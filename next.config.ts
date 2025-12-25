@@ -1,0 +1,248 @@
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  // Security Headers Configuration - Enhanced for Phase 7
+  async headers() {
+    // Determine if we're in production for stricter CSP
+    const isDev = process.env.NODE_ENV === 'development';
+
+    // Build CSP directives - stricter in production
+    const cspDirectives = [
+      "default-src 'self'",
+      // Script sources - allow unsafe-eval only in development for hot reload
+      isDev
+        ? "script-src 'self' 'unsafe-eval' 'unsafe-inline'"
+        : "script-src 'self' 'unsafe-inline'", // Production: no unsafe-eval
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob: https:",
+      "font-src 'self' data:",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+      "frame-src 'none'",
+      "frame-ancestors 'none'", // Enhanced: Prevents clickjacking
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "upgrade-insecure-requests", // Force HTTPS for all resources
+      "block-all-mixed-content", // Block HTTP resources on HTTPS pages
+    ].join('; ');
+
+    return [
+      {
+        // Apply security headers to all routes
+        source: '/(.*)',
+        headers: [
+          // Prevent clickjacking
+          {
+            key: 'X-Frame-Options',
+            value: 'DENY',
+          },
+          // Prevent MIME type sniffing
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+          // Control referrer information
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin',
+          },
+          // XSS Protection (legacy browsers)
+          {
+            key: 'X-XSS-Protection',
+            value: '1; mode=block',
+          },
+          // Permissions Policy - restrict browser features
+          {
+            key: 'Permissions-Policy',
+            value: [
+              'camera=()',
+              'microphone=()',
+              'geolocation=()',
+              'interest-cohort=()', // Disable FLoC
+              'accelerometer=()',
+              'gyroscope=()',
+              'magnetometer=()',
+              'payment=()',
+              'usb=()',
+              'bluetooth=()',
+              'serial=()',
+              'midi=()',
+              'picture-in-picture=(self)',
+              'fullscreen=(self)',
+            ].join(', '),
+          },
+          // DNS Prefetch Control
+          {
+            key: 'X-DNS-Prefetch-Control',
+            value: 'on',
+          },
+          // Content Security Policy
+          {
+            key: 'Content-Security-Policy',
+            value: cspDirectives,
+          },
+          // HTTP Strict Transport Security (HSTS)
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=31536000; includeSubDomains; preload',
+          },
+          // Cross-Origin policies for enhanced isolation
+          {
+            key: 'Cross-Origin-Opener-Policy',
+            value: 'same-origin',
+          },
+          {
+            key: 'Cross-Origin-Resource-Policy',
+            value: 'same-origin',
+          },
+          // Prevent browsers from caching sensitive pages
+          {
+            key: 'Cache-Control',
+            value: 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          },
+          {
+            key: 'Pragma',
+            value: 'no-cache',
+          },
+          {
+            key: 'Expires',
+            value: '0',
+          },
+        ],
+      },
+      {
+        // Allow caching for static assets
+        source: '/_next/static/(.*)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+      {
+        // Allow caching for images
+        source: '/images/(.*)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400, stale-while-revalidate=604800',
+          },
+        ],
+      },
+    ];
+  },
+
+  // Enable React strict mode for better security
+  reactStrictMode: true,
+
+  // Enhanced compression and security
+  compress: true,
+  poweredByHeader: false,
+
+  // Image optimization configuration for Next.js 16
+  images: {
+    // Enable modern image formats
+    formats: ['image/avif', 'image/webp'],
+    // Remote patterns for external images (add your domains as needed)
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '*.supabase.co',
+      },
+    ],
+    // Optimize image loading
+    minimumCacheTTL: 60,
+  },
+
+  // Server external packages - packages that should not be bundled
+  // These are packages that have native dependencies or should run on server only
+  serverExternalPackages: [
+    'jose', // JWT library with native crypto
+  ],
+
+  // Enable experimental features for better performance (Next.js 16.0.4)
+  experimental: {
+    // Optimize imports for tree-shaking heavy UI libraries
+    optimizePackageImports: [
+      '@radix-ui/react-accordion',
+      '@radix-ui/react-alert-dialog',
+      '@radix-ui/react-avatar',
+      '@radix-ui/react-checkbox',
+      '@radix-ui/react-collapsible',
+      '@radix-ui/react-dialog',
+      '@radix-ui/react-dropdown-menu',
+      '@radix-ui/react-label',
+      '@radix-ui/react-popover',
+      '@radix-ui/react-select',
+      '@radix-ui/react-separator',
+      '@radix-ui/react-slot',
+      '@radix-ui/react-switch',
+      '@radix-ui/react-tabs',
+      '@radix-ui/react-tooltip',
+      '@tabler/icons-react',
+      'lucide-react',
+      'recharts',
+      'framer-motion',
+      'date-fns',
+    ],
+    // Enable CSS optimization for smaller bundles
+    optimizeCss: true,
+    // Optimize React server components rendering
+    optimizeServerReact: true,
+    // Cache configuration for client-side router cache
+    staleTimes: {
+      dynamic: 60, // 1 minute for dynamic routes
+      static: 86400, // 24 hours for static routes
+    },
+  },
+
+  // Bundle optimization configuration
+  webpack: (config, { isServer }) => {
+    // Optimize bundle splitting for better caching (client-side only)
+    if (!isServer) {
+      config.optimization.splitChunks.cacheGroups = {
+        ...config.optimization.splitChunks.cacheGroups,
+        // Separate heavy UI libraries for better caching
+        'radix-ui': {
+          test: /[\\/]node_modules[\\/]@radix-ui/,
+          name: 'radix-ui',
+          chunks: 'all',
+          priority: 20,
+        },
+        // Separate Supabase and tRPC for better caching
+        'supabase': {
+          test: /[\\/]node_modules[\\/](@supabase|@trpc)/,
+          name: 'supabase-trpc',
+          chunks: 'all',
+          priority: 15,
+        },
+        // Separate UI utility libraries
+        'ui-libs': {
+          test: /[\\/]node_modules[\\/](lucide-react|clsx|tailwind-merge|class-variance-authority)/,
+          name: 'ui-libs',
+          chunks: 'all',
+          priority: 10,
+        },
+        // Separate charting library (heavy)
+        'charts': {
+          test: /[\\/]node_modules[\\/]recharts/,
+          name: 'charts',
+          chunks: 'all',
+          priority: 12,
+        },
+        // Separate animation library
+        'animations': {
+          test: /[\\/]node_modules[\\/]framer-motion/,
+          name: 'animations',
+          chunks: 'all',
+          priority: 11,
+        },
+      };
+    }
+
+    return config;
+  },
+};
+
+export default nextConfig;

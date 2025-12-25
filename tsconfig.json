@@ -1,0 +1,47 @@
+{
+  "compilerOptions": {
+    // Target ES2022 for better performance with modern JavaScript features
+    "target": "ES2022",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    // React 19 JSX transform
+    "jsx": "react-jsx",
+    "incremental": true,
+    // Ensure consistent casing in imports
+    "forceConsistentCasingInFileNames": true,
+    // Next.js plugin for enhanced type checking
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    // Path aliases
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

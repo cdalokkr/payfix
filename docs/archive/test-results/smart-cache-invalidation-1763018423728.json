@@ -1,0 +1,281 @@
+{
+  "timestamp": "2025-11-13T07:20:23.715Z",
+  "summary": {
+    "totalDuration": 149,
+    "totalTests": 20,
+    "totalPassed": 19,
+    "totalFailed": 1,
+    "successRate": 95
+  },
+  "testSuites": [
+    {
+      "name": "Login Flow Tests",
+      "duration": 93,
+      "passed": 4,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "Prefetch Dashboard Data Exists After Login",
+          "passed": true,
+          "details": {
+            "message": "Prefetch system properly implemented",
+            "keyMethods": [
+              "prefetchDashboardData",
+              "prefetchComprehensiveData"
+            ]
+          },
+          "duration": 90
+        },
+        {
+          "name": "Comprehensive Dashboard Data in Cache",
+          "passed": true,
+          "details": {
+            "message": "Smart invalidation preserving comprehensive data confirmed",
+            "preservedKeys": [
+              "comprehensive-dashboard-data"
+            ],
+            "invalidatedKeys": [
+              "critical-dashboard-data",
+              "stats"
+            ]
+          },
+          "duration": 1
+        },
+        {
+          "name": "Magic Card Values Display Immediately",
+          "passed": true,
+          "details": {
+            "message": "Console logging present for monitoring cache operations",
+            "loggingPoints": [
+              "Smart invalidation start",
+              "Data preservation",
+              "Refresh completion"
+            ]
+          },
+          "duration": 1
+        },
+        {
+          "name": "Cache Hit Rate After Prefetch",
+          "passed": true,
+          "details": {
+            "message": "Cache hit rate tracking implemented",
+            "metrics": [
+              "hits",
+              "misses",
+              "hitRate",
+              "missRate"
+            ]
+          },
+          "duration": 0
+        }
+      ]
+    },
+    {
+      "name": "User Creation Tests",
+      "duration": 5,
+      "passed": 4,
+      "failed": 1,
+      "tests": [
+        {
+          "name": "Smart Invalidation Triggers on User Creation",
+          "passed": false,
+          "error": "Smart invalidation not properly triggered",
+          "duration": 1
+        },
+        {
+          "name": "Only Critical Data Invalidated, Stats Updated",
+          "passed": true,
+          "details": {
+            "message": "Correct invalidation pattern confirmed",
+            "deleted": [
+              "critical-dashboard-data",
+              "stats"
+            ],
+            "preserved": [
+              "comprehensive-dashboard-data"
+            ]
+          },
+          "duration": 1
+        },
+        {
+          "name": "Comprehensive Data Preserved After User Creation",
+          "passed": true,
+          "details": {
+            "message": "Data preservation properly tracked",
+            "tracking": [
+              "preservedData",
+              "affectedData",
+              "smartInvalidation flag"
+            ]
+          },
+          "duration": 0
+        },
+        {
+          "name": "User Count Updates Automatically Without Page Refresh",
+          "passed": true,
+          "details": {
+            "message": "Auto-refresh mechanism properly configured",
+            "mechanism": [
+              "refreshDashboard flag",
+              "user-operation-complete event",
+              "cache invalidation"
+            ]
+          },
+          "duration": 1
+        },
+        {
+          "name": "No Manual Page Refresh Required",
+          "passed": true,
+          "details": {
+            "message": "No manual page refresh required, smart refresh implemented",
+            "approach": "Smart cache invalidation and event-driven updates"
+          },
+          "duration": 2
+        }
+      ]
+    },
+    {
+      "name": "Cache Integrity Tests",
+      "duration": 3,
+      "passed": 4,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "Prefetched Data Remains Intact After User Creation",
+          "passed": true,
+          "details": {
+            "message": "Prefetch preservation logic implemented",
+            "preservedKeys": [
+              "comprehensive-dashboard-data"
+            ]
+          },
+          "duration": 1
+        },
+        {
+          "name": "Smart Invalidation Flag Set Correctly",
+          "passed": true,
+          "details": {
+            "message": "Smart invalidation flag properly set",
+            "flag": "smartInvalidation: true"
+          },
+          "duration": 1
+        },
+        {
+          "name": "Background Refresh Updates Only Affected Data",
+          "passed": true,
+          "details": {
+            "message": "Background refresh mechanism present",
+            "mechanism": "Background refresher updates only affected cache entries"
+          },
+          "duration": 0
+        },
+        {
+          "name": "Cache Entry Metadata Preserved",
+          "passed": true,
+          "details": {
+            "message": "Cache metadata system implemented",
+            "metadataFields": [
+              "prefetched",
+              "prefetchedAt",
+              "source",
+              "updatedAfterUserCreation"
+            ]
+          },
+          "duration": 0
+        }
+      ]
+    },
+    {
+      "name": "Cross-tab Synchronization Tests",
+      "duration": 2,
+      "passed": 3,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "Cache Updates Propagate Across Browser Tabs",
+          "passed": true,
+          "details": {
+            "message": "Cross-tab synchronization implemented",
+            "mechanism": "BroadcastChannel for cache invalidation events"
+          },
+          "duration": 0
+        },
+        {
+          "name": "User Operation Complete Event Works Correctly",
+          "passed": true,
+          "details": {
+            "message": "User operation complete event properly dispatched",
+            "eventName": "user-operation-complete"
+          },
+          "duration": 1
+        },
+        {
+          "name": "Smart Invalidation Event Propagation",
+          "passed": true,
+          "details": {
+            "message": "Smart invalidation event details properly included",
+            "details": [
+              "preservedData",
+              "affectedData",
+              "smartInvalidation flag"
+            ]
+          },
+          "duration": 0
+        }
+      ]
+    },
+    {
+      "name": "Performance Validation Tests",
+      "duration": 2,
+      "passed": 4,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "Cache Hit Rate Improvement",
+          "passed": true,
+          "details": {
+            "message": "Cache hit rate tracking implemented",
+            "measurement": "hitRate, missRate, totalRequests"
+          },
+          "duration": 0
+        },
+        {
+          "name": "Reduced Network Requests",
+          "passed": true,
+          "details": {
+            "message": "Prefetch mechanism reduces network requests",
+            "approach": "Background prefetch during login"
+          },
+          "duration": 1
+        },
+        {
+          "name": "Dashboard Load Time Optimization",
+          "passed": true,
+          "details": {
+            "message": "Performance optimization implemented",
+            "optimizations": [
+              "Background prefetch",
+              "Smart cache invalidation",
+              "Lazy loading"
+            ]
+          },
+          "duration": 0
+        },
+        {
+          "name": "Memory Usage Optimization",
+          "passed": true,
+          "details": {
+            "message": "Memory optimization implemented",
+            "features": [
+              "Compression",
+              "Size limits",
+              "Entry limits",
+              "LRU eviction"
+            ]
+          },
+          "duration": 1
+        }
+      ]
+    }
+  ]
+}

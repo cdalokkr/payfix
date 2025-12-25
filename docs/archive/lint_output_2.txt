@@ -1,0 +1,633 @@
+
+> my-fullstack-app@0.1.0 lint
+> eslint
+
+
+D:\myfullstackapp-Antigravity\components\dashboard\ModernAddUserForm.tsx
+  346:16  error  Parsing error: ';' expected
+
+D:\myfullstackapp-Antigravity\components\dashboard\_deprecated\dual-layer-loading-coordinator-integration-example.tsx
+  304:50  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  339:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\components\dashboard\_deprecated\dual-layer-loading-coordinator.tsx
+  193:45  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\components\dashboard\_deprecated\smooth-transition-integration-example.tsx
+  112:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  298:64  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  348:53  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  376:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  514:15  warning  Unreachable code                          no-unreachable
+
+D:\myfullstackapp-Antigravity\components\dashboard\_deprecated\user-management-enhanced-with-coordinator.tsx
+  277:60  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\components\dashboard\_deprecated\user-management-final-with-coordinator.tsx
+  126:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  150:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  180:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  273:60  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\components\dashboard\enhanced-skeletons.tsx
+  586:5  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\components\dashboard\error-recovery.tsx
+  126:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  127:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  429:34  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\components\dashboard\progressive-loading\progressive-activity-feed.tsx
+  46:20  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  86:57  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\components\dashboard\progressive-loading\progressive-loading-demo.tsx
+  60:52  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  61:52  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  62:64  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\components\dashboard\progressive-loading\progressive-user-table.tsx
+   57:20  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  106:58  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  106:70  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\components\dashboard\skeletons\progressive-loader-integration-example.tsx
+  18:44  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  36:58  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\components\monitoring\performance-dashboard.tsx
+  331:89  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\components\org-switcher.tsx
+  16:1  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-unused-vars')
+
+D:\myfullstackapp-Antigravity\components\shared\DataTable.tsx
+  18:20  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  34:52  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\components\ui\accordion.tsx
+  43:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\components\ui\action-button.tsx
+  24:30  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\components\ui\action-button.types.ts
+  24:30  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\components\ui\manual-async-button.tsx
+  12:26  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\components\ui\modern-dialog.tsx
+   76:7   error    'remainingChildren' is never reassigned. Use 'const' instead  prefer-const
+   84:41  warning  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  193:53  warning  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\hooks\use-admin-user-optimistic-operations.ts
+   26:64  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   64:55  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   74:59  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  139:55  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  205:55  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  285:55  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\hooks\use-admin-users-with-loading.ts
+  86:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\hooks\use-advanced-cache.ts
+  191:78  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  200:77  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  355:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\hooks\use-progressive-dashboard-data.ts
+   89:12   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   90:16   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   91:23   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   92:15   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  105:45   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  269:64   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  357:74   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  676:47   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  677:48   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  678:47   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  681:47   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  682:48   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  683:47   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  691:59   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  691:105  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  692:60   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  692:107  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  693:59   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  693:105  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\isolated-async-button-test.tsx
+  11:33  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\jest.config.js
+  1:18  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+
+D:\myfullstackapp-Antigravity\lib\auth\auth-middleware.ts
+  202:10  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  203:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\lib\cache\advanced-cache-manager.ts
+   80:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  240:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  318:57  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  342:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  415:63  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\lib\cache\cache-consistency.ts
+  145:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  162:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  175:47  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  182:46  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  187:50  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  589:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\lib\cache\cache-debug.ts
+   49:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  104:13  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  186:53  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  186:68  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  308:60  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  319:66  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\lib\cache\cache-system-validation.ts
+   85:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  102:33  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  131:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\lib\cache\memory-optimizer.ts
+  85:63  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  86:30  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\lib\cache\smart-cache-manager.ts
+  249:56  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  306:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\lib\dashboard-prefetch.ts
+  7:10  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\lib\data\data-transformation-pipeline.ts
+  261:48   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  266:51   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  275:53   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  416:21   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  447:44   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  447:90   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  463:53   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  463:99   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  477:54   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  477:102  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  493:29   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  496:48   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\lib\data\enhanced-background-refresh.ts
+   73:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  397:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\lib\data\intelligent-change-detector.ts
+  605:46   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  606:35   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  606:72   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  606:110  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  607:37   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  607:72   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  607:110  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\lib\db\optimized-query-manager.ts
+   19:9   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   27:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   28:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   74:43  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  113:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  115:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  126:79  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  127:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  135:81  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  136:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  206:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  253:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  263:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  354:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  364:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  459:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  460:20  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  461:15  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  468:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  469:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  470:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  584:61  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\lib\error-logging.tsx
+   38:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   55:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  176:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  183:67  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  192:86  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  201:90  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\lib\error-recovery.ts
+  308:71  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\lib\monitoring\performance-analytics.ts
+  334:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  361:45  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  362:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  367:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  382:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  383:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  388:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  400:44  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  933:68  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\lib\monitoring\performance-validator.ts
+  208:9  error  'passed' is never reassigned. Use 'const' instead  prefer-const
+
+D:\myfullstackapp-Antigravity\lib\monitoring\web-vitals.ts
+   17:69  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   18:69  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   19:69  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   20:69  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   21:70  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   22:69  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   28:70  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   34:24  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   35:33  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   52:70  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   57:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   71:70  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   90:70  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  109:71  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  124:70  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  158:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  180:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  253:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  254:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  267:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  268:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  281:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  282:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  295:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  296:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  309:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  310:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  323:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  324:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  367:53  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  376:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  385:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  470:48  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  487:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  503:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\lib\progressive-loading\critical-path-loader.ts
+   10:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   45:46  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   46:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   97:40  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  272:68  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  294:70  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  354:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  358:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\lib\progressive-loading\error-recovery-system.ts
+   43:9   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  469:75  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  515:43  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\lib\progressive-loading\loading-state-manager.ts
+   27:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   28:18  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   29:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   31:18  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  356:20  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  391:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  402:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  493:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\lib\progressive-loading\progressive-loading-strategy.ts
+   48:11   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   61:28   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   63:22   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   64:21   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   76:28   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   78:14   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  554:38   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  554:71   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  554:107  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\lib\progressive-loading\responsive-data-loader.ts
+  137:40   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  190:38   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  190:71   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  190:107  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  393:40   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  393:54   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  393:60   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  407:42   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  407:56   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  407:62   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  435:30   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  435:53   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  455:24   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  475:29   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  483:37   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  506:38   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\lib\security\account-lockout.ts
+   18:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   39:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   42:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  121:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  273:55  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  325:46  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\lib\security\rate-limiter.ts
+  92:18  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\lib\security\route-protection.ts
+   39:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  171:55  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  188:65  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  237:93  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  400:46  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  438:55  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\lib\security\secure-session.ts
+   18:20  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   83:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  158:13  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  206:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  232:13  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  275:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  432:55  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\lib\trpc\routers\admin-dashboard-optimized.ts
+   19:46  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   19:84  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   50:45  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   50:79  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  384:70  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\lib\trpc\server.ts
+  85:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\lib\validation\accessibility-validator.ts
+  596:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\lib\validation\performance-validator.ts
+  283:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  284:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  314:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\monitoring-setup.ts
+   41:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   72:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  117:78  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  127:78  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  133:44  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  150:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  174:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  220:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  222:43  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  223:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  264:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  285:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  288:34  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  338:47  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  339:49  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  391:52  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\scripts\automated-test-executor.ts
+  177:73  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\scripts\health-check.js
+    8:15  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+    9:14  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+   46:20  error  'e' is defined but never used            @typescript-eslint/no-unused-vars
+  139:21  error  'result' is defined but never used       @typescript-eslint/no-unused-vars
+
+D:\myfullstackapp-Antigravity\scripts\migrate-config.js
+  8:12  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+  9:14  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+
+D:\myfullstackapp-Antigravity\scripts\performance-validation.ts
+   36:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  207:24  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\scripts\phase3-validation.ts
+   45:13  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   50:13  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  128:48  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  131:20  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  162:50  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  190:41  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  220:24  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  221:26  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  222:18  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  301:54  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  301:80  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  301:98  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  341:48  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  341:74  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  341:92  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  558:39  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  564:40  warning  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  576:9   error    Unexpected lexical declaration in case block  no-case-declarations
+  580:9   error    Unexpected lexical declaration in case block  no-case-declarations
+
+D:\myfullstackapp-Antigravity\scripts\security-audit.js
+   8:12  error  A `require()` style import is forbidden    @typescript-eslint/no-require-imports
+   9:7   error  'path' is assigned a value but never used  @typescript-eslint/no-unused-vars
+   9:14  error  A `require()` style import is forbidden    @typescript-eslint/no-require-imports
+  10:15  error  A `require()` style import is forbidden    @typescript-eslint/no-require-imports
+  11:14  error  A `require()` style import is forbidden    @typescript-eslint/no-require-imports
+  79:20  error  'e' is defined but never used              @typescript-eslint/no-unused-vars
+
+D:\myfullstackapp-Antigravity\scripts\test-smart-cache-invalidation.ts
+  25:13  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\scripts\test-status-bar-independent.js
+    5:22  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+    6:12  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+    7:14  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+  118:10  error  'error' is defined but never used        @typescript-eslint/no-unused-vars
+
+D:\myfullstackapp-Antigravity\scripts\validate-advanced-async-button.js
+   8:22  error  A `require()` style import is forbidden    @typescript-eslint/no-require-imports
+   9:12  error  A `require()` style import is forbidden    @typescript-eslint/no-require-imports
+  10:7   error  'path' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  10:14  error  A `require()` style import is forbidden    @typescript-eslint/no-require-imports
+
+D:\myfullstackapp-Antigravity\scripts\validate-dashboard-layouts.js
+  14:7  error  'VALID_LAYOUT_FILE' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  37:9  error  'issues' is assigned a value but never used             @typescript-eslint/no-unused-vars
+
+D:\myfullstackapp-Antigravity\scripts\validate-realtime-dashboard-implementation.js
+  16:9  error  'mockHook' is assigned a value but never used   @typescript-eslint/no-unused-vars
+  69:9  error  'mockEvent' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+D:\myfullstackapp-Antigravity\scripts\verify-demo-page.js
+  8:12  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+  9:14  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+
+D:\myfullstackapp-Antigravity\test-cache-clearing-mechanism.ts
+  12:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  15:20  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  16:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  88:65  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\test-dashboard-refresh-fix.js
+  11:12  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+  12:14  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+
+D:\myfullstackapp-Antigravity\test-full-name-construction.ts
+  71:5  error  'totalTests' is never reassigned. Use 'const' instead  prefer-const
+
+D:\myfullstackapp-Antigravity\test-smart-cache-invalidation.ts
+  182:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\test-user-management-fields-validation.js
+  10:12  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+  11:14  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+
+D:\myfullstackapp-Antigravity\tests\comprehensive-test-executor.ts
+   14:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   16:49  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   19:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   21:43  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   23:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  580:48  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  613:90  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  619:50  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  625:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  632:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  642:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  652:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\tests\consolidated-add-user-modal-test.tsx
+   73:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  155:49  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\tests\consolidated-async-button-test.tsx
+   65:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  254:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\tests\dual-layer-loading-integration.test.tsx
+   403:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   406:34  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   536:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   608:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   743:43  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   859:81  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   981:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   990:44  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1031:34  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1194:57  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1194:72  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1203:13  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1245:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1510:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1521:43  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\tests\dual-layer-loading-test-harness.tsx
+    58:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+    65:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   152:30  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   404:53  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   408:47  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   414:74  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   798:79  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1034:10  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1121:65  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1129:61  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\tests\enhanced-add-user-modal-test-runner.tsx
+  257:19  error    A `require()` style import is forbidden   @typescript-eslint/no-require-imports
+  272:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  294:19  error    A `require()` style import is forbidden   @typescript-eslint/no-require-imports
+  300:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  388:19  error    A `require()` style import is forbidden   @typescript-eslint/no-require-imports
+  394:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\tests\magic-card-ui-validation.test.tsx
+  585:22  error  Parsing error: Identifier expected
+
+D:\myfullstackapp-Antigravity\tests\new-login-form.test.tsx
+  153:29  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+  178:29  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+  216:29  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+  230:29  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+
+D:\myfullstackapp-Antigravity\tests\performance-optimization-validation.test.ts
+  101:25  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+  121:40  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+  136:54  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+  148:30  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+  188:32  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+
+D:\myfullstackapp-Antigravity\tests\phase3-comprehensive-validation.test.ts
+   33:24  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   52:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   53:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   56:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   68:18  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  121:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  346:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  348:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  352:18  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  354:60  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  449:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  499:62  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  531:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\tests\real-time-dashboard-validation.test.ts
+  73:25  error  Parsing error: '>' expected
+
+D:\myfullstackapp-Antigravity\tests\run-testing-demo.ts
+  52:54  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  60:58  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\tests\security-comprehensive-test.ts
+  179:66  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  193:65  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  216:65  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  315:68  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  318:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  326:68  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  342:68  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  352:68  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  355:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  403:52  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  510:52  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  518:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  555:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  575:61  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  589:54  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\tests\status-bar-independent-update.test.tsx
+  85:9   error    'callCount' is never reassigned. Use 'const' instead  prefer-const
+  93:25  warning  Unexpected any. Specify a different type              @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\tests\user-experience-validation.tsx
+   59:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  187:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  492:55  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  527:71  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\myfullstackapp-Antigravity\tests\validate-accordion-fixes.js
+  13:12  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+  14:14  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+
+D:\myfullstackapp-Antigravity\verify-smart-cache-implementation.js
+  10:9   error  'ModernAddUserForm' is assigned a value but never used            @typescript-eslint/no-unused-vars
+  10:29  error  A `require()` style import is forbidden                           @typescript-eslint/no-require-imports
+  19:9   error  'useProgressiveDashboardData' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  19:39  error  A `require()` style import is forbidden                           @typescript-eslint/no-require-imports
+  28:11  error  'smartCacheManager' is assigned a value but never used            @typescript-eslint/no-unused-vars
+  28:33  error  A `require()` style import is forbidden                           @typescript-eslint/no-require-imports
+
+Γ£û 443 problems (60 errors, 383 warnings)
+  4 errors and 1 warning potentially fixable with the `--fix` option.
+

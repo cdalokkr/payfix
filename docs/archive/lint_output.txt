@@ -1,0 +1,10 @@
+
+> my-fullstack-app@0.1.0 lint
+> eslint components/dashboard/ModernAddUserForm.tsx
+
+
+D:\myfullstackapp-Antigravity\components\dashboard\ModernAddUserForm.tsx
+  383:20  error  Parsing error: ',' expected
+
+Γ£û 1 problem (1 error, 0 warnings)
+

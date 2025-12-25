@@ -1,0 +1,173 @@
+"use client"
+
+import * as React from "react"
+import {
+    ColumnDef,
+    ColumnFiltersState,
+    SortingState,
+    VisibilityState,
+    flexRender,
+    getCoreRowModel,
+    getFilteredRowModel,
+    getPaginationRowModel,
+    getSortedRowModel,
+    useReactTable,
+    RowSelectionState,
+    Table as TableType,
+} from "@tanstack/react-table"
+
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table"
+import { DataTablePagination } from "@/components/ui/data-table-pagination"
+import { Skeleton } from "@/components/ui/skeleton"
+
+interface DataTableProps<TData, TValue> {
+    columns: ColumnDef<TData, TValue>[]
+    data: TData[]
+    toolbar?: (table: TableType<TData>) => React.ReactNode
+    isLoading?: boolean
+    recentlyUpdatedId?: string | null
+    rowSelection?: RowSelectionState
+    onRowSelectionChange?: React.Dispatch<React.SetStateAction<RowSelectionState>>
+    hidePagination?: boolean
+    meta?: Record<string, any>
+}
+
+export function DataTable<TData, TValue>({
+    columns,
+    data,
+    toolbar,
+    isLoading = false,
+    recentlyUpdatedId,
+    rowSelection: externalRowSelection,
+    onRowSelectionChange: externalOnRowSelectionChange,
+    hidePagination = false,
+    meta,
+}: DataTableProps<TData, TValue>) {
+    const [internalRowSelection, setInternalRowSelection] = React.useState<RowSelectionState>({})
+
+    const rowSelection = externalRowSelection ?? internalRowSelection
+    const setRowSelection = externalOnRowSelectionChange ?? setInternalRowSelection
+
+    const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
+    const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
+    const [sorting, setSorting] = React.useState<SortingState>([])
+
+    const table = useReactTable({
+        data,
+        columns,
+        state: {
+            sorting,
+            columnVisibility,
+            rowSelection,
+            columnFilters,
+        },
+        enableRowSelection: true,
+        onRowSelectionChange: setRowSelection,
+        onSortingChange: setSorting,
+        onColumnFiltersChange: setColumnFilters,
+        onColumnVisibilityChange: setColumnVisibility,
+        getCoreRowModel: getCoreRowModel(),
+        getFilteredRowModel: getFilteredRowModel(),
+        getPaginationRowModel: getPaginationRowModel(),
+        getSortedRowModel: getSortedRowModel(),
+        getRowId: (row) => (row as { id: string }).id,
+        meta,
+    })
+
+    // Effect to unselect the row when it's recently updated
+    React.useEffect(() => {
+        let isEffectMounted = true
+        if (recentlyUpdatedId && rowSelection[recentlyUpdatedId]) {
+            setRowSelection((prev) => {
+                if (!isEffectMounted) return prev
+                const newSelection = { ...prev }
+                delete newSelection[recentlyUpdatedId]
+                return newSelection
+            })
+        }
+        return () => {
+            isEffectMounted = false
+        }
+    }, [recentlyUpdatedId, rowSelection, setRowSelection])
+
+    return (
+        <div className="space-y-4">
+            {toolbar && toolbar(table)}
+            <div className="rounded-md border">
+                <Table>
+                    <TableHeader>
+                        {table.getHeaderGroups().map((headerGroup) => (
+                            <TableRow key={headerGroup.id}>
+                                {headerGroup.headers.map((header) => {
+                                    if (!header.column.getIsVisible()) return null
+                                    return (
+                                        <TableHead key={header.id} colSpan={header.colSpan}>
+                                            {header.isPlaceholder
+                                                ? null
+                                                : flexRender(
+                                                    header.column.columnDef.header,
+                                                    header.getContext()
+                                                )}
+                                        </TableHead>
+                                    )
+                                })}
+                            </TableRow>
+                        ))}
+                    </TableHeader>
+                    <TableBody>
+                        {isLoading ? (
+                            Array.from({ length: 10 }).map((_, i) => (
+                                <TableRow key={i} className="hover:bg-transparent">
+                                    {columns.map((_, j) => (
+                                        <TableCell key={j} className="py-4 text-center">
+                                            <Skeleton className="h-6 w-full animate-pulse bg-muted/30 rounded-lg" />
+                                        </TableCell>
+                                    ))}
+                                </TableRow>
+                            ))
+                        ) : table.getRowModel().rows?.length ? (
+                            table.getRowModel().rows.map((row) => (
+                                <TableRow
+                                    key={row.id}
+                                    data-state={row.getIsSelected() && "selected"}
+                                    className={
+                                        // @ts-expect-error - accessing id from original data which might not exist on TData
+                                        row.original?.id === recentlyUpdatedId ? "animate-fade-green" : ""
+                                    }
+                                >
+                                    {row.getVisibleCells().map((cell) => (
+                                        <TableCell key={cell.id}>
+                                            {flexRender(
+                                                cell.column.columnDef.cell,
+                                                cell.getContext()
+                                            )}
+                                        </TableCell>
+                                    ))}
+                                </TableRow>
+                            ))
+                        ) : (
+                            <TableRow>
+                                <TableCell
+                                    colSpan={table.getVisibleLeafColumns().length}
+                                    className="h-24 text-center text-destructive font-medium bg-destructive/10"
+                                >
+                                    No Record Found
+                                </TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </div>
+            {!hidePagination && table.getFilteredRowModel().rows.length > 0 && (
+                <DataTablePagination table={table} />
+            )}
+        </div>
+    )
+}

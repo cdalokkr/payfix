@@ -1,0 +1,23 @@
+docs/archive/test-cache-clearing-mechanism.ts(7,35): error TS2307: Cannot find module './lib/cache/smart-cache-manager' or its corresponding type declarations.
+docs/archive/test-cache-clearing-mechanism.ts(8,35): error TS2307: Cannot find module './lib/cache/cache-invalidation' or its corresponding type declarations.
+docs/archive/test-cache-clearing-mechanism.ts(9,39): error TS2307: Cannot find module './lib/auth/optimized-context' or its corresponding type declarations.
+docs/archive/test-smart-cache-invalidation.ts(6,35): error TS2307: Cannot find module './lib/cache/smart-cache-manager' or its corresponding type declarations.
+docs/archive/test-smart-cache-invalidation.ts(7,37): error TS2307: Cannot find module './lib/dashboard-prefetch' or its corresponding type declarations.
+features/users/components/ModernAddUserForm.tsx(205,9): error TS2322: Type '{ firstName: string; middleName: string; lastName: string; email: string; password: string; confirmPassword: string; mobileNo: string; dateOfBirth: string; sex: "" | "Male" | "Female"; role: "admin" | ... 1 more ... | "employee"; designationId: string; allowedModules: Module[]; }' is not assignable to type 'UserFormValues'.
+  Types of property 'sex' are incompatible.
+    Type '"" | "Male" | "Female"' is not assignable to type '"" | "male" | "female"'.
+      Type '"Male"' is not assignable to type '"" | "male" | "female"'. Did you mean '"male"'?
+features/users/components/ModernAddUserForm.tsx(251,18): error TS2345: Argument of type '{ firstName: string; middleName: string; lastName: string; email: string; mobileNo: string; dateOfBirth: string; sex: "" | "Male" | "Female"; role: "admin" | "moderator" | "employee"; designationId: string; allowedModules: Module[]; password: string; confirmPassword: string; }' is not assignable to parameter of type 'UserFormValues | { firstName?: string | undefined; middleName?: string | null | undefined; lastName?: string | undefined; email?: string | undefined; mobileNo?: string | ... 1 more ... | undefined; ... 6 more ...; confirmPassword?: string | undefined; } | ResetAction<...> | undefined'.
+  Types of property 'sex' are incompatible.
+    Type '"" | "Male" | "Female"' is not assignable to type '"" | "male" | "female" | undefined'.
+      Type '"Male"' is not assignable to type '"" | "male" | "female" | undefined'. Did you mean '"male"'?
+features/users/components/ModernAddUserForm.tsx(617,51): error TS2345: Argument of type '{ firstName: string; middleName: string; lastName: string; email: string; mobileNo: string; dateOfBirth: string; sex: "Male" | "Female"; }' is not assignable to parameter of type '{ firstName?: string | undefined; lastName?: string | undefined; middleName?: string | undefined; full_name?: string | undefined; avatar_url?: string | undefined; mobileNo?: string | undefined; dateOfBirth?: string | undefined; sex?: "male" | ... 1 more ... | undefined; }'.
+  Types of property 'sex' are incompatible.
+    Type '"Male" | "Female"' is not assignable to type '"male" | "female" | undefined'.
+      Type '"Male"' is not assignable to type '"male" | "female" | undefined'. Did you mean '"male"'?
+features/users/components/ModernAddUserForm.tsx(620,48): error TS2345: Argument of type '{ userId: string; role: "admin" | "moderator" | "employee"; designationId: string | null; allowedModules: Module[] | undefined; firstName: string; middleName: string; lastName: string; email: string; mobileNo: string; dateOfBirth: string; sex: "Male" | "Female"; }' is not assignable to parameter of type '{ userId: string; firstName: string; lastName: string; email: string; role: "admin" | "moderator" | "employee"; sex: "male" | "female"; middleName?: string | undefined; mobileNo?: string | undefined; dateOfBirth?: string | undefined; allowedModules?: string[] | undefined; designationId?: string | ... 1 more ... | un...'.
+  Types of property 'sex' are incompatible.
+    Type '"Male" | "Female"' is not assignable to type '"male" | "female"'.
+      Type '"Male"' is not assignable to type '"male" | "female"'. Did you mean '"male"'?
+features/users/components/ModernAddUserForm.tsx(640,11): error TS2322: Type '"Male" | "Female"' is not assignable to type '"" | "male" | "female"'.
+  Type '"Male"' is not assignable to type '"" | "male" | "female"'. Did you mean '"male"'?
