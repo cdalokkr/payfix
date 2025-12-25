@@ -82,7 +82,7 @@ export interface AsyncButtonProps extends HTMLMotionProps<"button"> {
   toastPosition?: 'global' | 'button-top';
 }
 
-export default function AsyncButton({
+export function AsyncButton({
   onClick,
   loadingText = 'Loading...',
   successText = 'Success!',
@@ -479,3 +479,6 @@ export function SubmitButton({ successDuration = 2000, ...props }: Omit<AsyncBut
     />
   );
 }
+
+export default AsyncButton;
+

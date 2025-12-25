@@ -119,50 +119,50 @@ export function ModeratorAnalyticsView() {
                         <MetricCard
                             title="Total Users"
                             value={formatNumber(displayStats.totalUsers)}
-                            icon={<Users className="h-4 w-4 text-muted-foreground" />}
+                            icon={<Users />}
                             loading={!dataReady}
                             iconBgColor="bg-blue-500/20"
-                            iconColor="text-blue-700"
-                            borderColor="border-blue-200"
+                            iconColor="text-blue-700 dark:text-blue-400"
+                            borderColor="border-blue-200/50 dark:border-blue-900/50"
                             gradientColor="from-blue-500/10 to-cyan-500/10"
-                            cardBgColor="bg-blue-50/50 dark:bg-blue-900/10"
+                            cardBgColor="bg-blue-50/50 dark:bg-blue-950/20"
                             delay={0.1}
-                            trend={trends.userGrowth > 0 ? { value: trends.userGrowth, label: "from last month", positive: true } : undefined}
+                            trend={trends.userGrowth > 0 ? { value: trends.userGrowth, label: "vs last month", positive: true } : undefined}
                         />
                         <MetricCard
                             title="Active Now"
                             value={`+${formatNumber(displayStats.activeUsers)}`}
-                            icon={<Activity className="h-4 w-4 text-muted-foreground" />}
+                            icon={<Activity />}
                             loading={!dataReady}
-                            iconBgColor="bg-green-500/20"
-                            iconColor="text-green-700"
-                            borderColor="border-green-200"
-                            gradientColor="from-green-500/10 to-emerald-500/10"
-                            cardBgColor="bg-green-50/50 dark:bg-green-900/10"
+                            iconBgColor="bg-emerald-500/20"
+                            iconColor="text-emerald-700 dark:text-emerald-400"
+                            borderColor="border-emerald-200/50 dark:border-emerald-900/50"
+                            gradientColor="from-emerald-500/10 to-emerald-500/10"
+                            cardBgColor="bg-emerald-50/50 dark:bg-emerald-950/20"
                             delay={0.2}
                         />
                         <MetricCard
-                            title="Total Moderator role"
+                            title="Moderators"
                             value={formatNumber(displayStats.totalModerators)}
-                            icon={<Shield className="h-4 w-4 text-muted-foreground" />}
+                            icon={<Shield />}
                             loading={!dataReady}
                             iconBgColor="bg-purple-500/20"
-                            iconColor="text-purple-700"
-                            borderColor="border-purple-200"
+                            iconColor="text-purple-700 dark:text-purple-400"
+                            borderColor="border-purple-200/50 dark:border-purple-900/50"
                             gradientColor="from-purple-500/10 to-pink-500/10"
-                            cardBgColor="bg-purple-50/50 dark:bg-purple-900/10"
+                            cardBgColor="bg-purple-50/50 dark:bg-purple-950/20"
                             delay={0.3}
                         />
                         <MetricCard
-                            title="Total Employee role"
+                            title="Employees"
                             value={formatNumber(displayStats.totalEmployees)}
-                            icon={<User className="h-4 w-4 text-muted-foreground" />}
+                            icon={<User />}
                             loading={!dataReady}
-                            iconBgColor="bg-orange-500/20"
-                            iconColor="text-orange-700"
-                            borderColor="border-orange-200"
-                            gradientColor="from-orange-500/10 to-red-500/10"
-                            cardBgColor="bg-orange-50/50 dark:bg-orange-900/10"
+                            iconBgColor="bg-amber-500/20"
+                            iconColor="text-amber-700 dark:text-amber-400"
+                            borderColor="border-amber-200/50 dark:border-amber-900/50"
+                            gradientColor="from-amber-500/10 to-red-500/10"
+                            cardBgColor="bg-amber-50/50 dark:bg-amber-950/20"
                             delay={0.4}
                         />
                     </div>

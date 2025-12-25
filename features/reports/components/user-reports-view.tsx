@@ -13,168 +13,8 @@ import { motion, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { DateRange } from "react-day-picker"
+import { MetricCard } from "@/components/dashboard/metric-card"
 
-// MetricCard component matching dashboard style
-interface MetricCardProps {
-  title?: string
-  value?: string | number
-  description?: string
-  icon?: React.ReactNode
-  loading?: boolean
-  iconBgColor?: string
-  iconColor?: string
-  borderColor?: string
-  gradientColor?: string
-  cardBgColor?: string
-  delay?: number
-  trend?: {
-    value: number
-    label: string
-    positive?: boolean
-  }
-  className?: string
-}
-
-function MetricCardSkeleton({ title, description, icon, iconBgColor, iconColor, borderColor, gradientColor, cardBgColor }: {
-  title?: string
-  description?: string
-  icon?: React.ReactNode
-  iconBgColor?: string
-  iconColor?: string
-  borderColor?: string
-  gradientColor?: string
-  cardBgColor?: string
-}) {
-  return (
-    <div className={`h-full relative overflow-hidden rounded-xl border ${borderColor || 'border-transparent'} p-4 ${cardBgColor || 'bg-background/60'} backdrop-blur-xl`}>
-      <div className="flex flex-col h-full justify-between gap-2">
-        <div className="flex justify-between items-start">
-          <h3 className="text-base font-semibold tracking-wide text-foreground">{title}</h3>
-          <div className={`p-2 rounded-md ${iconBgColor || 'bg-gray-100'} opacity-50`}>
-            {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<React.SVGProps<SVGSVGElement>>, {
-              className: `h-6 w-6 ${iconColor || 'text-muted-foreground'}`,
-              'aria-hidden': true,
-              strokeWidth: 2.5
-            }) : icon}
-          </div>
-        </div>
-        <div>
-          <div className="h-8 w-24 bg-muted/50 rounded-md animate-pulse mb-1" />
-          <p className="text-xs text-muted-foreground/50">{description}</p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function MetricCard({
-  title,
-  value,
-  description,
-  icon,
-  loading,
-  iconBgColor,
-  iconColor,
-  borderColor,
-  gradientColor = "from-blue-500/20 to-purple-500/20",
-  cardBgColor,
-  delay = 0,
-  trend,
-  className
-}: MetricCardProps) {
-  const [isHovered, setIsHovered] = useState(false)
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay, ease: "easeOut" }}
-      whileHover={{ scale: 1 }}
-      className="h-full"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      <div
-        className={cn(
-          "relative overflow-hidden h-full transition-all duration-300",
-          "rounded-xl border border-border/50 bg-background/60 backdrop-blur-xl",
-          "hover:shadow-xl hover:border-primary/20",
-          "group",
-          borderColor || 'border-transparent',
-          cardBgColor || 'bg-background/60',
-          className
-        )}
-      >
-        {/* Gradient Background Effect */}
-        <div
-          className={cn(
-            "absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-br pointer-events-none",
-            gradientColor
-          )}
-        />
-
-        {/* Content Wrapper */}
-        <div className="relative z-10 h-full p-4">
-          <div className="flex flex-col h-full justify-between gap-1">
-            <div className="flex justify-between items-start">
-              <h3 className="text-base font-semibold tracking-wide text-foreground">{title}</h3>
-              <motion.div
-                className={`p-2 rounded-md ${iconBgColor || 'bg-gray-100'} transition-all duration-300`}
-                animate={isHovered ? { rotate: 10 } : { rotate: 0 }}
-              >
-                {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<React.SVGProps<SVGSVGElement>>, {
-                  className: `h-6 w-6 ${iconColor || 'text-muted-foreground'}`,
-                  'aria-hidden': true,
-                  strokeWidth: 2.5
-                }) : icon}
-              </motion.div>
-            </div>
-            <div>
-              <div className="text-2xl font-bold tracking-tight text-foreground min-h-[2rem] flex items-center relative overflow-hidden">
-                <AnimatePresence mode="wait">
-                  {loading ? (
-                    <motion.div
-                      key="skeleton"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.2 }}
-                    >
-                      <div className="h-8 w-24 bg-muted/50 rounded-md animate-pulse" />
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key="value"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.2 }}
-                    >
-                      {value}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-              <div className="text-xs text-muted-foreground mt-1 flex items-center gap-2">
-                {trend && (
-                  <span
-                    className={cn(
-                      "flex items-center font-medium",
-                      trend.positive ? "text-green-500" : "text-red-500"
-                    )}
-                  >
-                    {trend.positive ? "+" : ""}
-                    {trend.value.toFixed(1)}%
-                  </span>
-                )}
-                {description && <span>{description}</span>}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </motion.div>
-  )
-}
 
 export function UserReportsView() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>()
@@ -275,62 +115,62 @@ export function UserReportsView() {
             <MetricCard
               title="Total Logins"
               value={dataReady ? reportsData.stats.totalLogins : 0}
-              description={dataReady && reportsData.lastLogin ? `Last login: ${formatLastLogin(new Date(reportsData.lastLogin))}` : "No login data"}
-              icon={<Clock className="h-4 w-4 text-muted-foreground" />}
+              description={dataReady && reportsData.lastLogin ? `Last: ${formatLastLogin(new Date(reportsData.lastLogin))}` : "No login data"}
+              icon={<Clock />}
               loading={!dataReady}
               iconBgColor="bg-blue-500/20"
-              iconColor="text-blue-700"
-              borderColor="border-blue-200"
+              iconColor="text-blue-700 dark:text-blue-400"
+              borderColor="border-blue-200/50 dark:border-blue-900/50"
               gradientColor="from-blue-500/10 to-cyan-500/10"
-              cardBgColor="bg-blue-50/50 dark:bg-blue-900/10"
+              cardBgColor="bg-blue-50/50 dark:bg-blue-950/20"
               delay={0.1}
             />
             <MetricCard
-              title="Actions Performed"
+              title="Actions"
               value={dataReady ? reportsData.stats.totalActions : 0}
-              description={reportsData?.trends.activityTrend ? `${reportsData.trends.activityTrend > 0 ? '+' : ''}${reportsData.trends.activityTrend.toFixed(1)}% from last week` : "No change"}
-              icon={<Activity className="h-4 w-4 text-muted-foreground" />}
+              description="System actions"
+              icon={<Activity />}
               loading={!dataReady}
-              iconBgColor="bg-green-500/20"
-              iconColor="text-green-700"
-              borderColor="border-green-200"
-              gradientColor="from-green-500/10 to-emerald-500/10"
-              cardBgColor="bg-green-50/50 dark:bg-green-900/10"
+              iconBgColor="bg-emerald-500/20"
+              iconColor="text-emerald-700 dark:text-emerald-400"
+              borderColor="border-emerald-200/50 dark:border-emerald-900/50"
+              gradientColor="from-emerald-500/10 to-teal-500/10"
+              cardBgColor="bg-emerald-50/50 dark:bg-emerald-950/20"
               delay={0.2}
               trend={reportsData?.trends.activityTrend ? {
                 value: reportsData.trends.activityTrend,
-                label: "from last week",
+                label: "vs last week",
                 positive: reportsData.trends.activityTrend > 0
               } : undefined}
             />
             <MetricCard
-              title="Reports Generated"
+              title="Reports"
               value={dataReady ? reportsData.stats.reportsGenerated : 0}
-              description="3 this week"
-              icon={<FileText className="h-4 w-4 text-muted-foreground" />}
+              description="Generated files"
+              icon={<FileText />}
               loading={!dataReady}
               iconBgColor="bg-purple-500/20"
-              iconColor="text-purple-700"
-              borderColor="border-purple-200"
+              iconColor="text-purple-700 dark:text-purple-400"
+              borderColor="border-purple-200/50 dark:border-purple-900/50"
               gradientColor="from-purple-500/10 to-pink-500/10"
-              cardBgColor="bg-purple-50/50 dark:bg-purple-900/10"
+              cardBgColor="bg-purple-50/50 dark:bg-purple-950/20"
               delay={0.3}
             />
             <MetricCard
-              title="Average Session"
+              title="Avg Session"
               value={dataReady ? reportsData.stats.averageSession : "0m"}
-              description={reportsData?.trends.sessionTrend ? `${reportsData.trends.sessionTrend > 0 ? '+' : ''}${reportsData.trends.sessionTrend.toFixed(1)}% from last week` : "No change"}
-              icon={<Star className="h-4 w-4 text-muted-foreground" />}
+              description="Time per session"
+              icon={<Star />}
               loading={!dataReady}
-              iconBgColor="bg-orange-500/20"
-              iconColor="text-orange-700"
-              borderColor="border-orange-200"
-              gradientColor="from-orange-500/10 to-red-500/10"
-              cardBgColor="bg-orange-50/50 dark:bg-orange-900/10"
+              iconBgColor="bg-amber-500/20"
+              iconColor="text-amber-700 dark:text-amber-400"
+              borderColor="border-amber-200/50 dark:border-amber-900/50"
+              gradientColor="from-amber-500/10 to-orange-500/10"
+              cardBgColor="bg-amber-50/50 dark:bg-amber-950/20"
               delay={0.4}
               trend={reportsData?.trends.sessionTrend ? {
                 value: Math.abs(reportsData.trends.sessionTrend),
-                label: "from last week",
+                label: "vs last week",
                 positive: reportsData.trends.sessionTrend > 0
               } : undefined}
             />

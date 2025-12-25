@@ -102,42 +102,42 @@ export function AdminAnalyticsView() {
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                         <MetricCard
                             title="All Users"
-                            description="Total number of registered users"
+                            description="Total system accounts"
                             value={formatNumber(displayStats.totalUsers)}
-                            icon={<Users className="h-4 w-4 text-muted-foreground" />}
+                            icon={<Users />}
                             loading={!dataReady}
                             iconBgColor="bg-blue-500/20"
-                            iconColor="text-blue-700"
-                            borderColor="border-blue-200"
+                            iconColor="text-blue-700 dark:text-blue-400"
+                            borderColor="border-blue-200/50 dark:border-blue-900/50"
                             gradientColor="from-blue-500/10 to-cyan-500/10"
-                            cardBgColor="bg-blue-50/50 dark:bg-blue-900/10"
+                            cardBgColor="bg-blue-50/50 dark:bg-blue-950/20"
                             delay={0.1}
-                            trend={trends.userGrowth > 0 ? { value: trends.userGrowth, label: "from last month", positive: true } : undefined}
+                            trend={trends.userGrowth > 0 ? { value: trends.userGrowth, label: "vs last month", positive: true } : undefined}
                         />
                         <MetricCard
                             title="Active Users"
-                            description="Allowed to access the system"
+                            description="Allowed access level"
                             value={formatNumber(displayStats.activeUsersForAccess)}
-                            icon={<UserCheck className="h-4 w-4 text-muted-foreground" />}
+                            icon={<UserCheck />}
                             loading={!dataReady}
-                            iconBgColor="bg-green-500/20"
-                            iconColor="text-green-700"
-                            borderColor="border-green-200"
-                            gradientColor="from-green-500/10 to-emerald-500/10"
-                            cardBgColor="bg-green-50/50 dark:bg-green-900/10"
+                            iconBgColor="bg-emerald-500/20"
+                            iconColor="text-emerald-700 dark:text-emerald-400"
+                            borderColor="border-emerald-200/50 dark:border-emerald-900/50"
+                            gradientColor="from-emerald-500/10 to-teal-500/10"
+                            cardBgColor="bg-emerald-50/50 dark:bg-emerald-950/20"
                             delay={0.2}
                         />
                         <MetricCard
                             title="Inactive Users"
-                            description="Not allowed to access the system"
+                            description="Blocked access level"
                             value={formatNumber(displayStats.inactiveUsers)}
-                            icon={<UserX className="h-4 w-4 text-muted-foreground" />}
+                            icon={<UserX />}
                             loading={!dataReady}
-                            iconBgColor="bg-red-500/20"
-                            iconColor="text-red-700"
-                            borderColor="border-red-200"
-                            gradientColor="from-red-500/10 to-red-500/10"
-                            cardBgColor="bg-red-50/50 dark:bg-red-900/10"
+                            iconBgColor="bg-rose-500/20"
+                            iconColor="text-rose-700 dark:text-rose-400"
+                            borderColor="border-rose-200/50 dark:border-rose-900/50"
+                            gradientColor="from-rose-500/10 to-red-500/10"
+                            cardBgColor="bg-rose-50/50 dark:bg-rose-950/20"
                             delay={0.3}
                         />
                     </div>

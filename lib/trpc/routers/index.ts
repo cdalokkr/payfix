@@ -11,6 +11,7 @@ import { adminReportsRouter } from './admin-reports'
 import { moderatorReportsRouter } from './moderator-reports'
 import { notificationRouter } from './notification'
 import { designationRouter } from './designation'
+import { attendanceRouter } from './attendance'
 
 export const appRouter = router({
   auth: authRouter,
@@ -24,8 +25,10 @@ export const appRouter = router({
   }),
   moderator: router({
     reports: moderatorReportsRouter,
+    attendance: attendanceRouter,
   }),
   notification: notificationRouter,
+  attendance: attendanceRouter,
 })
 
 export type AppRouter = typeof appRouter

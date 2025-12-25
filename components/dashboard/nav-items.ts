@@ -70,6 +70,40 @@ export const adminNavItems: NavGroup[] = [
     ]
   },
   {
+    label: "Payroll",
+    icon: "Banknote",
+    items: [
+      {
+        title: "Dashboard",
+        href: "/admin/payroll/dashboard",
+        icon: "LayoutDashboard",
+        moduleId: "payroll",
+        description: "Payroll overview and statistics"
+      },
+      {
+        title: "Attendance",
+        href: "/admin/payroll/attendance",
+        icon: "CalendarCheck",
+        moduleId: "attendance",
+        description: "Manage employee attendance"
+      },
+      {
+        title: "Leaves",
+        href: "/admin/payroll/leaves",
+        icon: "CalendarOff",
+        moduleId: "leaves",
+        description: "Manage leave applications"
+      },
+      {
+        title: "Settings",
+        href: "/admin/payroll/settings",
+        icon: "Settings",
+        moduleId: "settings",
+        description: "Office timing and closures"
+      },
+    ]
+  },
+  {
     label: "Personalize",
     icon: "UserPen",
     items: [
@@ -121,9 +155,35 @@ export const moderatorNavItems: NavGroup[] = [
     ]
   },
   {
+    label: "Payroll",
+    icon: "Banknote",
+    items: [
+      {
+        title: "Dashboard",
+        href: "/moderator/payroll/dashboard",
+        icon: "LayoutDashboard",
+        moduleId: "payroll",
+        description: "Payroll overview"
+      },
+      {
+        title: "Attendance",
+        href: "/moderator/payroll/attendance",
+        icon: "CalendarCheck",
+        moduleId: "attendance",
+        description: "Manage employee attendance"
+      },
+      {
+        title: "Leaves",
+        href: "/moderator/payroll/leaves",
+        icon: "CalendarOff",
+        moduleId: "leaves",
+        description: "Manage leave applications"
+      },
+    ]
+  },
+  {
     label: "Personalize",
     icon: "UserPen",
-
     items: [
       {
         title: "Profile",
@@ -152,9 +212,35 @@ export const employeeNavItems: NavGroup[] = [
     ]
   },
   {
+    label: "Payroll",
+    icon: "Banknote",
+    items: [
+      {
+        title: "Dashboard",
+        href: "/employee/payroll/dashboard",
+        icon: "LayoutDashboard",
+        moduleId: "payroll",
+        description: "Your payroll overview"
+      },
+      {
+        title: "Attendance",
+        href: "/employee/payroll/attendance",
+        icon: "CalendarCheck",
+        moduleId: "attendance",
+        description: "Mark attendance and view history"
+      },
+      {
+        title: "Leaves",
+        href: "/employee/payroll/leaves",
+        icon: "CalendarOff",
+        moduleId: "leaves",
+        description: "Apply for leaves and view status"
+      },
+    ]
+  },
+  {
     label: "Personalize",
     icon: "UserPen",
-
     items: [
       {
         title: "Profile",

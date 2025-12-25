@@ -1,7 +1,7 @@
 // ============================================
 // types/index.ts
 // ============================================
-export type Module = 'dashboard' | 'users' | 'reports' | 'settings' | 'analytics' | 'notifications' | 'billing' | 'profile'
+export type Module = 'dashboard' | 'users' | 'reports' | 'settings' | 'analytics' | 'notifications' | 'billing' | 'profile' | 'attendance' | 'leaves' | 'payroll'
 
 export type UserRole = 'admin' | 'moderator' | 'employee'
 
@@ -145,4 +145,54 @@ export interface AnalyticsExportOptions {
   }
   metrics: string[]
   includeCharts: boolean
+}
+
+export interface Attendance {
+  id: string
+  profile_id: string
+  date: string
+  check_in: string | null
+  check_out: string | null
+  working_hours: number | null
+  status: 'pending' | 'verified' | 'rejected'
+  remarks: string | null
+  verified_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface Leave {
+  id: string
+  profile_id: string
+  leave_type: string | null
+  start_date: string
+  end_date: string
+  reason: string | null
+  status: 'pending' | 'approved' | 'rejected'
+  remarks: string | null
+  approved_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface OfficeSettings {
+  id: string
+  default_check_in: string
+  default_check_out: string
+  updated_at: string
+}
+
+export interface OfficeClosure {
+  id: string
+  date: string
+  reason: string
+  type: 'holiday' | 'closed'
+  created_at: string
+}
+
+export interface EmployeeSettings {
+  profile_id: string
+  custom_check_in: string | null
+  custom_check_out: string | null
+  updated_at: string
 }
