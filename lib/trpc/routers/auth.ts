@@ -209,7 +209,7 @@ export const authRouter = router({
               module: 'auth',
               description: formatActivityDescription({
                 action: 'login',
-                actorRole: profileData?.role || 'user',
+                actorRole: profileData?.role || 'employee',
                 actorEmail: data.user.email || '',
                 module: 'auth'
               }),
@@ -225,7 +225,7 @@ export const authRouter = router({
         // Ensure role is present
         if (!profileData.role) {
           console.warn('[Auth] Profile missing role for user:', data.user.id)
-          profileData.role = 'user' // Default to user role
+          profileData.role = 'employee' // Default to employee role
         }
 
         return {
@@ -268,7 +268,7 @@ export const authRouter = router({
       if (ctx.user) {
         // Use ctx.profile.role if available, otherwise fallback to user
         // ctx.profile should be populated by the optimized context
-        const actorRole = ctx.profile?.role || 'user'
+        const actorRole = ctx.profile?.role || 'employee'
 
         const { error: activityError } = await ctx.supabase.from('activities').insert({
           user_id: ctx.profile?.id || ctx.user.id, // Use profile.id if available
@@ -399,7 +399,7 @@ export const authRouter = router({
         module: 'auth',
         description: formatActivityDescription({
           action: 'update',
-          actorRole: ctx.profile?.role || 'user',
+          actorRole: ctx.profile?.role || 'employee',
           actorEmail: email,
           module: 'auth'
         }),

@@ -3,7 +3,7 @@
 import { MetricCard } from "@/components/dashboard/metric-card"
 import { ActionButton } from "@/components/ui/action-button"
 import { PageHeading } from "@/components/ui/page-heading"
-import { Settings, Bell, User, Activity, LogIn, LogOut, Calendar, History, BarChart3 } from "lucide-react"
+import { Settings, Bell, User, Activity, LogIn, LogOut, Calendar, History, BarChart3, UserCheck, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { trpc } from "@/lib/trpc/client"
 import { Activity as ActivityType } from "@/types"
@@ -12,6 +12,10 @@ import { ActivityLogFeed, type UserActivity } from "@/components/dashboard/activ
 import { motion } from "framer-motion"
 import { format } from "date-fns"
 import { useUserRealtimeDashboard } from "@/hooks/use-realtime-dashboard-data"
+import { Badge } from "@/components/ui/badge"
+import { toast } from "sonner"
+import { useEffect, useState } from "react"
+import { DailyAttendanceCard } from "@/features/attendance/DailyAttendanceCard"
 
 
 
@@ -47,6 +51,8 @@ function ActivitiesCard({ activities, loading }: ActivitiesCardProps) {
         </MetricCard>
     )
 }
+
+
 
 export default function EmployeeDashboard({ initialData }: { initialData?: any }) {
     // Get profile to obtain userId for real-time subscriptions
@@ -191,6 +197,9 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                     </div>
                 </MetricCard>
             </div>
+
+            {/* Daily Attendance Section */}
+            <DailyAttendanceCard />
 
             {/* Recent Activities */}
             <ActivitiesCard activities={recentActivities as any} loading={!recentActivityDataReady && !initialData} />

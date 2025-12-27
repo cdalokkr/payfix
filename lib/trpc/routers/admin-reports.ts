@@ -36,8 +36,8 @@ export const adminReportsRouter = router({
         activitiesInPeriodResult,
         profilesResult,
         adminCountResult,
-        userCountResult,
         moderatorCountResult,
+        employeeCountResult,
         activeProfilesCountResult,
         inactiveProfilesCountResult,
       ] = await Promise.all([
@@ -81,11 +81,11 @@ export const adminReportsRouter = router({
           .select('*', { count: 'exact', head: true })
           .eq('role', 'admin'),
 
-        // Total Regular Users Count
+        // Total Employees Count
         ctx.supabase
           .from('profiles')
           .select('*', { count: 'exact', head: true })
-          .neq('role', 'admin'),
+          .eq('role', 'employee'),
 
         // Total Moderators Count
         ctx.supabase
@@ -124,7 +124,6 @@ export const adminReportsRouter = router({
       const adminUsers: { user_id: string, name: string, count: number, email: string, avatar_url: string | null }[] = []
       const moderatorUsers: { user_id: string, name: string, count: number, email: string, avatar_url: string | null }[] = []
       const employeeUsers: { user_id: string, name: string, count: number, email: string, avatar_url: string | null }[] = []
-      const regularUsers: { user_id: string, name: string, count: number, email: string, avatar_url: string | null }[] = []
 
       if (profilesResult.data) {
         profilesResult.data.forEach((profile: any) => {
@@ -143,10 +142,8 @@ export const adminReportsRouter = router({
               adminUsers.push(userData)
             } else if (profile.role === 'moderator') {
               moderatorUsers.push(userData)
-            } else if (profile.role === 'employee') {
-              employeeUsers.push(userData)
             } else {
-              regularUsers.push(userData)
+              employeeUsers.push(userData)
             }
           }
         })
@@ -156,7 +153,6 @@ export const adminReportsRouter = router({
       const topAdmins = adminUsers.sort((a, b) => b.count - a.count).slice(0, 5)
       const topModerators = moderatorUsers.sort((a, b) => b.count - a.count).slice(0, 5)
       const topEmployees = employeeUsers.sort((a, b) => b.count - a.count).slice(0, 5)
-      const topUsers = regularUsers.sort((a, b) => b.count - a.count).slice(0, 5)
 
       // Helper function to prepare chart data for activity breakdown
       const prepareBreakdownChartData = (topUsers: any[], showBreakdown: boolean = true) => {
@@ -261,23 +257,23 @@ export const adminReportsRouter = router({
         })
       }
 
-      const activityRoleCounts = new Map<string, { admin: number, user: number }>()
+      const activityRoleCounts = new Map<string, { admin: number, employee: number }>()
 
       if (activitiesInPeriodResult.data) {
         activitiesInPeriodResult.data.forEach((activity: any) => {
           const type = activity.activity_type || 'unknown'
           const userId = activity.user_id
-          const role = roleMap.get(userId) || 'user' // Default to user if unknown
+          const role = roleMap.get(userId) || 'employee' // Default to employee if unknown
 
           if (!activityRoleCounts.has(type)) {
-            activityRoleCounts.set(type, { admin: 0, user: 0 })
+            activityRoleCounts.set(type, { admin: 0, employee: 0 })
           }
 
           const counts = activityRoleCounts.get(type)!
           if (role === 'admin') {
             counts.admin++
           } else {
-            counts.user++
+            counts.employee++
           }
         })
       }
@@ -285,7 +281,7 @@ export const adminReportsRouter = router({
       const activityByRoleChartData = Array.from(activityRoleCounts.entries()).map(([type, counts]) => ({
         name: type,
         admin: counts.admin,
-        user: counts.user
+        employee: counts.employee
       }))
 
       // Calculate unique active users
@@ -329,7 +325,7 @@ export const adminReportsRouter = router({
           activeSubscriptions: 2350, // Placeholder
           totalAdmins: adminCountResult.count || 0,
           totalModerators: moderatorCountResult.count || 0,
-          totalRegularUsers: userCountResult.count || 0,
+          totalEmployees: employeeCountResult.count || 0,
           activeUsersForAccess: activeProfilesCountResult.count || 0,
           inactiveUsers: inactiveProfilesCountResult.count || 0,
         },
@@ -345,7 +341,6 @@ export const adminReportsRouter = router({
           topAdmins,
           topModerators,
           topEmployees,
-          topUsers,
         },
         metadata: {
           fetchedAt: new Date().toISOString(),

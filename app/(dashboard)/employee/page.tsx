@@ -1,4 +1,3 @@
-import { PageErrorBoundary } from '@/components/ui/error-boundary'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import EmployeeDashboard from '@/components/dashboard/employee-dashboard'
 import { DashboardPageLayout } from '@/components/dashboard/dashboard-page-layout'

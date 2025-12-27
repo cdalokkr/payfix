@@ -100,7 +100,7 @@ export async function authMiddleware(request: NextRequest) {
     }
 
     // Role-based access control with caching
-    const userRole = context.profile?.role || 'user'
+    const userRole = context.profile?.role || 'employee'
 
     // Check route permissions (cached for performance)
     const requiredRole = getRequiredRoleForRoute(path)
@@ -202,7 +202,6 @@ function hasPermission(userRole: string, requiredRole: string): boolean {
     'admin': 3,
     'moderator': 2,
     'employee': 1,
-    'user': 1, // Legacy support
     'anonymous': 0
   }
 

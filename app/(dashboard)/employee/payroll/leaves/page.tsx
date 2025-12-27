@@ -9,7 +9,7 @@ export default function EmployeeLeavesPage() {
             <DashboardPageLayout>
                 <div className="space-y-6">
                     <PageHeading
-                        title="Leave Management"
+                        heading="Leave Management"
                         description="Apply for leaves and track your requests"
                     />
                     <ErrorBoundary level="section">

@@ -10,7 +10,7 @@ import { getSecureSessionManager } from './secure-session'
 export enum SecurityLevel {
   PUBLIC = 'public',
   AUTHENTICATED = 'authenticated',
-  USER = 'user',
+  EMPLOYEE = 'employee',
   ADMIN = 'admin',
   SUPER_ADMIN = 'super_admin'
 }
@@ -76,13 +76,9 @@ export class RouteProtectionManager {
       allowedMethods: ['GET', 'POST', 'PUT', 'DELETE']
     }],
 
-    // User routes
+    // Dashboard routes
     ['/dashboard', {
-      securityLevel: SecurityLevel.USER,
-      requireCSRF: true
-    }],
-    ['/api/user', {
-      securityLevel: SecurityLevel.USER,
+      securityLevel: SecurityLevel.AUTHENTICATED,
       requireCSRF: true
     }],
 
@@ -194,7 +190,7 @@ export class RouteProtectionManager {
       }
 
       // Role-based access control
-      const userRole = validation.session!.user.role || 'user'
+      const userRole = validation.session!.user.role || 'employee'
       const hasAccess = this.checkRoleAccess(userRole, config.securityLevel)
       if (!hasAccess) {
         await this.logSecurityEvent('insufficient_privileges', {
@@ -229,7 +225,7 @@ export class RouteProtectionManager {
     const roleHierarchy = {
       [SecurityLevel.SUPER_ADMIN]: 4,
       [SecurityLevel.ADMIN]: 3,
-      [SecurityLevel.USER]: 2,
+      [SecurityLevel.EMPLOYEE]: 2,
       [SecurityLevel.AUTHENTICATED]: 1,
       [SecurityLevel.PUBLIC]: 0
     }

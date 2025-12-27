@@ -53,12 +53,12 @@ function recordQueryMetrics(metrics: Omit<DatabaseMetrics, 'timestamp'>) {
     ...metrics,
     timestamp: Date.now()
   }
-  
+
   queryMetrics.push(entry)
   if (queryMetrics.length > MAX_METRICS_ENTRIES) {
     queryMetrics.shift()
   }
-  
+
   // Log slow queries
   if (metrics.executionTime > 1000) {
     console.warn(`[DB-PERF] Slow query ${metrics.queryType}: ${metrics.executionTime.toFixed(2)}ms`, {
@@ -95,13 +95,13 @@ function setCachedQuery<T>(queryHash: string, data: T, ttl: number = CACHE_TTL_D
     ttl,
     queryHash
   })
-  
+
   // Clean up cache to prevent memory leaks
   if (queryCache.size > MAX_CACHE_SIZE) {
     const now = Date.now()
     const entries = Array.from(queryCache.entries())
     entries.sort((a, b) => a[1].timestamp - b[1].timestamp) // Sort by timestamp
-    
+
     for (let i = 0; i < entries.length - MAX_CACHE_SIZE; i++) {
       queryCache.delete(entries[i][0])
     }
@@ -111,11 +111,11 @@ function setCachedQuery<T>(queryHash: string, data: T, ttl: number = CACHE_TTL_D
 // Optimized batch query execution
 export class OptimizedQueryManager {
   private supabase: any
-  
+
   constructor(supabaseClient: any) {
     this.supabase = supabaseClient
   }
-  
+
   // BATCH QUERY 1: Get all dashboard metrics in a single optimized query
   async getDashboardMetricsUnified(options: {
     analyticsDays?: number
@@ -129,13 +129,13 @@ export class OptimizedQueryManager {
     const startTime = startQueryTiming('getDashboardMetricsUnified')
     const { analyticsDays = 7, activitiesLimit = 10, useCache = true } = options
     const queryHash = hashQuery('dashboard_metrics_unified', { analyticsDays, activitiesLimit })
-    
+
     type DashboardMetricsResult = {
       critical: { totalUsers: number; activeUsers: number }
       secondary: { totalActivities: number; todayActivities: number; analytics: any[] }
       detailed: { recentActivities: any[] }
     }
-    
+
     try {
       // Check cache first
       if (useCache) {
@@ -151,26 +151,26 @@ export class OptimizedQueryManager {
           return cached
         }
       }
-      
+
       // Use optimized single query with proper joins to prevent N+1
       const [profilesResult, activitiesResult, todayActivitiesResult, analyticsResult, recentActivitiesResult, activeUsersResult] = await Promise.all([
         // Total users count with role filtering
         this.supabase
           .from('profiles')
           .select('*', { count: 'exact', head: true })
-          .eq('role', 'user'),
-        
+          .eq('role', 'employee'),
+
         // Total activities count
         this.supabase
           .from('activities')
           .select('*', { count: 'exact', head: true }),
-        
+
         // Today's activities count (optimized with date range)
         this.supabase
           .from('activities')
           .select('*', { count: 'exact', head: true })
           .gte('created_at', new Date().toISOString().split('T')[0]),
-        
+
         // Analytics data with optimized date range
         this.supabase
           .from('analytics_metrics')
@@ -178,7 +178,7 @@ export class OptimizedQueryManager {
           .gte('metric_date', new Date(Date.now() - analyticsDays * 24 * 60 * 60 * 1000).toISOString())
           .order('metric_date', { ascending: true })
           .limit(analyticsDays * 24), // Limit to prevent excessive data
-        
+
         // Recent activities with optimized join (prevents N+1)
         this.supabase
           .from('activities')
@@ -193,39 +193,39 @@ export class OptimizedQueryManager {
           `)
           .order('created_at', { ascending: false })
           .limit(activitiesLimit),
-        
+
         // Active users calculation (optimized single query)
         this.supabase
           .from('activities')
           .select('user_id')
           .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
       ])
-      
+
       // Process results efficiently
       const uniqueUsers = new Set(
         activeUsersResult.data?.map((a: any) => a.user_id).filter(Boolean) || []
       )
-      
+
       const result: DashboardMetricsResult = {
-          critical: {
-            totalUsers: profilesResult.count || 0,
-            activeUsers: uniqueUsers.size
-          },
-          secondary: {
-            totalActivities: activitiesResult.count || 0,
-            todayActivities: todayActivitiesResult.count || 0,
-            analytics: analyticsResult.data || []
-          },
-          detailed: {
-            recentActivities: recentActivitiesResult.data || []
-          }
+        critical: {
+          totalUsers: profilesResult.count || 0,
+          activeUsers: uniqueUsers.size
+        },
+        secondary: {
+          totalActivities: activitiesResult.count || 0,
+          todayActivities: todayActivitiesResult.count || 0,
+          analytics: analyticsResult.data || []
+        },
+        detailed: {
+          recentActivities: recentActivitiesResult.data || []
         }
-        
-        // Cache the result
-        if (useCache) {
-          setCachedQuery<DashboardMetricsResult>(queryHash, result, 15 * 1000) // 15 seconds cache
-        }
-      
+      }
+
+      // Cache the result
+      if (useCache) {
+        setCachedQuery<DashboardMetricsResult>(queryHash, result, 15 * 1000) // 15 seconds cache
+      }
+
       recordQueryMetrics({
         queryType: 'getDashboardMetricsUnified',
         executionTime: performance.now() - startTime,
@@ -233,15 +233,15 @@ export class OptimizedQueryManager {
         cacheHit: false,
         indexUsed: true
       })
-      
+
       return result
-      
+
     } catch (error) {
       console.error('[DB-PERF] getDashboardMetricsUnified failed:', error)
       throw error
     }
   }
-  
+
   // BATCH QUERY 2: Optimized user management queries
   async getUsersOptimized(options: {
     page?: number
@@ -258,13 +258,13 @@ export class OptimizedQueryManager {
     const { page = 1, limit = 20, role, search, useCache = true } = options
     const offset = (page - 1) * limit
     const queryHash = hashQuery('users_optimized', { page, limit, role, search })
-    
+
     type UsersResult = {
       users: any[]
       total: number
       hasMore: boolean
     }
-    
+
     try {
       // Check cache for basic queries
       if (useCache && !search && !role) {
@@ -280,7 +280,7 @@ export class OptimizedQueryManager {
           return cached
         }
       }
-      
+
       // Build optimized query with proper joins
       let query = this.supabase
         .from('profiles')
@@ -300,31 +300,31 @@ export class OptimizedQueryManager {
         `, { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1)
-      
+
       // Apply filters
       if (role) {
         query = query.eq('role', role)
       }
-      
+
       if (search) {
         query = query.or(`email.ilike.%${search}%,first_name.ilike.%${search}%,last_name.ilike.%${search}%`)
       }
-      
+
       const { data, error, count } = await query
-      
+
       if (error) throw error
-      
+
       const result: UsersResult = {
         users: data || [],
         total: count || 0,
         hasMore: (count || 0) > offset + limit
       }
-      
+
       // Cache the result
       if (useCache && !search && !role) {
         setCachedQuery<UsersResult>(queryHash, result, 60 * 1000) // 1 minute cache
       }
-      
+
       recordQueryMetrics({
         queryType: 'getUsersOptimized',
         executionTime: performance.now() - startTime,
@@ -332,15 +332,15 @@ export class OptimizedQueryManager {
         cacheHit: false,
         indexUsed: true
       })
-      
+
       return result
-      
+
     } catch (error) {
       console.error('[DB-PERF] getUsersOptimized failed:', error)
       throw error
     }
   }
-  
+
   // BATCH QUERY 3: Optimized activity queries with pagination
   async getActivitiesOptimized(options: {
     page?: number
@@ -359,13 +359,13 @@ export class OptimizedQueryManager {
     const { page = 1, limit = 20, userId, activityType, dateFrom, dateTo, useCache = true } = options
     const offset = (page - 1) * limit
     const queryHash = hashQuery('activities_optimized', { page, limit, userId, activityType, dateFrom, dateTo })
-    
+
     type ActivitiesResult = {
       activities: any[]
       total: number
       hasMore: boolean
     }
-    
+
     try {
       // Check cache for basic queries
       if (useCache && !userId && !activityType && !dateFrom && !dateTo) {
@@ -381,7 +381,7 @@ export class OptimizedQueryManager {
           return cached
         }
       }
-      
+
       // Build optimized query with proper joins (prevents N+1)
       let query = this.supabase
         .from('activities')
@@ -401,39 +401,39 @@ export class OptimizedQueryManager {
         `, { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1)
-      
+
       // Apply filters
       if (userId) {
         query = query.eq('user_id', userId)
       }
-      
+
       if (activityType) {
         query = query.eq('activity_type', activityType)
       }
-      
+
       if (dateFrom) {
         query = query.gte('created_at', dateFrom)
       }
-      
+
       if (dateTo) {
         query = query.lte('created_at', dateTo)
       }
-      
+
       const { data, error, count } = await query
-      
+
       if (error) throw error
-      
+
       const result: ActivitiesResult = {
         activities: data || [],
         total: count || 0,
         hasMore: (count || 0) > offset + limit
       }
-      
+
       // Cache the result
       if (useCache && !userId && !activityType && !dateFrom && !dateTo) {
         setCachedQuery<ActivitiesResult>(queryHash, result, 30 * 1000) // 30 seconds cache
       }
-      
+
       recordQueryMetrics({
         queryType: 'getActivitiesOptimized',
         executionTime: performance.now() - startTime,
@@ -441,15 +441,15 @@ export class OptimizedQueryManager {
         cacheHit: false,
         indexUsed: true
       })
-      
+
       return result
-      
+
     } catch (error) {
       console.error('[DB-PERF] getActivitiesOptimized failed:', error)
       throw error
     }
   }
-  
+
   // BATCH QUERY 4: Single query for complex statistics
   async getComplexStatistics(options: {
     dateRange: { from: string; to: string }
@@ -463,13 +463,13 @@ export class OptimizedQueryManager {
     const startTime = startQueryTiming('getComplexStatistics')
     const { dateRange, groupBy = 'day', useCache = true } = options
     const queryHash = hashQuery('complex_statistics', { dateRange, groupBy })
-    
+
     type ComplexStatisticsResult = {
       userGrowth: any[]
       activityStats: any[]
       topUsers: any[]
     }
-    
+
     try {
       // Check cache
       if (useCache) {
@@ -485,7 +485,7 @@ export class OptimizedQueryManager {
           return cached
         }
       }
-      
+
       // Execute optimized batch queries
       const [userGrowth, activityStats, topUsers] = await Promise.all([
         // User growth over time (using index on created_at)
@@ -494,7 +494,7 @@ export class OptimizedQueryManager {
           .select('created_at')
           .gte('created_at', dateRange.from)
           .lte('created_at', dateRange.to),
-        
+
         // Activity statistics (using optimized joins)
         this.supabase
           .from('activities')
@@ -507,7 +507,7 @@ export class OptimizedQueryManager {
           `)
           .gte('created_at', dateRange.from)
           .lte('created_at', dateRange.to),
-        
+
         // Top active users (optimized aggregation)
         this.supabase
           .from('activities')
@@ -521,19 +521,19 @@ export class OptimizedQueryManager {
           .order('count', { ascending: false })
           .limit(10)
       ])
-      
+
       // Process results
       const result: ComplexStatisticsResult = {
         userGrowth: userGrowth.data || [],
         activityStats: activityStats.data || [],
         topUsers: topUsers.data || []
       }
-      
+
       // Cache the result
       if (useCache) {
         setCachedQuery<ComplexStatisticsResult>(queryHash, result, 5 * 60 * 1000) // 5 minutes cache for complex stats
       }
-      
+
       recordQueryMetrics({
         queryType: 'getComplexStatistics',
         executionTime: performance.now() - startTime,
@@ -541,9 +541,9 @@ export class OptimizedQueryManager {
         cacheHit: false,
         indexUsed: true
       })
-      
+
       return result
-      
+
     } catch (error) {
       console.error('[DB-PERF] getComplexStatistics failed:', error)
       throw error
@@ -554,17 +554,17 @@ export class OptimizedQueryManager {
 // Performance monitoring utilities
 export function getDatabasePerformanceStats() {
   const recentMetrics = queryMetrics.slice(-100)
-  
+
   const avgQueryTime = recentMetrics.length > 0
     ? recentMetrics.reduce((sum, m) => sum + m.executionTime, 0) / recentMetrics.length
     : 0
-  
+
   const cacheHitRate = recentMetrics.length > 0
     ? (recentMetrics.filter(m => m.cacheHit).length / recentMetrics.length) * 100
     : 0
-  
+
   const slowQueries = recentMetrics.filter(m => m.executionTime > 500).length
-  
+
   return {
     totalQueries: queryMetrics.length,
     recentQueries: recentMetrics.length,

@@ -224,7 +224,7 @@ export const employeeNavItems: NavGroup[] = [
       },
       {
         title: "Attendance",
-        href: "/employee/payroll/attendance",
+        href: "/employee/attendance",
         icon: "CalendarCheck",
         moduleId: "attendance",
         description: "Mark attendance and view history"

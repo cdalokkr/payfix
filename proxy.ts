@@ -47,7 +47,7 @@ function addSecurityHeaders(response: NextResponse, request: NextRequest): NextR
 
     // Prevent caching of authenticated pages
     const pathname = request.nextUrl.pathname
-    if (pathname.startsWith('/admin') || pathname.startsWith('/user') || pathname.startsWith('/dashboard')) {
+    if (pathname.startsWith('/admin') || pathname.startsWith('/moderator') || pathname.startsWith('/employee') || pathname.startsWith('/dashboard')) {
         response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
         response.headers.set('Pragma', 'no-cache')
         response.headers.set('Expires', '0')
@@ -144,10 +144,8 @@ export async function proxy(request: NextRequest) {
     const isAdminRoute = pathname.startsWith('/admin')
     const isModeratorRoute = pathname.startsWith('/moderator')
     const isEmployeeRoute = pathname.startsWith('/employee')
-    const isUserRoute = pathname.startsWith('/user')
-
     // Any dashboard-related route is considered a protected route
-    const isProtectedRoute = isAdminRoute || isModeratorRoute || isEmployeeRoute || isUserRoute
+    const isProtectedRoute = isAdminRoute || isModeratorRoute || isEmployeeRoute
 
     const isLoginRoute = pathname === '/login'
     const isDeactiveAccountRoute = pathname === '/deactive-account'
@@ -185,11 +183,15 @@ export async function proxy(request: NextRequest) {
         }
 
         if (isAdminRoute && profile.role !== 'admin') {
-            return NextResponse.redirect(new URL('/user', request.url))
+            return NextResponse.redirect(new URL('/' + profile.role, request.url))
         }
 
-        if (isUserRoute && profile.role !== 'user') {
-            return NextResponse.redirect(new URL('/admin', request.url))
+        if (isModeratorRoute && profile.role !== 'moderator' && profile.role !== 'admin') {
+            return NextResponse.redirect(new URL('/' + profile.role, request.url))
+        }
+
+        if (isEmployeeRoute && profile.role !== 'employee') {
+            return NextResponse.redirect(new URL('/' + profile.role, request.url))
         }
     }
 

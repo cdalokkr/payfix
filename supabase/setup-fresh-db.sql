@@ -14,7 +14,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- 2. CREATE ENUMS
 DO $$ BEGIN
-    CREATE TYPE user_role AS ENUM ('admin', 'moderator', 'employee', 'backoffice', 'user');
+    CREATE TYPE user_role AS ENUM ('admin', 'moderator', 'employee');
 EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     email TEXT UNIQUE NOT NULL,
     full_name TEXT,
     avatar_url TEXT,
-    role user_role DEFAULT 'user',
+    role user_role DEFAULT 'employee',
     designation_id UUID REFERENCES public.designations(id) ON DELETE SET NULL,
     first_name VARCHAR(255),
     middle_name TEXT,

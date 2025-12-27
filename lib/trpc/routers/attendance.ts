@@ -19,10 +19,10 @@ export const attendanceRouter = router({
 
             let query = ctx.supabase
                 .from('attendance')
-                .select('*, profile:profiles(email, full_name)')
+                .select('*, profile:profiles!profile_id(email, full_name)')
 
             // Role-based filtering
-            if (ctx.profile.role === 'employee' || ctx.profile.role === 'user') {
+            if (ctx.profile.role === 'employee') {
                 query = query.eq('profile_id', ctx.profile.id)
             } else if (input.profileId) {
                 query = query.eq('profile_id', input.profileId)
@@ -146,6 +146,16 @@ export const attendanceRouter = router({
 
             if (error) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message })
 
+            const today = new Date().toISOString().split('T')[0]
+
+            // Log activity for real-time update
+            await ctx.supabase.from('activities').insert({
+                user_id: data.profile_id,
+                activity_type: 'data_edit',
+                module: 'attendance',
+                description: `Attendance record for ${today} was ${input.status} by ${ctx.profile.full_name || ctx.profile.email}`,
+            })
+
             return data
         }),
 
@@ -177,6 +187,14 @@ export const attendanceRouter = router({
 
             if (error) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message })
 
+            // Log activity for real-time update
+            await ctx.supabase.from('activities').insert({
+                user_id: data.profile_id,
+                activity_type: 'data_edit',
+                module: 'attendance',
+                description: `Attendance record for ${data.date} was manually updated by ${ctx.profile.full_name || ctx.profile.email}`,
+            })
+
             return data
         }),
 
@@ -192,9 +210,9 @@ export const attendanceRouter = router({
 
             let query = ctx.supabase
                 .from('leaves')
-                .select('*, profile:profiles(email, full_name)')
+                .select('*, profile:profiles!profile_id(email, full_name)')
 
-            if (ctx.profile.role === 'employee' || ctx.profile.role === 'user') {
+            if (ctx.profile.role === 'employee') {
                 query = query.eq('profile_id', ctx.profile.id)
             } else if (input.profileId) {
                 query = query.eq('profile_id', input.profileId)

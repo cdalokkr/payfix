@@ -97,7 +97,6 @@ export const moderatorReportsRouter = router({
 
             const moderatorUsers: { user_id: string, name: string, count: number, email: string, avatar_url: string | null }[] = []
             const employeeUsers: { user_id: string, name: string, count: number, email: string, avatar_url: string | null }[] = []
-            const regularUsers: { user_id: string, name: string, count: number, email: string, avatar_url: string | null }[] = []
 
             if (profilesResult.data) {
                 profilesResult.data.forEach((profile: any) => {
@@ -114,10 +113,8 @@ export const moderatorReportsRouter = router({
 
                         if (profile.role === 'moderator') {
                             moderatorUsers.push(userData)
-                        } else if (profile.role === 'employee') {
+                        } else {
                             employeeUsers.push(userData)
-                        } else if (profile.role === 'user') {
-                            regularUsers.push(userData)
                         }
                     }
                 })
@@ -126,7 +123,6 @@ export const moderatorReportsRouter = router({
             // Sort and substring top 5
             const topModerators = moderatorUsers.sort((a, b) => b.count - a.count).slice(0, 5)
             const topEmployees = employeeUsers.sort((a, b) => b.count - a.count).slice(0, 5)
-            const topUsers = regularUsers.sort((a, b) => b.count - a.count).slice(0, 5)
 
             // Helper function to prepare chart data for activity breakdown
             const prepareBreakdownChartData = (topUsers: any[], showBreakdown: boolean = true) => {
@@ -274,7 +270,6 @@ export const moderatorReportsRouter = router({
                     employeeActivity: employeeActivityChartData,
                     topModerators,
                     topEmployees,
-                    topUsers,
                 },
                 metadata: {
                     fetchedAt: new Date().toISOString(),
