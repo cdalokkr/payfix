@@ -17,13 +17,14 @@ export default async function EmployeeDashboardPage() {
 
     return (
         <ErrorBoundary level="page">
-            <div className="min-h-screen bg-background">
-                <DashboardPageLayout>
-                    <ErrorBoundary level="section">
-                        <EmployeeDashboard initialData={initialData} />
-                    </ErrorBoundary>
-                </DashboardPageLayout>
-            </div>
+            <DashboardPageLayout
+                heading="Employee Dashboard"
+                description="Welcome back! Here is an overview of your common tasks and recent activity."
+            >
+                <ErrorBoundary level="section">
+                    <EmployeeDashboard initialData={initialData} />
+                </ErrorBoundary>
+            </DashboardPageLayout>
         </ErrorBoundary>
     )
 }

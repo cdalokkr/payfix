@@ -3,6 +3,8 @@
 // ============================================
 import { z } from 'zod'
 import { router, adminProcedure } from '../server'
+import { profiles, activities, analyticsMetrics } from '@/lib/db/schema'
+import { eq, and, gte, lte, count, sql, desc, or } from 'drizzle-orm'
 
 export const adminAnalyticsRouter = router({
   getAnalytics: adminProcedure
@@ -12,43 +14,34 @@ export const adminAnalyticsRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      if (!ctx.supabase) {
-        throw new Error('Supabase client not available')
-      }
-      
-      const { data } = await ctx.supabase
-        .from('analytics_metrics')
-        .select('*')
-        .gte('metric_date', new Date(Date.now() - input.days * 24 * 60 * 60 * 1000).toISOString())
-        .order('metric_date', { ascending: true })
-
-      return data || []
+      const data = await ctx.db.query.analyticsMetrics.findMany({
+        where: gte(analyticsMetrics.metric_date, new Date(Date.now() - input.days * 24 * 60 * 60 * 1000).toISOString().split('T')[0]),
+        orderBy: [desc(analyticsMetrics.metric_date)]
+      })
+      return (data || []).map(m => ({
+        ...m,
+        metric_value: Number(m.metric_value),
+        created_at: m.created_at ? m.created_at.toISOString() : null,
+      }))
     }),
 
   // Analytics endpoints
   getCriticalAnalyticsData: adminProcedure.query(async ({ ctx }) => {
-    if (!ctx.supabase) {
-      throw new Error('Supabase client not available')
-    }
-    
-    // Tier 1: Critical analytics KPIs
     const now = new Date()
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
 
-    // Mock calculations - in real implementation, these would be calculated from actual data
-    const [totalUsers, activities] = await Promise.all([
-      ctx.supabase.from('profiles').select('*', { count: 'exact', head: true }),
-      ctx.supabase
-        .from('activities')
-        .select('*')
-        .gte('created_at', thirtyDaysAgo.toISOString())
+    const [totalUsersResult, activitiesInPeriod] = await Promise.all([
+      ctx.db.select({ value: count() }).from(profiles),
+      ctx.db.select({ value: count() }).from(activities).where(gte(activities.created_at, thirtyDaysAgo))
     ])
 
-    // Calculate basic KPIs (placeholder calculations)
-    const userEngagementRate = activities.data ? (activities.data.length / (totalUsers.count || 1)) * 100 : 0
-    const averageSessionDuration = 180 // seconds - placeholder
-    const conversionRate = 3.2 // percentage - placeholder
-    const bounceRate = 45.8 // percentage - placeholder
+    const totalUsersCount = totalUsersResult[0].value
+    const activityCount = activitiesInPeriod[0].value
+
+    const userEngagementRate = totalUsersCount > 0 ? (activityCount / totalUsersCount) * 100 : 0
+    const averageSessionDuration = 180 // placeholder
+    const conversionRate = 3.2 // placeholder
+    const bounceRate = 45.8 // placeholder
 
     return {
       kpis: {
@@ -56,15 +49,15 @@ export const adminAnalyticsRouter = router({
         averageSessionDuration,
         conversionRate,
         bounceRate,
-        pageViews: activities.data?.length || 0,
-        uniqueVisitors: totalUsers.count || 0,
-        newUsers: Math.floor((totalUsers.count || 0) * 0.15), // placeholder
-        returningUsers: Math.floor((totalUsers.count || 0) * 0.85), // placeholder
+        pageViews: activityCount,
+        uniqueVisitors: totalUsersCount,
+        newUsers: Math.floor(totalUsersCount * 0.15),
+        returningUsers: Math.floor(totalUsersCount * 0.85),
       },
       metadata: {
         tier: 'critical',
         fetchedAt: new Date().toISOString(),
-        cacheExpiry: Date.now() + (15 * 1000), // 15 seconds cache
+        cacheExpiry: Date.now() + (15 * 1000),
       }
     }
   }),
@@ -77,20 +70,13 @@ export const adminAnalyticsRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      if (!ctx.supabase) {
-        throw new Error('Supabase client not available')
-      }
-      
-      // Tier 2: Secondary analytics data - charts and trends
       const startDate = new Date(Date.now() - input.days * 24 * 60 * 60 * 1000)
 
       const [analyticsData, topPages] = await Promise.all([
-        ctx.supabase
-          .from('analytics_metrics')
-          .select('*')
-          .gte('metric_date', startDate.toISOString())
-          .order('metric_date', { ascending: true }),
-        // Mock top pages data - in real implementation, this would come from page view tracking
+        ctx.db.query.analyticsMetrics.findMany({
+          where: gte(analyticsMetrics.metric_date, startDate.toISOString().split('T')[0]),
+          orderBy: [desc(analyticsMetrics.metric_date)]
+        }),
         Promise.resolve([
           { page: '/dashboard', views: 1250, uniqueViews: 890, avgTimeOnPage: 180, bounceRate: 35.2 },
           { page: '/profile', views: 980, uniqueViews: 720, avgTimeOnPage: 240, bounceRate: 28.5 },
@@ -110,7 +96,11 @@ export const adminAnalyticsRouter = router({
       ]
 
       return {
-        analytics: analyticsData.data || [],
+        analytics: analyticsData.map(m => ({
+          ...m,
+          metric_value: Number(m.metric_value),
+          created_at: m.created_at ? m.created_at.toISOString() : null,
+        })) || [],
         topPages,
         cohortAnalysis,
         metadata: {
@@ -136,7 +126,7 @@ export const adminAnalyticsRouter = router({
       if (!ctx.supabase) {
         throw new Error('Supabase client not available')
       }
-      
+
       // Tier 3: Detailed analytics data for drill-down
       const startDate = new Date(input.dateRange.start)
       const endDate = new Date(input.dateRange.end)

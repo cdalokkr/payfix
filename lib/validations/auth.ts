@@ -110,7 +110,7 @@ export const createUserSchema = z.object({
   role: z.enum(['admin', 'moderator', 'employee'], {
     message: 'Select User Role'
   }),
-  allowedModules: z.array(z.enum(['dashboard', 'users', 'reports', 'settings', 'analytics', 'notifications', 'billing', 'profile'])).optional(),
+  allowedModules: z.array(z.string()).optional(),
   designationId: z.string().uuid("Designation is required"),
   sex: z.enum(['male', 'female']).or(z.literal('')).refine((val) => val !== '', {
     message: 'Sex is required'
@@ -146,7 +146,7 @@ export const editUserSchema = z.object({
   role: z.enum(['admin', 'moderator', 'employee'], {
     message: 'Select User Role'
   }),
-  allowedModules: z.array(z.enum(['dashboard', 'users', 'reports', 'settings', 'analytics', 'notifications', 'billing', 'profile'])).optional(),
+  allowedModules: z.array(z.string()).optional(),
   designationId: z.string().uuid("Designation is required"),
   sex: z.enum(['male', 'female']).or(z.literal('')).refine((val) => val !== '', {
     message: 'Sex is required'

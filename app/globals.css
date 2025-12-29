@@ -197,7 +197,7 @@
 /* Animation utilities */
 @layer components {
   .dashboard-wrapper {
-    @apply px-3 sm:px-4 lg:px-5 space-y-4;
+    @apply px-3 sm:px-4 lg:px-5;
   }
 }
 

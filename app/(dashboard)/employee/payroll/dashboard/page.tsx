@@ -6,16 +6,13 @@ import { PageHeading } from "@/components/ui/page-heading"
 export default function EmployeePayrollDashboardPage() {
     return (
         <div className="min-h-screen bg-background">
-            <DashboardPageLayout>
-                <div className="space-y-6">
-                    <PageHeading
-                        heading="Payroll Dashboard"
-                        description="Overview of your attendance, leaves, and payroll details"
-                    />
-                    <ErrorBoundary level="section">
-                        <EmployeePayrollDashboard />
-                    </ErrorBoundary>
-                </div>
+            <DashboardPageLayout
+                heading="Payroll Dashboard"
+                description="Overview of your attendance, leaves, and payroll details"
+            >
+                <ErrorBoundary level="section">
+                    <EmployeePayrollDashboard />
+                </ErrorBoundary>
             </DashboardPageLayout>
         </div>
     )

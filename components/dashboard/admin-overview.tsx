@@ -92,6 +92,9 @@ export function AdminOverview({
 
   // Detect route changes to reset skeleton state
   useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[ADMIN-OVERVIEW] Hydrated. initialData: ${initialData ? 'PRESENT' : 'MISSING'}`)
+    }
     const isDashboardRoute = pathname?.includes('/admin')
     const wasOnDifferentRoute = previousPathnameRef.current !== null &&
       previousPathnameRef.current !== pathname
@@ -132,14 +135,6 @@ export function AdminOverview({
 
   return (
     <div className="space-y-6 gesture-friendly">
-      {/* Header with refresh button */}
-      <div className="flex justify-between items-center">
-        <PageHeading
-          heading="Admin Dashboard"
-          description="Overview of your application metrics and activities"
-          variant="gradient"
-        />
-      </div>
 
       {/* Quick Actions & Session Row - Two Columns */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" data-testid="quick-actions-row">

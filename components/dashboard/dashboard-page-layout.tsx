@@ -43,10 +43,10 @@ export function DashboardPageLayout({
   return (
     <div className="dashboard-wrapper">
       {(heading || description || headerAction) && (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          {heading && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          {(heading || description) && (
             <PageHeading
-              heading={heading}
+              heading={heading || ''}
               description={description}
               className="mb-0"
             />

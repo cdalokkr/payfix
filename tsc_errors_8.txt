@@ -1,0 +1,17 @@
+features/users/components/designation-management.tsx(158,21): error TS2322: Type 'Designation' is not assignable to type '{ id: string; name: string; description: string | null; role: "admin" | "moderator" | "employee"; }'.
+  Types of property 'role' are incompatible.
+    Type 'string | null' is not assignable to type '"admin" | "moderator" | "employee"'.
+      Type 'null' is not assignable to type '"admin" | "moderator" | "employee"'.
+features/users/components/designation-management.tsx(204,21): error TS2322: Type 'Designation' is not assignable to type '{ id: string; name: string; description: string | null; role: "admin" | "moderator" | "employee"; }'.
+  Types of property 'role' are incompatible.
+    Type 'string | null' is not assignable to type '"admin" | "moderator" | "employee"'.
+      Type 'null' is not assignable to type '"admin" | "moderator" | "employee"'.
+features/users/components/ModernAddUserForm.tsx(206,9): error TS2322: Type '{ firstName: string; middleName: string; lastName: string; email: string; password: string; confirmPassword: string; mobileNo: string; dateOfBirth: string; sex: "" | "male" | "female"; role: "admin" | ... 1 more ... | "employee"; designationId: string; allowedModules: string[]; }' is not assignable to type 'UserFormValues'.
+  Types of property 'allowedModules' are incompatible.
+    Type 'string[]' is not assignable to type 'Module[]'.
+      Type 'string' is not assignable to type 'Module'.
+features/users/components/ModernAddUserForm.tsx(252,18): error TS2345: Argument of type '{ firstName: string; middleName: string; lastName: string; email: string; mobileNo: string; dateOfBirth: string; sex: "" | "male" | "female"; role: "admin" | "moderator" | "employee"; designationId: string; allowedModules: string[]; password: string; confirmPassword: string; }' is not assignable to parameter of type 'UserFormValues | { firstName?: string | undefined; middleName?: string | null | undefined; lastName?: string | undefined; email?: string | undefined; mobileNo?: string | ... 1 more ... | undefined; ... 6 more ...; confirmPassword?: string | undefined; } | ResetAction<...> | undefined'.
+  Types of property 'allowedModules' are incompatible.
+    Type 'string[]' is not assignable to type 'Module[] | (Module | undefined)[] | undefined'.
+      Type 'string[]' is not assignable to type 'Module[]'.
+        Type 'string' is not assignable to type 'Module'.

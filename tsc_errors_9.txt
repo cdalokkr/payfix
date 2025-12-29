@@ -1,0 +1,4 @@
+features/users/components/modern-add-designation-form.tsx(93,28): error TS2345: Argument of type '{ name: string; description: string; role: string | null; }' is not assignable to parameter of type '{ name: string; role: "admin" | "moderator" | "employee"; description?: string | undefined; } | { name?: string | undefined; role?: "admin" | "moderator" | "employee" | undefined; description?: string | undefined; } | ResetAction<...> | undefined'.
+  Types of property 'role' are incompatible.
+    Type 'string | null' is not assignable to type '"admin" | "moderator" | "employee" | undefined'.
+      Type 'null' is not assignable to type '"admin" | "moderator" | "employee" | undefined'.

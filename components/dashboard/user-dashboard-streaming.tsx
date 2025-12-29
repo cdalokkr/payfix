@@ -31,7 +31,10 @@ export function UserDashboardStreaming({ initialData }: { initialData?: any }) {
             console.error('User Dashboard Error:', error, errorInfo)
         }}>
             <div className="min-h-screen bg-background">
-                <DashboardPageLayout>
+                <DashboardPageLayout
+                    heading="Moderator Dashboard"
+                    description="Overview of your profile and recent activities"
+                >
                     <ErrorBoundary level="section">
                         <UserOverview
                             profile={profile}

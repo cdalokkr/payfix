@@ -25,6 +25,14 @@ ON CONFLICT (name) DO UPDATE SET
     role = EXCLUDED.role;
 
 -- ============================================
+-- STEP 1.5: Ensure Office Settings exist
+-- ============================================
+
+INSERT INTO public.office_settings (default_check_in, default_check_out, off_days)
+SELECT '10:00:00', '19:00:00', array[0]
+WHERE NOT EXISTS (SELECT 1 FROM public.office_settings);
+
+-- ============================================
 -- STEP 2: Insert into profiles table
 -- ============================================
 

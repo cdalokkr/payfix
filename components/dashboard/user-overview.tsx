@@ -164,13 +164,6 @@ export function UserOverview({
 
   return (
     <div className="space-y-6 gesture-friendly">
-      {/* Header */}
-      <PageHeading
-        heading="Moderator Dashboard"
-        description="Overview of your profile and recent activities"
-        variant="gradient"
-      />
-
       {/* Quick Actions & Session Row - Two Columns */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Quick Actions Column */}

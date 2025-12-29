@@ -6,16 +6,13 @@ import { PageHeading } from "@/components/ui/page-heading"
 export default function ModeratorAttendancePage() {
     return (
         <div className="min-h-screen bg-background">
-            <DashboardPageLayout>
-                <div className="space-y-6">
-                    <PageHeading
-                        title="Attendance Verification"
-                        description="Verify and manage employee attendance logs"
-                    />
-                    <ErrorBoundary level="section">
-                        <AdminAttendanceVerification />
-                    </ErrorBoundary>
-                </div>
+            <DashboardPageLayout
+                heading="Attendance Verification"
+                description="Verify and manage employee attendance logs"
+            >
+                <ErrorBoundary level="section">
+                    <AdminAttendanceVerification />
+                </ErrorBoundary>
             </DashboardPageLayout>
         </div>
     )

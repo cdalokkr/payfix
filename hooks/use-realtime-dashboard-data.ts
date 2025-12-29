@@ -516,7 +516,8 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
       // PERFORMANCE FIX: Disable refetchOnWindowFocus since we handle visibility manually
       // This prevents duplicate API calls when tab regains focus
       refetchOnWindowFocus: false,
-      refetchOnMount: true,
+      // Only refetch on mount if we don't have initialData (prevents redundant calls after SSR)
+      refetchOnMount: !initialData,
       refetchOnReconnect: true,
       // CRITICAL: Keep previous data while refetching to prevent zero values flash
       // This ensures the UI shows the last known data during background refetch
@@ -1063,11 +1064,12 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
       // Hide skeleton after minimum display time
       const skeletonTimer = setTimeout(() => {
         setShowSkeleton(false)
-      }, remainingTime)
+      }, Math.max(0, remainingTime))
 
       // Set data ready states with slight delays for progressive reveal
-      const magicCardsTimer = setTimeout(() => setMagicCardsDataReady(true), remainingTime + 10)
-      const recentActivityTimer = setTimeout(() => setRecentActivityDataReady(true), remainingTime + 20)
+      // Use Math.max to prevent negative timeout warnings during SSR hydration
+      const magicCardsTimer = setTimeout(() => setMagicCardsDataReady(true), Math.max(0, remainingTime + 10))
+      const recentActivityTimer = setTimeout(() => setRecentActivityDataReady(true), Math.max(0, remainingTime + 20))
 
       return () => {
         clearTimeout(skeletonTimer)

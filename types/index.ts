@@ -11,9 +11,9 @@ export interface Designation {
   id: string
   name: string
   description: string | null
-  role: UserRole
-  created_at: string
-  updated_at: string
+  role: UserRole | string | null
+  created_at: string | null
+  updated_at: string | null
 }
 
 export interface Profile {
@@ -24,17 +24,17 @@ export interface Profile {
   avatar_url: string | null
   role: UserRole
   designation_id?: string | null
-  designation?: Designation
-  first_name?: string
-  middle_name?: string
-  last_name?: string
-  mobile_no?: string
-  date_of_birth?: string
-  sex?: string
-  status: 'active' | 'deactive' | 'deleted'
-  created_at: string
-  updated_at: string
-  allowed_modules?: Module[]
+  designation?: Designation | null
+  first_name?: string | null
+  middle_name?: string | null
+  last_name?: string | null
+  mobile_no?: string | null
+  date_of_birth?: string | null
+  sex?: string | null
+  status: 'active' | 'deactive' | 'deleted' | null
+  created_at: string | null
+  updated_at: string | null
+  allowed_modules?: string[] | null
 }
 
 export interface Activity {
@@ -43,7 +43,7 @@ export interface Activity {
   activity_type: ActivityType
   description: string | null
   metadata: Record<string, unknown>
-  created_at: string
+  created_at: string | null
 }
 
 export interface AnalyticsMetric {
@@ -157,8 +157,8 @@ export interface Attendance {
   status: 'pending' | 'verified' | 'rejected'
   remarks: string | null
   verified_by: string | null
-  created_at: string
-  updated_at: string
+  created_at: string | null
+  updated_at: string | null
 }
 
 export interface Leave {
@@ -171,8 +171,8 @@ export interface Leave {
   status: 'pending' | 'approved' | 'rejected'
   remarks: string | null
   approved_by: string | null
-  created_at: string
-  updated_at: string
+  created_at: string | null
+  updated_at: string | null
 }
 
 export interface OfficeSettings {

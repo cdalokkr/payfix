@@ -7,7 +7,9 @@ import { router, publicProcedure, protectedProcedure } from '../server'
 import { loginSchema, changePasswordSchema } from '@/lib/validations/auth'
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
-import { performLogout } from '@/lib/auth/optimized-context'
+import { profiles, activities, designations } from '@/lib/db/schema'
+import { eq, and, desc, count } from 'drizzle-orm'
+import { performLogout, preSeedSessionCache } from '@/lib/auth/optimized-context'
 import { formatActivityDescription } from '@/lib/utils/activity-logger'
 
 // Custom error types for specific validation scenarios
@@ -31,12 +33,10 @@ export const authRouter = router({
 
       try {
         // 0. PRE-AUTH OPTIMIZATION: Check if user is deactivated before expensive auth call
-        // This allows for "near-instant" rejection (<100ms) vs waiting for auth (~1s+)
-        const { data: preCheck } = await ctx.supabase
-          .from('profiles')
-          .select('status, user_id')
-          .eq('email', input.email)
-          .maybeSingle()
+        const preCheck = await ctx.db.query.profiles.findFirst({
+          where: eq(profiles.email, input.email),
+          columns: { status: true, user_id: true }
+        })
 
         if (preCheck?.status === 'deactive' || preCheck?.status === 'deleted') {
           const isDeleted = preCheck?.status === 'deleted'
@@ -55,9 +55,7 @@ export const authRouter = router({
           })
         }
       } catch (err) {
-        // If it's our own TRPCError, rethrow it
         if (err instanceof TRPCError) throw err
-        // Otherwise silent fallthrough - if pre-check fails, proceed to standard auth
         console.error('[Auth] Pre-check failed, falling back to standard auth:', err)
       }
 
@@ -140,44 +138,33 @@ export const authRouter = router({
         // But we can return the response and log activity concurrently if we structure it right
 
         // Fetch profile and last logout in parallel for maximum performance
-        const [profileRes, lastLogoutRes] = await Promise.all([
-          ctx.supabase
-            .from('profiles')
-            .select('id, user_id, email, full_name, avatar_url, role, status, first_name, middle_name, last_name, mobile_no, date_of_birth, sex, created_at, updated_at, designation_id, allowed_modules, designation:designations(*)')
-            .eq('user_id', data.user.id)
-            .single(),
-          ctx.supabase
-            .from('activities')
-            .select('created_at')
-            .eq('user_id', data.user.id)
-            .eq('activity_type', 'logout')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle()
+        const [profileData, lastLogoutResult] = await Promise.all([
+          ctx.db.query.profiles.findFirst({
+            where: eq(profiles.user_id, data.user.id),
+            with: { designation: true }
+          }),
+          ctx.db.query.activities.findFirst({
+            where: and(eq(activities.user_id, data.user.id), eq(activities.activity_type, 'logout')),
+            orderBy: [desc(activities.created_at)]
+          })
         ])
 
-        const { data: profileData, error: profileError } = profileRes
-        const lastLogout = lastLogoutRes.data?.created_at || null
-
-        // Handle designation array (Supabase returns single relations as array)
-        if (profileData && (profileData as any).designation && Array.isArray((profileData as any).designation)) {
-          (profileData as any).designation = (profileData as any).designation[0] || null
-        }
+        const lastLogout = lastLogoutResult?.created_at || null
 
         // Profile fetch success, but we haven't checked status yet.
         // Activity logging will happen later if user is active.
 
         // Handle profile fetch failure - still allow login but with warning
-        if (profileError || !profileData) {
-          console.warn('[Auth] Profile fetch failed for user:', data.user.id, profileError?.message)
+        if (!profileData) {
+          console.warn('[Auth] Profile fetch failed for user:', data.user.id)
           return {
             success: true,
-            profile: null as null,
+            profile: null as any,
             user: {
               id: data.user.id,
               email: data.user.email
             },
-            warning: 'Profile not found. Please contact administrator.' as string | null
+            warning: 'Profile not found. Please contact administrator.'
           }
         }
 
@@ -203,7 +190,7 @@ export const authRouter = router({
         // Only log after we've confirmed the user is active
         const logActivity = async () => {
           try {
-            await ctx.supabase?.from('activities').insert({
+            await ctx.db.insert(activities).values({
               user_id: profileData.id,
               activity_type: 'login',
               module: 'auth',
@@ -227,6 +214,12 @@ export const authRouter = router({
           console.warn('[Auth] Profile missing role for user:', data.user.id)
           profileData.role = 'employee' // Default to employee role
         }
+
+        // PRE-SEED CACHE: Pre-populate session cache for instant first dashboard load
+        // This eliminates the ~600ms cache miss on the first protected procedure after login
+        preSeedSessionCache(data.user, profileData as any).catch(err => {
+          console.warn('[AUTH-LOGIN] Pre-seed cache failed (non-critical):', err)
+        })
 
         return {
           success: true,
@@ -270,8 +263,8 @@ export const authRouter = router({
         // ctx.profile should be populated by the optimized context
         const actorRole = ctx.profile?.role || 'employee'
 
-        const { error: activityError } = await ctx.supabase.from('activities').insert({
-          user_id: ctx.profile?.id || ctx.user.id, // Use profile.id if available
+        await ctx.db.insert(activities).values({
+          user_id: ctx.profile?.id || ctx.user.id,
           activity_type: 'logout',
           module: 'auth',
           description: formatActivityDescription({
@@ -281,15 +274,6 @@ export const authRouter = router({
             module: 'auth'
           }),
         })
-
-        if (activityError) {
-          console.error('[AUTH-LOGOUT] Failed to log logout activity:', {
-            userId: ctx.user.id,
-            error: activityError.message,
-            errorDetails: activityError
-          })
-          // Don't fail logout if activity logging fails, but log the error
-        }
       }
 
       // Sign out from Supabase (this clears auth cookies)
@@ -339,9 +323,9 @@ export const authRouter = router({
         })
       }
 
-      await ctx.supabase.from('activities').insert({
+      await ctx.db.insert(activities).values({
         user_id: ctx.profile?.id || ctx.user.id,
-        activity_type: input.type,
+        activity_type: input.type as any,
         module: 'auth',
         description: `User ${input.type}`,
       })
@@ -393,7 +377,7 @@ export const authRouter = router({
       }
 
       // Log activity
-      await ctx.supabase.from('activities').insert({
+      await ctx.db.insert(activities).values({
         user_id: ctx.profile?.id || ctx.user.id,
         activity_type: 'password_change',
         module: 'auth',

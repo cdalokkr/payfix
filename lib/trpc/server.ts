@@ -5,13 +5,15 @@
 import { initTRPC, TRPCError } from '@trpc/server'
 import { createOptimizedContext } from '@/lib/auth/optimized-context'
 import { getAuthPerformanceStats } from '@/lib/auth/optimized-context'
+import { db } from '@/lib/db'
 import type { Profile } from '@/types'
+import { cache } from 'react'
 
 let createContextCallCount = 0
 const authCallTimes: number[] = []
 const MAX_AUTH_TIMES = 100
 
-export async function createContext() {
+export const createContext = cache(async () => {
   createContextCallCount++
   const startTime = performance.now()
 
@@ -38,6 +40,7 @@ export async function createContext() {
 
     return {
       supabase: context.supabase,
+      db: db,
       user: context.user,
       profile: context.profile,
       performance: {
@@ -57,6 +60,7 @@ export async function createContext() {
 
     return {
       supabase: null,
+      db: db,
       user: null,
       profile: null,
       performance: {
@@ -68,9 +72,9 @@ export async function createContext() {
       }
     }
   }
-}
+})
 
-type Context = Awaited<ReturnType<typeof createContext>>
+export type Context = Awaited<ReturnType<typeof createContext>>
 
 const t = initTRPC.context<Context>().create({
   errorFormatter({ shape, error }) {
@@ -106,8 +110,8 @@ export const createCallerFactory = t.createCallerFactory
 
 export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
   // Performance check - warn if context creation was slow
-  if (ctx.performance?.contextCreationTime > 500) {
-    console.warn(`[AUTH-PROC] Slow context in protectedProcedure: ${ctx.performance.contextCreationTime}ms`)
+  if (ctx.performance?.contextCreationTime > 200) {
+    console.warn(`[AUTH-PROC] Slow context in protectedProcedure: ${ctx.performance.contextCreationTime.toFixed(2)}ms`)
   }
 
   if (!ctx.user || !ctx.profile) {
@@ -136,6 +140,7 @@ export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
   return next({
     ctx: {
       ...ctx,
+      db: ctx.db,
       user: ctx.user,
       profile: ctx.profile,
       performance: ctx.performance

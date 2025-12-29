@@ -20,7 +20,7 @@ interface ModernAddDesignationFormProps {
     className?: string
     title?: string
     description?: string
-    editingDesignation?: { id: string, name: string, description: string | null, role: "admin" | "moderator" | "employee" } | null
+    editingDesignation?: { id: string, name: string, description: string | null, role: "admin" | "moderator" | "employee" | string | null } | null
     isDeleteMode?: boolean
 }
 
@@ -93,7 +93,7 @@ export function ModernAddDesignationForm({
                 form.reset({
                     name: editingDesignation.name,
                     description: editingDesignation.description || ' ',
-                    role: editingDesignation.role,
+                    role: (editingDesignation.role as "admin" | "moderator" | "employee") || 'employee',
                 })
             } else {
                 form.reset({

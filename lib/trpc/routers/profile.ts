@@ -3,6 +3,8 @@
 // ============================================
 import { z } from 'zod'
 import { router, protectedProcedure } from '../server'
+import { profiles, activities, designations } from '@/lib/db/schema'
+import { eq, and, desc, count } from 'drizzle-orm'
 import { profileUpdateSchema } from '@/lib/validations/auth'
 import { invalidateUserSession } from '@/lib/auth/optimized-context'
 import { invalidateDashboardCache } from './admin-dashboard-optimized'
@@ -11,33 +13,22 @@ import { invalidateDashboardCache } from './admin-dashboard-optimized'
 export const profileRouter = router({
   get: protectedProcedure.query(async ({ ctx }) => {
     // Always fetch fresh profile data with designation join
-    if (!ctx.supabase) {
-      throw new Error('Database service unavailable')
-    }
+    const data = await ctx.db.query.profiles.findFirst({
+      where: eq(profiles.user_id, ctx.user.id),
+      with: { designation: true }
+    })
 
-    const { data, error } = await ctx.supabase
-      .from('profiles')
-      .select('id, user_id, email, full_name, avatar_url, role, first_name, middle_name, last_name, mobile_no, date_of_birth, sex, created_at, updated_at, designation_id, allowed_modules, designation:designations(*)')
-      .eq('user_id', ctx.user.id)
-      .single()
-
-    if (error) {
-      console.error('Error fetching profile:', error)
-      // Fall back to ctx.profile if fresh fetch fails
+    if (!data) {
+      console.error('Profile not found for user:', ctx.user.id)
       return ctx.profile
-    }
-
-    // Handle designation array (Supabase returns single relations as array)
-    if (data && (data as any).designation && Array.isArray((data as any).designation)) {
-      (data as any).designation = (data as any).designation[0] || null
     }
 
     console.log('[Profile] Fetch result:', {
       userId: ctx.user.id,
-      email: data?.email,
-      role: data?.role,
-      designation_id: data?.designation_id,
-      designation_name: (data as any)?.designation?.name || (data?.role === 'admin' ? 'Administrator' : 'Staff')
+      email: data.email,
+      role: data.role,
+      designation_id: data.designation_id,
+      designation_name: (data as any).designation?.name || (data.role === 'admin' ? 'Administrator' : 'Staff')
     })
 
     return data as any as import('@/types').Profile
@@ -46,24 +37,9 @@ export const profileRouter = router({
   update: protectedProcedure
     .input(profileUpdateSchema)
     .mutation(async ({ input, ctx }) => {
-      if (!ctx.supabase) {
-        throw new Error('Database service unavailable')
+      const updateData: any = {
+        updated_at: new Date()
       }
-
-      const updateData: Partial<{
-        first_name: string;
-        last_name: string;
-        middle_name: string;
-        avatar_url: string;
-        mobile_no: string;
-        date_of_birth: string;
-        sex: 'male' | 'female';
-        full_name: string;
-        updated_at: string;
-      }> = {
-        updated_at: new Date().toISOString()
-      }
-
 
       if (input.firstName) updateData.first_name = input.firstName
       if (input.lastName) updateData.last_name = input.lastName
@@ -82,16 +58,14 @@ export const profileRouter = router({
         updateData.full_name = input.full_name
       }
 
-      const { data, error } = await ctx.supabase
-        .from('profiles')
-        .update(updateData)
-        .eq('user_id', ctx.user.id)
-        .select()
-        .single()
+      const [updatedProfile] = await ctx.db.update(profiles)
+        .set(updateData)
+        .where(eq(profiles.user_id, ctx.user.id))
+        .returning()
 
-      if (error) throw new Error(error.message)
+      if (!updatedProfile) throw new Error('Failed to update profile')
 
-      await ctx.supabase.from('activities').insert({
+      await ctx.db.insert(activities).values({
         user_id: ctx.profile.id,
         activity_type: 'profile_update',
         module: 'profile',
@@ -105,7 +79,7 @@ export const profileRouter = router({
       // Invalidate session cache to reflect profile changes immediately
       invalidateUserSession(ctx.user.id)
 
-      return data
+      return updatedProfile
     }),
 
 
@@ -115,29 +89,23 @@ export const profileRouter = router({
       avatarUrl: z.string().min(1, 'Avatar URL is required'),
     }))
     .mutation(async ({ ctx, input }) => {
-      if (!ctx.supabase) {
-        throw new Error('Database service unavailable')
-      }
-
       // Security check: only allow updating own profile picture
       if (input.userId !== ctx.profile.id && ctx.profile.role !== 'admin') {
         throw new Error('Unauthorized to update this profile picture')
       }
 
-      const { data, error } = await ctx.supabase
-        .from('profiles')
-        .update({
+      const [updatedProfile] = await ctx.db.update(profiles)
+        .set({
           avatar_url: input.avatarUrl,
-          updated_at: new Date().toISOString(),
+          updated_at: new Date(),
         })
-        .eq('id', input.userId)
-        .select()
-        .single()
+        .where(eq(profiles.id, input.userId))
+        .returning()
 
-      if (error) throw new Error(error.message)
+      if (!updatedProfile) throw new Error('Failed to update profile picture')
 
       // Log activity
-      await ctx.supabase.from('activities').insert({
+      await ctx.db.insert(activities).values({
         user_id: ctx.profile.id,
         activity_type: 'profile_update',
         module: 'profile',
@@ -149,11 +117,11 @@ export const profileRouter = router({
       })
 
       // Invalidate session cache to reflect avatar change immediately
-      if (data?.user_id) {
-        invalidateUserSession(data.user_id)
+      if (updatedProfile.user_id) {
+        invalidateUserSession(updatedProfile.user_id)
       }
 
-      return data
+      return updatedProfile
     }),
 
   invalidateCache: protectedProcedure
@@ -182,63 +150,36 @@ export const profileRouter = router({
   getActivities: protectedProcedure
     .input(z.object({ limit: z.number().default(10) }))
     .query(async ({ ctx, input }) => {
-      if (!ctx.supabase) {
-        throw new Error('Database service unavailable')
-      }
-
-      const { data } = await ctx.supabase
-        .from('activities')
-        .select('*')
-        .eq('user_id', ctx.profile.id)
-        .order('created_at', { ascending: false })
-        .limit(input.limit)
-
+      const data = await ctx.db.query.activities.findMany({
+        where: eq(activities.user_id, ctx.profile.id),
+        orderBy: [desc(activities.created_at)],
+        limit: input.limit
+      })
       return data || []
     }),
 
   getLastSession: protectedProcedure.query(async ({ ctx }) => {
-    if (!ctx.supabase) {
-      throw new Error('Database service unavailable')
-    }
-
-    // Get last login
-    const { data: loginData } = await ctx.supabase
-      .from('activities')
-      .select('created_at')
-      .eq('user_id', ctx.profile.id)
-      .eq('activity_type', 'login')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    // Get last logout
-    const { data: logoutData } = await ctx.supabase
-      .from('activities')
-      .select('created_at')
-      .eq('user_id', ctx.profile.id)
-      .eq('activity_type', 'logout')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    // Get account creation date
-    const { data: profileData } = await ctx.supabase
-      .from('profiles')
-      .select('created_at')
-      .eq('id', ctx.profile.id)
-      .single()
-
-    // Get total activities count
-    const { count: totalActivities } = await ctx.supabase
-      .from('activities')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', ctx.profile.id)
+    const [loginResult, logoutResult, profileResult, totalResult] = await Promise.all([
+      ctx.db.query.activities.findFirst({
+        where: and(eq(activities.user_id, ctx.profile.id), eq(activities.activity_type, 'login')),
+        orderBy: [desc(activities.created_at)]
+      }),
+      ctx.db.query.activities.findFirst({
+        where: and(eq(activities.user_id, ctx.profile.id), eq(activities.activity_type, 'logout')),
+        orderBy: [desc(activities.created_at)]
+      }),
+      ctx.db.query.profiles.findFirst({
+        where: eq(profiles.id, ctx.profile.id),
+        columns: { created_at: true }
+      }),
+      ctx.db.select({ value: count() }).from(activities).where(eq(activities.user_id, ctx.profile.id))
+    ])
 
     return {
-      lastLogin: loginData?.created_at || null,
-      lastLogout: logoutData?.created_at || null,
-      joinedAt: profileData?.created_at || null,
-      totalActivities: totalActivities || 0,
+      lastLogin: loginResult?.created_at || null,
+      lastLogout: logoutResult?.created_at || null,
+      joinedAt: profileResult?.created_at || null,
+      totalActivities: totalResult[0].value || 0,
     }
   }),
 })

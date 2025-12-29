@@ -17,15 +17,10 @@ const SECURE_COOKIE_OPTIONS: Partial<CookieOptions> = {
   path: '/',
 }
 
-export async function createServerSupabaseClient() {
-  const cookieStore = await cookies()
-
-  // Use SERVICE ROLE key for server-side operations to bypass RLS
-  // This is critical for tRPC context creation where we need to query profiles
-  // SECURITY NOTE: Service role key should NEVER be exposed to client
+// Synchronous version for use when cookie store is already available (optimizes createContext)
+export function createSupabaseClientSync(cookieStore: Awaited<ReturnType<typeof cookies>>) {
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-  // Validate environment variables
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
     throw new Error('NEXT_PUBLIC_SUPABASE_URL is not configured')
   }
@@ -40,17 +35,13 @@ export async function createServerSupabaseClient() {
         },
         set(name: string, value: string, options: CookieOptions) {
           try {
-            // Merge secure options with provided options
             const secureOptions = {
               ...SECURE_COOKIE_OPTIONS,
               ...options,
-              // Ensure httpOnly is always true for auth cookies
               httpOnly: name.includes('auth') ? true : options.httpOnly,
             }
             cookieStore.set({ name, value, ...secureOptions })
           } catch (error) {
-            // This can happen in middleware or during static generation
-            // Log only in development to avoid noise in production
             if (process.env.NODE_ENV === 'development') {
               console.warn('[Supabase] Cookie set warning:', error)
             }
@@ -61,7 +52,7 @@ export async function createServerSupabaseClient() {
             const secureOptions = {
               ...SECURE_COOKIE_OPTIONS,
               ...options,
-              maxAge: 0, // Expire immediately
+              maxAge: 0,
             }
             cookieStore.set({ name, value: '', ...secureOptions })
           } catch (error) {
@@ -73,6 +64,11 @@ export async function createServerSupabaseClient() {
       },
     }
   )
+}
+
+export async function createServerSupabaseClient() {
+  const cookieStore = await cookies()
+  return createSupabaseClientSync(cookieStore)
 }
 
 // Create a client with anon key only (for public operations)

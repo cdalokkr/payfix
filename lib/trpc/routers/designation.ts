@@ -1,58 +1,38 @@
 import { z } from 'zod'
 import { adminProcedure, router } from '../server'
 import { TRPCError } from '@trpc/server'
+import { designations, profiles, activities } from '@/lib/db/schema'
+import { eq, and, desc, count } from 'drizzle-orm'
 import { designationSchema } from '@/lib/validations/auth'
 import { formatActivityDescription, ChangedField } from '@/lib/utils/activity-logger'
 
 export const designationRouter = router({
     getDesignations: adminProcedure.query(async ({ ctx }) => {
-        if (!ctx.supabase) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Supabase client not initialized' })
-        const { data, error } = await ctx.supabase
-            .from('designations')
-            .select('*')
-            .order('name', { ascending: true })
-
-        if (error) {
-            throw new TRPCError({
-                code: 'INTERNAL_SERVER_ERROR',
-                message: 'Failed to fetch designations',
-                cause: error,
-            })
-        }
-
-        return data
+        const data = await ctx.db.query.designations.findMany({
+            orderBy: [desc(designations.name)]
+        })
+        return (data || []).map(d => ({
+            ...d,
+            created_at: d.created_at ? d.created_at.toISOString() : null,
+            updated_at: d.updated_at ? d.updated_at.toISOString() : null,
+            role: d.role as any,
+        }))
     }),
 
     createDesignation: adminProcedure
         .input(designationSchema)
         .mutation(async ({ ctx, input }) => {
-            if (!ctx.supabase) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Supabase client not initialized' })
-            const { data, error } = await ctx.supabase
-                .from('designations')
-                .insert({
+            const [data] = await ctx.db.insert(designations)
+                .values({
                     name: input.name,
                     description: input.description,
                     role: input.role,
                 })
-                .select()
-                .single()
+                .returning()
 
-            if (error) {
-                if (error.code === '23505') {
-                    throw new TRPCError({
-                        code: 'CONFLICT',
-                        message: 'Designation with this name already exists',
-                    })
-                }
-                throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: 'Failed to create designation',
-                    cause: error,
-                })
-            }
-
+            if (!data) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create designation' })
             // Log activity
-            await ctx.supabase.from('activities').insert({
+            await ctx.db.insert(activities).values({
                 user_id: ctx.profile.id,
                 activity_type: 'data_create',
                 module: 'designations',
@@ -70,8 +50,12 @@ export const designationRouter = router({
                     role: input.role
                 },
             })
-
-            return data
+            return {
+                ...data,
+                created_at: data.created_at ? data.created_at.toISOString() : null,
+                updated_at: data.updated_at ? data.updated_at.toISOString() : null,
+                role: data.role as any,
+            } as any
         }),
 
     updateDesignation: adminProcedure
@@ -80,41 +64,19 @@ export const designationRouter = router({
             ...designationSchema.shape,
         }))
         .mutation(async ({ ctx, input }) => {
-            if (!ctx.supabase) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Supabase client not initialized' })
+            const currentData = await ctx.db.query.designations.findFirst({
+                where: eq(designations.id, input.id)
+            })
 
-            // Get current data for activity logging
-            const { data: currentData } = await ctx.supabase
-                .from('designations')
-                .select('*')
-                .eq('id', input.id)
-                .single()
-
-            const { data, error } = await ctx.supabase
-                .from('designations')
-                .update({
+            const [data] = await ctx.db.update(designations)
+                .set({
                     name: input.name,
                     description: input.description,
                     role: input.role,
                 })
-                .eq('id', input.id)
-                .select()
-                .single()
+                .where(eq(designations.id, input.id))
+                .returning()
 
-            if (error) {
-                if (error.code === '23505') {
-                    throw new TRPCError({
-                        code: 'CONFLICT',
-                        message: 'Designation with this name already exists',
-                    })
-                }
-                throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: 'Failed to update designation',
-                    cause: error,
-                })
-            }
-
-            // Log activity
             if (currentData) {
                 const changedFields: ChangedField[] = []
                 if (currentData.name !== input.name) changedFields.push({ name: 'Name', value: input.name })
@@ -122,7 +84,7 @@ export const designationRouter = router({
                 if (currentData.role !== input.role) changedFields.push({ name: 'Role', value: input.role })
 
                 if (changedFields.length > 0) {
-                    await ctx.supabase.from('activities').insert({
+                    await ctx.db.insert(activities).values({
                         user_id: ctx.profile.id,
                         activity_type: 'data_edit',
                         module: 'designations',
@@ -146,58 +108,40 @@ export const designationRouter = router({
                 }
             }
 
-            return data
+            return {
+                ...data,
+                created_at: data.created_at ? data.created_at.toISOString() : null,
+                updated_at: data.updated_at ? data.updated_at.toISOString() : null,
+                role: data.role as any,
+            } as any
         }),
 
     deleteDesignation: adminProcedure
         .input(z.object({ id: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
-            if (!ctx.supabase) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Supabase client not initialized' })
+            const currentData = await ctx.db.query.designations.findFirst({
+                where: eq(designations.id, input.id),
+                columns: { name: true }
+            })
 
-            // Get current data before deletion
-            const { data: currentData } = await ctx.supabase
-                .from('designations')
-                .select('name')
-                .eq('id', input.id)
-                .single()
+            const usageCheck = await ctx.db.select({ value: count() })
+                .from(profiles)
+                .where(eq(profiles.designation_id, input.id))
 
-            // Check if any users are assigned to this designation
-            const { count, error: countError } = await ctx.supabase
-                .from('profiles')
-                .select('*', { count: 'exact', head: true })
-                .eq('designation_id', input.id)
+            const usageCount = usageCheck[0].value
 
-            if (countError) {
-                throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: 'Failed to check designation usage',
-                    cause: countError,
-                })
-            }
-
-            if (count && count > 0) {
+            if (usageCount > 0) {
                 throw new TRPCError({
                     code: 'PRECONDITION_FAILED',
-                    message: `Cannot delete designation because it is assigned to ${count} user(s)`,
+                    message: `Cannot delete designation because it is assigned to ${usageCount} user(s)`,
                 })
             }
 
-            const { error } = await ctx.supabase
-                .from('designations')
-                .delete()
-                .eq('id', input.id)
-
-            if (error) {
-                throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: 'Failed to delete designation',
-                    cause: error,
-                })
-            }
+            await ctx.db.delete(designations).where(eq(designations.id, input.id))
 
             // Log activity
             if (currentData) {
-                await ctx.supabase.from('activities').insert({
+                await ctx.db.insert(activities).values({
                     user_id: ctx.profile.id,
                     activity_type: 'data_delete',
                     module: 'designations',

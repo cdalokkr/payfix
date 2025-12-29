@@ -12,7 +12,10 @@ export function AdminDashboardStreaming({ initialData }: { initialData?: any }) 
       console.error('Admin Dashboard Error:', error, errorInfo)
     }}>
       <div className="min-h-screen bg-background">
-        <DashboardPageLayout>
+        <DashboardPageLayout
+          heading="Admin Dashboard"
+          description="Overview of your application metrics and activities"
+        >
           <ErrorBoundary level="section">
             <AdminOverview initialData={initialData} />
           </ErrorBoundary>

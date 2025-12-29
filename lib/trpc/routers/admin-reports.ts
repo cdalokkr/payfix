@@ -4,6 +4,8 @@
 // ============================================
 import { z } from 'zod'
 import { router, adminProcedure, protectedProcedure } from '../server'
+import { profiles, activities, attendance, userStatusHistory } from '@/lib/db/schema'
+import { eq, and, gte, lte, count, sql, desc, or, ilike, ne } from 'drizzle-orm'
 
 export const adminReportsRouter = router({
   // Get comprehensive reports data for admin
@@ -27,94 +29,68 @@ export const adminReportsRouter = router({
         : new Date(now.getTime() - input.days * 24 * 60 * 60 * 1000)
       const endDate = input.endDate ? new Date(input.endDate) : now
 
-      // Fetch all required data
+      const todayStart = new Date()
+      todayStart.setHours(0, 0, 0, 0)
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+
       const [
-        totalUsersResult,
+        roleCounts,
+        statusCounts,
+        activityStats,
         activeUsersResult,
-        activitiesResult,
-        todayActivitiesResult,
-        activitiesInPeriodResult,
-        profilesResult,
-        adminCountResult,
-        moderatorCountResult,
-        employeeCountResult,
-        activeProfilesCountResult,
-        inactiveProfilesCountResult,
+        activitiesInPeriod,
+        profilesData,
       ] = await Promise.all([
-        // Total users count
-        ctx.supabase
-          .from('profiles')
-          .select('*', { count: 'exact', head: true }),
+        // 1. Consolidated Role counts
+        ctx.db.select({ role: profiles.role, count: count() }).from(profiles).groupBy(profiles.role),
 
-        // Active users (last 7 days) - Fixed: select user_id to get data for Set
-        ctx.supabase
-          .from('activities')
-          .select('user_id')
-          .gte('created_at', new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()),
+        // 2. Consolidated Status counts
+        ctx.db.select({ status: profiles.status, count: count() }).from(profiles).groupBy(profiles.status),
 
-        // Total activities
-        ctx.supabase
-          .from('activities')
-          .select('*', { count: 'exact', head: true }),
+        // 3. Consolidated Activity stats (Total and Today)
+        ctx.db.select({
+          total: count(),
+          today: sql<number>`count(*) filter (where ${activities.created_at} >= ${todayStart.toISOString()}::timestamp)`
+        }).from(activities),
 
-        // Today's activities
-        ctx.supabase
-          .from('activities')
-          .select('*', { count: 'exact', head: true })
-          .gte('created_at', new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
+        // 4. Active users (last 7 days)
+        ctx.db.select({ user_id: activities.user_id })
+          .from(activities)
+          .where(gte(activities.created_at, sevenDaysAgo)),
 
-        // Activities in selected period for aggregation
-        ctx.supabase
-          .from('activities')
-          .select('activity_type, user_id')
-          .gte('created_at', startDate.toISOString())
-          .lte('created_at', endDate.toISOString()),
+        // 5. Activities in the requested period
+        ctx.db.query.activities.findMany({
+          where: and(
+            gte(activities.created_at, startDate),
+            lte(activities.created_at, endDate)
+          ),
+          columns: { activity_type: true, user_id: true }
+        }),
 
-        // User profiles (fetch id, user_id, role, name details)
-        ctx.supabase
-          .from('profiles')
-          .select('id, user_id, role, first_name, last_name, email, avatar_url'),
-
-        // Total Admins Count
-        ctx.supabase
-          .from('profiles')
-          .select('*', { count: 'exact', head: true })
-          .eq('role', 'admin'),
-
-        // Total Employees Count
-        ctx.supabase
-          .from('profiles')
-          .select('*', { count: 'exact', head: true })
-          .eq('role', 'employee'),
-
-        // Total Moderators Count
-        ctx.supabase
-          .from('profiles')
-          .select('*', { count: 'exact', head: true })
-          .eq('role', 'moderator'),
-
-        // Total Active Users for Access (from profiles table)
-        ctx.supabase
-          .from('profiles')
-          .select('*', { count: 'exact', head: true })
-          .eq('status', 'active'),
-
-        // Total Inactive Users for Access (from profiles table)
-        ctx.supabase
-          .from('profiles')
-          .select('*', { count: 'exact', head: true })
-          .eq('status', 'deactive'),
+        // 6. Profiles data
+        ctx.db.query.profiles.findMany({
+          columns: { id: true, user_id: true, role: true, first_name: true, last_name: true, email: true, avatar_url: true }
+        }),
       ])
 
-      // Check for errors in critical queries
-      if (activitiesInPeriodResult.error) throw new Error(`Activities query failed: ${activitiesInPeriodResult.error.message}`)
-      if (profilesResult.error) throw new Error(`Profiles query failed: ${profilesResult.error.message}`)
+      // Map consolidated results back to original variables or stats object
+      const totalUsers = roleCounts.reduce((acc, curr) => acc + Number(curr.count), 0)
+      const getRoleCount = (role: string) => Number(roleCounts.find(r => r.role === role)?.count || 0)
+      const getStatusCount = (status: string) => Number(statusCounts.find(s => s.status === status)?.count || 0)
+
+      const adminCount = getRoleCount('admin')
+      const employeeCount = getRoleCount('employee')
+      const moderatorCount = getRoleCount('moderator')
+      const activeProfilesCount = getStatusCount('active')
+      const inactiveProfilesCount = getStatusCount('deactive')
+      const totalActivities = Number(activityStats[0]?.total || 0)
+      const todayActivities = Number(activityStats[0]?.today || 0)
 
       // Process Activity by User
       const userActivityCounts = new Map<string, number>()
 
-      if (activitiesInPeriodResult.data) {
-        activitiesInPeriodResult.data.forEach((activity: any) => {
+      if (activitiesInPeriod) {
+        activitiesInPeriod.forEach((activity: any) => {
           if (activity.user_id) {
             userActivityCounts.set(activity.user_id, (userActivityCounts.get(activity.user_id) || 0) + 1)
           }
@@ -125,13 +101,13 @@ export const adminReportsRouter = router({
       const moderatorUsers: { user_id: string, name: string, count: number, email: string, avatar_url: string | null }[] = []
       const employeeUsers: { user_id: string, name: string, count: number, email: string, avatar_url: string | null }[] = []
 
-      if (profilesResult.data) {
-        profilesResult.data.forEach((profile: any) => {
+      if (profilesData) {
+        profilesData.forEach((profile: any) => {
           const count = userActivityCounts.get(profile.id) || 0
           if (count > 0) {
             const name = `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || profile.email
             const userData = {
-              user_id: profile.id, // Using profile.id which activities.user_id references
+              user_id: profile.id,
               name,
               count,
               email: profile.email,
@@ -162,8 +138,8 @@ export const adminReportsRouter = router({
           const activityTypesMap = new Map<string, Map<string, number>>() // user_id -> map(activity_type -> count)
           const allActivityTypes = new Set<string>()
 
-          if (activitiesInPeriodResult.data) {
-            activitiesInPeriodResult.data.forEach((activity: any) => {
+          if (activitiesInPeriod) {
+            activitiesInPeriod.forEach((activity: any) => {
               if (activity.user_id && topUserIds.has(activity.user_id)) {
                 const type = activity.activity_type || 'unknown'
                 allActivityTypes.add(type)
@@ -249,18 +225,18 @@ export const adminReportsRouter = router({
       const moderatorActivityChartData = prepareBreakdownChartData(topModerators, false)
       const employeeActivityChartData = prepareBreakdownChartData(topEmployees, false)
 
-      // Process Activity By Role Data (Keep existing logic for now if needed, or remove if unused)
+      // Process Activity By Role Data
       const roleMap = new Map<string, string>()
-      if (profilesResult.data) {
-        profilesResult.data.forEach((user: any) => {
+      if (profilesData) {
+        profilesData.forEach((user: any) => {
           if (user.id) roleMap.set(user.id, user.role)
         })
       }
 
       const activityRoleCounts = new Map<string, { admin: number, employee: number }>()
 
-      if (activitiesInPeriodResult.data) {
-        activitiesInPeriodResult.data.forEach((activity: any) => {
+      if (activitiesInPeriod) {
+        activitiesInPeriod.forEach((activity: any) => {
           const type = activity.activity_type || 'unknown'
           const userId = activity.user_id
           const role = roleMap.get(userId) || 'employee' // Default to employee if unknown
@@ -284,50 +260,44 @@ export const adminReportsRouter = router({
         employee: counts.employee
       }))
 
-      // Calculate unique active users
-      const uniqueActiveUserIds = new Set(
-        activeUsersResult.data?.map((a: any) => a.user_id) || []
-      )
-      const activeUsersCount = uniqueActiveUserIds.size
-
       // Calculate trends (compare with previous period)
       const previousStartDate = new Date(startDate.getTime() - (endDate.getTime() - startDate.getTime()))
-      const [previousTotalUsers, previousTodayActivities] = await Promise.all([
-        ctx.supabase
-          .from('profiles')
-          .select('*', { count: 'exact', head: true })
-          .lt('created_at', startDate.toISOString()),
-        ctx.supabase
-          .from('activities')
-          .select('*', { count: 'exact', head: true })
-          .gte('created_at', new Date(previousStartDate.setHours(0, 0, 0, 0)).toISOString())
-          .lt('created_at', startDate.toISOString()),
+
+      const [previousStats, previousTodayActivities] = await Promise.all([
+        ctx.db.select({ value: count() }).from(profiles).where(lte(profiles.created_at, startDate)),
+        ctx.db.select({ value: count() }).from(activities).where(
+          and(
+            gte(activities.created_at, previousStartDate),
+            lte(activities.created_at, startDate)
+          )
+        ),
       ])
 
-      const totalUsers = totalUsersResult.count || 0
-      const previousTotalUsersCount = previousTotalUsers.count || 0
+      const previousTotalUsersCount = previousStats[0]?.value || 0
       const userGrowthPercent = previousTotalUsersCount > 0
         ? ((totalUsers - previousTotalUsersCount) / previousTotalUsersCount) * 100
         : 0
 
-      const todayActivities = todayActivitiesResult.count || 0
-      const previousTodayActivitiesCount = previousTodayActivities.count || 0
+      const previousTodayActivitiesCount = previousTodayActivities[0]?.value || 0
       const activityGrowthPercent = previousTodayActivitiesCount > 0
         ? ((todayActivities - previousTodayActivitiesCount) / previousTodayActivitiesCount) * 100
         : 0
+
+      // Calculate unique active users
+      const activeUsersCount = new Set(activeUsersResult.map((a: any) => a.user_id)).size
 
       return {
         stats: {
           totalUsers,
           activeUsers: activeUsersCount,
-          totalActivities: activitiesResult.count || 0,
+          totalActivities,
           todayActivities,
           activeSubscriptions: 2350, // Placeholder
-          totalAdmins: adminCountResult.count || 0,
-          totalModerators: moderatorCountResult.count || 0,
-          totalEmployees: employeeCountResult.count || 0,
-          activeUsersForAccess: activeProfilesCountResult.count || 0,
-          inactiveUsers: inactiveProfilesCountResult.count || 0,
+          totalAdmins: adminCount,
+          totalModerators: moderatorCount,
+          totalEmployees: employeeCount,
+          activeUsersForAccess: activeProfilesCount,
+          inactiveUsers: inactiveProfilesCount,
         },
         trends: {
           userGrowth: userGrowthPercent,
@@ -362,68 +332,71 @@ export const adminReportsRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      if (!ctx.supabase) {
-        throw new Error('Supabase client not available')
-      }
-
       const profileId = ctx.profile?.id || ctx.user?.id
+      if (!profileId) throw new Error('Unauthorized')
+
       const now = new Date()
-      const startDate = input.startDate
-        ? new Date(input.startDate)
-        : new Date(now.getTime() - input.days * 24 * 60 * 60 * 1000)
+      const startDate = input.startDate ? new Date(input.startDate) : new Date(now.getTime() - input.days * 24 * 60 * 60 * 1000)
       const endDate = input.endDate ? new Date(input.endDate) : now
 
-      // Fetch user-specific data
+      const todayStart = new Date()
+      todayStart.setHours(0, 0, 0, 0)
+      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+      const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
+
       const [
-        totalLoginsResult,
-        activitiesResult,
-        todayActivitiesResult,
-        activityChartDataResult,
-        usageChartDataResult,
+        mainStats,
+        weeklyStats,
+        activityChartDataRaw,
+        usageChartDataRaw,
+        lastLoginResult,
       ] = await Promise.all([
-        // Total logins (login activities)
-        ctx.supabase
-          .from('activities')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', profileId)
-          .eq('activity_type', 'login'),
+        // 1. Consolidated Main Stats
+        ctx.db.select({
+          totalLogins: sql<number>`count(*) filter (where ${activities.activity_type} = 'login')`,
+          totalActions: count(),
+          todayActivities: sql<number>`count(*) filter (where ${activities.created_at} >= ${todayStart.toISOString()}::timestamp)`
+        }).from(activities).where(eq(activities.user_id, profileId)),
 
-        // All user activities
-        ctx.supabase
-          .from('activities')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', profileId),
+        // 2. Consolidated Weekly Trend Stats
+        ctx.db.select({
+          currentWeek: sql<number>`count(*) filter (where ${activities.created_at} >= ${weekAgo.toISOString()}::timestamp)`,
+          previousWeek: sql<number>`count(*) filter (where ${activities.created_at} >= ${twoWeeksAgo.toISOString()}::timestamp and ${activities.created_at} < ${weekAgo.toISOString()}::timestamp)`
+        }).from(activities).where(eq(activities.user_id, profileId)),
 
-        // Today's activities
-        ctx.supabase
-          .from('activities')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', profileId)
-          .gte('created_at', new Date(now.setHours(0, 0, 0, 0)).toISOString()),
+        // 3. Activity Chart Data (last 7 days)
+        ctx.db.select({ created_at: activities.created_at })
+          .from(activities)
+          .where(and(eq(activities.user_id, profileId), gte(activities.created_at, weekAgo)))
+          .orderBy(desc(activities.created_at)),
 
-        // Activity data for chart (daily for last 7 days)
-        ctx.supabase
-          .from('activities')
-          .select('created_at')
-          .eq('user_id', profileId)
-          .gte('created_at', new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString())
-          .order('created_at', { ascending: true }),
+        // 4. Usage Chart Data (last 210 days)
+        ctx.db.select({ created_at: activities.created_at })
+          .from(activities)
+          .where(and(eq(activities.user_id, profileId), gte(activities.created_at, new Date(now.getTime() - 210 * 24 * 60 * 60 * 1000))))
+          .orderBy(desc(activities.created_at)),
 
-        // Usage data (monthly for last 7 months)
-        ctx.supabase
-          .from('activities')
-          .select('created_at')
-          .eq('user_id', profileId)
-          .gte('created_at', new Date(now.getTime() - 210 * 24 * 60 * 60 * 1000).toISOString())
-          .order('created_at', { ascending: true }),
+        // 5. Last Login
+        ctx.db.select({ created_at: activities.created_at })
+          .from(activities)
+          .where(and(eq(activities.user_id, profileId), eq(activities.activity_type, 'login')))
+          .orderBy(desc(activities.created_at))
+          .limit(1),
       ])
+
+      const totalLogins = Number(mainStats[0]?.totalLogins || 0)
+      const totalActions = Number(mainStats[0]?.totalActions || 0)
+      const todayActivities = Number(mainStats[0]?.todayActivities || 0)
+      const currentWeek = Number(weeklyStats[0]?.currentWeek || 0)
+      const previousWeek = Number(weeklyStats[0]?.previousWeek || 0)
 
       // Process activity chart data
       const activityMap = new Map<string, number>()
       const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
-      if (activityChartDataResult.data) {
-        activityChartDataResult.data.forEach((activity: any) => {
+      if (activityChartDataRaw) {
+        activityChartDataRaw.forEach((activity: any) => {
+          if (!activity.created_at) return
           const date = new Date(activity.created_at)
           const dayKey = date.toISOString().split('T')[0]
           activityMap.set(dayKey, (activityMap.get(dayKey) || 0) + 1)
@@ -445,8 +418,9 @@ export const adminReportsRouter = router({
       const usageMap = new Map<string, number>()
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-      if (usageChartDataResult.data) {
-        usageChartDataResult.data.forEach((activity: any) => {
+      if (usageChartDataRaw) {
+        usageChartDataRaw.forEach((activity: any) => {
+          if (!activity.created_at) return
           const date = new Date(activity.created_at)
           const monthKey = `${monthNames[date.getMonth()]} ${date.getFullYear()}`
           usageMap.set(monthKey, (usageMap.get(monthKey) || 0) + 1)
@@ -463,41 +437,13 @@ export const adminReportsRouter = router({
         })
       }
 
-      // Get last login time
-      const lastLoginResult = await ctx.supabase
-        .from('activities')
-        .select('created_at')
-        .eq('user_id', profileId)
-        .eq('activity_type', 'login')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
-
-      const lastLogin = lastLoginResult.data?.created_at
-        ? new Date(lastLoginResult.data.created_at)
+      const lastLogin = (lastLoginResult && lastLoginResult[0] && lastLoginResult[0].created_at)
+        ? new Date(lastLoginResult[0].created_at)
         : null
 
       // Calculate trends
-      const previousWeekStart = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
-      const previousWeekEnd = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-
-      const previousWeekActivities = await ctx.supabase
-        .from('activities')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', profileId)
-        .gte('created_at', previousWeekStart.toISOString())
-        .lt('created_at', previousWeekEnd.toISOString())
-
-      const currentWeekActivities = await ctx.supabase
-        .from('activities')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', profileId)
-        .gte('created_at', previousWeekEnd.toISOString())
-
-      const previousWeekCount = previousWeekActivities.count || 0
-      const currentWeekCount = currentWeekActivities.count || 0
-      const activityTrendPercent = previousWeekCount > 0
-        ? ((currentWeekCount - previousWeekCount) / previousWeekCount) * 100
+      const activityTrendPercent = previousWeek > 0
+        ? ((currentWeek - previousWeek) / previousWeek) * 100
         : 0
 
       // Calculate average session (mock for now)
@@ -505,8 +451,8 @@ export const adminReportsRouter = router({
 
       return {
         stats: {
-          totalLogins: totalLoginsResult.count || 0,
-          totalActions: activitiesResult.count || 0,
+          totalLogins,
+          totalActions,
           reportsGenerated: 24, // Placeholder
           averageSession: `${averageSessionMinutes}m`,
         },
@@ -518,7 +464,7 @@ export const adminReportsRouter = router({
           activity: activityChartData,
           usage: usageChartData,
         },
-        lastLogin,
+        lastLogin: lastLogin ? lastLogin.toISOString() : null,
         metadata: {
           fetchedAt: new Date().toISOString(),
           dateRange: {
@@ -537,36 +483,27 @@ export const adminReportsRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      if (!ctx.supabase) {
-        throw new Error('Supabase client not available')
-      }
-
       // Get user profile details
-      const { data: profile, error: profileError } = await ctx.supabase
-        .from('profiles')
-        .select('*, designation:designations(name)')
-        .eq('id', input.userId)
-        .single()
+      const profileData = await ctx.db.query.profiles.findFirst({
+        where: eq(profiles.id, input.userId),
+        with: { designation: true }
+      })
 
-      if (profileError) {
-        throw new Error(profileError.message)
-      }
-
-      if (!profile) {
+      if (!profileData) {
         throw new Error('User not found')
       }
 
       // Get all activity statistics for this user (unfiltered)
-      const { data: allActivities } = await ctx.supabase
-        .from('activities')
-        .select('activity_type, created_at')
-        .eq('user_id', profile.id)
+      const allActivities = await ctx.db.query.activities.findMany({
+        where: eq(activities.user_id, profileData.id),
+        columns: { activity_type: true, created_at: true, module: true }
+      })
 
       const activityStats = {
         total: allActivities?.length || 0,
         byType: {} as Record<string, number>,
         lastActivity: allActivities && allActivities.length > 0
-          ? new Date(Math.max(...allActivities.map(a => new Date(a.created_at).getTime())))
+          ? new Date(Math.max(...allActivities.map(a => a.created_at ? new Date(a.created_at).getTime() : 0)))
           : null,
       }
 
@@ -577,17 +514,23 @@ export const adminReportsRouter = router({
         })
       }
 
-      // Get unique modules for this user
-      const { data: modulesData } = await ctx.supabase
-        .from('activities')
-        .select('module')
-        .eq('user_id', profile.id)
-        .not('module', 'is', null)
-
-      const uniqueModules = Array.from(new Set(modulesData?.map(m => m.module) || []))
+      // Get unique modules
+      const uniqueModules = Array.from(new Set(allActivities?.map(m => m.module).filter(Boolean)))
 
       return {
-        profile,
+        profile: {
+          ...profileData,
+          created_at: profileData.created_at ? profileData.created_at.toISOString() : null,
+          updated_at: profileData.updated_at ? profileData.updated_at.toISOString() : null,
+          user_id: profileData.user_id as string,
+          role: profileData.role as any,
+          designation: profileData.designation ? {
+            ...profileData.designation,
+            created_at: profileData.designation.created_at ? profileData.designation.created_at.toISOString() : null,
+            updated_at: profileData.designation.updated_at ? profileData.designation.updated_at.toISOString() : null,
+            role: profileData.designation.role as any,
+          } : null
+        } as any,
         statistics: activityStats,
         modules: uniqueModules,
       }
@@ -607,74 +550,50 @@ export const adminReportsRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      if (!ctx.supabase) {
-        throw new Error('Supabase client not available')
-      }
+      let filters = [eq(activities.user_id, input.userId)]
 
-      // Get user profile to resolve user_id (since input.userId is profile id)
-      const { data: profile, error: profileError } = await ctx.supabase
-        .from('profiles')
-        .select('id')
-        .eq('id', input.userId)
-        .single()
-
-      if (profileError || !profile) {
-        throw new Error('User not found')
-      }
-
-      // Build activity query
-      let activityQuery = ctx.supabase
-        .from('activities')
-        .select('*', { count: 'exact' })
-        .eq('user_id', profile.id)
-        .order('created_at', { ascending: false })
-
-      // Apply filters
       if (input.activityType) {
         if (Array.isArray(input.activityType)) {
-          if (input.activityType.length > 0) {
-            activityQuery = activityQuery.in('activity_type', input.activityType)
-          }
+          if (input.activityType.length > 0) filters.push(sql`${activities.activity_type} IN ${input.activityType}`)
         } else {
-          activityQuery = activityQuery.eq('activity_type', input.activityType)
+          filters.push(eq(activities.activity_type, input.activityType as any))
         }
       }
 
-      if (input.startDate) {
-        activityQuery = activityQuery.gte('created_at', input.startDate)
-      }
-
-      if (input.endDate) {
-        activityQuery = activityQuery.lte('created_at', input.endDate)
-      }
+      if (input.startDate) filters.push(gte(activities.created_at, new Date(input.startDate)))
+      if (input.endDate) filters.push(lte(activities.created_at, new Date(input.endDate)))
 
       if (input.module) {
         if (Array.isArray(input.module)) {
-          if (input.module.length > 0) {
-            activityQuery = activityQuery.in('module', input.module)
-          }
+          if (input.module.length > 0) filters.push(sql`${activities.module} IN ${input.module}`)
         } else {
-          activityQuery = activityQuery.eq('module', input.module)
+          filters.push(eq(activities.module, input.module))
         }
       }
 
-      // Apply pagination
-      const offset = (input.page - 1) * input.limit
-      activityQuery = activityQuery.range(offset, offset + input.limit - 1)
+      const where = and(...filters)
 
-      const { data: activities, error: activitiesError, count } = await activityQuery
+      const totalResult = await ctx.db.select({ value: count() }).from(activities).where(where)
+      const total = totalResult[0].value
 
-      if (activitiesError) {
-        throw new Error(activitiesError.message)
-      }
+      const data = await ctx.db.query.activities.findMany({
+        where,
+        orderBy: [desc(activities.created_at)],
+        limit: input.limit,
+        offset: (input.page - 1) * input.limit,
+      })
 
       return {
-        activities: activities || [],
+        activities: (data || []).map(a => ({
+          ...a,
+          created_at: a.created_at ? a.created_at.toISOString() : null,
+          user_id: a.user_id as string,
+        })),
         pagination: {
           page: input.page,
           limit: input.limit,
-          total: count || 0,
-          totalPages: Math.ceil((count || 0) / input.limit),
+          total,
+          totalPages: Math.ceil(total / input.limit),
         },
       }
     }),
@@ -688,31 +607,41 @@ export const adminReportsRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      if (!ctx.supabase) {
-        throw new Error('Supabase client not available')
-      }
-
       const searchQuery = input.query.trim()
+      let filters = []
 
-      // Build query - if search is empty, return all users
-      let query = ctx.supabase
-        .from('profiles')
-        .select('id, user_id, email, first_name, last_name, middle_name, mobile_no, avatar_url, role, created_at, sex, date_of_birth, status, designation:designations(name)')
-
-      // Only apply search filter if query is not empty
       if (searchQuery.length > 0) {
-        query = query.or(`first_name.ilike.%${searchQuery}%,last_name.ilike.%${searchQuery}%,middle_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%,mobile_no.ilike.%${searchQuery}%`)
+        filters.push(
+          or(
+            ilike(profiles.first_name, `%${searchQuery}%`),
+            ilike(profiles.last_name, `%${searchQuery}%`),
+            ilike(profiles.middle_name, `%${searchQuery}%`),
+            ilike(profiles.email, `%${searchQuery}%`),
+            ilike(profiles.mobile_no, `%${searchQuery}%`)
+          )
+        )
       }
 
-      const { data, error } = await query
-        .limit(100) // Increased limit for report exports
-        .order('created_at', { ascending: false })
+      const data = await ctx.db.query.profiles.findMany({
+        where: filters.length > 0 ? and(...filters) : undefined,
+        with: { designation: true },
+        limit: 100,
+        orderBy: [desc(profiles.created_at)],
+      })
 
-      if (error) {
-        throw new Error(error.message)
-      }
-
-      return data || []
+      return (data || []).map(u => ({
+        ...u,
+        created_at: u.created_at ? u.created_at.toISOString() : null,
+        updated_at: u.updated_at ? u.updated_at.toISOString() : null,
+        user_id: u.user_id as string,
+        role: u.role as any,
+        designation: u.designation ? {
+          ...u.designation,
+          created_at: u.designation.created_at ? u.designation.created_at.toISOString() : null,
+          updated_at: u.designation.updated_at ? u.designation.updated_at.toISOString() : null,
+          role: u.designation.role as any,
+        } : null
+      }))
     }),
 
   // Get user details with activity logs
@@ -728,72 +657,50 @@ export const adminReportsRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      if (!ctx.supabase) {
-        throw new Error('Supabase client not available')
-      }
-
       // Get user profile details
-      const { data: profile, error: profileError } = await ctx.supabase
-        .from('profiles')
-        .select('*, designation:designations(name)')
-        .eq('id', input.userId)
-        .single()
+      const profileData = await ctx.db.query.profiles.findFirst({
+        where: eq(profiles.id, input.userId),
+        with: { designation: true }
+      })
 
-      if (profileError) {
-        throw new Error(profileError.message)
-      }
+      if (!profileData) throw new Error('User not found')
 
-      if (!profile) {
-        throw new Error('User not found')
-      }
-
-      // Build activity query
-      let activityQuery = ctx.supabase
-        .from('activities')
-        .select('*', { count: 'exact' })
-        .eq('user_id', profile.id)
-        .order('created_at', { ascending: false })
-
-      // Apply filters
+      // Build activity filters
+      let filters = [eq(activities.user_id, profileData.id)]
       if (input.activityType) {
         if (Array.isArray(input.activityType)) {
-          if (input.activityType.length > 0) {
-            activityQuery = activityQuery.in('activity_type', input.activityType)
-          }
+          if (input.activityType.length > 0) filters.push(sql`${activities.activity_type} IN ${input.activityType}`)
         } else {
-          activityQuery = activityQuery.eq('activity_type', input.activityType)
+          filters.push(eq(activities.activity_type, input.activityType as any))
         }
       }
+      if (input.startDate) filters.push(gte(activities.created_at, new Date(input.startDate)))
+      if (input.endDate) filters.push(lte(activities.created_at, new Date(input.endDate)))
 
-      if (input.startDate) {
-        activityQuery = activityQuery.gte('created_at', input.startDate)
-      }
+      const where = and(...filters)
 
-      if (input.endDate) {
-        activityQuery = activityQuery.lte('created_at', input.endDate)
-      }
+      // Get activities paginated and total count
+      const [totalResult, paginatedActivities, allActivities] = await Promise.all([
+        ctx.db.select({ value: count() }).from(activities).where(where),
+        ctx.db.query.activities.findMany({
+          where,
+          orderBy: [desc(activities.created_at)],
+          limit: input.limit,
+          offset: (input.page - 1) * input.limit,
+        }),
+        ctx.db.query.activities.findMany({
+          where: eq(activities.user_id, profileData.id),
+          columns: { activity_type: true, created_at: true }
+        })
+      ])
 
-      // Apply pagination
-      const offset = (input.page - 1) * input.limit
-      activityQuery = activityQuery.range(offset, offset + input.limit - 1)
-
-      const { data: activities, error: activitiesError, count } = await activityQuery
-
-      if (activitiesError) {
-        throw new Error(activitiesError.message)
-      }
-
-      // Get activity statistics
-      const { data: allActivities } = await ctx.supabase
-        .from('activities')
-        .select('activity_type, created_at')
-        .eq('user_id', profile.id)
+      const total = totalResult[0].value
 
       const activityStats = {
         total: allActivities?.length || 0,
         byType: {} as Record<string, number>,
         lastActivity: allActivities && allActivities.length > 0
-          ? new Date(Math.max(...allActivities.map(a => new Date(a.created_at).getTime())))
+          ? new Date(Math.max(...allActivities.map(a => a.created_at ? new Date(a.created_at).getTime() : 0)))
           : null,
       }
 
@@ -805,73 +712,66 @@ export const adminReportsRouter = router({
       }
 
       return {
-        profile,
-        activities: activities || [],
+        profile: {
+          ...profileData,
+          created_at: profileData.created_at ? profileData.created_at.toISOString() : null,
+          updated_at: profileData.updated_at ? profileData.updated_at.toISOString() : null,
+          user_id: profileData.user_id as string,
+          role: profileData.role as any,
+          designation: profileData.designation ? {
+            ...profileData.designation,
+            created_at: profileData.designation.created_at ? profileData.designation.created_at.toISOString() : null,
+            updated_at: profileData.designation.updated_at ? profileData.designation.updated_at.toISOString() : null,
+            role: profileData.designation.role as any,
+          } : null
+        },
+        activities: (paginatedActivities || []).map(a => ({
+          ...a,
+          created_at: a.created_at ? a.created_at.toISOString() : null,
+          user_id: a.user_id as string,
+        })),
         pagination: {
           page: input.page,
           limit: input.limit,
-          total: count || 0,
-          totalPages: Math.ceil((count || 0) / input.limit),
+          total,
+          totalPages: Math.ceil(total / input.limit),
         },
         statistics: activityStats,
       }
     }),
-
   getUserStatusHistory: adminProcedure
     .input(z.object({ userId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
-      if (!ctx.supabase) {
-        throw new Error('Supabase client not available')
-      }
-
-      const { data, error } = await ctx.supabase
-        .from('user_status_history')
-        .select(`
-          *,
-          changed_by_profile:profiles!user_status_history_changed_by_fkey(full_name, email)
-        `)
-        .eq('profile_id', input.userId)
-        .order('created_at', { ascending: false })
-
-      if (error) throw new Error(error.message)
-
+      const data = await ctx.db.query.userStatusHistory.findMany({
+        where: eq(userStatusHistory.profile_id, input.userId),
+        with: {
+          actor: {
+            columns: { full_name: true, email: true }
+          }
+        },
+        orderBy: [desc(userStatusHistory.created_at)]
+      })
       return data || []
     }),
 
-  // Get all activities for reporting
   getAllActivities: adminProcedure
-    .input(
-      z.object({
-        startDate: z.string().optional(),
-        endDate: z.string().optional(),
-      })
-    )
+    .input(z.object({
+      startDate: z.string().optional(),
+      endDate: z.string().optional(),
+    }))
     .query(async ({ ctx, input }) => {
-      if (!ctx.supabase) {
-        throw new Error('Supabase client not available')
-      }
+      let filters = []
+      if (input.startDate) filters.push(gte(activities.created_at, new Date(input.startDate)))
+      if (input.endDate) filters.push(lte(activities.created_at, new Date(input.endDate)))
 
-      let query = ctx.supabase
-        .from('activities')
-        .select(`
-          *,
-          profile:profiles(id, first_name, last_name, middle_name, email, role)
-        `)
-        .order('created_at', { ascending: false })
-
-      if (input.startDate) {
-        query = query.gte('created_at', input.startDate)
-      }
-
-      if (input.endDate) {
-        query = query.lte('created_at', input.endDate)
-      }
-
-      const { data, error } = await query.limit(1000)
-
-      if (error) {
-        throw new Error(error.message)
-      }
+      const data = await ctx.db.query.activities.findMany({
+        where: filters.length > 0 ? and(...filters) : undefined,
+        with: {
+          profile: true
+        },
+        orderBy: [desc(activities.created_at)],
+        limit: 1000
+      })
 
       return data || []
     }),

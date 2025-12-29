@@ -6,16 +6,13 @@ import { PageHeading } from "@/components/ui/page-heading"
 export default function EmployeeLeavesPage() {
     return (
         <div className="min-h-screen bg-background">
-            <DashboardPageLayout>
-                <div className="space-y-6">
-                    <PageHeading
-                        heading="Leave Management"
-                        description="Apply for leaves and track your requests"
-                    />
-                    <ErrorBoundary level="section">
-                        <LeaveApplication />
-                    </ErrorBoundary>
-                </div>
+            <DashboardPageLayout
+                heading="Leave Management"
+                description="Apply for leaves and track your requests"
+            >
+                <ErrorBoundary level="section">
+                    <LeaveApplication />
+                </ErrorBoundary>
             </DashboardPageLayout>
         </div>
     )

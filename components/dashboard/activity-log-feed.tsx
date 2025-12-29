@@ -26,7 +26,7 @@ export interface UserActivity {
     user_id: string
     activity_type: string
     description: string | null
-    created_at: string
+    created_at: string | null
     module?: string | null
     profiles?: {
         email: string
@@ -208,7 +208,7 @@ export function ActivityLogFeed({
                                     </div>
                                     <div className="flex items-center text-[11px] text-muted-foreground font-medium bg-muted/50 px-2 py-0.5 rounded-full w-fit">
                                         <Clock className="h-3 w-3 mr-1" />
-                                        {format(new Date(activity.created_at), "MMM dd, yyyy HH:mm:ss")}
+                                        {activity.created_at ? format(new Date(activity.created_at), "MMM dd, yyyy HH:mm:ss") : "N/A"}
                                     </div>
                                 </div>
                                 <p className="text-sm font-medium leading-relaxed tracking-tight text-foreground/90 break-words">

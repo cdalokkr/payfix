@@ -1,7 +1,7 @@
 "use client"
 
 import { MetricCard } from "@/components/dashboard/metric-card"
-import { Calendar, LogIn, LogOut, UserCheck, Loader2 } from "lucide-react"
+import { Calendar, LogIn, LogOut, UserCheck, Loader2, Plus } from "lucide-react"
 import { trpc } from "@/lib/trpc/client"
 import { format } from "date-fns"
 import { Badge } from "@/components/ui/badge"
@@ -11,23 +11,34 @@ import { cn } from "@/lib/utils"
 
 export function DailyAttendanceCard({ className }: { className?: string }) {
     const utils = trpc.useUtils()
+    const todayStr = format(new Date(), 'yyyy-MM-dd')
+
+    // Fetch last 2 days to catch stale sessions from yesterday
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    const yesterdayStr = format(yesterday, 'yyyy-MM-dd')
+
     const { data: attendance, isLoading } = trpc.attendance.getAttendance.useQuery({
-        startDate: format(new Date(), 'yyyy-MM-dd'),
-        endDate: format(new Date(), 'yyyy-MM-dd')
+        startDate: yesterdayStr,
+        endDate: todayStr
     })
+
+    const { data: settings } = trpc.attendance.getOfficeSettings.useQuery()
 
     const [currentTime, setCurrentTime] = useState(new Date())
     const clockInMutation = trpc.attendance.clockIn.useMutation({
         onSuccess: () => {
             toast.success("Clocked in successfully")
             utils.attendance.getAttendance.invalidate()
-        }
+        },
+        onError: (error) => toast.error(error.message)
     })
     const clockOutMutation = trpc.attendance.clockOut.useMutation({
         onSuccess: () => {
             toast.success("Clocked out successfully")
             utils.attendance.getAttendance.invalidate()
-        }
+        },
+        onError: (error) => toast.error(error.message)
     })
 
     useEffect(() => {
@@ -35,23 +46,28 @@ export function DailyAttendanceCard({ className }: { className?: string }) {
         return () => clearInterval(timer)
     }, [])
 
-    const todayRecord = attendance?.[0]
-    const isClockedIn = !!todayRecord?.check_in && !todayRecord?.check_out
-    const isMarked = !!todayRecord?.check_in && !!todayRecord?.check_out
+    // Find today's record
+    const todayRecord = attendance?.find(r => r.date === todayStr)
+    // Find the most recent pending record (could be today or yesterday)
+    const pendingRecord = attendance?.filter(r => !r.check_out).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
 
-    const handleClockIn = async () => {
+    const isClockedIn = !!pendingRecord
+    const isMarked = !!todayRecord?.check_in && !!todayRecord?.check_out
+    const isTodayOffDay = settings?.off_days?.includes(new Date().getDay())
+
+    const handleClockIn = async (isExtra: boolean = false) => {
         try {
-            await clockInMutation.mutateAsync()
+            await clockInMutation.mutateAsync({ localDate: todayStr, isExtraDay: isExtra })
         } catch (error: any) {
-            toast.error(error.message || "Failed to clock in")
+            // Already handled in onError
         }
     }
 
     const handleClockOut = async () => {
         try {
-            await clockOutMutation.mutateAsync()
+            await clockOutMutation.mutateAsync({ localDate: todayStr })
         } catch (error: any) {
-            toast.error(error.message || "Failed to clock out")
+            // Already handled in onError
         }
     }
 
@@ -92,21 +108,47 @@ export function DailyAttendanceCard({ className }: { className?: string }) {
                             <Badge variant="secondary" className="px-8 py-3 text-xl font-black bg-green-500/10 text-green-700 border-green-500/20 shadow-sm">
                                 <UserCheck className="mr-3 h-6 w-6" /> Marked
                             </Badge>
-                            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-green-600/60 mt-2">Attendance Complete</p>
+                            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-green-600/60 mt-2">
+                                {todayRecord?.is_extra_day ? "Extra Work Day Complete" : "Attendance Complete"}
+                            </p>
                         </div>
                     ) : isClockedIn ? (
-                        <button
-                            onClick={handleClockOut}
-                            disabled={clockOutMutation.isPending}
-                            className="group relative flex items-center gap-4 px-10 py-5 rounded-2xl border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 hover:border-orange-300 transition-all duration-300 shadow-xl shadow-orange-500/10 active:scale-95 disabled:opacity-50"
-                        >
-                            <LogOut className="h-7 w-7 group-hover:rotate-12 transition-transform" />
-                            <span className="text-2xl font-extrabold uppercase tracking-tight">Office - Out</span>
-                            {clockOutMutation.isPending && <Loader2 className="h-5 w-5 animate-spin ml-2" />}
-                        </button>
+                        <div className="flex flex-col items-center gap-4">
+                            <button
+                                onClick={handleClockOut}
+                                disabled={clockOutMutation.isPending}
+                                className="group relative flex items-center gap-4 px-10 py-5 rounded-2xl border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 hover:border-orange-300 transition-all duration-300 shadow-xl shadow-orange-500/10 active:scale-95 disabled:opacity-50"
+                            >
+                                <LogOut className="h-7 w-7 group-hover:rotate-12 transition-transform" />
+                                <span className="text-2xl font-extrabold uppercase tracking-tight">Office - Out</span>
+                                {clockOutMutation.isPending && <Loader2 className="h-5 w-5 animate-spin ml-2" />}
+                            </button>
+                            {pendingRecord?.is_extra_day && (
+                                <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-widest text-orange-600 border-orange-200 bg-orange-50/50">Extra Work Session</Badge>
+                            )}
+                        </div>
+                    ) : isTodayOffDay ? (
+                        <div className="flex flex-col items-center gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                            <div className="flex flex-col items-center gap-2">
+                                <div className="px-10 py-4 rounded-2xl bg-muted/50 border-2 border-dashed border-muted-foreground/20 text-muted-foreground/60 text-3xl font-black uppercase tracking-widest">
+                                    Weekday
+                                </div>
+                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/40">Office is closed today</p>
+                            </div>
+
+                            <button
+                                onClick={() => handleClockIn(true)}
+                                disabled={clockInMutation.isPending}
+                                className="group flex items-center gap-3 px-6 py-3 rounded-xl border border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 transition-all active:scale-95 disabled:opacity-50"
+                            >
+                                <Plus className="h-4 w-4" />
+                                <span className="text-sm font-bold uppercase tracking-wider">Clock In (Extra Work)</span>
+                                {clockInMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                            </button>
+                        </div>
                     ) : (
                         <button
-                            onClick={handleClockIn}
+                            onClick={() => handleClockIn(false)}
                             disabled={clockInMutation.isPending}
                             className="group relative flex items-center gap-4 px-10 py-5 rounded-2xl border border-green-200 bg-green-50 text-green-700 hover:bg-green-100 hover:border-green-300 transition-all duration-300 shadow-xl shadow-green-500/10 active:scale-95 disabled:opacity-50"
                         >

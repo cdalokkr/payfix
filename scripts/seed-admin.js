@@ -195,6 +195,41 @@ async function ensureDesignation() {
 }
 
 // ============================================
+// STEP 2.7: Ensure Office Settings Initialized
+// ============================================
+async function ensureOfficeSettings() {
+    console.log('\n⚙️ Ensuring Office Settings initialized...')
+
+    const { data: existing } = await supabase
+        .from('office_settings')
+        .select('id')
+        .maybeSingle()
+
+    if (existing) {
+        console.log('   ℹ️ Office settings already exist')
+        return existing.id
+    }
+
+    const { data, error } = await supabase
+        .from('office_settings')
+        .insert({
+            default_check_in: '10:00:00',
+            default_check_out: '19:00:00',
+            off_days: [0] // Sunday
+        })
+        .select()
+        .single()
+
+    if (error) {
+        console.error('❌ Failed to initialize office settings:', error.message)
+        return null
+    }
+
+    console.log('✅ Office settings initialized')
+    return data.id
+}
+
+// ============================================
 // STEP 3: Create Profile
 // ============================================
 async function createProfile(authUserId) {
@@ -417,6 +452,9 @@ async function main() {
 
         // Step 2.5: Ensure designation exists
         await ensureDesignation()
+
+        // Step 2.7: Ensure office settings initialized
+        await ensureOfficeSettings()
 
         // Step 3: Create profile
         const profileSuccess = await createProfile(authUserId)

@@ -1,8 +1,11 @@
 // ============================================
 // lib/db/optimized-query-manager.ts
 // Performance-optimized database query manager with N+1 elimination
+// Using Drizzle ORM for maximum performance
 // ============================================
-import { createClient } from '@supabase/supabase-js'
+import { db } from '@/lib/db'
+import { profiles, activities, analyticsMetrics, designations } from '@/lib/db/schema'
+import { eq, and, gte, lte, desc, sql, or, ilike, count } from 'drizzle-orm'
 
 // Performance monitoring for database queries
 interface DatabaseMetrics {
@@ -12,6 +15,7 @@ interface DatabaseMetrics {
   cacheHit: boolean
   indexUsed: boolean
   timestamp: number
+  hash?: string
 }
 
 // Query cache for frequently accessed data
@@ -20,18 +24,6 @@ interface QueryCache {
   timestamp: number
   ttl: number
   queryHash: string
-}
-
-// Optimized query patterns to prevent N+1 queries
-interface QueryBatch {
-  queries: Array<() => Promise<any>>
-  results: any[]
-  startTime: number
-  metrics: {
-    totalQueries: number
-    totalTime: number
-    cacheHits: number
-  }
 }
 
 // Global query cache
@@ -60,12 +52,13 @@ function recordQueryMetrics(metrics: Omit<DatabaseMetrics, 'timestamp'>) {
   }
 
   // Log slow queries
-  if (metrics.executionTime > 1000) {
+  if (metrics.executionTime > 500) { // Lowered to 500ms for Drizzle
     console.warn(`[DB-PERF] Slow query ${metrics.queryType}: ${metrics.executionTime.toFixed(2)}ms`, {
       executionTime: metrics.executionTime,
       rowCount: metrics.rowCount,
       cacheHit: metrics.cacheHit,
-      indexUsed: metrics.indexUsed
+      indexUsed: metrics.indexUsed,
+      hash: metrics.hash
     })
   }
 }
@@ -108,21 +101,21 @@ function setCachedQuery<T>(queryHash: string, data: T, ttl: number = CACHE_TTL_D
   }
 }
 
-// Optimized batch query execution
+// Optimized query execution manager
 export class OptimizedQueryManager {
-  private supabase: any
-
-  constructor(supabaseClient: any) {
-    this.supabase = supabaseClient
-  }
-
-  // BATCH QUERY 1: Get all dashboard metrics in a single optimized query
+  // BATCH QUERY 1: Get all dashboard metrics in a single optimized execution
   async getDashboardMetricsUnified(options: {
     analyticsDays?: number
     activitiesLimit?: number
     useCache?: boolean
   } = {}): Promise<{
-    critical: { totalUsers: number; activeUsers: number }
+    critical: {
+      totalUsers: number;
+      activeUsers: number;
+      employeeCount: number;
+      moderatorCount: number;
+      adminCount: number;
+    }
     secondary: { totalActivities: number; todayActivities: number; analytics: any[] }
     detailed: { recentActivities: any[] }
   }> {
@@ -131,7 +124,13 @@ export class OptimizedQueryManager {
     const queryHash = hashQuery('dashboard_metrics_unified', { analyticsDays, activitiesLimit })
 
     type DashboardMetricsResult = {
-      critical: { totalUsers: number; activeUsers: number }
+      critical: {
+        totalUsers: number;
+        activeUsers: number;
+        employeeCount: number;
+        moderatorCount: number;
+        adminCount: number;
+      }
       secondary: { totalActivities: number; todayActivities: number; analytics: any[] }
       detailed: { recentActivities: any[] }
     }
@@ -152,72 +151,91 @@ export class OptimizedQueryManager {
         }
       }
 
-      // Use optimized single query with proper joins to prevent N+1
-      const [profilesResult, activitiesResult, todayActivitiesResult, analyticsResult, recentActivitiesResult, activeUsersResult] = await Promise.all([
-        // Total users count with role filtering
-        this.supabase
-          .from('profiles')
-          .select('*', { count: 'exact', head: true })
-          .eq('role', 'employee'),
+      const todayStart = new Date(new Date().setHours(0, 0, 0, 0))
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+      const analyticsDaysAgo = new Date(Date.now() - analyticsDays * 24 * 60 * 60 * 1000)
 
-        // Total activities count
-        this.supabase
-          .from('activities')
-          .select('*', { count: 'exact', head: true }),
+      const [
+        roleCountsResult,
+        totalActivitiesResult,
+        todayActivitiesResult,
+        activeUsersCountResult,
+        analyticsData,
+        recentActivities
+      ] = await Promise.all([
+        // 1. Consolidated Role counts
+        db.select({
+          role: profiles.role,
+          count: count()
+        }).from(profiles).groupBy(profiles.role),
 
-        // Today's activities count (optimized with date range)
-        this.supabase
-          .from('activities')
-          .select('*', { count: 'exact', head: true })
-          .gte('created_at', new Date().toISOString().split('T')[0]),
+        // 2a. Total Activities - Minimal query
+        db.select({ count: count(activities.id) }).from(activities),
 
-        // Analytics data with optimized date range
-        this.supabase
-          .from('analytics_metrics')
-          .select('*')
-          .gte('metric_date', new Date(Date.now() - analyticsDays * 24 * 60 * 60 * 1000).toISOString())
-          .order('metric_date', { ascending: true })
-          .limit(analyticsDays * 24), // Limit to prevent excessive data
+        // 2b. Today Activities - Filtered count
+        db.select({
+          count: sql<number>`count(*) filter (where ${activities.created_at} >= ${todayStart.toISOString()}::timestamp)`
+        }).from(activities),
 
-        // Recent activities with optimized join (prevents N+1)
-        this.supabase
-          .from('activities')
-          .select(`
-            *,
-            profiles!activities_user_id_fkey (
-              email,
-              full_name,
-              first_name,
-              last_name
-            )
-          `)
-          .order('created_at', { ascending: false })
-          .limit(activitiesLimit),
+        // 2c. Optimized Active User Count
+        // For small datasets (< 10k), COUNT(DISTINCT) is often faster than a GROUP BY subquery
+        // because it avoids the overhead of materializing the subquery.
+        // 2c. Optimized Active User Count - Stable distinct count for small datasets
+        db.select({ count: sql<number>`count(distinct ${activities.user_id})` }).from(activities)
+          .where(gte(activities.created_at, sevenDaysAgo)),
 
-        // Active users calculation (optimized single query)
-        this.supabase
-          .from('activities')
-          .select('user_id')
-          .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
+        // 3. Analytics data (TimeSeries)
+        db.query.analyticsMetrics.findMany({
+          where: gte(analyticsMetrics.metric_date, analyticsDaysAgo.toISOString().split('T')[0]),
+          orderBy: [desc(analyticsMetrics.metric_date)],
+          limit: analyticsDays * 24
+        }),
+
+        // 4. Recent activities with optimized profile join
+        db.query.activities.findMany({
+          with: {
+            profile: {
+              columns: {
+                id: true,
+                email: true,
+                full_name: true,
+                first_name: true,
+                last_name: true
+              }
+            }
+          },
+          orderBy: [desc(activities.created_at)],
+          limit: activitiesLimit
+        })
       ])
 
-      // Process results efficiently
-      const uniqueUsers = new Set(
-        activeUsersResult.data?.map((a: any) => a.user_id).filter(Boolean) || []
-      )
+      const totalActivitiesCount = Number((totalActivitiesResult as any)?.[0]?.count || 0)
+      const todayActivitiesCount = Number((todayActivitiesResult as any)?.[0]?.count || 0)
+      const activeUsersCount = Number((activeUsersCountResult as any)?.[0]?.count || 0)
+
+      // Process role counts from the grouped result
+      const employeeCount = Number(roleCountsResult.find(r => r.role === 'employee')?.count || 0)
+      const moderatorCount = Number(roleCountsResult.find(r => r.role === 'moderator')?.count || 0)
+      const adminCount = Number(roleCountsResult.find(r => r.role === 'admin')?.count || 0)
 
       const result: DashboardMetricsResult = {
         critical: {
-          totalUsers: profilesResult.count || 0,
-          activeUsers: uniqueUsers.size
+          totalUsers: employeeCount + moderatorCount + adminCount,
+          activeUsers: Number(activeUsersCount),
+          employeeCount,
+          moderatorCount,
+          adminCount
         },
         secondary: {
-          totalActivities: activitiesResult.count || 0,
-          todayActivities: todayActivitiesResult.count || 0,
-          analytics: analyticsResult.data || []
+          totalActivities: totalActivitiesCount,
+          todayActivities: todayActivitiesCount,
+          analytics: analyticsData
         },
         detailed: {
-          recentActivities: recentActivitiesResult.data || []
+          recentActivities: recentActivities.map(a => ({
+            ...a,
+            profiles: a.profile // Map for compatibility
+          }))
         }
       }
 
@@ -229,9 +247,10 @@ export class OptimizedQueryManager {
       recordQueryMetrics({
         queryType: 'getDashboardMetricsUnified',
         executionTime: performance.now() - startTime,
-        rowCount: result.secondary.totalActivities + result.secondary.analytics.length,
+        rowCount: recentActivities.length,
         cacheHit: false,
-        indexUsed: true
+        indexUsed: true,
+        hash: queryHash
       })
 
       return result
@@ -266,7 +285,7 @@ export class OptimizedQueryManager {
     }
 
     try {
-      // Check cache for basic queries
+      // Check cache
       if (useCache && !search && !role) {
         const cached = getCachedQuery<UsersResult>(queryHash)
         if (cached) {
@@ -281,48 +300,41 @@ export class OptimizedQueryManager {
         }
       }
 
-      // Build optimized query with proper joins
-      let query = this.supabase
-        .from('profiles')
-        .select(`
-          id,
-          user_id,
-          email,
-          role,
-          first_name,
-          last_name,
-          created_at,
-          updated_at,
-          auth.users!inner (
-            email_confirmed_at,
-            last_sign_in_at
-          )
-        `, { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .range(offset, offset + limit - 1)
-
-      // Apply filters
-      if (role) {
-        query = query.eq('role', role)
-      }
-
+      // Build where clause
+      let whereClause = []
+      if (role) whereClause.push(eq(profiles.role, role as any))
       if (search) {
-        query = query.or(`email.ilike.%${search}%,first_name.ilike.%${search}%,last_name.ilike.%${search}%`)
+        whereClause.push(
+          or(
+            ilike(profiles.email, `%${search}%`),
+            ilike(profiles.first_name, `%${search}%`),
+            ilike(profiles.last_name, `%${search}%`)
+          )
+        )
       }
 
-      const { data, error, count } = await query
-
-      if (error) throw error
+      const [data, totalCount] = await Promise.all([
+        db.query.profiles.findMany({
+          where: whereClause.length > 0 ? and(...whereClause) : undefined,
+          orderBy: [desc(profiles.created_at)],
+          limit: limit,
+          offset: offset,
+          with: { designation: true }
+        }),
+        db.select({ value: count() })
+          .from(profiles)
+          .where(whereClause.length > 0 ? and(...whereClause) : undefined)
+      ])
 
       const result: UsersResult = {
-        users: data || [],
-        total: count || 0,
-        hasMore: (count || 0) > offset + limit
+        users: data,
+        total: totalCount[0]?.value || 0,
+        hasMore: (totalCount[0]?.value || 0) > offset + limit
       }
 
       // Cache the result
       if (useCache && !search && !role) {
-        setCachedQuery<UsersResult>(queryHash, result, 60 * 1000) // 1 minute cache
+        setCachedQuery<UsersResult>(queryHash, result, 60 * 1000)
       }
 
       recordQueryMetrics({
@@ -360,78 +372,48 @@ export class OptimizedQueryManager {
     const offset = (page - 1) * limit
     const queryHash = hashQuery('activities_optimized', { page, limit, userId, activityType, dateFrom, dateTo })
 
-    type ActivitiesResult = {
-      activities: any[]
-      total: number
-      hasMore: boolean
-    }
-
     try {
-      // Check cache for basic queries
       if (useCache && !userId && !activityType && !dateFrom && !dateTo) {
-        const cached = getCachedQuery<ActivitiesResult>(queryHash)
-        if (cached) {
-          recordQueryMetrics({
-            queryType: 'getActivitiesOptimized',
-            executionTime: performance.now() - startTime,
-            rowCount: 0,
-            cacheHit: true,
-            indexUsed: true
-          })
-          return cached
-        }
+        const cached = getCachedQuery<any>(queryHash)
+        if (cached) return cached
       }
 
-      // Build optimized query with proper joins (prevents N+1)
-      let query = this.supabase
-        .from('activities')
-        .select(`
-          id,
-          user_id,
-          activity_type,
-          description,
-          metadata,
-          created_at,
-          profiles!activities_user_id_fkey (
-            email,
-            full_name,
-            first_name,
-            last_name
-          )
-        `, { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .range(offset, offset + limit - 1)
+      let whereClause = []
+      if (userId) whereClause.push(eq(activities.user_id, userId))
+      if (activityType) whereClause.push(eq(activities.activity_type, activityType as any))
+      if (dateFrom) whereClause.push(gte(activities.created_at, new Date(dateFrom)))
+      if (dateTo) whereClause.push(lte(activities.created_at, new Date(dateTo)))
 
-      // Apply filters
-      if (userId) {
-        query = query.eq('user_id', userId)
+      const [data, totalCount] = await Promise.all([
+        db.query.activities.findMany({
+          where: whereClause.length > 0 ? and(...whereClause) : undefined,
+          orderBy: [desc(activities.created_at)],
+          limit: limit,
+          offset: offset,
+          with: {
+            profile: {
+              columns: {
+                email: true,
+                full_name: true,
+                first_name: true,
+                last_name: true
+              }
+            }
+          }
+        }),
+        db.select({ value: count() })
+          .from(activities)
+          .where(whereClause.length > 0 ? and(...whereClause) : undefined)
+      ])
+
+      const result = {
+        activities: data.map(a => ({ ...a, profiles: a.profile })),
+        total: totalCount[0]?.value || 0,
+        hasMore: (totalCount[0]?.value || 0) > offset + limit
       }
 
-      if (activityType) {
-        query = query.eq('activity_type', activityType)
-      }
-
-      if (dateFrom) {
-        query = query.gte('created_at', dateFrom)
-      }
-
-      if (dateTo) {
-        query = query.lte('created_at', dateTo)
-      }
-
-      const { data, error, count } = await query
-
-      if (error) throw error
-
-      const result: ActivitiesResult = {
-        activities: data || [],
-        total: count || 0,
-        hasMore: (count || 0) > offset + limit
-      }
-
-      // Cache the result
       if (useCache && !userId && !activityType && !dateFrom && !dateTo) {
-        setCachedQuery<ActivitiesResult>(queryHash, result, 30 * 1000) // 30 seconds cache
+        setCachedQuery(queryHash, result, 30 * 1000)
       }
 
       recordQueryMetrics({
@@ -443,7 +425,6 @@ export class OptimizedQueryManager {
       })
 
       return result
-
     } catch (error) {
       console.error('[DB-PERF] getActivitiesOptimized failed:', error)
       throw error
@@ -455,95 +436,65 @@ export class OptimizedQueryManager {
     dateRange: { from: string; to: string }
     groupBy?: 'day' | 'week' | 'month'
     useCache?: boolean
-  } = { dateRange: { from: '', to: '' } }): Promise<{
+  }): Promise<{
     userGrowth: any[]
     activityStats: any[]
     topUsers: any[]
   }> {
     const startTime = startQueryTiming('getComplexStatistics')
-    const { dateRange, groupBy = 'day', useCache = true } = options
-    const queryHash = hashQuery('complex_statistics', { dateRange, groupBy })
-
-    type ComplexStatisticsResult = {
-      userGrowth: any[]
-      activityStats: any[]
-      topUsers: any[]
-    }
+    const { dateRange, useCache = true } = options
+    const queryHash = hashQuery('complex_statistics', { dateRange })
 
     try {
-      // Check cache
       if (useCache) {
-        const cached = getCachedQuery<ComplexStatisticsResult>(queryHash)
-        if (cached) {
-          recordQueryMetrics({
-            queryType: 'getComplexStatistics',
-            executionTime: performance.now() - startTime,
-            rowCount: 0,
-            cacheHit: true,
-            indexUsed: true
-          })
-          return cached
-        }
+        const cached = getCachedQuery<any>(queryHash)
+        if (cached) return cached
       }
 
-      // Execute optimized batch queries
       const [userGrowth, activityStats, topUsers] = await Promise.all([
-        // User growth over time (using index on created_at)
-        this.supabase
-          .from('profiles')
-          .select('created_at')
-          .gte('created_at', dateRange.from)
-          .lte('created_at', dateRange.to),
+        db.select({
+          date: sql`date_trunc('day', ${profiles.created_at})`,
+          count: count()
+        })
+          .from(profiles)
+          .where(and(gte(profiles.created_at, new Date(dateRange.from)), lte(profiles.created_at, new Date(dateRange.to))))
+          .groupBy(sql`date_trunc('day', ${profiles.created_at})`)
+          .orderBy(sql`date_trunc('day', ${profiles.created_at})`),
 
-        // Activity statistics (using optimized joins)
-        this.supabase
-          .from('activities')
-          .select(`
-            activity_type,
-            created_at,
-            profiles!activities_user_id_fkey (
-              email
-            )
-          `)
-          .gte('created_at', dateRange.from)
-          .lte('created_at', dateRange.to),
+        db.select({
+          type: activities.activity_type,
+          count: count()
+        })
+          .from(activities)
+          .where(and(gte(activities.created_at, new Date(dateRange.from)), lte(activities.created_at, new Date(dateRange.to))))
+          .groupBy(activities.activity_type),
 
-        // Top active users (optimized aggregation)
-        this.supabase
-          .from('activities')
-          .select(`
-            user_id,
-            count:id
-          `)
-          .gte('created_at', dateRange.from)
-          .lte('created_at', dateRange.to)
-          .group('user_id')
-          .order('count', { ascending: false })
+        db.select({
+          userId: activities.user_id,
+          count: count()
+        })
+          .from(activities)
+          .where(and(gte(activities.created_at, new Date(dateRange.from)), lte(activities.created_at, new Date(dateRange.to))))
+          .groupBy(activities.user_id)
+          .orderBy(desc(count()))
           .limit(10)
       ])
 
-      // Process results
-      const result: ComplexStatisticsResult = {
-        userGrowth: userGrowth.data || [],
-        activityStats: activityStats.data || [],
-        topUsers: topUsers.data || []
-      }
+      const result = { userGrowth, activityStats, topUsers }
 
-      // Cache the result
       if (useCache) {
-        setCachedQuery<ComplexStatisticsResult>(queryHash, result, 5 * 60 * 1000) // 5 minutes cache for complex stats
+        setCachedQuery(queryHash, result, 5 * 60 * 1000)
       }
 
       recordQueryMetrics({
         queryType: 'getComplexStatistics',
         executionTime: performance.now() - startTime,
-        rowCount: result.userGrowth.length + result.activityStats.length + result.topUsers.length,
+        rowCount: userGrowth.length + activityStats.length + topUsers.length,
         cacheHit: false,
         indexUsed: true
       })
 
       return result
-
     } catch (error) {
       console.error('[DB-PERF] getComplexStatistics failed:', error)
       throw error
@@ -563,7 +514,7 @@ export function getDatabasePerformanceStats() {
     ? (recentMetrics.filter(m => m.cacheHit).length / recentMetrics.length) * 100
     : 0
 
-  const slowQueries = recentMetrics.filter(m => m.executionTime > 500).length
+  const slowQueries = recentMetrics.filter(m => m.executionTime > 200).length // 200ms threshold for Drizzle
 
   return {
     totalQueries: queryMetrics.length,
@@ -573,19 +524,19 @@ export function getDatabasePerformanceStats() {
     slowQueries,
     cacheSize: queryCache.size,
     topSlowQueries: recentMetrics
-      .filter(m => m.executionTime > 1000)
+      .filter(m => m.executionTime > 500)
       .sort((a, b) => b.executionTime - a.executionTime)
       .slice(0, 5)
       .map(m => ({ type: m.queryType, time: m.executionTime }))
   }
 }
 
-// Create optimized query manager factory
-export function createOptimizedQueryManager(supabaseClient: any): OptimizedQueryManager {
-  return new OptimizedQueryManager(supabaseClient)
+// Factory function
+export function createOptimizedQueryManager(): OptimizedQueryManager {
+  return new OptimizedQueryManager()
 }
 
-// Clear all caches (useful for testing or memory management)
+// Clear all caches
 export function clearQueryCaches(): void {
   queryCache.clear()
   console.log('[DB-PERF] All query caches cleared')

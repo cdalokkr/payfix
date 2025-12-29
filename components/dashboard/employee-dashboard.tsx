@@ -79,13 +79,6 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
 
     return (
         <div className="space-y-6 gesture-friendly">
-            {/* Header */}
-            <PageHeading
-                heading="Employee Dashboard"
-                description="Welcome back! Here is an overview of your common tasks and recent activity."
-                variant="gradient"
-            />
-
             {/* Quick Actions & Session Row - Two Columns */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Quick Actions Column */}

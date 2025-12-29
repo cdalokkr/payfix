@@ -45,7 +45,7 @@ export type UserFormValues = {
     sex: "male" | "female" | ""
     role: "admin" | "moderator" | "employee" | ""
     designationId?: string | null
-    allowedModules?: Module[]
+    allowedModules?: string[]
     password?: string
     confirmPassword?: string
 }

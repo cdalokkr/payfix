@@ -1,0 +1,32 @@
+features/reports/components/analytics-tab.tsx(94,46): error TS2349: This expression is not callable.
+  Each member of the union type 'ProcedureUseQuery<{ input: { userId: string; }; output: { profile: { created_at: string | null; updated_at: string | null; user_id: string; role: any; designation: { created_at: string | null; updated_at: string | null; role: any; name: string; id: string; description: string | null; } | null; ... 12 more ...; allow...' has signatures, but none of those signatures are compatible with each other.
+features/reports/components/analytics-tab.tsx(685,82): error TS2322: Type 'unknown' is not assignable to type 'ReactNode'.
+features/reports/components/analytics-tab.tsx(974,72): error TS2345: Argument of type '(activity: UserActivity) => string[]' is not assignable to parameter of type '(value: { activity_type: "login" | "logout" | "profile_update" | "data_view" | "data_edit" | "data_delete" | "data_create" | "password_change"; id: string; description: string | null; created_at: string | null; user_id: string; module: string | null; metadata?: unknown; }, index: number, array: { ...; }[]) => string[]'.
+  Types of parameters 'activity' and 'value' are incompatible.
+    Type '{ activity_type: "login" | "logout" | "profile_update" | "data_view" | "data_edit" | "data_delete" | "data_create" | "password_change"; id: string; description: string | null; created_at: string | null; user_id: string; module: string | null; metadata?: unknown; }' is not assignable to type 'UserActivity'.
+      Types of property 'created_at' are incompatible.
+        Type 'string | null' is not assignable to type 'string'.
+          Type 'null' is not assignable to type 'string'.
+features/reports/components/analytics-tab.tsx(1006,19): error TS2322: Type '{ activity_type: "login" | "logout" | "profile_update" | "data_view" | "data_edit" | "data_delete" | "data_create" | "password_change"; id: string; description: string | null; created_at: string | null; user_id: string; module: string | null; metadata?: unknown; }[]' is not assignable to type 'UserActivity[]'.
+  Type '{ activity_type: "login" | "logout" | "profile_update" | "data_view" | "data_edit" | "data_delete" | "data_create" | "password_change"; id: string; description: string | null; created_at: string | null; user_id: string; module: string | null; metadata?: unknown; }' is not assignable to type 'UserActivity'.
+    Types of property 'created_at' are incompatible.
+      Type 'string | null' is not assignable to type 'string'.
+        Type 'null' is not assignable to type 'string'.
+features/users/components/designation-management.tsx(158,21): error TS2322: Type 'Designation' is not assignable to type '{ id: string; name: string; description: string | null; role: "admin" | "moderator" | "employee"; }'.
+  Types of property 'role' are incompatible.
+    Type 'string | null' is not assignable to type '"admin" | "moderator" | "employee"'.
+      Type 'null' is not assignable to type '"admin" | "moderator" | "employee"'.
+features/users/components/designation-management.tsx(204,21): error TS2322: Type 'Designation' is not assignable to type '{ id: string; name: string; description: string | null; role: "admin" | "moderator" | "employee"; }'.
+  Types of property 'role' are incompatible.
+    Type 'string | null' is not assignable to type '"admin" | "moderator" | "employee"'.
+      Type 'null' is not assignable to type '"admin" | "moderator" | "employee"'.
+features/users/components/user-management.tsx(229,21): error TS2322: Type '{ created_at: string | null; updated_at: string | null; user_id: string; role: any; designation: { created_at: string | null; updated_at: string | null; role: any; name: string; id: string; description: string | null; } | null; ... 12 more ...; allowed_modules: string[] | null; }[]' is not assignable to type 'Profile[]'.
+  Type '{ created_at: string | null; updated_at: string | null; user_id: string; role: any; designation: { created_at: string | null; updated_at: string | null; role: any; name: string; id: string; description: string | null; } | null; ... 12 more ...; allowed_modules: string[] | null; }' is not assignable to type 'Profile'.
+    Types of property 'first_name' are incompatible.
+      Type 'string | null' is not assignable to type 'string | undefined'.
+        Type 'null' is not assignable to type 'string | undefined'.
+features/users/components/user-management.tsx(255,21): error TS2322: Type '{ created_at: string | null; updated_at: string | null; user_id: string; role: any; designation: { created_at: string | null; updated_at: string | null; role: any; name: string; id: string; description: string | null; } | null; ... 12 more ...; allowed_modules: string[] | null; }[]' is not assignable to type 'Profile[]'.
+  Type '{ created_at: string | null; updated_at: string | null; user_id: string; role: any; designation: { created_at: string | null; updated_at: string | null; role: any; name: string; id: string; description: string | null; } | null; ... 12 more ...; allowed_modules: string[] | null; }' is not assignable to type 'Profile'.
+    Types of property 'first_name' are incompatible.
+      Type 'string | null' is not assignable to type 'string | undefined'.
+        Type 'null' is not assignable to type 'string | undefined'.

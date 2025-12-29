@@ -3,9 +3,9 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { trpc } from "@/lib/trpc/client"
-import { CalendarCheck, Clock, Briefcase } from "lucide-react"
+import { Clock } from "lucide-react"
 import { format, startOfMonth, endOfMonth, isSameDay } from "date-fns"
-import { Calendar, CalendarDayButton } from "@/components/ui/calendar"
+import { Calendar as ShadcnCalendar, CalendarDayButton } from "@/components/ui/calendar"
 import { DataTable } from "@/components/ui/data-table"
 import { ColumnDef } from "@tanstack/react-table"
 import { Badge } from "@/components/ui/badge"
@@ -15,8 +15,9 @@ import { eachDayOfInterval, isSunday, isWithinInterval, parseISO, addMonths, sub
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { motion } from "framer-motion"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { ClockUser as ClockUserIcon, CalendarDots as CalendarDotsIcon, CalendarCheck as CalendarCheckIcon, CalendarX as CalendarXIcon, CalendarMinus as CalendarMinusIcon, CalendarSlash as CalendarSlashIcon, Calendar as CalendarIcon, Briefcase as BriefcaseIcon } from "@phosphor-icons/react"
+import { Skeleton } from "@/components/ui/skeleton"
 
 export function AttendanceDashboard() {
     const today = new Date()
@@ -54,6 +55,7 @@ export function AttendanceDashboard() {
         let absent = 0
         let leave = 0
         let holiday = 0
+        let noOfficeOut = 0
 
         days.forEach(day => {
             const dateStr = format(day, 'yyyy-MM-dd')
@@ -79,13 +81,17 @@ export function AttendanceDashboard() {
 
             if (record) {
                 if (record.check_in) present++
-                if (record.check_in && record.check_out) marked++
+                if (record.check_in && record.check_out) {
+                    marked++
+                } else if (record.check_in && !record.check_out) {
+                    noOfficeOut++
+                }
             } else if (day < today && !isSunday(day)) {
                 absent++
             }
         })
 
-        return { marked, present, absent, leave, holiday }
+        return { marked, present, absent, leave, holiday, noOfficeOut }
     }, [attendanceMap, leaves, closures, monthStart, monthEnd, today])
 
     const columns: ColumnDef<any>[] = [
@@ -141,30 +147,59 @@ export function AttendanceDashboard() {
     return (
         <div className="space-y-8">
             {/* Monthly Statistics Overview */}
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
                 {[
-                    { label: "Marked Days", value: stats.marked, color: "text-primary", bg: "bg-primary/10", border: "border-primary/20" },
-                    { label: "Present Days", value: stats.present, color: "text-green-600", bg: "bg-green-500/10", border: "border-green-500/20" },
-                    { label: "Absent Days", value: stats.absent, color: "text-red-600", bg: "bg-red-500/10", border: "border-red-500/20" },
-                    { label: "Leave Days", value: stats.leave, color: "text-orange-600", bg: "bg-orange-500/10", border: "border-orange-500/20" },
-                    { label: "Holidays", value: stats.holiday, color: "text-blue-600", bg: "bg-blue-500/10", border: "border-blue-500/20" }
-                ].map((stat, i) => (
-                    <Card key={i} className={cn("border shadow-sm overflow-hidden", stat.border)}>
-                        <div className={cn("px-4 py-3 flex flex-col gap-1", stat.bg)}>
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">{stat.label}</p>
-                            <p className={cn("text-2xl font-black tabular-nums", stat.color)}>{stat.value}</p>
-                        </div>
-                    </Card>
-                ))}
+                    { label: "Marked Days", value: stats.marked, icon: CalendarDotsIcon, color: "text-primary", bg: "bg-primary/10", border: "border-primary/20" },
+                    { label: "Present Days", value: stats.present, icon: CalendarCheckIcon, color: "text-green-600", bg: "bg-green-500/10", border: "border-green-500/20" },
+                    { label: "Absent Days", value: stats.absent, icon: CalendarXIcon, color: "text-red-600", bg: "bg-red-500/10", border: "border-red-500/20" },
+                    { label: "Leave Days", value: stats.leave, icon: CalendarMinusIcon, color: "text-orange-600", bg: "bg-orange-500/10", border: "border-orange-500/20" },
+                    { label: "No Office Out", value: stats.noOfficeOut, icon: ClockUserIcon, color: "text-purple-600", bg: "bg-purple-500/10", border: "border-purple-500/20" },
+                    { label: "Holidays", value: stats.holiday, icon: CalendarSlashIcon, color: "text-blue-600", bg: "bg-blue-500/10", border: "border-blue-500/20" }
+                ].map((stat, i) => {
+                    const Icon = stat.icon;
+                    return (
+                        <motion.div
+                            key={i}
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            whileHover={{ y: -2, transition: { duration: 0.2 } }}
+                            transition={{ delay: 0.1 + i * 0.05 }}
+                            className={cn(
+                                "flex flex-col p-3 rounded-xl border transition-all duration-300",
+                                "bg-background/40 hover:bg-background/80",
+                                "group cursor-default shadow-sm",
+                                stat.border
+                            )}
+                        >
+                            <div className="flex items-center justify-between mb-2">
+                                <div className={cn(
+                                    "p-1.5 rounded-lg transition-transform duration-300 group-hover:scale-110",
+                                    stat.bg,
+                                    stat.color
+                                )}>
+                                    <Icon size={32} weight="duotone" />
+                                </div>
+                                {isAttendanceLoading ? (
+                                    <Skeleton className="h-8 w-10" />
+                                ) : (
+                                    <span className={cn("text-2xl font-black tabular-nums tracking-tight", stat.color)}>{stat.value}</span>
+                                )}
+                            </div>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground truncate">
+                                {stat.label}
+                            </p>
+                        </motion.div>
+                    )
+                })}
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-                <Card className="xl:col-span-6 shadow-xl border-primary/10 overflow-hidden flex flex-col h-full bg-background/50 backdrop-blur-sm">
-                    <CardHeader className="border-b bg-muted/30 pb-4">
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <Card className="xl:col-span-6 shadow-xl border-primary/10 overflow-hidden flex flex-col h-full bg-background/50 backdrop-blur-sm pt-0 hover:bg-background/80 transition-colors group cursor-default hover:border-primary/20 ">
+                    <CardHeader className="border-b border-muted/20 bg-muted/50 transition-colors p-0 overflow-hidden group-hover:bg-muted/80">
+                        <div className="px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 group/header cursor-default">
                             <div className="flex items-center gap-3">
                                 <div className="p-2.5 rounded-xl bg-primary/10 text-primary shadow-sm">
-                                    <CalendarCheck className="h-5 w-5" />
+                                    <CalendarIcon className="h-6 w-6" />
                                 </div>
                                 <div>
                                     <CardTitle className="text-lg font-bold">Monthly Calendar</CardTitle>
@@ -176,7 +211,7 @@ export function AttendanceDashboard() {
                     <CardContent className="p-0 flex flex-1 justify-center min-h-[500px]">
                         <div className="w-full px-4 py-2">
                             <TooltipProvider>
-                                <Calendar
+                                <ShadcnCalendar
                                     mode="single"
                                     month={currentMonth}
                                     onMonthChange={setCurrentMonth}
@@ -192,9 +227,10 @@ export function AttendanceDashboard() {
                                         nav: "hidden",
                                         table: "w-full h-full border-collapse flex-1 flex flex-col",
                                         tbody: "flex flex-col gap-3 flex-1",
-                                        head_row: "flex w-full mb-2 px-1",
-                                        row: "flex w-full flex-1 px-1 gap-3",
+                                        head_row: "flex w-full mb-2 px-1 gap-4",
+                                        row: "flex w-full flex-1 px-1 gap-4",
                                         day: "p-0.5 flex-1 aspect-square",
+                                        dropdowns: "w-full flex items-center text-sm font-medium justify-center gap-1.5 [&_[data-slot=select-trigger]]:border [&_[data-slot=select-trigger]]:border-muted/50",
                                     }}
                                     formatters={{
                                         formatMonthDropdown: (date) => {
@@ -335,14 +371,14 @@ export function AttendanceDashboard() {
                                                                 <div className="flex items-center gap-2 whitespace-nowrap">
                                                                     <div className="h-1.5 w-1.5 rounded-full bg-green-500 flex-shrink-0" />
                                                                     <span className="font-semibold text-muted-foreground">In :</span>
-                                                                    <span className="font-black tabular-nums text-foreground">
+                                                                    <span className="font-semibold tabular-nums text-foreground">
                                                                         {record.check_in ? format(new Date(record.check_in), "hh:mm a") : "-"}
                                                                     </span>
                                                                 </div>
                                                                 <div className="flex items-center gap-2 whitespace-nowrap">
                                                                     <div className="h-1.5 w-1.5 rounded-full bg-primary flex-shrink-0" />
-                                                                    <span className="font-semibold text-muted-foreground">Out:</span>
-                                                                    <span className="font-black tabular-nums text-foreground">
+                                                                    <span className="font-semibold text-muted-foreground">Out :</span>
+                                                                    <span className="font-semibold tabular-nums text-foreground">
                                                                         {record.check_out ? format(new Date(record.check_out), "hh:mm a") : "-"}
                                                                     </span>
                                                                 </div>
@@ -357,7 +393,7 @@ export function AttendanceDashboard() {
                             </TooltipProvider>
                         </div>
                     </CardContent>
-                    <div className="px-6 py-4 bg-muted/20 border-t grid grid-cols-2 lg:grid-cols-3 gap-3 text-[9px] font-black uppercase tracking-tighter text-center">
+                    <div className="px-6 py-4 bg-muted/20 border-t grid grid-cols-2 lg:grid-cols-3 gap-3 text-[10px] font-black uppercase text-center">
                         <div className="flex items-center gap-2 text-primary bg-primary/5 p-1.5 rounded-lg border border-primary/10 shadow-sm"><div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" /> Marked (In/Out)</div>
                         <div className="flex items-center gap-2 text-green-700 bg-green-500/5 p-1.5 rounded-lg border border-green-500/10 shadow-sm"><div className="h-1.5 w-1.5 rounded-full bg-green-500" /> Present (Check-in)</div>
                         <div className="flex items-center gap-2 text-purple-700 bg-purple-500/5 p-1.5 rounded-lg border border-purple-500/10 shadow-sm"><div className="h-1.5 w-1.5 rounded-full bg-purple-500" /> Leave (Approved)</div>
@@ -367,11 +403,11 @@ export function AttendanceDashboard() {
                     </div>
                 </Card>
 
-                <Card className="xl:col-span-6 shadow-xl border-primary/10 flex flex-col h-full bg-background/50 backdrop-blur-sm">
-                    <CardHeader className="border-b bg-muted/30 pb-4">
-                        <div className="flex items-center gap-3">
+                <Card className="xl:col-span-6 shadow-xl border-primary/10 flex flex-col h-full bg-background/10 backdrop-blur-sm pt-0 hover:bg-background/80 transition-colors group cursor-default hover:border-primary/20 hover:shadow-xl">
+                    <CardHeader className="border-b border-muted/20 bg-muted/50 transition-colors p-0 overflow-hidden group-hover:bg-muted/80">
+                        <div className="px-6 py-4 flex items-center gap-3 group/header cursor-default">
                             <div className="p-2.5 rounded-xl bg-orange-500/10 text-orange-600 shadow-sm">
-                                <Briefcase className="h-5 w-5" />
+                                <BriefcaseIcon className="h-6 w-6" />
                             </div>
                             <div>
                                 <CardTitle className="text-lg font-bold">Attendance Summary</CardTitle>

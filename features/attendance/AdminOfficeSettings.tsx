@@ -51,9 +51,11 @@ export function AdminOfficeSettings() {
     const handleUpdateSettings = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault()
         const formData = new FormData(e.currentTarget)
+        const offDays = Array.from(formData.getAll('offDays')).map(Number)
         updateSettingsMutation.mutate({
             defaultCheckIn: formData.get('defaultCheckIn') as string,
             defaultCheckOut: formData.get('defaultCheckOut') as string,
+            offDays
         })
     }
 
@@ -67,37 +69,86 @@ export function AdminOfficeSettings() {
         })
     }
 
+    const DAYS = [
+        { label: 'Sun', value: 0 },
+        { label: 'Mon', value: 1 },
+        { label: 'Tue', value: 2 },
+        { label: 'Wed', value: 3 },
+        { label: 'Thu', value: 4 },
+        { label: 'Fri', value: 5 },
+        { label: 'Sat', value: 6 },
+    ]
+
     return (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            <div className="lg:col-span-5 space-y-6">
+            <div className="lg:col-span-12 space-y-6">
                 <Card className="border-none shadow-md bg-card/50 backdrop-blur-sm overflow-hidden">
                     <CardHeader className="bg-primary/5 border-b pb-6">
                         <CardTitle className="flex items-center gap-2 text-xl font-bold">
-                            <Settings className="size-5 text-primary" /> Default Office Hours
+                            <Settings className="size-5 text-primary" /> Company Office Settings
                         </CardTitle>
-                        <CardDescription>Set the standard working hours for the organization</CardDescription>
+                        <CardDescription>Setup office hours and weekly off days</CardDescription>
                     </CardHeader>
                     <CardContent className="pt-6">
                         {settings && (
-                            <form onSubmit={handleUpdateSettings} className="space-y-6">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Default Check-In</Label>
-                                        <Input type="time" name="defaultCheckIn" defaultValue={settings.default_check_in.split(':').slice(0, 2).join(':')} required className="h-11 bg-background" />
+                            <form onSubmit={handleUpdateSettings} className="space-y-8">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                    <div className="space-y-4">
+                                        <Label className="text-sm font-bold uppercase tracking-wider text-primary/80">Default Office Hours</Label>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <Label className="text-xs font-medium text-muted-foreground">Default Check-In</Label>
+                                                <Input type="time" name="defaultCheckIn" defaultValue={settings.default_check_in.split(':').slice(0, 2).join(':')} required className="h-11 bg-background" />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label className="text-xs font-medium text-muted-foreground">Default Check-Out</Label>
+                                                <Input type="time" name="defaultCheckOut" defaultValue={settings.default_check_out.split(':').slice(0, 2).join(':')} required className="h-11 bg-background" />
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Default Check-Out</Label>
-                                        <Input type="time" name="defaultCheckOut" defaultValue={settings.default_check_out.split(':').slice(0, 2).join(':')} required className="h-11 bg-background" />
+
+                                    <div className="space-y-4">
+                                        <Label className="text-sm font-bold uppercase tracking-wider text-primary/80">Weekly Off Days (Weekdays)</Label>
+                                        <div className="flex flex-wrap gap-3">
+                                            {DAYS.map((day) => (
+                                                <label
+                                                    key={day.value}
+                                                    className={cn(
+                                                        "flex flex-col items-center justify-center w-14 h-14 rounded-xl border-2 cursor-pointer transition-all duration-200",
+                                                        "hover:bg-primary/5",
+                                                        settings.off_days?.includes(day.value)
+                                                            ? "bg-primary/10 border-primary text-primary font-bold shadow-sm"
+                                                            : "bg-background border-muted text-muted-foreground"
+                                                    )}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        name="offDays"
+                                                        value={day.value}
+                                                        defaultChecked={settings.off_days?.includes(day.value)}
+                                                        className="hidden"
+                                                    />
+                                                    <span className="text-xs uppercase tracking-tighter">{day.label}</span>
+                                                    {settings.off_days?.includes(day.value) && (
+                                                        <div className="size-1 rounded-full bg-primary mt-1" />
+                                                    )}
+                                                </label>
+                                            ))}
+                                        </div>
+                                        <p className="text-[10px] text-muted-foreground italic">Employees will see "Weekday" label on these days.</p>
                                     </div>
                                 </div>
-                                <Button type="submit" disabled={updateSettingsMutation.isPending} className="w-full h-11 font-semibold transition-all hover:ring-2 ring-primary/20">
+                                <Button type="submit" disabled={updateSettingsMutation.isPending} className="w-full md:w-fit h-11 px-12 font-semibold transition-all hover:ring-2 ring-primary/20">
                                     {updateSettingsMutation.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
-                                    Save Company Timing
+                                    Update Office Settings
                                 </Button>
                             </form>
                         )}
                     </CardContent>
                 </Card>
+            </div>
+
+            <div className="lg:col-span-5 space-y-6">
 
                 <Card className="border-none shadow-md bg-card/50 backdrop-blur-sm overflow-hidden">
                     <CardHeader className="bg-muted/30 border-b pb-6">

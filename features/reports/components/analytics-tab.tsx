@@ -89,16 +89,17 @@ export function AnalyticsTab({ role = 'admin' }: { role?: 'admin' | 'moderator' 
     )
 
   // Get user profile details (only fetches once per user selection)
-  const { data: userProfileData, isLoading: isLoadingProfile } = (role === 'admin'
+  const userProfileQuery = (role === 'admin'
     ? trpc.admin.reports.getUserProfile
-    : trpc.moderator.reports.getUserProfile).useQuery(
-      {
-        userId: selectedUser!,
-      },
-      {
-        enabled: !!selectedUser,
-      }
-    )
+    : trpc.moderator.reports.getUserProfile) as any
+  const { data: userProfileData, isLoading: isLoadingProfile } = userProfileQuery.useQuery(
+    {
+      userId: selectedUser!,
+    },
+    {
+      enabled: !!selectedUser,
+    }
+  )
 
   // Get user activities (refetches on filter change)
   const { data: userActivitiesData, isLoading: isLoadingActivities, isFetching: isFetchingActivities } = (role === 'admin'
@@ -657,7 +658,7 @@ export function AnalyticsTab({ role = 'admin' }: { role?: 'admin' | 'moderator' 
                     className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3"
                   >
                     {Object.entries(statistics.byType)
-                      .sort(([, a], [, b]) => b - a)
+                      .sort(([, a], [, b]) => (b as number) - (a as number))
                       .map(([type, count], index) => {
                         const Icon = getActivityIcon(type)
                         const colorClass = getActivityTypeColor(type)
@@ -682,7 +683,7 @@ export function AnalyticsTab({ role = 'admin' }: { role?: 'admin' | 'moderator' 
                               )}>
                                 <Icon className="h-4 w-4" />
                               </div>
-                              <span className="text-lg font-bold tracking-tight">{count}</span>
+                              <span className="text-lg font-bold tracking-tight">{count as number}</span>
                             </div>
                             <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground truncate">
                               {type.replace(/_/g, ' ')}
@@ -827,7 +828,7 @@ export function AnalyticsTab({ role = 'admin' }: { role?: 'admin' | 'moderator' 
                         <div className="p-2 space-y-2">
                           <div className="space-y-2 max-h-60 overflow-y-auto">
                             {modules.length > 0 ? (
-                              modules.map((mod) => (
+                              modules.map((mod: string) => (
                                 <div key={mod} className="flex items-center space-x-2">
                                   <Checkbox
                                     id={`module-${mod}`}
@@ -974,7 +975,7 @@ export function AnalyticsTab({ role = 'admin' }: { role?: 'admin' | 'moderator' 
                         const rows = userActivitiesData.activities.map((activity: UserActivity) => [
                           activity.activity_type || "Unknown",
                           activity.description || "No description",
-                          format(new Date(activity.created_at), "MMM dd, yyyy HH:mm:ss")
+                          activity.created_at ? format(new Date(activity.created_at), "MMM dd, yyyy HH:mm:ss") : "N/A"
                         ])
 
                         const csvContent = [
