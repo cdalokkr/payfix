@@ -10,22 +10,15 @@ import { trpc } from "@/lib/trpc/client"
 import { toast } from "sonner"
 import { format } from "date-fns"
 import { CardShell } from "./CardShell"
-import { CalendarClock, Settings, Plus, Trash2, Calendar as CalendarIcon, Loader2, Check, X, Clock, ChevronDown, Palmtree } from "lucide-react"
+import { Settings, Calendar as CalendarIcon, Loader2, Check, X, Clock, Palmtree } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Calendar } from "@/components/ui/calendar"
 import { DataTable } from "@/components/ui/data-table"
 import { ColumnDef } from "@tanstack/react-table"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Card } from "@/components/ui/card"
 
-export function AdminOfficeSettings() {
-    const [closureDate, setClosureDate] = useState<Date | undefined>(undefined)
-    const [closureReason, setClosureReason] = useState("")
-    const [closureType, setClosureType] = useState<'holiday' | 'closed'>('holiday')
-    const [isCalendarOpen, setIsCalendarOpen] = useState(false)
-
+export function ModeratorOfficeSettings() {
     const utils = trpc.useUtils()
     const { data: settings } = trpc.attendance.getOfficeSettings.useQuery()
     const { data: closures } = trpc.attendance.getOfficeClosures.useQuery()
@@ -44,24 +37,6 @@ export function AdminOfficeSettings() {
         onSuccess: () => {
             toast.success("Office configuration updated")
             utils.attendance.getOfficeSettings.invalidate()
-        },
-        onError: (error) => toast.error(error.message)
-    })
-
-    const addClosureMutation = trpc.attendance.addOfficeClosure.useMutation({
-        onSuccess: () => {
-            toast.success("Office closure added")
-            utils.attendance.getOfficeClosures.invalidate()
-            setClosureDate(undefined)
-            setClosureReason("")
-        },
-        onError: (error) => toast.error(error.message)
-    })
-
-    const deleteClosureMutation = trpc.attendance.deleteOfficeClosure.useMutation({
-        onSuccess: () => {
-            toast.success("Office closure removed")
-            utils.attendance.getOfficeClosures.invalidate()
         },
         onError: (error) => toast.error(error.message)
     })
@@ -99,16 +74,6 @@ export function AdminOfficeSettings() {
         }))
     }
 
-    const handleAddClosure = (e: React.FormEvent) => {
-        e.preventDefault()
-        if (!closureDate || !closureReason) return toast.error("Please fill all fields")
-        addClosureMutation.mutate({
-            date: format(closureDate, 'yyyy-MM-dd'),
-            reason: closureReason,
-            type: closureType
-        })
-    }
-
     const DAYS = [
         { label: 'Sunday', short: 'Sun', value: 0 },
         { label: 'Monday', short: 'Mon', value: 1 },
@@ -144,22 +109,6 @@ export function AdminOfficeSettings() {
                     )}>{row.original.type}</Badge>
                 </div>
             )
-        },
-        {
-            id: "actions",
-            header: () => <div className="text-right pr-6">Action</div>,
-            cell: ({ row }) => (
-                <div className="text-right pr-4">
-                    <Button
-                        size="icon"
-                        variant="ghost"
-                        className="text-destructive hover:bg-destructive/10 h-8 w-8 rounded-full"
-                        onClick={() => deleteClosureMutation.mutate({ id: row.original.id })}
-                    >
-                        <Trash2 className="h-4 w-4" />
-                    </Button>
-                </div>
-            )
         }
     ]
 
@@ -169,16 +118,16 @@ export function AdminOfficeSettings() {
                 <TabsList className="bg-muted/50 p-1.5 h-auto gap-1">
                     <TabsTrigger
                         value="schedule"
-                        className="h-11 px-8 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm  transition-all gap-2"
+                        className="h-11 px-8 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary font-extrabold transition-all gap-2"
                     >
-                        <CalendarClock className="size-5" />
+                        <Settings className="size-4" />
                         Office Schedule
                     </TabsTrigger>
                     <TabsTrigger
                         value="holiday"
-                        className="h-11 px-8 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all gap-2"
+                        className="h-11 px-8 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary font-extrabold transition-all gap-2"
                     >
-                        <Palmtree className="size-5" />
+                        <Palmtree className="size-4" />
                         Office Holiday
                     </TabsTrigger>
                 </TabsList>
@@ -188,18 +137,18 @@ export function AdminOfficeSettings() {
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                     <div className="lg:col-span-12">
                         <CardShell
-                            title="Working Schedule Settings"
+                            title="Company Office Settings"
                             description="Configure day-wise working hours and weekly off days"
                             icon={Settings}
                             className="xl:col-span-12"
                             contentClassName="p-6 border-t border-muted/20"
                         >
-                            <Card className="shadow-lg border-primary/5 overflow-hidden bg-background/40 backdrop-blur-sm p-0 hover:border-primary/10 transition-all duration-300 hover:bg-background/50 ">
+                            <Card className="shadow-lg border-primary/5 overflow-hidden bg-background/40 backdrop-blur-sm">
                                 {settings && (
                                     <form onSubmit={handleUpdateSettings} className="flex flex-col">
                                         <div className="overflow-x-auto">
                                             <Table>
-                                                <TableHeader className="bg-muted/40 border-b border-muted/20 hover:bg-transparent transition-all duration-300">
+                                                <TableHeader className="bg-muted/40 border-b border-muted/20">
                                                     <TableRow className="hover:bg-transparent">
                                                         <TableHead className="w-[80px] font-extrabold text-[11px] uppercase tracking-wider py-4 pl-10 text-primary/80">Select</TableHead>
                                                         <TableHead className="w-[150px] font-extrabold text-[11px] uppercase tracking-wider py-4 text-primary/80">Day</TableHead>
@@ -353,83 +302,22 @@ export function AdminOfficeSettings() {
 
             <TabsContent value="holiday" className="space-y-8 focus-visible:outline-none focus-visible:ring-0">
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                    <div className="lg:col-span-5 space-y-6">
-                        <CardShell
-                            title="Add Office Closure"
-                            description="Mark holidays or specific days when the office is closed"
-                            icon={Plus}
-                            className="xl:col-span-12"
-                            contentClassName="pt-6 min-h-fit"
-                        >
-                            <form onSubmit={handleAddClosure} className="space-y-6">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="flex flex-col gap-3">
-                                        <Label className="px-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">Date</Label>
-                                        <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
-                                            <PopoverTrigger asChild>
-                                                <Button
-                                                    variant="outline"
-                                                    className="w-full h-11 justify-between font-normal bg-background hover:bg-muted/10 border-muted-foreground/20"
-                                                >
-                                                    {closureDate ? format(closureDate, "PPP") : "Select date"}
-                                                    <ChevronDown className="h-4 w-4 opacity-50" />
-                                                </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-auto p-0" align="start">
-                                                <Calendar
-                                                    mode="single"
-                                                    selected={closureDate}
-                                                    captionLayout="dropdown"
-                                                    onSelect={(date) => {
-                                                        setClosureDate(date)
-                                                        setIsCalendarOpen(false)
-                                                    }}
-                                                />
-                                            </PopoverContent>
-                                        </Popover>
-                                    </div>
-                                    <div className="flex flex-col gap-3">
-                                        <Label className="px-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">Type</Label>
-                                        <select
-                                            value={closureType}
-                                            onChange={(e) => setClosureType(e.target.value as any)}
-                                            className="w-full h-11 p-2 bg-background border border-muted-foreground/20 rounded-md focus:ring-2 focus:ring-primary/20 outline-none transition-all text-sm"
-                                        >
-                                            <option value="holiday">Festival Holiday</option>
-                                            <option value="closed">Office Closed</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Reason</Label>
-                                    <Input value={closureReason} onChange={(e) => setClosureReason(e.target.value)} placeholder="e.g., Diwali, Annual Maintenance" className="h-11 bg-background" />
-                                </div>
-                                <Button type="submit" disabled={addClosureMutation.isPending} className="w-full h-11 font-semibold transition-all hover:bg-muted" variant="outline">
-                                    {addClosureMutation.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
-                                    Add Holiday
-                                </Button>
-                            </form>
-                        </CardShell>
-                    </div>
-
-                    <div className="lg:col-span-7">
-                        <CardShell
-                            title="Upcoming Closures"
-                            description="Scheduled holidays and office closures"
-                            icon={CalendarIcon}
-                            className="xl:col-span-12"
-                            contentClassName="p-0 min-h-fit"
-                        >
-                            <div className="max-h-[600px] overflow-auto border-t border-muted/20">
-                                <DataTable
-                                    columns={closureColumns}
-                                    data={closures || []}
-                                    isLoading={!closures}
-                                    hidePagination={true}
-                                />
-                            </div>
-                        </CardShell>
-                    </div>
+                    <CardShell
+                        title="Office Closures & Holidays"
+                        description="Scheduled holidays and office closures (Read-only for Moderators)"
+                        icon={CalendarIcon}
+                        className="xl:col-span-12"
+                        contentClassName="p-0 min-h-fit"
+                    >
+                        <div className="max-h-[600px] overflow-auto border-t border-muted/20">
+                            <DataTable
+                                columns={closureColumns}
+                                data={closures || []}
+                                isLoading={!closures}
+                                hidePagination={true}
+                            />
+                        </div>
+                    </CardShell>
                 </div>
             </TabsContent>
         </Tabs>

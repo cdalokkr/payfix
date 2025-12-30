@@ -8,8 +8,16 @@ CREATE TABLE IF NOT EXISTS public.office_settings (
     default_check_in TIME NOT NULL DEFAULT '10:00:00',
     default_check_out TIME NOT NULL DEFAULT '19:00:00',
     off_days INTEGER[] DEFAULT array[0],
+    daily_working_hours JSONB DEFAULT '{}'::jsonb,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Migrations for existing tables
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'office_settings' AND column_name = 'daily_working_hours') THEN
+        ALTER TABLE public.office_settings ADD COLUMN daily_working_hours JSONB DEFAULT '{}'::jsonb;
+    END IF;
+END $$;
 
 -- Initial default settings
 INSERT INTO public.office_settings (default_check_in, default_check_out, off_days)

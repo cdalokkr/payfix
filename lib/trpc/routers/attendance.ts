@@ -306,6 +306,10 @@ export const attendanceRouter = router({
             defaultCheckIn: z.string(),
             defaultCheckOut: z.string(),
             offDays: z.array(z.number()),
+            dailyWorkingHours: z.record(z.string(), z.object({
+                checkIn: z.string(),
+                checkOut: z.string()
+            })).optional(),
         }))
         .mutation(async ({ ctx, input }) => {
             const current = await ctx.db.query.officeSettings.findFirst({
@@ -318,6 +322,7 @@ export const attendanceRouter = router({
                 default_check_in: input.defaultCheckIn,
                 default_check_out: input.defaultCheckOut,
                 off_days: input.offDays,
+                daily_working_hours: input.dailyWorkingHours || {},
                 updated_at: new Date()
             }).where(eq(officeSettings.id, current.id)).returning()
 
