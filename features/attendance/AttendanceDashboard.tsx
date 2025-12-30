@@ -37,6 +37,7 @@ export function AttendanceDashboard() {
     })
 
     const { data: closures } = trpc.attendance.getOfficeClosures.useQuery()
+    const { data: settings } = trpc.attendance.getOfficeSettings.useQuery()
 
     const attendanceMap = useMemo(() => {
         const map: Record<string, any> = {}
@@ -60,6 +61,7 @@ export function AttendanceDashboard() {
         days.forEach(day => {
             const dateStr = format(day, 'yyyy-MM-dd')
             const record = attendanceMap[dateStr]
+            const isOffDay = settings?.off_days?.includes(day.getDay())
 
             // Check for holiday
             const isHoliday = closures?.some(c => c.date === dateStr)
@@ -71,7 +73,7 @@ export function AttendanceDashboard() {
             // Check for leave
             const isLeave = leaves?.some(l => {
                 const start = parseISO(l.start_date)
-                const end = parseISO(l.end_date)
+                const end = parseISO(l.endDate)
                 return isWithinInterval(day, { start, end })
             })
             if (isLeave) {
@@ -80,19 +82,23 @@ export function AttendanceDashboard() {
             }
 
             if (record) {
-                if (record.check_in) present++
-                if (record.check_in && record.check_out) {
+                if (record.status === 'verified') {
+                    present++
+                } else if (record.check_in && record.check_out) {
                     marked++
                 } else if (record.check_in && !record.check_out) {
                     noOfficeOut++
                 }
-            } else if (day < today && !isSunday(day)) {
+                // Fallback for present count if it's just a check-in but we want to count it as "something"
+                // But as per user: "marked in/out is till then it's not verified"
+                // and "present day date background color is green as per legend. as status is verified means present"
+            } else if (day < today && !isOffDay) {
                 absent++
             }
         })
 
         return { marked, present, absent, leave, holiday, noOfficeOut }
-    }, [attendanceMap, leaves, closures, monthStart, monthEnd, today])
+    }, [attendanceMap, leaves, closures, settings, monthStart, monthEnd, today])
 
     const columns: ColumnDef<any>[] = [
         {
@@ -208,8 +214,8 @@ export function AttendanceDashboard() {
                             </div>
                         </div>
                     </CardHeader>
-                    <CardContent className="p-0 flex flex-1 justify-center min-h-[500px]">
-                        <div className="w-full px-4 py-2">
+                    <CardContent className="p-4 flex flex-1 justify-center min-h-[500px]">
+                        <Card className="w-full p-4 md:p-6 bg-background/40 backdrop-blur-md border border-primary/5 shadow-inner rounded-3xl flex flex-col items-center justify-center overflow-hidden transition-all duration-500 hover:bg-background/60 group/innercard">
                             <TooltipProvider>
                                 <ShadcnCalendar
                                     mode="single"
@@ -218,41 +224,64 @@ export function AttendanceDashboard() {
                                     selected={selectedDate}
                                     onSelect={setSelectedDate}
                                     captionLayout="dropdown"
-                                    className="p-0 border-0 w-full h-full [--cell-size:3rem] md:[--cell-size:3.5rem] lg:[--cell-size:3.25rem] xl:[--cell-size:3.25rem]"
+                                    className="p-0 border-0 w-fit h-fit [--cell-size:2rem] md:[--cell-size:3.5rem] lg:[--cell-size:3.25rem] xl:[--cell-size:3.25rem]"
                                     classNames={{
-                                        root: "w-full h-full flex flex-col",
-                                        months: "w-full h-full flex flex-col",
-                                        month: "w-full h-full flex flex-col space-y-0",
-                                        caption: "flex justify-center relative items-center mb-1",
+                                        root: "w-fit h-fit flex flex-col items-center",
+                                        months: "w-fit h-fit flex flex-col items-center",
+                                        month: "w-fit h-fit flex flex-col space-y-0 items-center",
+                                        caption: "flex justify-center relative items-center mb-4",
                                         nav: "hidden",
-                                        table: "w-full h-full border-collapse flex-1 flex flex-col",
-                                        tbody: "flex flex-col gap-3 flex-1",
-                                        head_row: "flex w-full mb-2 px-1 gap-4",
-                                        row: "flex w-full flex-1 px-1 gap-4",
-                                        day: "p-0.5 flex-1 aspect-square",
+                                        table: "w-fit border-separate border-spacing-0 flex flex-col items-center",
+                                        tbody: "w-fit flex flex-col gap-4",
+                                        head_row: "flex w-fit mb-4",
+                                        weekday: "w-(--cell-size) mx-1.5 flex-none flex justify-center items-center font-bold text-[12px] uppercase tracking-widest text-muted-foreground",
+                                        row: "flex w-fit",
+                                        day: "w-(--cell-size) mx-1.5 flex-none flex items-center justify-center p-0",
                                         dropdowns: "w-full flex items-center text-sm font-medium justify-center gap-1.5 [&_[data-slot=select-trigger]]:border [&_[data-slot=select-trigger]]:border-muted/50",
                                     }}
                                     formatters={{
                                         formatMonthDropdown: (date) => {
                                             return date.toLocaleString("default", { month: "long" })
                                         },
+                                        formatWeekdayName: (date) => {
+                                            return format(date, "EEE").toUpperCase()
+                                        },
                                     }}
                                     modifiers={{
                                         present: (date) => !!attendanceMap[format(date, 'yyyy-MM-dd')]?.check_in,
-                                        absent: (date) => !attendanceMap[format(date, 'yyyy-MM-dd')] && date < today && date >= monthStart && !isSunday(date),
+                                        absent: (date) => !attendanceMap[format(date, 'yyyy-MM-dd')] && date < today && date >= monthStart && !settings?.off_days?.includes(date.getDay()),
                                         marked: (date) => !!(attendanceMap[format(date, 'yyyy-MM-dd')]?.check_in && attendanceMap[format(date, 'yyyy-MM-dd')]?.check_out),
                                         holiday: (date) => !!closures?.some(c => c.date === format(date, 'yyyy-MM-dd')),
-                                        leave: (date) => !!leaves?.some(l => isWithinInterval(date, { start: parseISO(l.start_date), end: parseISO(l.end_date) })),
-                                        sunday: (date) => isSunday(date),
+                                        leave: (date) => !!leaves?.some(l => isWithinInterval(date, { start: parseISO(l.start_date), end: parseISO(l.endDate) })),
+                                        offDay: (date) => !!settings?.off_days?.includes(date.getDay()),
                                     }}
                                     components={{
+                                        Weekday: ({ children, className, ...props }: any) => {
+                                            // Extract the weekday index from props (RDP 9 passes the date for the weekday)
+                                            // If date is not available, we skip dynamic styling for headers to avoid errors
+                                            const weekdayDate = (props as any).date as Date | undefined
+                                            const isOffDay = weekdayDate ? settings?.off_days?.includes(weekdayDate.getDay()) : false
+
+                                            return (
+                                                <th
+                                                    className={cn(
+                                                        className,
+                                                        "text-[12px] font-bold uppercase tracking-widest py-3",
+                                                        isOffDay && "bg-muted/20 text-muted-foreground rounded-lg border border-muted/30 shadow-sm"
+                                                    )}
+                                                    {...props}
+                                                >
+                                                    {children}
+                                                </th>
+                                            )
+                                        },
                                         DayButton: ({ day, modifiers, children, ...props }: any) => {
                                             const isCurrentMonth = day.date.getMonth() === currentMonth.getMonth()
                                             if (!isCurrentMonth) return <div className="flex-1" />
 
                                             const isToday = modifiers.today
                                             const isSelected = modifiers.selected
-                                            const isSunday = modifiers.sunday
+                                            const isOffDay = modifiers.offDay
 
                                             // Use direct array find for maximum reliability
                                             const record = attendance?.find(r => {
@@ -301,24 +330,26 @@ export function AttendanceDashboard() {
                                                             modifiers={modifiers}
                                                             {...props}
                                                             className={cn(
-                                                                "w-full h-full min-h-(--cell-size) p-0 rounded-2xl transition-all duration-500 relative overflow-visible flex flex-col items-center justify-center border-2 group/daybutton",
+                                                                "size-(--cell-size) mx-auto p-0 rounded-2xl transition-all duration-500 relative overflow-visible flex flex-col items-center justify-center border-2 group/daybutton",
                                                                 isSelected
                                                                     ? "border-primary shadow-xl shadow-primary/40 z-20 bg-primary"
-                                                                    : isToday
-                                                                        ? "border-primary bg-primary/10 text-primary z-10 shadow-lg shadow-primary/5"
+                                                                    : record?.status === 'verified'
+                                                                        ? "border-green-500/50 bg-green-500/10 text-green-700 hover:bg-green-500/20 hover:border-green-500/70 z-10"
                                                                         : record?.check_in && record?.check_out
-                                                                            ? "border-primary/40 bg-primary/5 text-primary hover:bg-primary/10 hover:border-primary/60"
+                                                                            ? "border-primary/50 bg-primary/10 text-primary hover:bg-primary/20 hover:border-primary/70 z-10"
                                                                             : record?.check_in
-                                                                                ? "border-green-500/40 bg-green-500/5 text-green-700 hover:bg-green-500/10 hover:border-green-500/60"
+                                                                                ? "border-green-500/50 bg-green-500/10 text-green-700 hover:bg-green-500/20 hover:border-green-500/70"
                                                                                 : modifiers.leave
-                                                                                    ? "border-purple-500/40 bg-purple-500/5 text-purple-700 hover:bg-purple-500/10 hover:border-purple-500/60"
+                                                                                    ? "border-orange-500/50 bg-orange-500/10 text-orange-700 hover:bg-orange-500/20 hover:border-orange-500/70"
                                                                                     : modifiers.holiday
-                                                                                        ? "border-orange-500/40 bg-orange-500/5 text-orange-700 hover:bg-orange-500/10 hover:border-orange-500/60"
-                                                                                        : isSunday
-                                                                                            ? "border-transparent bg-muted/20 text-muted-foreground hover:bg-muted/30 hover:text-foreground hover:border-muted-foreground/20"
-                                                                                            : (day.date < today && day.date >= monthStart)
-                                                                                                ? "border-red-500/10 bg-red-500/5 text-red-700/60 hover:bg-red-500/10 hover:border-red-500/30"
-                                                                                                : "border-muted/20 hover:bg-muted/5 hover:border-muted/40"
+                                                                                        ? "border-blue-500/50 bg-blue-500/10 text-blue-700 hover:bg-blue-500/20 hover:border-blue-500/70"
+                                                                                        : modifiers.offDay
+                                                                                            ? "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted/50 hover:text-foreground hover:border-muted-foreground/30"
+                                                                                            : modifiers.absent
+                                                                                                ? "border-red-500/30 bg-red-500/10 text-red-700 hover:bg-red-500/20 hover:border-red-500/50"
+                                                                                                : isToday
+                                                                                                    ? "border-primary bg-primary/20 text-primary z-10 shadow-lg shadow-primary/5"
+                                                                                                    : "bg-muted/20 border-muted/20 hover:bg-muted/30 hover:border-muted/40"
                                                             )}
                                                         >
                                                             <motion.div
@@ -328,9 +359,9 @@ export function AttendanceDashboard() {
                                                                 transition={{ type: "spring", stiffness: 400, damping: 20 }}
                                                             >
                                                                 <span className={cn(
-                                                                    "text-2xl font-black transition-colors duration-300",
+                                                                    "text-base font-bold transition-colors duration-300",
                                                                     isSelected ? "text-primary-foreground" : (isToday ? "text-primary" : "text-foreground"),
-                                                                    isSunday && !isToday && !isSelected && "text-muted-foreground group-hover/daybutton:text-foreground"
+                                                                    isOffDay && !isToday && !isSelected && "text-muted-foreground group-hover/daybutton:text-foreground"
                                                                 )}>
                                                                     {day.date.getDate()}
                                                                 </span>
@@ -343,7 +374,7 @@ export function AttendanceDashboard() {
                                                                         {record.check_out && <div className="h-1.5 w-1.5 rounded-full bg-current opacity-60" />}
                                                                     </div>
                                                                 )}
-                                                                {isSunday && (
+                                                                {isOffDay && (
                                                                     <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_2px,transparent_2px)] [background-size:12px_12px] opacity-10 pointer-events-none group-hover/daybutton:opacity-30 transition-opacity" />
                                                                 )}
 
@@ -391,15 +422,15 @@ export function AttendanceDashboard() {
                                     }}
                                 />
                             </TooltipProvider>
-                        </div>
+                        </Card>
                     </CardContent>
                     <div className="px-6 py-4 bg-muted/20 border-t grid grid-cols-2 lg:grid-cols-3 gap-3 text-[10px] font-black uppercase text-center">
-                        <div className="flex items-center gap-2 text-primary bg-primary/5 p-1.5 rounded-lg border border-primary/10 shadow-sm"><div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" /> Marked (In/Out)</div>
-                        <div className="flex items-center gap-2 text-green-700 bg-green-500/5 p-1.5 rounded-lg border border-green-500/10 shadow-sm"><div className="h-1.5 w-1.5 rounded-full bg-green-500" /> Present (Check-in)</div>
-                        <div className="flex items-center gap-2 text-purple-700 bg-purple-500/5 p-1.5 rounded-lg border border-purple-500/10 shadow-sm"><div className="h-1.5 w-1.5 rounded-full bg-purple-500" /> Leave (Approved)</div>
-                        <div className="flex items-center gap-2 text-red-700 bg-red-500/5 p-1.5 rounded-lg border border-red-500/10 shadow-sm"><div className="h-1.5 w-1.5 rounded-full bg-red-500" /> Absent (Missed)</div>
-                        <div className="flex items-center gap-2 text-orange-700 bg-orange-500/5 p-1.5 rounded-lg border border-orange-500/10 shadow-sm"><div className="h-1.5 w-1.5 rounded-full bg-orange-500" /> Office Closure</div>
-                        <div className="flex items-center gap-2 text-muted-foreground bg-muted/20 p-1.5 rounded-lg border border-muted/30 shadow-sm"><div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30" /> Weekly Sunday</div>
+                        <div className="flex items-center gap-2 text-primary bg-primary/10 p-1.5 rounded-lg border border-primary/20 shadow-sm"><div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" /> Marked (Pending)</div>
+                        <div className="flex items-center gap-2 text-green-700 bg-green-500/10 p-1.5 rounded-lg border border-green-500/20 shadow-sm"><div className="h-1.5 w-1.5 rounded-full bg-green-500" /> Present (Verified)</div>
+                        <div className="flex items-center gap-2 text-orange-700 bg-orange-500/10 p-1.5 rounded-lg border border-orange-500/20 shadow-sm"><div className="h-1.5 w-1.5 rounded-full bg-orange-500" /> Leave (Approved)</div>
+                        <div className="flex items-center gap-2 text-red-700 bg-red-500/10 p-1.5 rounded-lg border border-red-500/20 shadow-sm"><div className="h-1.5 w-1.5 rounded-full bg-red-500" /> Absent (Missed)</div>
+                        <div className="flex items-center gap-2 text-blue-700 bg-blue-500/10 p-1.5 rounded-lg border border-blue-500/20 shadow-sm"><div className="h-1.5 w-1.5 rounded-full bg-blue-500" /> Holidays</div>
+                        <div className="flex items-center gap-2 text-muted-foreground bg-muted/40 p-1.5 rounded-lg border border-muted/30 shadow-sm"><div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30" /> Weekly Off</div>
                     </div>
                 </Card>
 

@@ -15,7 +15,7 @@ import { useUserRealtimeDashboard } from "@/hooks/use-realtime-dashboard-data"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { useEffect, useState } from "react"
-import { DailyAttendanceCard } from "@/features/attendance/DailyAttendanceCard"
+import { cn } from "@/lib/utils"
 
 
 
@@ -55,11 +55,19 @@ function ActivitiesCard({ activities, loading }: ActivitiesCardProps) {
 
 
 export default function EmployeeDashboard({ initialData }: { initialData?: any }) {
+    const utils = trpc.useUtils()
+    const todayStr = format(new Date(), 'yyyy-MM-dd')
+    const [currentTime, setCurrentTime] = useState(new Date())
+
+    useEffect(() => {
+        const timer = setInterval(() => setCurrentTime(new Date()), 1000)
+        return () => clearInterval(timer)
+    }, [])
+
     // Get profile to obtain userId for real-time subscriptions
     const { data: profile } = trpc.profile.get.useQuery()
 
-    // Use the optimized unified dashboard hook instead of individual manual queries
-    // This hook is already optimized for speed and handles real-time updates
+    // Use the optimized unified dashboard hook
     const {
         stats,
         recentActivities,
@@ -69,19 +77,60 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
         recentActivityDataReady
     } = useUserRealtimeDashboard(profile?.user_id || '', initialData, 'employee')
 
-    // Still need sessionInfo for specific last login/logout details
-    // but aggregate counts come from the unified endpoint now
-    const { data: sessionInfo, isLoading: sessionLoading } = trpc.profile.getLastSession.useQuery(undefined, {
-        staleTime: 60 * 1000,
+    // Fetch last 2 days for attendance status
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    const yesterdayStr = format(yesterday, 'yyyy-MM-dd')
+
+    const { data: attendance, isLoading: attendanceLoading } = trpc.attendance.getAttendance.useQuery({
+        startDate: yesterdayStr,
+        endDate: todayStr
     })
 
-    const isDataReady = (magicCardsDataReady || !!initialData) && !sessionLoading
+    const { data: settings } = trpc.attendance.getOfficeSettings.useQuery()
+
+    const clockInMutation = trpc.attendance.clockIn.useMutation({
+        onSuccess: () => {
+            toast.success("Clocked in successfully")
+            utils.attendance.getAttendance.invalidate()
+            refetch()
+        },
+        onError: (error) => toast.error(error.message)
+    })
+
+    const clockOutMutation = trpc.attendance.clockOut.useMutation({
+        onSuccess: () => {
+            toast.success("Clocked out successfully")
+            utils.attendance.getAttendance.invalidate()
+            refetch()
+        },
+        onError: (error) => toast.error(error.message)
+    })
+
+    // Find today's record and pending record
+    const todayRecord = attendance?.find(r => r.date === todayStr)
+    const pendingRecord = attendance?.filter(r => !r.check_out).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
+
+    const isClockedIn = !!pendingRecord
+    const isMarked = !!todayRecord?.check_in && !!todayRecord?.check_out
+    const isTodayOffDay = settings?.off_days?.includes(new Date().getDay())
+
+    const handleClockIn = async (isExtra: boolean = false) => {
+        try {
+            await clockInMutation.mutateAsync({ localDate: todayStr, isExtraDay: isExtra })
+        } catch (error: any) { }
+    }
+
+    const handleClockOut = async () => {
+        try {
+            await clockOutMutation.mutateAsync({ localDate: todayStr })
+        } catch (error: any) { }
+    }
 
     return (
         <div className="space-y-6 gesture-friendly">
-            {/* Quick Actions & Session Row - Two Columns */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Quick Actions Column */}
+            {/* Quick Actions Row */}
+            <div className="grid grid-cols-1 gap-6">
                 <MetricCard
                     className="shadow-xl"
                     gradientColor="from-primary/10 to-transparent"
@@ -91,12 +140,78 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                     cardBgColor="bg-card/50"
                 >
                     <div className="flex flex-col gap-4 h-full">
-                        <div className="flex items-center gap-2">
-                            <div className="h-6 w-1 bg-primary rounded-full" />
-                            <h3 className="text-xl font-bold tracking-tight">Quick Actions</h3>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <div className="h-6 w-1 bg-primary rounded-full" />
+                                <h3 className="text-xl font-bold tracking-tight">Quick Actions</h3>
+                            </div>
+                            <div className="text-right px-4">
+                                <p className="text-lg font-bold tracking-tight tabular-nums text-foreground">{format(currentTime, "hh:mm:ss a")}</p>
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Current Time</p>
+                            </div>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 py-2">
-                            {/* Edit Profile Item */}
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 py-2">
+                            {/* Attendance Action (First Position) */}
+                            {attendanceLoading ? (
+                                <div className="flex items-center justify-center p-4 rounded-2xl border border-muted-foreground/10 bg-muted/5 animate-pulse min-h-[82px]">
+                                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                                </div>
+                            ) : isMarked ? (
+                                <div className="flex items-center gap-3 p-4 rounded-2xl border border-green-200/50 bg-green-50/30 dark:bg-green-500/5 cursor-default relative overflow-hidden group">
+                                    <div className="p-2.5 rounded-xl bg-green-500/10 text-green-700 dark:text-green-400">
+                                        <UserCheck className="h-5 w-5" />
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-green-600/60 leading-none mb-1.5">Attendance</p>
+                                        <p className="text-sm font-bold text-green-700 dark:text-green-400">Marked for Today</p>
+                                    </div>
+                                </div>
+                            ) : isClockedIn ? (
+                                <button
+                                    onClick={handleClockOut}
+                                    disabled={clockOutMutation.isPending}
+                                    className="flex items-center gap-3 p-4 rounded-2xl border border-orange-200/50 bg-orange-50/30 dark:bg-orange-500/5 hover:bg-orange-500/10 hover:border-orange-500/50 hover:shadow-lg hover:shadow-orange-500/5 transition-all duration-300 group cursor-pointer disabled:opacity-50"
+                                >
+                                    <div className="p-2.5 rounded-xl bg-orange-500/10 text-orange-700 dark:text-orange-400 group-hover:scale-110 group-hover:rotate-3 transition-transform">
+                                        {clockOutMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogOut className="h-5 w-5" />}
+                                    </div>
+                                    <div className="flex flex-col text-left">
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Action</p>
+                                        <p className="text-sm font-bold group-hover:text-primary transition-colors">Office - Out</p>
+                                    </div>
+                                </button>
+                            ) : isTodayOffDay ? (
+                                <button
+                                    onClick={() => handleClockIn(true)}
+                                    disabled={clockInMutation.isPending}
+                                    className="flex items-center gap-3 p-4 rounded-2xl border border-primary/20 bg-primary/5 hover:bg-primary/10 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300 group cursor-pointer disabled:opacity-50"
+                                >
+                                    <div className="p-2.5 rounded-xl bg-primary/10 text-primary group-hover:scale-110 group-hover:-rotate-3 transition-transform">
+                                        {clockInMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogIn className="h-5 w-5" />}
+                                    </div>
+                                    <div className="flex flex-col text-left">
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Extra Day</p>
+                                        <p className="text-sm font-bold group-hover:text-primary transition-colors">Office - In</p>
+                                    </div>
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={() => handleClockIn(false)}
+                                    disabled={clockInMutation.isPending}
+                                    className="flex items-center gap-3 p-4 rounded-2xl border border-green-200/50 bg-green-50/30 dark:bg-green-500/5 hover:bg-green-500/10 hover:border-green-500/50 hover:shadow-lg hover:shadow-green-500/5 transition-all duration-300 group cursor-pointer disabled:opacity-50"
+                                >
+                                    <div className="p-2.5 rounded-xl bg-green-500/10 text-green-700 dark:text-green-400 group-hover:scale-110 group-hover:-rotate-3 transition-transform">
+                                        {clockInMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogIn className="h-5 w-5" />}
+                                    </div>
+                                    <div className="flex flex-col text-left">
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Action</p>
+                                        <p className="text-sm font-bold group-hover:text-primary transition-colors">Office - In</p>
+                                    </div>
+                                </button>
+                            )}
+
+                            {/* Profile Item */}
                             <Link
                                 href="/employee/profile"
                                 className="flex items-center gap-3 p-4 rounded-2xl border border-blue-200/50 bg-blue-50/30 dark:bg-blue-500/5 hover:bg-blue-500/10 hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-500/5 transition-all duration-300 group cursor-pointer"
@@ -126,73 +241,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                         </div>
                     </div>
                 </MetricCard>
-
-                {/* Session & Activity Summary Column */}
-                <MetricCard
-                    className="shadow-xl"
-                    gradientColor="from-indigo-500/10 to-purple-500/10"
-                    delay={0.15}
-                    disableHover={true}
-                    borderColor="border-indigo-500/10"
-                    cardBgColor="bg-card/50"
-                >
-                    <div className="flex flex-col gap-4 h-full">
-                        <div className="flex items-center gap-2">
-                            <div className="h-6 w-1 bg-indigo-500 rounded-full" />
-                            <h3 className="text-xl font-bold tracking-tight">Account Overview</h3>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-1">
-                            {/* Total Activities */}
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.95 }}
-                                animate={{ opacity: isDataReady ? 1 : 0, scale: isDataReady ? 1 : 0.95 }}
-                                className="flex items-center gap-4 p-4 rounded-2xl border border-purple-200/50 bg-purple-50/30 dark:bg-purple-500/5 hover:shadow-md transition-all duration-300 group cursor-default"
-                            >
-                                <div className="p-2.5 rounded-xl bg-purple-500/10 text-purple-700 dark:text-purple-400 group-hover:scale-110 transition-transform">
-                                    <History className="h-5 w-5" />
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Activities</p>
-                                    <div className="mt-1">
-                                        {sessionLoading ? (
-                                            <div className="h-5 w-12 bg-muted animate-pulse rounded" />
-                                        ) : (
-                                            <p className="text-lg font-bold tabular-nums">{sessionInfo?.totalActivities || 0}</p>
-                                        )}
-                                    </div>
-                                </div>
-                            </motion.div>
-
-                            {/* Last Logged Out */}
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.95 }}
-                                animate={{ opacity: isDataReady ? 1 : 0, scale: isDataReady ? 1 : 0.95 }}
-                                className="flex items-center gap-4 p-4 rounded-2xl border border-pink-200/50 bg-pink-50/30 dark:bg-pink-500/5 hover:shadow-md transition-all duration-300 group cursor-default"
-                            >
-                                <div className="p-2.5 rounded-xl bg-pink-500/10 text-pink-700 dark:text-pink-400 group-hover:scale-110 transition-transform">
-                                    <LogOut className="h-5 w-5" />
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Last Logout</p>
-                                    <div className="mt-1">
-                                        {sessionLoading ? (
-                                            <div className="h-5 w-24 bg-muted animate-pulse rounded" />
-                                        ) : (
-                                            <p className="text-sm font-bold truncate">
-                                                {sessionInfo?.lastLogout ? format(new Date(sessionInfo.lastLogout), "MMM dd, HH:mm") : "None"}
-                                            </p>
-                                        )}
-                                    </div>
-                                </div>
-                            </motion.div>
-                        </div>
-                    </div>
-                </MetricCard>
             </div>
-
-            {/* Daily Attendance Section */}
-            <DailyAttendanceCard />
 
             {/* Recent Activities */}
             <ActivitiesCard activities={recentActivities as any} loading={!recentActivityDataReady && !initialData} />
