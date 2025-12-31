@@ -344,6 +344,18 @@ export const attendanceRouter = router({
             type: z.enum(['holiday', 'closed']),
         }))
         .mutation(async ({ ctx, input }) => {
+            // Check for existing closure on same date
+            const existing = await ctx.db.query.officeClosures.findFirst({
+                where: eq(officeClosures.date, input.date)
+            })
+
+            if (existing) {
+                throw new TRPCError({
+                    code: 'CONFLICT',
+                    message: `A closure already exists for ${input.date}`
+                })
+            }
+
             const [data] = await ctx.db.insert(officeClosures).values({
                 date: input.date,
                 reason: input.reason,

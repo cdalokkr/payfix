@@ -16,15 +16,35 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { DataTable } from "@/components/ui/data-table"
-import { ColumnDef } from "@tanstack/react-table"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
-import { Card } from "@/components/ui/card"
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import * as z from "zod"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ColumnDef } from "@tanstack/react-table"
+
+const closureSchema = z.object({
+    date: z.date({
+        message: "A date is required.",
+    }),
+    type: z.enum(['holiday', 'closed']),
+    reason: z.string().min(3, "Reason must be at least 3 characters.").max(50, "Reason must be under 50 characters."),
+})
+
+type ClosureFormValues = z.infer<typeof closureSchema>
 
 export function AdminOfficeSettings() {
-    const [closureDate, setClosureDate] = useState<Date | undefined>(undefined)
-    const [closureReason, setClosureReason] = useState("")
-    const [closureType, setClosureType] = useState<'holiday' | 'closed'>('holiday')
     const [isCalendarOpen, setIsCalendarOpen] = useState(false)
+
+    const form = useForm<ClosureFormValues>({
+        resolver: zodResolver(closureSchema),
+        defaultValues: {
+            type: 'holiday',
+            reason: '',
+        }
+    })
 
     const utils = trpc.useUtils()
     const { data: settings } = trpc.attendance.getOfficeSettings.useQuery()
@@ -52,10 +72,19 @@ export function AdminOfficeSettings() {
         onSuccess: () => {
             toast.success("Office closure added")
             utils.attendance.getOfficeClosures.invalidate()
-            setClosureDate(undefined)
-            setClosureReason("")
+            form.reset({
+                type: 'holiday',
+                reason: '',
+                date: undefined
+            })
         },
-        onError: (error) => toast.error(error.message)
+        onError: (error) => {
+            if (error.data?.code === 'CONFLICT') {
+                toast.error(error.message)
+            } else {
+                toast.error("Failed to add closure. Please try again.")
+            }
+        }
     })
 
     const deleteClosureMutation = trpc.attendance.deleteOfficeClosure.useMutation({
@@ -99,13 +128,11 @@ export function AdminOfficeSettings() {
         }))
     }
 
-    const handleAddClosure = (e: React.FormEvent) => {
-        e.preventDefault()
-        if (!closureDate || !closureReason) return toast.error("Please fill all fields")
+    const onSubmitClosure = (values: ClosureFormValues) => {
         addClosureMutation.mutate({
-            date: format(closureDate, 'yyyy-MM-dd'),
-            reason: closureReason,
-            type: closureType
+            date: format(values.date, 'yyyy-MM-dd'),
+            reason: values.reason,
+            type: values.type
         })
     }
 
@@ -123,7 +150,7 @@ export function AdminOfficeSettings() {
         {
             accessorKey: "date",
             header: "Date",
-            cell: ({ row }) => (
+            cell: ({ row }: any) => (
                 <div className="flex items-center gap-3 pl-2">
                     <div className="p-2 rounded-lg bg-primary/10 text-primary">
                         <CalendarIcon className="h-4 w-4" />
@@ -133,22 +160,28 @@ export function AdminOfficeSettings() {
             )
         },
         {
+            accessorKey: "type",
+            header: "Type",
+            cell: ({ row }: any) => (
+                <Badge variant="outline" className={cn(
+                    "w-fit text-[10px] px-2 h-5 font-bold uppercase tracking-wider whitespace-nowrap",
+                    row.original.type === 'holiday' ? "text-amber-600 border-amber-200 bg-amber-50" : "text-rose-600 border-rose-200 bg-rose-50"
+                )}>
+                    {row.original.type === 'holiday' ? 'Festival Holiday' : 'Office Closed'}
+                </Badge>
+            )
+        },
+        {
             accessorKey: "reason",
-            header: "Reason & Type",
-            cell: ({ row }) => (
-                <div className="flex flex-col gap-1">
-                    <span className="font-medium">{row.original.reason}</span>
-                    <Badge variant="outline" className={cn(
-                        "w-fit text-[10px] px-2 h-5 font-bold uppercase tracking-wider",
-                        row.original.type === 'holiday' ? "text-amber-600 border-amber-200 bg-amber-50" : "text-rose-600 border-rose-200 bg-rose-50"
-                    )}>{row.original.type}</Badge>
-                </div>
+            header: "Reason / Name",
+            cell: ({ row }: any) => (
+                <span className="font-semibold text-sm text-foreground/80">{row.original.reason}</span>
             )
         },
         {
             id: "actions",
             header: () => <div className="text-right pr-6">Action</div>,
-            cell: ({ row }) => (
+            cell: ({ row }: any) => (
                 <div className="text-right pr-4">
                     <Button
                         size="icon"
@@ -352,85 +385,165 @@ export function AdminOfficeSettings() {
             </TabsContent>
 
             <TabsContent value="holiday" className="space-y-8 focus-visible:outline-none focus-visible:ring-0">
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                    <div className="lg:col-span-5 space-y-6">
-                        <CardShell
-                            title="Add Office Closure"
-                            description="Mark holidays or specific days when the office is closed"
-                            icon={Plus}
-                            className="xl:col-span-12"
-                            contentClassName="pt-6 min-h-fit"
-                        >
-                            <form onSubmit={handleAddClosure} className="space-y-6">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="flex flex-col gap-3">
-                                        <Label className="px-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">Date</Label>
-                                        <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
-                                            <PopoverTrigger asChild>
-                                                <Button
-                                                    variant="outline"
-                                                    className="w-full h-11 justify-between font-normal bg-background hover:bg-muted/10 border-muted-foreground/20"
-                                                >
-                                                    {closureDate ? format(closureDate, "PPP") : "Select date"}
-                                                    <ChevronDown className="h-4 w-4 opacity-50" />
-                                                </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-auto p-0" align="start">
-                                                <Calendar
-                                                    mode="single"
-                                                    selected={closureDate}
-                                                    captionLayout="dropdown"
-                                                    onSelect={(date) => {
-                                                        setClosureDate(date)
-                                                        setIsCalendarOpen(false)
-                                                    }}
-                                                />
-                                            </PopoverContent>
-                                        </Popover>
-                                    </div>
-                                    <div className="flex flex-col gap-3">
-                                        <Label className="px-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">Type</Label>
-                                        <select
-                                            value={closureType}
-                                            onChange={(e) => setClosureType(e.target.value as any)}
-                                            className="w-full h-11 p-2 bg-background border border-muted-foreground/20 rounded-md focus:ring-2 focus:ring-primary/20 outline-none transition-all text-sm"
-                                        >
-                                            <option value="holiday">Festival Holiday</option>
-                                            <option value="closed">Office Closed</option>
-                                        </select>
-                                    </div>
+                <CardShell
+                    title="Office Closure Management"
+                    description="Configure official holidays and scheduled office closures"
+                    icon={Palmtree}
+                    className="xl:col-span-12"
+                    contentClassName="p-6"
+                >
+                    <div className="flex flex-col gap-8">
+                        <Card className="shadow-none border border-muted hover:border-primary/20 transition-all p-0 overflow-hidden">
+                            <CardHeader className="p-4 border-b border-muted/20 bg-muted/50 hover:bg-muted/80 transition-all">
+                                <div className="flex items-center gap-2">
+                                    <Plus className="size-6 text-primary border border-primary/20 rounded-lg h-6 w-6" />
+                                    <CardTitle className="text-sm font-bold">Add New Closure</CardTitle>
                                 </div>
-                                <div className="space-y-2">
-                                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Reason</Label>
-                                    <Input value={closureReason} onChange={(e) => setClosureReason(e.target.value)} placeholder="e.g., Diwali, Annual Maintenance" className="h-11 bg-background" />
-                                </div>
-                                <Button type="submit" disabled={addClosureMutation.isPending} className="w-full h-11 font-semibold transition-all hover:bg-muted" variant="outline">
-                                    {addClosureMutation.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
-                                    Add Holiday
-                                </Button>
-                            </form>
-                        </CardShell>
-                    </div>
+                            </CardHeader>
+                            <CardContent className="p-6 pt-2">
+                                <Form {...form}>
+                                    <form onSubmit={form.handleSubmit(onSubmitClosure)} className="space-y-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 items-end">
+                                            <FormField
+                                                control={form.control}
+                                                name="date"
+                                                render={({ field }) => (
+                                                    <FormItem className="flex flex-col lg:col-span-3">
+                                                        <FormLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">Select Date</FormLabel>
+                                                        <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+                                                            <PopoverTrigger asChild>
+                                                                <FormControl>
+                                                                    <Button
+                                                                        variant={"outline"}
+                                                                        className={cn(
+                                                                            "w-full h-10 pl-3 text-left font-normal border-muted-foreground/20 hover:bg-muted/10",
+                                                                            !field.value && "text-muted-foreground"
+                                                                        )}
+                                                                    >
+                                                                        {field.value ? (
+                                                                            format(field.value, "PPP")
+                                                                        ) : (
+                                                                            <span>Pick a date</span>
+                                                                        )}
+                                                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                                                    </Button>
+                                                                </FormControl>
+                                                            </PopoverTrigger>
+                                                            <PopoverContent className="w-auto p-0" align="start">
+                                                                <Calendar
+                                                                    mode="single"
+                                                                    selected={field.value}
+                                                                    onSelect={(date) => {
+                                                                        field.onChange(date)
+                                                                        setIsCalendarOpen(false)
+                                                                    }}
+                                                                    disabled={(date) => {
+                                                                        const formatted = format(date, 'yyyy-MM-dd')
+                                                                        return closures?.some(c => c.date === formatted) || date < new Date(new Date().setHours(0, 0, 0, 0))
+                                                                    }}
+                                                                    initialFocus
+                                                                />
+                                                            </PopoverContent>
+                                                        </Popover>
+                                                        <div className="h-5">
+                                                            <FormMessage className="text-[10px]" />
+                                                        </div>
+                                                    </FormItem>
+                                                )}
+                                            />
 
-                    <div className="lg:col-span-7">
-                        <CardShell
-                            title="Upcoming Closures"
-                            description="Scheduled holidays and office closures"
-                            icon={CalendarIcon}
-                            className="xl:col-span-12"
-                            contentClassName="p-0 min-h-fit"
-                        >
-                            <div className="max-h-[600px] overflow-auto border-t border-muted/20">
-                                <DataTable
-                                    columns={closureColumns}
-                                    data={closures || []}
-                                    isLoading={!closures}
-                                    hidePagination={true}
-                                />
-                            </div>
-                        </CardShell>
+                                            <FormField
+                                                control={form.control}
+                                                name="type"
+                                                render={({ field }) => (
+                                                    <FormItem className="lg:col-span-2">
+                                                        <FormLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">Closure Type</FormLabel>
+                                                        <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                                                            <FormControl>
+                                                                <SelectTrigger className="w-full h-10 border-muted-foreground/20 hover:bg-muted/10 flex items-center">
+                                                                    <SelectValue placeholder="Select type" />
+                                                                </SelectTrigger>
+                                                            </FormControl>
+                                                            <SelectContent>
+                                                                <SelectItem value="holiday">Festival Holiday</SelectItem>
+                                                                <SelectItem value="closed">Office Closed</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <div className="h-5">
+                                                            <FormMessage className="text-[10px]" />
+                                                        </div>
+                                                    </FormItem>
+                                                )}
+                                            />
+
+                                            <FormField
+                                                control={form.control}
+                                                name="reason"
+                                                render={({ field }) => (
+                                                    <FormItem className="lg:col-span-4">
+                                                        <FormLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">Reason / Name</FormLabel>
+                                                        <FormControl>
+                                                            <Input placeholder="e.g., Diwali, Maintenance" className="h-10 border-muted-foreground/20" {...field} />
+                                                        </FormControl>
+                                                        <div className="h-5">
+                                                            <FormMessage className="text-[10px]" />
+                                                        </div>
+                                                    </FormItem>
+                                                )}
+                                            />
+
+                                            <FormItem className="w-full lg:col-span-3">
+                                                <FormLabel className="text-[10px] font-bold uppercase tracking-wider text-transparent select-none">Action</FormLabel>
+                                                <FormControl>
+                                                    <Button
+                                                        type="submit"
+                                                        disabled={addClosureMutation.isPending}
+                                                        className="w-full h-10 font-bold shadow-md transition-all hover:scale-[1.01]"
+                                                    >
+                                                        {addClosureMutation.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Plus className="mr-2 size-4" />}
+                                                        Add Holiday
+                                                    </Button>
+                                                </FormControl>
+                                                <div className="h-5" />
+                                            </FormItem>
+                                        </div>
+                                    </form>
+                                </Form>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="shadow-none border border-muted hover:border-primary/20 transition-all p-0 overflow-hidden">
+                            <CardHeader className="p-4 border-b border-muted/20 bg-muted/50 hover:bg-muted/80 transition-all">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <CalendarIcon className="size-6 text-primary border border-primary/20 rounded-lg p-1" />
+                                        <CardTitle className="text-sm font-bold">Upcoming Closures</CardTitle>
+                                    </div>
+                                    <Badge variant="outline" className="text-[10px] font-bold px-2 py-0">
+                                        {closures?.length || 0} Listed
+                                    </Badge>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="p-6 pt-2">
+                                <div className="max-h-[600px] overflow-auto">
+                                    {closures && closures.length > 0 ? (
+                                        <DataTable
+                                            columns={closureColumns}
+                                            data={closures || []}
+                                            isLoading={!closures}
+                                            hidePagination={true}
+                                        />
+                                    ) : (
+                                        <div className="p-12 text-center flex flex-col items-center gap-3">
+                                            <CalendarClock className="size-12 text-muted-foreground/20" />
+                                            <p className="text-sm text-muted-foreground font-medium">No office closures scheduled</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
                     </div>
-                </div>
+                </CardShell>
             </TabsContent>
         </Tabs>
     )
