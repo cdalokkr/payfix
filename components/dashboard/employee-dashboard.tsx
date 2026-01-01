@@ -88,6 +88,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
     })
 
     const { data: settings } = trpc.attendance.getOfficeSettings.useQuery()
+    const { data: closures } = trpc.attendance.getOfficeClosures.useQuery()
 
     const clockInMutation = trpc.attendance.clockIn.useMutation({
         onSuccess: () => {
@@ -114,6 +115,8 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
     const isClockedIn = !!pendingRecord
     const isMarked = !!todayRecord?.check_in && !!todayRecord?.check_out
     const isTodayOffDay = settings?.off_days?.includes(new Date().getDay())
+    const todayClosure = closures?.find(c => c.date === todayStr)
+    const isTodayHoliday = !!todayClosure
 
     const handleClockIn = async (isExtra: boolean = false) => {
         try {
@@ -181,20 +184,26 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                                         <p className="text-sm font-bold group-hover:text-primary transition-colors">Office - Out</p>
                                     </div>
                                 </button>
+                            ) : isTodayHoliday ? (
+                                <div className="flex items-center gap-3 p-4 rounded-2xl border border-amber-200/50 bg-amber-50/30 dark:bg-amber-500/5 cursor-default group">
+                                    <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-400">
+                                        <Calendar className="h-5 w-5" />
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600/60 leading-none mb-1.5">Holiday</p>
+                                        <p className="text-sm font-bold text-amber-700 dark:text-amber-400">Office Closed</p>
+                                    </div>
+                                </div>
                             ) : isTodayOffDay ? (
-                                <button
-                                    onClick={() => handleClockIn(true)}
-                                    disabled={clockInMutation.isPending}
-                                    className="flex items-center gap-3 p-4 rounded-2xl border border-primary/20 bg-primary/5 hover:bg-primary/10 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300 group cursor-pointer disabled:opacity-50"
-                                >
-                                    <div className="p-2.5 rounded-xl bg-primary/10 text-primary group-hover:scale-110 group-hover:-rotate-3 transition-transform">
-                                        {clockInMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogIn className="h-5 w-5" />}
+                                <div className="flex items-center gap-3 p-4 rounded-2xl border border-muted-foreground/10 bg-muted/5 cursor-default group">
+                                    <div className="p-2.5 rounded-xl bg-muted/10 text-muted-foreground">
+                                        <Calendar className="h-5 w-5" />
                                     </div>
-                                    <div className="flex flex-col text-left">
-                                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Extra Day</p>
-                                        <p className="text-sm font-bold group-hover:text-primary transition-colors">Office - In</p>
+                                    <div className="flex flex-col">
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Week off Day</p>
+                                        <p className="text-sm font-bold text-muted-foreground">Scheduled Off</p>
                                     </div>
-                                </button>
+                                </div>
                             ) : (
                                 <button
                                     onClick={() => handleClockIn(false)}

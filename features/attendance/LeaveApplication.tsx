@@ -14,6 +14,7 @@ import { toast } from "sonner"
 import { format } from "date-fns"
 import { Plane, Plus, Loader2 } from "lucide-react"
 import { ModernDialog, ModernDialogContent, ModernDialogHeader, ModernDialogTitle, ModernDialogDescription } from "@/components/ui/modern-dialog"
+import { cn } from "@/lib/utils"
 
 export function LeaveApplication() {
     const [isOpen, setIsOpen] = useState(false)
@@ -21,6 +22,8 @@ export function LeaveApplication() {
     const [startDate, setStartDate] = useState("")
     const [endDate, setEndDate] = useState("")
     const [reason, setReason] = useState("")
+    const [isHalfDay, setIsHalfDay] = useState(false)
+    const [halfDayPeriod, setHalfDayPeriod] = useState<"morning" | "afternoon">("morning")
 
     const utils = trpc.useUtils()
     const { data: leaves, isLoading: isLeavesLoading } = trpc.attendance.getLeaves.useQuery({})
@@ -42,6 +45,8 @@ export function LeaveApplication() {
         setStartDate("")
         setEndDate("")
         setReason("")
+        setIsHalfDay(false)
+        setHalfDayPeriod("morning")
     }
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -51,7 +56,9 @@ export function LeaveApplication() {
             leaveType,
             startDate,
             endDate,
-            reason
+            reason,
+            isHalfDay,
+            halfDayPeriod: isHalfDay ? halfDayPeriod : undefined
         })
     }
 
@@ -88,10 +95,15 @@ export function LeaveApplication() {
                                             <div className="flex items-center gap-2">
                                                 <div className="w-1.5 h-1.5 rounded-full bg-primary" />
                                                 {leave.leave_type || 'N/A'}
+                                                {leave.is_half_day && (
+                                                    <Badge variant="outline" className="ml-2 text-[10px] h-4 bg-primary/5 border-primary/20 text-primary">
+                                                        Half Day ({leave.half_day_period})
+                                                    </Badge>
+                                                )}
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-center py-4">{format(new Date(leave.start_date), 'MMM dd, yyyy')}</TableCell>
-                                        <TableCell className="text-center py-4">{format(new Date(leave.end_date), 'MMM dd, yyyy')}</TableCell>
+                                        <TableCell className="text-center py-4">{format(new Date(leave.endDate), 'MMM dd, yyyy')}</TableCell>
                                         <TableCell className="text-center py-4">
                                             <Badge variant={
                                                 leave.status === 'approved' ? 'success' as any :
@@ -148,8 +160,52 @@ export function LeaveApplication() {
                             </div>
                             <div className="space-y-2">
                                 <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">End Date</Label>
-                                <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required className="h-11 bg-background" />
+                                <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required className="h-11 bg-background" disabled={isHalfDay} />
                             </div>
+                        </div>
+
+                        <div className="flex items-center gap-6 p-4 bg-muted/30 rounded-lg border border-dashed">
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    id="isHalfDay"
+                                    checked={isHalfDay}
+                                    onChange={(e) => {
+                                        setIsHalfDay(e.target.checked)
+                                        if (e.target.checked) setEndDate(startDate)
+                                    }}
+                                    className="size-4 rounded border-gray-300 text-primary focus:ring-primary"
+                                />
+                                <Label htmlFor="isHalfDay" className="text-sm font-semibold cursor-pointer">Apply Half Day</Label>
+                            </div>
+
+                            {isHalfDay && (
+                                <div className="flex items-center gap-4 animate-in fade-in slide-in-from-left-2">
+                                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Period:</Label>
+                                    <div className="flex bg-background border rounded-md p-1 gap-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => setHalfDayPeriod("morning")}
+                                            className={cn(
+                                                "px-3 py-1 text-xs rounded-sm transition-all",
+                                                halfDayPeriod === "morning" ? "bg-primary text-primary-foreground shadow-sm" : "hover:bg-muted"
+                                            )}
+                                        >
+                                            Morning
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setHalfDayPeriod("afternoon")}
+                                            className={cn(
+                                                "px-3 py-1 text-xs rounded-sm transition-all",
+                                                halfDayPeriod === "afternoon" ? "bg-primary text-primary-foreground shadow-sm" : "hover:bg-muted"
+                                            )}
+                                        >
+                                            Afternoon
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         <div className="space-y-2">

@@ -145,9 +145,18 @@ export function AdminLeaveApproval() {
                                                 <span className="text-xs text-muted-foreground">{leave.profile?.email}</span>
                                             </div>
                                         </TableCell>
-                                        <TableCell>{leave.leave_type || 'N/A'}</TableCell>
+                                        <TableCell>
+                                            <div className="flex items-center gap-2">
+                                                {leave.leave_type || 'N/A'}
+                                                {leave.is_half_day && (
+                                                    <Badge variant="outline" className="text-[10px] h-4 bg-primary/5 border-primary/20 text-primary">
+                                                        Half Day ({leave.half_day_period})
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        </TableCell>
                                         <TableCell>{format(new Date(leave.start_date), 'MMM dd, yyyy')}</TableCell>
-                                        <TableCell>{format(new Date(leave.end_date), 'MMM dd, yyyy')}</TableCell>
+                                        <TableCell>{format(new Date(leave.endDate), 'MMM dd, yyyy')}</TableCell>
                                         <TableCell>
                                             <Badge variant={
                                                 leave.status === 'approved' ? 'success' as any :

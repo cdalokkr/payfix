@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { router, protectedProcedure, adminProcedure, moderatorProcedure } from '../server'
 import { TRPCError } from '@trpc/server'
 import { attendance, profiles, leaves, officeSettings, officeClosures, activities } from '@/lib/db/schema'
-import { eq, and, gte, lte, desc, sql } from 'drizzle-orm'
+import { eq, and, gte, lte, desc, sql, inArray } from 'drizzle-orm'
 
 export const attendanceRouter = router({
     // --- ATTENDANCE ---
@@ -37,7 +37,17 @@ export const attendanceRouter = router({
                     profile: {
                         columns: {
                             email: true,
-                            full_name: true
+                            full_name: true,
+                            role: true,
+                            avatar_url: true,
+                            sex: true
+                        },
+                        with: {
+                            designation: {
+                                columns: {
+                                    name: true
+                                }
+                            }
                         }
                     }
                 },
@@ -63,6 +73,31 @@ export const attendanceRouter = router({
         }).optional())
         .mutation(async ({ ctx, input }) => {
             const today = input?.localDate || new Date().toISOString().split('T')[0]
+            const dayOfWeek = new Date(today).getDay()
+
+            // Fetch office settings and closures to check for restrictions
+            const settings = await ctx.db.query.officeSettings.findFirst()
+            const closures = await ctx.db.query.officeClosures.findMany()
+
+            // Check if today is an off-day
+            const isOffDay = settings?.off_days?.includes(dayOfWeek)
+            // Check if today is a holiday/closure
+            const isHoliday = closures?.some(c => c.date === today)
+
+            if (isHoliday) {
+                const holiday = closures.find(c => c.date === today)
+                throw new TRPCError({
+                    code: 'BAD_REQUEST',
+                    message: `Cannot clock in today: Office is closed for ${holiday?.reason || 'Holiday'}.`
+                })
+            }
+
+            if (isOffDay && !input?.isExtraDay) {
+                throw new TRPCError({
+                    code: 'BAD_REQUEST',
+                    message: 'Today is a weekly off day. Please use "Extra Work" to clock in if authorized.'
+                })
+            }
 
             // Check if already clocked in today using Drizzle
             const existing = await ctx.db.query.attendance.findFirst({
@@ -93,7 +128,7 @@ export const attendanceRouter = router({
                 user_id: ctx.profile.id,
                 activity_type: 'data_create',
                 module: 'attendance',
-                description: `${ctx.profile.full_name || ctx.profile.email} clocked in at ${new Date().toLocaleTimeString()}`,
+                description: `${ctx.profile.full_name || ctx.profile.email} clocked in at ${new Date().toLocaleTimeString()}${input?.isExtraDay ? ' (Extra Work)' : ''}`,
             })
 
             return data
@@ -158,28 +193,55 @@ export const attendanceRouter = router({
             id: z.string().uuid(),
             status: z.enum(['verified', 'rejected']),
             remarks: z.string().optional(),
+            isHalfDay: z.boolean().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
             const [data] = await ctx.db.update(attendance).set({
                 status: input.status,
                 remarks: input.remarks,
+                is_half_day: input.isHalfDay ?? false,
                 verified_by: ctx.profile.id,
                 updated_at: new Date()
             }).where(eq(attendance.id, input.id)).returning()
 
             if (!data) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to verify attendance' })
 
-            const today = new Date().toISOString().split('T')[0]
-
             // Log activity for real-time update
             await ctx.db.insert(activities).values({
                 user_id: data.profile_id,
                 activity_type: 'data_edit',
                 module: 'attendance',
-                description: `Attendance record for ${today} was ${input.status} by ${ctx.profile.full_name || ctx.profile.email}`,
+                description: `Attendance record for ${data.date} was ${input.status} by ${ctx.profile.full_name || ctx.profile.email}`,
             })
 
             return data
+        }),
+
+    bulkVerifyAttendance: moderatorProcedure
+        .input(z.object({
+            ids: z.array(z.string().uuid()),
+            status: z.enum(['verified', 'rejected']),
+            remarks: z.string().optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+            const updatedRecords = await ctx.db.update(attendance).set({
+                status: input.status,
+                remarks: input.remarks,
+                verified_by: ctx.profile.id,
+                updated_at: new Date()
+            }).where(inArray(attendance.id, input.ids)).returning()
+
+            if (!updatedRecords.length) throw new TRPCError({ code: 'NOT_FOUND', message: 'No records found to update' })
+
+            // Log activity for bulk update
+            await ctx.db.insert(activities).values({
+                user_id: ctx.profile.id,
+                activity_type: 'data_edit',
+                module: 'attendance',
+                description: `Bulk ${input.status} ${updatedRecords.length} attendance records by ${ctx.profile.full_name || ctx.profile.email}`,
+            })
+
+            return updatedRecords
         }),
 
     manualUpdate: moderatorProcedure
@@ -188,15 +250,41 @@ export const attendanceRouter = router({
             checkIn: z.string().optional(),
             checkOut: z.string().optional(),
             status: z.enum(['pending', 'verified', 'rejected']).optional(),
+            isHalfDay: z.boolean().optional(),
             remarks: z.string().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
+            // Fetch existing record to get the date context
+            const existing = await ctx.db.query.attendance.findFirst({
+                where: eq(attendance.id, input.id)
+            })
+
+            if (!existing) {
+                throw new TRPCError({ code: 'NOT_FOUND', message: 'Attendance record not found' })
+            }
+
+            const recordDate = existing.date // Expecting 'YYYY-MM-DD'
             const updateData: any = {
                 updated_at: new Date()
             }
-            if (input.checkIn) updateData.check_in = new Date(input.checkIn)
-            if (input.checkOut) updateData.check_out = new Date(input.checkOut)
+
+            if (input.checkIn) {
+                // Combine date and time (input.checkIn is "HH:mm")
+                const [h, m] = input.checkIn.split(':')
+                const dateObj = new Date(recordDate)
+                dateObj.setHours(parseInt(h, 10), parseInt(m, 10), 0, 0)
+                updateData.check_in = dateObj
+            }
+
+            if (input.checkOut) {
+                const [h, m] = input.checkOut.split(':')
+                const dateObj = new Date(recordDate)
+                dateObj.setHours(parseInt(h, 10), parseInt(m, 10), 0, 0)
+                updateData.check_out = dateObj
+            }
+
             if (input.status) updateData.status = input.status
+            if (input.isHalfDay !== undefined) updateData.is_half_day = input.isHalfDay
             if (input.remarks) updateData.remarks = input.remarks
 
             const [data] = await ctx.db.update(attendance)
@@ -256,6 +344,8 @@ export const attendanceRouter = router({
             leaveType: z.string().optional(),
             startDate: z.string(),
             endDate: z.string(),
+            isHalfDay: z.boolean().optional(),
+            halfDayPeriod: z.enum(['morning', 'afternoon']).optional(),
             reason: z.string().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
@@ -264,6 +354,8 @@ export const attendanceRouter = router({
                 leave_type: input.leaveType,
                 start_date: input.startDate,
                 endDate: input.endDate,
+                is_half_day: input.isHalfDay ?? false,
+                half_day_period: input.halfDayPeriod,
                 reason: input.reason,
                 status: 'pending'
             }).returning()
@@ -333,7 +425,7 @@ export const attendanceRouter = router({
     getOfficeClosures: protectedProcedure
         .query(async ({ ctx }) => {
             return await ctx.db.query.officeClosures.findMany({
-                orderBy: [officeClosures.date]
+                orderBy: [desc(officeClosures.date)]
             })
         }),
 

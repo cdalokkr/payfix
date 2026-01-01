@@ -6,17 +6,14 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
 } from "lucide-react"
-import { DayButton, DayPicker, getDefaultClassNames } from "react-day-picker"
+import {
+  DayPicker,
+  getDefaultClassNames,
+  type DayButton,
+} from "react-day-picker"
 
 import { cn } from "@/lib/utils"
 import { Button, buttonVariants } from "@/components/ui/button"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 
 function Calendar({
   className,
@@ -77,14 +74,13 @@ function Calendar({
           defaultClassNames.dropdowns
         ),
         dropdown_root: cn(
-          "relative",
+          "relative has-focus:border-ring border border-input shadow-xs has-focus:ring-ring/50 has-focus:ring-[3px] rounded-md",
           defaultClassNames.dropdown_root
         ),
         dropdown: cn(
-          "relative inline-flex",
+          "absolute bg-popover inset-0 opacity-0",
           defaultClassNames.dropdown
         ),
-
         caption_label: cn(
           "select-none font-medium",
           captionLayout === "label"
@@ -166,31 +162,7 @@ function Calendar({
             <ChevronDownIcon className={cn("size-4", className)} {...props} />
           )
         },
-        Dropdown: ({ value, onChange, options, ...props }: any) => {
-          const handleValueChange = (newValue: string) => {
-            onChange?.({ target: { value: newValue } } as any)
-          }
-
-          return (
-            <Select value={value?.toString()} onValueChange={handleValueChange}>
-              <SelectTrigger className="h-8 w-fit gap-1 border-none bg-transparent px-2 py-1 font-bold shadow-none focus:ring-0 [&_svg]:size-3 hover:bg-accent/50 rounded-md transition-all">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent position="popper" className="max-h-80 min-w-[var(--radix-select-trigger-width)] overflow-y-auto z-[110] bg-popover/95 backdrop-blur-md">
-                {options?.map((option: any) => (
-                  <SelectItem
-                    key={option.value}
-                    value={option.value.toString()}
-                    className="text-xs font-medium"
-                  >
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )
-        },
-        DayButton: (props) => <CalendarDayButton {...props} />,
+        DayButton: CalendarDayButton,
         WeekNumber: ({ children, ...props }) => {
           return (
             <td {...props}>
@@ -207,15 +179,18 @@ function Calendar({
   )
 }
 
-const CalendarDayButton = React.forwardRef<
-  HTMLButtonElement,
-  React.ComponentProps<typeof DayButton>
->(({ className, day, modifiers, ...props }, ref) => {
+function CalendarDayButton({
+  className,
+  day,
+  modifiers,
+  ...props
+}: React.ComponentProps<typeof DayButton>) {
   const defaultClassNames = getDefaultClassNames()
 
+  const ref = React.useRef<HTMLButtonElement>(null)
   React.useEffect(() => {
-    if (modifiers.focused) (ref as React.RefObject<HTMLButtonElement>)?.current?.focus()
-  }, [modifiers.focused, ref])
+    if (modifiers.focused) ref.current?.focus()
+  }, [modifiers.focused])
 
   return (
     <Button
@@ -240,9 +215,6 @@ const CalendarDayButton = React.forwardRef<
       {...props}
     />
   )
-})
-CalendarDayButton.displayName = "CalendarDayButton"
+}
 
 export { Calendar, CalendarDayButton }
-
-

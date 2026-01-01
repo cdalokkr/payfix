@@ -59,6 +59,7 @@ export const attendance = pgTable('attendance', {
     remarks: text('remarks'),
     verified_by: uuid('verified_by').references(() => profiles.id, { onDelete: 'set null' }),
     is_extra_day: boolean('is_extra_day').default(false),
+    is_half_day: boolean('is_half_day').default(false),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
@@ -72,6 +73,8 @@ export const leaves = pgTable('leaves', {
     endDate: date('end_date').notNull(), // Matching the SQL which had end_date as endDate in my manual map? recheck
     reason: text('reason'),
     status: text('status').notNull().default('pending'),
+    is_half_day: boolean('is_half_day').default(false),
+    half_day_period: text('half_day_period'), // 'morning' or 'afternoon'
     remarks: text('remarks'),
     approved_by: uuid('approved_by').references(() => profiles.id, { onDelete: 'set null' }),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),

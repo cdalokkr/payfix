@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { TimeInput } from "@/components/ui/time-input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
@@ -226,14 +227,12 @@ export function ModeratorOfficeSettings() {
                                                                         "transition-all duration-300",
                                                                         isOffDay ? "opacity-30 pointer-events-none scale-95 origin-left" : "opacity-100"
                                                                     )}>
-                                                                        <div className="relative max-w-[140px]">
-                                                                            <Clock className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/50" />
-                                                                            <Input
-                                                                                type="time"
+                                                                        <div className="max-w-[140px]">
+                                                                            <TimeInput
                                                                                 step="1"
                                                                                 value={hours.checkIn}
-                                                                                onChange={(e) => handleDailyHourChange(day.value, 'checkIn', e.target.value)}
-                                                                                className="h-8 pl-9 bg-muted/20 border-transparent hover:bg-muted/40 focus:bg-background focus:ring-primary/20 transition-all text-xs font-medium appearance-none [&::-webkit-calendar-picker-indicator]:hidden"
+                                                                                onChange={(e: any) => handleDailyHourChange(day.value, 'checkIn', e.target.value)}
+                                                                                className="h-8 bg-muted/20 border-transparent hover:bg-muted/40"
                                                                             />
                                                                         </div>
                                                                     </div>
@@ -244,14 +243,12 @@ export function ModeratorOfficeSettings() {
                                                                         "transition-all duration-300",
                                                                         isOffDay ? "opacity-30 pointer-events-none scale-95 origin-left" : "opacity-100"
                                                                     )}>
-                                                                        <div className="relative max-w-[140px]">
-                                                                            <Clock className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/50" />
-                                                                            <Input
-                                                                                type="time"
+                                                                        <div className="max-w-[140px]">
+                                                                            <TimeInput
                                                                                 step="1"
                                                                                 value={hours.checkOut}
-                                                                                onChange={(e) => handleDailyHourChange(day.value, 'checkOut', e.target.value)}
-                                                                                className="h-8 pl-9 bg-muted/20 border-transparent hover:bg-muted/40 focus:bg-background focus:ring-primary/20 transition-all text-xs font-medium appearance-none [&::-webkit-calendar-picker-indicator]:hidden"
+                                                                                onChange={(e: any) => handleDailyHourChange(day.value, 'checkOut', e.target.value)}
+                                                                                className="h-8 bg-muted/20 border-transparent hover:bg-muted/40"
                                                                             />
                                                                         </div>
                                                                     </div>
@@ -315,6 +312,8 @@ export function ModeratorOfficeSettings() {
                                 data={closures || []}
                                 isLoading={!closures}
                                 hidePagination={true}
+                                emptyIcon={<Palmtree className="size-12 text-muted-foreground/20" />}
+                                emptyMessage="No office closures scheduled"
                             />
                         </div>
                     </CardShell>

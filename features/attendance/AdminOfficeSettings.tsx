@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { TimeInput } from "@/components/ui/time-input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
@@ -310,14 +311,12 @@ export function AdminOfficeSettings() {
                                                                         "transition-all duration-300",
                                                                         isOffDay ? "opacity-30 pointer-events-none scale-95 origin-left" : "opacity-100"
                                                                     )}>
-                                                                        <div className="relative max-w-[140px]">
-                                                                            <Clock className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/50" />
-                                                                            <Input
-                                                                                type="time"
+                                                                        <div className="max-w-[140px]">
+                                                                            <TimeInput
                                                                                 step="1"
                                                                                 value={hours.checkIn}
-                                                                                onChange={(e) => handleDailyHourChange(day.value, 'checkIn', e.target.value)}
-                                                                                className="h-8 pl-9 bg-muted/20 border-transparent hover:bg-muted/40 focus:bg-background focus:ring-primary/20 transition-all text-xs font-medium appearance-none [&::-webkit-calendar-picker-indicator]:hidden"
+                                                                                onChange={(e: any) => handleDailyHourChange(day.value, 'checkIn', e.target.value)}
+                                                                                className="h-8 bg-muted/20 border-transparent hover:bg-muted/40"
                                                                             />
                                                                         </div>
                                                                     </div>
@@ -328,14 +327,12 @@ export function AdminOfficeSettings() {
                                                                         "transition-all duration-300",
                                                                         isOffDay ? "opacity-30 pointer-events-none scale-95 origin-left" : "opacity-100"
                                                                     )}>
-                                                                        <div className="relative max-w-[140px]">
-                                                                            <Clock className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/50" />
-                                                                            <Input
-                                                                                type="time"
+                                                                        <div className="max-w-[140px]">
+                                                                            <TimeInput
                                                                                 step="1"
                                                                                 value={hours.checkOut}
-                                                                                onChange={(e) => handleDailyHourChange(day.value, 'checkOut', e.target.value)}
-                                                                                className="h-8 pl-9 bg-muted/20 border-transparent hover:bg-muted/40 focus:bg-background focus:ring-primary/20 transition-all text-xs font-medium appearance-none [&::-webkit-calendar-picker-indicator]:hidden"
+                                                                                onChange={(e: any) => handleDailyHourChange(day.value, 'checkOut', e.target.value)}
+                                                                                className="h-8 bg-muted/20 border-transparent hover:bg-muted/40"
                                                                             />
                                                                         </div>
                                                                     </div>
@@ -432,6 +429,9 @@ export function AdminOfficeSettings() {
                                                             <PopoverContent className="w-auto p-0" align="start">
                                                                 <Calendar
                                                                     mode="single"
+                                                                    captionLayout="dropdown"
+                                                                    fromYear={new Date().getFullYear()}
+                                                                    toYear={new Date().getFullYear() + 5}
                                                                     selected={field.value}
                                                                     onSelect={(date) => {
                                                                         field.onChange(date)
@@ -526,19 +526,14 @@ export function AdminOfficeSettings() {
                             </CardHeader>
                             <CardContent className="p-6 pt-2">
                                 <div className="max-h-[600px] overflow-auto">
-                                    {closures && closures.length > 0 ? (
-                                        <DataTable
-                                            columns={closureColumns}
-                                            data={closures || []}
-                                            isLoading={!closures}
-                                            hidePagination={true}
-                                        />
-                                    ) : (
-                                        <div className="p-12 text-center flex flex-col items-center gap-3">
-                                            <CalendarClock className="size-12 text-muted-foreground/20" />
-                                            <p className="text-sm text-muted-foreground font-medium">No office closures scheduled</p>
-                                        </div>
-                                    )}
+                                    <DataTable
+                                        columns={closureColumns}
+                                        data={closures || []}
+                                        isLoading={!closures}
+                                        hidePagination={true}
+                                        emptyIcon={<CalendarClock className="size-12 text-muted-foreground/20" />}
+                                        emptyMessage="No office closures scheduled"
+                                    />
                                 </div>
                             </CardContent>
                         </Card>

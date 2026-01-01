@@ -96,7 +96,7 @@ export function AttendanceDashboard() {
                     { label: "Present Days", value: stats.present, icon: CalendarCheckIcon, color: "text-green-600", bg: "bg-green-500/10", border: "border-green-500/20" },
                     { label: "Absent Days", value: stats.absent, icon: CalendarXIcon, color: "text-red-600", bg: "bg-red-500/10", border: "border-red-500/20" },
                     { label: "Leave Days", value: stats.leave, icon: CalendarMinusIcon, color: "text-orange-600", bg: "bg-orange-500/10", border: "border-orange-500/20" },
-                    { label: "No Office Out", value: stats.noOfficeOut, icon: ClockUserIcon, color: "text-purple-600", bg: "bg-purple-500/10", border: "border-purple-500/20" },
+                    { label: "Office In", value: stats.noOfficeOut, icon: ClockUserIcon, color: "text-purple-600", bg: "bg-purple-500/10", border: "border-purple-500/20" },
                     { label: "Holidays", value: stats.holiday, icon: CalendarSlashIcon, color: "text-blue-600", bg: "bg-blue-500/10", border: "border-blue-500/20" }
                 ].map((stat, i) => {
                     const Icon = stat.icon;
@@ -120,7 +120,7 @@ export function AttendanceDashboard() {
                                     stat.bg,
                                     stat.color
                                 )}>
-                                    <Icon size={32} weight="duotone" />
+                                    <Icon size={28} weight="duotone" />
                                 </div>
                                 {isAttendanceLoading ? (
                                     <Skeleton className="h-8 w-10" />
@@ -168,6 +168,7 @@ export function AttendanceDashboard() {
                         <AttendanceSummaryContent
                             attendance={attendance}
                             isLoading={isAttendanceLoading}
+                            settings={settings}
                         />
                     </div>
                 </CardShell>

@@ -4,33 +4,33 @@
 import React from 'react'
 
 // Export all ActionButton related types
-export type ActionType = 'edit' | 'save' | 'cancel' | 'delete' | 'add' | 'view' | 'settings'
+export type ActionType = 'edit' | 'save' | 'cancel' | 'delete' | 'add' | 'view' | 'settings' | 'reset' | 'dashboard-blue' | 'dashboard-orange' | 'dashboard-purple' | 'activate' | 'deactivate' | 'verify' | 'reject'
 export type ActionButtonVariant = 'button' | 'icon-only'
 export type ActionButtonSize = 'sm' | 'md' | 'lg'
 
 export interface ActionButtonProps extends React.ComponentProps<'button'> {
   // Required
   action: ActionType
-  
+
   // Optional styling
   variant?: ActionButtonVariant
   size?: ActionButtonSize
-  
+
   // State management
   loading?: boolean
   disabled?: boolean
-  
+
   // Content
   icon?: React.ComponentType<any>
   children?: React.ReactNode
-  
+
   // Event handling
   onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void
-  
+
   // Accessibility
   'aria-label'?: string
   'data-testid'?: string
-  
+
   // Additional styling
   className?: string
 }

@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/table"
 import { DataTablePagination } from "@/components/ui/data-table-pagination"
 import { Skeleton } from "@/components/ui/skeleton"
+import { FileX } from "lucide-react"
 
 interface DataTableProps<TData, TValue> {
     columns: ColumnDef<TData, TValue>[]
@@ -37,6 +38,9 @@ interface DataTableProps<TData, TValue> {
     onRowSelectionChange?: React.Dispatch<React.SetStateAction<RowSelectionState>>
     hidePagination?: boolean
     meta?: Record<string, any>
+    emptyIcon?: React.ReactNode
+    emptyMessage?: string
+    getRowId?: (row: TData) => string
 }
 
 export function DataTable<TData, TValue>({
@@ -49,6 +53,9 @@ export function DataTable<TData, TValue>({
     onRowSelectionChange: externalOnRowSelectionChange,
     hidePagination = false,
     meta,
+    emptyIcon,
+    emptyMessage = "No Record Found",
+    getRowId,
 }: DataTableProps<TData, TValue>) {
     const [internalRowSelection, setInternalRowSelection] = React.useState<RowSelectionState>({})
 
@@ -77,7 +84,7 @@ export function DataTable<TData, TValue>({
         getFilteredRowModel: getFilteredRowModel(),
         getPaginationRowModel: getPaginationRowModel(),
         getSortedRowModel: getSortedRowModel(),
-        getRowId: (row) => (row as { id: string }).id,
+        getRowId: getRowId || ((row) => (row as { id: string }).id),
         meta,
     })
 
@@ -108,7 +115,11 @@ export function DataTable<TData, TValue>({
                                 {headerGroup.headers.map((header) => {
                                     if (!header.column.getIsVisible()) return null
                                     return (
-                                        <TableHead key={header.id} colSpan={header.colSpan}>
+                                        <TableHead
+                                            key={header.id}
+                                            colSpan={header.colSpan}
+                                            style={{ width: header.column.columnDef.size }}
+                                        >
                                             {header.isPlaceholder
                                                 ? null
                                                 : flexRender(
@@ -143,7 +154,10 @@ export function DataTable<TData, TValue>({
                                     }
                                 >
                                     {row.getVisibleCells().map((cell) => (
-                                        <TableCell key={cell.id}>
+                                        <TableCell
+                                            key={cell.id}
+                                            style={{ width: cell.column.columnDef.size }}
+                                        >
                                             {flexRender(
                                                 cell.column.columnDef.cell,
                                                 cell.getContext()
@@ -153,12 +167,15 @@ export function DataTable<TData, TValue>({
                                 </TableRow>
                             ))
                         ) : (
-                            <TableRow>
+                            <TableRow className="hover:bg-transparent">
                                 <TableCell
                                     colSpan={table.getVisibleLeafColumns().length}
-                                    className="h-24 text-center text-destructive font-medium bg-destructive/10"
+                                    className="h-32 text-center bg-muted/30"
                                 >
-                                    No Record Found
+                                    <div className="flex flex-col items-center justify-center gap-2 py-4">
+                                        {emptyIcon || <FileX className="size-10 text-muted-foreground/30" />}
+                                        <p className="text-sm text-muted-foreground font-medium">{emptyMessage}</p>
+                                    </div>
                                 </TableCell>
                             </TableRow>
                         )}

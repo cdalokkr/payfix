@@ -24,6 +24,7 @@ export function DailyAttendanceCard({ className }: { className?: string }) {
     })
 
     const { data: settings } = trpc.attendance.getOfficeSettings.useQuery()
+    const { data: closures } = trpc.attendance.getOfficeClosures.useQuery()
 
     const [currentTime, setCurrentTime] = useState(new Date())
     const clockInMutation = trpc.attendance.clockIn.useMutation({
@@ -54,6 +55,8 @@ export function DailyAttendanceCard({ className }: { className?: string }) {
     const isClockedIn = !!pendingRecord
     const isMarked = !!todayRecord?.check_in && !!todayRecord?.check_out
     const isTodayOffDay = settings?.off_days?.includes(new Date().getDay())
+    const todayClosure = closures?.find(c => c.date === todayStr)
+    const isTodayHoliday = !!todayClosure
 
     const handleClockIn = async (isExtra: boolean = false) => {
         try {
@@ -127,24 +130,21 @@ export function DailyAttendanceCard({ className }: { className?: string }) {
                                 <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-widest text-orange-600 border-orange-200 bg-orange-50/50">Extra Work Session</Badge>
                             )}
                         </div>
-                    ) : isTodayOffDay ? (
-                        <div className="flex flex-col items-center gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                            <div className="flex flex-col items-center gap-2">
-                                <div className="px-10 py-4 rounded-2xl bg-muted/50 border-2 border-dashed border-muted-foreground/20 text-muted-foreground/60 text-3xl font-black uppercase tracking-widest">
-                                    Weekday
-                                </div>
-                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/40">Office is closed today</p>
+                    ) : isTodayHoliday ? (
+                        <div className="flex flex-col items-center gap-2 animate-in fade-in slide-in-from-bottom-4 duration-700 text-center">
+                            <div className="px-10 py-4 rounded-2xl bg-amber-500/10 border-2 border-dashed border-amber-500/30 text-amber-600 text-3xl font-black uppercase tracking-widest">
+                                Holiday
                             </div>
-
-                            <button
-                                onClick={() => handleClockIn(true)}
-                                disabled={clockInMutation.isPending}
-                                className="group flex items-center gap-3 px-6 py-3 rounded-xl border border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 transition-all active:scale-95 disabled:opacity-50"
-                            >
-                                <Plus className="h-4 w-4" />
-                                <span className="text-sm font-bold uppercase tracking-wider">Clock In (Extra Work)</span>
-                                {clockInMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                            </button>
+                            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-600/60 mt-2">
+                                Office is closed for {todayClosure.reason}
+                            </p>
+                        </div>
+                    ) : isTodayOffDay ? (
+                        <div className="flex flex-col items-center gap-2 animate-in fade-in slide-in-from-bottom-4 duration-700 text-center">
+                            <div className="px-10 py-4 rounded-2xl bg-muted/50 border-2 border-dashed border-muted-foreground/20 text-muted-foreground/60 text-3xl font-black uppercase tracking-widest">
+                                Week off Day
+                            </div>
+                            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/40 mt-1">Weekly scheduled off day</p>
                         </div>
                     ) : (
                         <button

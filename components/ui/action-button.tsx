@@ -6,6 +6,7 @@ import { motion } from 'framer-motion'
 import {
   Edit,
   Save,
+  Check,
   X,
   Trash2,
   UserPlus,
@@ -23,7 +24,7 @@ import { cn } from '@/lib/utils'
 
 // Type definitions
 export interface ActionButtonProps {
-  action: 'edit' | 'save' | 'cancel' | 'delete' | 'add' | 'view' | 'settings' | 'reset' | 'dashboard-blue' | 'dashboard-orange' | 'dashboard-purple' | 'activate' | 'deactivate'
+  action: 'edit' | 'save' | 'cancel' | 'delete' | 'add' | 'view' | 'settings' | 'reset' | 'dashboard-blue' | 'dashboard-orange' | 'dashboard-purple' | 'activate' | 'deactivate' | 'verify' | 'reject'
   variant?: 'button' | 'icon-only'
   size?: 'sm' | 'md' | 'lg'
   loading?: boolean
@@ -51,7 +52,9 @@ const ACTION_ICONS = {
   'dashboard-purple': Settings,
   reset: Lock,
   activate: UserCheck,
-  deactivate: UserX
+  deactivate: UserX,
+  verify: Check,
+  reject: X
 }
 
 // Size configurations
@@ -165,6 +168,20 @@ const actionThemes = {
     icon: 'text-red-600 dark:text-red-400 group-hover/btn:text-red-500',
     shadow: 'hover:shadow-[0_0_15px_-3px_rgba(239,68,68,0.4)]',
     gradient: ''
+  },
+  verify: {
+    base: 'bg-white/90 dark:bg-slate-900/90 hover:border-emerald-500 text-emerald-700 dark:text-emerald-400 border-emerald-200/60 group/btn backdrop-blur-sm',
+    fill: 'bg-emerald-500/10 border-emerald-500/20',
+    icon: 'text-emerald-600 dark:text-emerald-400 group-hover/btn:text-emerald-500',
+    shadow: 'hover:shadow-[0_0_15px_-3px_rgba(16,185,129,0.4)]',
+    gradient: ''
+  },
+  reject: {
+    base: 'bg-white/90 dark:bg-slate-900/90 hover:border-rose-500 text-rose-700 dark:text-rose-400 border-rose-200/60 group/btn backdrop-blur-sm',
+    fill: 'bg-rose-500/10 border-rose-500/20',
+    icon: 'text-rose-600 dark:text-rose-400 group-hover/btn:text-rose-500',
+    shadow: 'hover:shadow-[0_0_15px_-3px_rgba(244,63,94,0.4)]',
+    gradient: ''
   }
 }
 
@@ -200,7 +217,7 @@ export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProp
     const getAccessibleLabel = () => {
       if (ariaLabel) return ariaLabel
       if (variant === 'icon-only' && !children) {
-        const actionLabels = {
+        const actionLabels: Record<ActionButtonProps['action'], string> = {
           edit: 'Edit',
           save: 'Save',
           cancel: 'Cancel',
@@ -213,7 +230,9 @@ export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProp
           'dashboard-orange': 'Dashboard Action',
           'dashboard-purple': 'Dashboard Action',
           activate: 'Activate User',
-          deactivate: 'Deactivate User'
+          deactivate: 'Deactivate User',
+          verify: 'Verify Attendance',
+          reject: 'Reject Attendance'
         }
         return actionLabels[action]
       }

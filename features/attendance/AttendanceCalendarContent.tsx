@@ -43,6 +43,7 @@ export function AttendanceCalendarContent({
                     selected={selectedDate}
                     onSelect={setSelectedDate}
                     captionLayout="dropdown"
+                    showOutsideDays={false}
                     className="p-0 border-0 w-fit h-fit mx-auto [--cell-size:2rem] md:[--cell-size:3.5rem] lg:[--cell-size:3.25rem] xl:[--cell-size:3.25rem]"
                     classNames={{
                         root: "w-fit h-fit flex flex-col items-center",
@@ -67,12 +68,12 @@ export function AttendanceCalendarContent({
                         },
                     }}
                     modifiers={{
-                        present: (date) => !!attendanceMap[format(date, 'yyyy-MM-dd')]?.check_in,
-                        absent: (date) => !attendanceMap[format(date, 'yyyy-MM-dd')] && date < today && date >= monthStart && !settings?.off_days?.includes(date.getDay()),
-                        marked: (date) => !!(attendanceMap[format(date, 'yyyy-MM-dd')]?.check_in && attendanceMap[format(date, 'yyyy-MM-dd')]?.check_out),
-                        holiday: (date) => !!closures?.some(c => c.date === format(date, 'yyyy-MM-dd')),
-                        leave: (date) => !!leaves?.some(l => isWithinInterval(date, { start: parseISO(l.start_date), end: parseISO(l.endDate) })),
-                        offDay: (date) => !!settings?.off_days?.includes(date.getDay()),
+                        present: (date) => date.getMonth() === currentMonth.getMonth() && date.getFullYear() === currentMonth.getFullYear() && !!attendanceMap[format(date, 'yyyy-MM-dd')]?.check_in,
+                        absent: (date) => date.getMonth() === currentMonth.getMonth() && date.getFullYear() === currentMonth.getFullYear() && !attendanceMap[format(date, 'yyyy-MM-dd')] && date < today && date >= monthStart && !settings?.off_days?.includes(date.getDay()),
+                        marked: (date) => date.getMonth() === currentMonth.getMonth() && date.getFullYear() === currentMonth.getFullYear() && !!(attendanceMap[format(date, 'yyyy-MM-dd')]?.check_in && attendanceMap[format(date, 'yyyy-MM-dd')]?.check_out),
+                        holiday: (date) => date.getMonth() === currentMonth.getMonth() && date.getFullYear() === currentMonth.getFullYear() && !!closures?.some(c => c.date === format(date, 'yyyy-MM-dd')),
+                        leave: (date) => date.getMonth() === currentMonth.getMonth() && date.getFullYear() === currentMonth.getFullYear() && !!leaves?.some(l => isWithinInterval(date, { start: parseISO(l.start_date), end: parseISO(l.endDate) })),
+                        offDay: (date) => date.getMonth() === currentMonth.getMonth() && date.getFullYear() === currentMonth.getFullYear() && !!settings?.off_days?.includes(date.getDay()),
                     }}
                     components={{
                         Weekday: ({ children, className, ...props }: any) => {
@@ -93,8 +94,12 @@ export function AttendanceCalendarContent({
                             )
                         },
                         DayButton: ({ day, modifiers, children, ...props }: any) => {
-                            const isCurrentMonth = day.date.getMonth() === currentMonth.getMonth()
-                            if (!isCurrentMonth) return <div className="flex-1" />
+                            const isCurrentMonth = day.date.getMonth() === currentMonth.getMonth() &&
+                                day.date.getFullYear() === currentMonth.getFullYear()
+
+                            if (!isCurrentMonth) {
+                                return <div className="size-(--cell-size)" />
+                            }
 
                             const isToday = modifiers.today
                             const isSelected = modifiers.selected
