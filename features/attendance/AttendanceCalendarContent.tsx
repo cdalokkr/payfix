@@ -44,7 +44,7 @@ export function AttendanceCalendarContent({
                     onSelect={setSelectedDate}
                     captionLayout="dropdown"
                     showOutsideDays={false}
-                    className="p-0 border-0 w-fit h-fit mx-auto [--cell-size:2rem] md:[--cell-size:3.5rem] lg:[--cell-size:3.25rem] xl:[--cell-size:3.25rem]"
+                    className="p-0 border-0 w-fit h-fit mx-auto [--cell-size:2.5rem] sm:[--cell-size:3rem] md:[--cell-size:3.5rem] lg:[--cell-size:3.25rem] xl:[--cell-size:3.25rem]"
                     classNames={{
                         root: "w-fit h-fit flex flex-col items-center",
                         months: "w-fit h-fit flex flex-col items-center",
@@ -211,7 +211,7 @@ export function AttendanceCalendarContent({
                 />
             </TooltipProvider>
 
-            <div className="mt-8 px-6 py-4 bg-muted/20 border-y rounded-xl grid grid-cols-2 lg:grid-cols-3 gap-3 text-[10px] font-black uppercase text-center">
+            <div className="mt-8 px-4 py-4 bg-muted/20 border-y rounded-xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-[10px] font-black uppercase text-center">
                 <div className="flex items-center gap-2 text-primary bg-primary/10 p-1.5 rounded-lg border border-primary/20 shadow-sm"><div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" /> Marked (Pending)</div>
                 <div className="flex items-center gap-2 text-green-700 bg-green-500/10 p-1.5 rounded-lg border border-green-500/20 shadow-sm"><div className="h-1.5 w-1.5 rounded-full bg-green-500" /> Present (Verified)</div>
                 <div className="flex items-center gap-2 text-orange-700 bg-orange-500/10 p-1.5 rounded-lg border border-orange-500/20 shadow-sm"><div className="h-1.5 w-1.5 rounded-full bg-orange-500" /> Leave (Approved)</div>

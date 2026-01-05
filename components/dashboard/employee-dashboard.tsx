@@ -138,7 +138,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                     className="shadow-xl"
                     gradientColor="from-primary/10 to-transparent"
                     delay={0.1}
-                    disableHover={true}
+                    disableHover={false}
                     borderColor="border-primary/10"
                     cardBgColor="bg-card/50"
                 >
@@ -174,14 +174,14 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                                 <button
                                     onClick={handleClockOut}
                                     disabled={clockOutMutation.isPending}
-                                    className="flex items-center gap-3 p-4 rounded-2xl border border-orange-200/50 bg-orange-50/30 dark:bg-orange-500/5 hover:bg-orange-500/10 hover:border-orange-500/50 hover:shadow-lg hover:shadow-orange-500/5 transition-all duration-300 group cursor-pointer disabled:opacity-50"
+                                    className="flex items-center gap-3 p-4 rounded-2xl border border-orange-100/50 bg-orange-500/[0.08] dark:bg-orange-500/[0.08] hover:bg-orange-500/15 hover:border-orange-500/30 hover:shadow-lg hover:shadow-orange-500/10 transition-all duration-300 group/action cursor-pointer disabled:opacity-50"
                                 >
-                                    <div className="p-2.5 rounded-xl bg-orange-500/10 text-orange-700 dark:text-orange-400 group-hover:scale-110 group-hover:rotate-3 transition-transform">
+                                    <div className="p-2.5 rounded-xl bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400 group-hover/action:scale-110 group-hover/action:rotate-3 transition-transform">
                                         {clockOutMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogOut className="h-5 w-5" />}
                                     </div>
                                     <div className="flex flex-col text-left">
-                                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Action</p>
-                                        <p className="text-sm font-bold group-hover:text-primary transition-colors">Office - Out</p>
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5 font-bold">Action</p>
+                                        <p className="text-sm font-bold group-hover/action:text-orange-600 transition-colors">Office - Out</p>
                                     </div>
                                 </button>
                             ) : isTodayHoliday ? (
@@ -208,14 +208,14 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                                 <button
                                     onClick={() => handleClockIn(false)}
                                     disabled={clockInMutation.isPending}
-                                    className="flex items-center gap-3 p-4 rounded-2xl border border-green-200/50 bg-green-50/30 dark:bg-green-500/5 hover:bg-green-500/10 hover:border-green-500/50 hover:shadow-lg hover:shadow-green-500/5 transition-all duration-300 group cursor-pointer disabled:opacity-50"
+                                    className="flex items-center gap-3 p-4 rounded-2xl border border-emerald-100/50 bg-emerald-500/[0.08] dark:bg-emerald-500/[0.08] hover:bg-emerald-500/15 hover:border-emerald-500/30 hover:shadow-lg hover:shadow-emerald-500/10 transition-all duration-300 group/action cursor-pointer disabled:opacity-50"
                                 >
-                                    <div className="p-2.5 rounded-xl bg-green-500/10 text-green-700 dark:text-green-400 group-hover:scale-110 group-hover:-rotate-3 transition-transform">
+                                    <div className="p-2.5 rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 group-hover/action:scale-110 group-hover/action:-rotate-3 transition-transform">
                                         {clockInMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogIn className="h-5 w-5" />}
                                     </div>
                                     <div className="flex flex-col text-left">
-                                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Action</p>
-                                        <p className="text-sm font-bold group-hover:text-primary transition-colors">Office - In</p>
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5 font-bold">Action</p>
+                                        <p className="text-sm font-bold group-hover/action:text-emerald-600 transition-colors">Office - In</p>
                                     </div>
                                 </button>
                             )}
@@ -223,28 +223,28 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                             {/* Profile Item */}
                             <Link
                                 href="/employee/profile"
-                                className="flex items-center gap-3 p-4 rounded-2xl border border-blue-200/50 bg-blue-50/30 dark:bg-blue-500/5 hover:bg-blue-500/10 hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-500/5 transition-all duration-300 group cursor-pointer"
+                                className="flex items-center gap-3 p-4 rounded-2xl border border-blue-100/50 bg-blue-500/[0.08] dark:bg-blue-500/[0.08] hover:bg-blue-500/15 hover:border-blue-500/30 hover:shadow-lg hover:shadow-blue-500/10 transition-all duration-300 group/action cursor-pointer"
                             >
-                                <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-700 dark:text-blue-400 group-hover:scale-110 group-hover:rotate-3 transition-transform">
+                                <div className="p-2.5 rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 group-hover/action:scale-110 group-hover/action:rotate-3 transition-transform">
                                     <User className="h-5 w-5" />
                                 </div>
                                 <div>
-                                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Settings</p>
-                                    <p className="text-sm font-bold group-hover:text-primary transition-colors">Profile</p>
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5 font-bold">Settings</p>
+                                    <p className="text-sm font-bold group-hover/action:text-blue-600 transition-colors">Profile</p>
                                 </div>
                             </Link>
 
                             {/* Reports Item */}
                             <Link
                                 href="/employee/reports"
-                                className="flex items-center gap-3 p-4 rounded-2xl border border-orange-200/50 bg-orange-50/30 dark:bg-orange-500/5 hover:bg-orange-500/10 hover:border-orange-500/50 hover:shadow-lg hover:shadow-orange-500/5 transition-all duration-300 group cursor-pointer"
+                                className="flex items-center gap-3 p-4 rounded-2xl border border-purple-100/50 bg-purple-500/[0.08] dark:bg-purple-500/[0.08] hover:bg-purple-500/15 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10 transition-all duration-300 group/action cursor-pointer"
                             >
-                                <div className="p-2.5 rounded-xl bg-orange-500/10 text-orange-700 dark:text-orange-400 group-hover:scale-110 group-hover:-rotate-3 transition-transform">
+                                <div className="p-2.5 rounded-xl bg-purple-100 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400 group-hover/action:scale-110 group-hover/action:-rotate-3 transition-transform">
                                     <BarChart3 className="h-5 w-5" />
                                 </div>
                                 <div>
-                                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Reports</p>
-                                    <p className="text-sm font-bold group-hover:text-primary transition-colors">Analytics</p>
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5 font-bold">Reports</p>
+                                    <p className="text-sm font-bold group-hover/action:text-purple-600 transition-colors">Analytics</p>
                                 </div>
                             </Link>
                         </div>

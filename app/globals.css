@@ -197,7 +197,24 @@
 /* Animation utilities */
 @layer components {
   .dashboard-wrapper {
-    @apply px-3 sm:px-4 lg:px-5;
+    @apply px-3 sm:px-4 lg:px-6;
+  }
+
+  /* Responsive Font Scales */
+  .resp-h1 {
+    @apply text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight leading-tight;
+  }
+
+  .resp-h2 {
+    @apply text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight;
+  }
+
+  .resp-body {
+    @apply text-sm sm:text-base text-muted-foreground;
+  }
+
+  .resp-caption {
+    @apply text-[10px] sm:text-xs font-medium uppercase tracking-widest text-muted-foreground/80;
   }
 }
 
@@ -281,9 +298,26 @@
   }
 }
 
+@layer utilities {
+  /* ... existing utilities ... */
+}
 
+/* Base button active state */
 button:active:not([data-slot="accordion-trigger"]) {
-  transform: scale(0.97);
+  transform: scale(0.96);
+  opacity: 0.9;
+  transition: transform 0.1s ease, opacity 0.1s ease;
+}
+
+/* Mobile-Specific Interactions */
+@layer components {
+  .mobile-nav-item {
+    @apply flex flex-col items-center justify-center gap-1 p-2 transition-all duration-200;
+  }
+
+  .mobile-nav-item:active {
+    @apply scale-90 opacity-70;
+  }
 }
 
 /* Mobile-specific media queries */

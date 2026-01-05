@@ -13,6 +13,7 @@ import {
   Wifi,
   WifiOff
 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 // Compact cache status indicator for independent use
 function CompactIndependentStatus({ status, detail }: { status: string; detail: string }) {
@@ -80,7 +81,7 @@ function SimpleLastUpdated({ timestamp }: { timestamp: number }) {
   )
 }
 
-export function StatusBar() {
+export function StatusBar({ className }: { className?: string }) {
   const { cacheStatus, markDashboardLoaded } = useIndependentCacheStatus()
 
   // Mark dashboard as loaded immediately when StatusBar mounts
@@ -89,7 +90,7 @@ export function StatusBar() {
   }, [markDashboardLoaded])
 
   return (
-    <div className="flex items-center justify-center gap-4 px-4 py-2 bg-muted/50 border-t">
+    <div className={cn("flex items-center justify-center gap-4 px-4 py-2 bg-muted/50 border-t", className)}>
       <div className="flex items-center gap-2">
         <div className="flex items-center gap-1">
           <span className="text-xs font-medium">Status:</span>

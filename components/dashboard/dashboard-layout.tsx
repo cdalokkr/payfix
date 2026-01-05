@@ -8,10 +8,12 @@ import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar'
 import { AppSidebar } from './app-sidebar'
 import { TopBar } from './top-bar'
 import { StatusBar } from './status-bar'
+import { BottomNav } from './bottom-nav'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Profile } from '@/types'
+import { cn } from '@/lib/utils'
 
 // Dynamic imports for heavy dashboard components to reduce initial bundle size
 const AdminOverview = dynamic(
@@ -342,13 +344,15 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           defaultTenant={defaultTenant}
           onTenantSwitch={handleTenantSwitch}
           user={currentUser}
+          className={cn(currentRole === 'employee' && "hidden lg:flex")}
         />
         <SidebarInset className="flex flex-col h-screen overflow-hidden">
           <TopBar user={currentUser} />
-          <div className="flex-1 overflow-y-auto pt-6 pb-4 scroll-smooth">
+          <div className="flex-1 overflow-y-auto pt-6 pb-20 lg:pb-4 scroll-smooth">
             {children || <DashboardContent profile={profile} isLoading={profileLoading} onLoadingChange={handleLoadingChange} />}
           </div>
-          <StatusBar />
+          <BottomNav />
+          <StatusBar className="hidden lg:flex" />
         </SidebarInset>
       </SidebarProvider>
     </>

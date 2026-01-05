@@ -51,8 +51,14 @@ export function TopBar({ className, user }: TopBarProps) {
       )}
     >
       <div className="flex h-full items-center gap-4">
-        <SidebarTrigger className="-ml-1 h-9 w-9 hover:bg-sidebar-accent/50 transition-colors" />
-        <div className="h-6 w-px bg-border/40 shrink-0" />
+        <SidebarTrigger className={cn(
+          "-ml-1 h-9 w-9 hover:bg-sidebar-accent/50 transition-colors",
+          user?.role === 'employee' && "hidden lg:flex"
+        )} />
+        <div className={cn(
+          "h-6 w-px bg-border/40 shrink-0",
+          user?.role === 'employee' && "hidden lg:block"
+        )} />
         <Breadcrumb>
           <BreadcrumbList>
             {breadcrumbs.map((crumb, index) => (

@@ -6,7 +6,9 @@ import { ColumnDef } from "@tanstack/react-table"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { useMemo } from "react"
-import { CalendarDays } from "lucide-react"
+import { CalendarDays, Clock, ArrowRight } from "lucide-react"
+import { useIsMobile } from "@/hooks/use-mobile"
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface DailyWorkingHours {
     [key: string]: {
@@ -167,11 +169,114 @@ export function AttendanceSummaryContent({
         }
     ]
 
+    const isMobile = useIsMobile()
+    const records = attendance || []
+
+    if (isMobile) {
+        if (isLoading) {
+            return (
+                <div className="space-y-4 px-4 py-2">
+                    {[1, 2, 3].map((i) => (
+                        <Skeleton key={i} className="h-24 w-full rounded-xl" />
+                    ))}
+                </div>
+            )
+        }
+
+        if (records.length === 0) {
+            return (
+                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                    <CalendarDays className="size-12 opacity-10 mb-4" />
+                    <p className="text-sm font-medium">No records for this month</p>
+                </div>
+            )
+        }
+
+        return (
+            <div className="space-y-3 px-1 py-1">
+                {records.map((record, idx) => {
+                    const status = record.status as string
+                    const isHalfDay = record.is_half_day
+                    const workingHours = record.working_hours as number
+                    const dayOfWeek = getDay(new Date(record.date))
+                    const scheduledHours = scheduledHoursMap[dayOfWeek] ?? 9
+                    const extraHours = Math.max(0, workingHours - scheduledHours)
+
+                    return (
+                        <div key={idx} className="flex flex-col bg-background/40 p-4 rounded-xl border border-border/50 shadow-sm transition-all active:scale-[0.98]">
+                            <div className="flex items-center justify-between mb-3">
+                                <div className="flex flex-col">
+                                    <span className="text-sm font-bold tracking-tight">
+                                        {format(new Date(record.date), "EEEE, MMM dd")}
+                                    </span>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <Badge
+                                            variant="secondary"
+                                            className={cn(
+                                                "capitalize font-black text-[9px] px-1.5 h-3.5",
+                                                status === 'verified' && "bg-green-500/10 text-green-700 border-green-500/20",
+                                                status === 'pending' && "bg-amber-500/10 text-amber-700 border-amber-500/20",
+                                                status === 'rejected' && "bg-red-500/10 text-red-700 border-red-500/20"
+                                            )}
+                                        >
+                                            {status}
+                                        </Badge>
+                                        <Badge variant="outline" className={cn(
+                                            "text-[9px] h-3.5 font-bold px-1.5",
+                                            isHalfDay ? "bg-amber-500/5 border-amber-500/20 text-amber-600" : "bg-blue-500/5 border-blue-500/20 text-blue-600"
+                                        )}>
+                                            {isHalfDay ? "Half Day" : "Full Day"}
+                                        </Badge>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-lg font-black tracking-tight text-foreground">
+                                        {workingHours ? `${workingHours.toFixed(1)}h` : "-"}
+                                    </div>
+                                    {extraHours > 0 && (
+                                        <div className="text-[10px] font-bold text-green-600">
+                                            +{extraHours.toFixed(1)}h extra
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4 py-2 border-t border-border/30 mt-1">
+                                <div className="flex items-center gap-2">
+                                    <div className="p-1.5 rounded-md bg-muted/50">
+                                        <Clock className="size-3 text-muted-foreground" />
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Check In</span>
+                                        <span className="text-xs font-semibold tabular-nums">
+                                            {record.check_in ? format(new Date(record.check_in), "hh:mm a") : "--:-- --"}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <div className="p-1.5 rounded-md bg-muted/50">
+                                        <ArrowRight className="size-3 text-muted-foreground" />
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Check Out</span>
+                                        <span className="text-xs font-semibold tabular-nums">
+                                            {record.check_out ? format(new Date(record.check_out), "hh:mm a") : "--:-- --"}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )
+                })}
+            </div>
+        )
+    }
+
     return (
         <div className="w-full overflow-hidden [&_th]:px-2 [&_td]:px-2 [&_th:first-child]:pl-4 [&_td:first-child]:pl-4 [&_th:last-child]:pr-4 [&_td:last-child]:pr-4 [&_td]:text-xs [&_th]:text-[10px] [&_th]:uppercase [&_th]:tracking-wider">
             <DataTable
                 columns={columns}
-                data={attendance || []}
+                data={records}
                 isLoading={isLoading}
                 hidePagination={true}
                 emptyIcon={<CalendarDays className="size-10 text-muted-foreground/20" />}

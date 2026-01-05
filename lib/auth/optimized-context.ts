@@ -1,7 +1,7 @@
 import { createServerSupabaseClient, createSupabaseClientSync } from '@/lib/supabase/server'
 import type { Profile } from '@/types'
 import type { User } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import { createHash } from 'crypto'
 import { db } from '@/lib/db'
 import { profiles, designations } from '@/lib/db/schema'
@@ -335,13 +335,44 @@ export async function createOptimizedContext() {
 
     // 1. FAST CHECK: If no auth cookies exist, skip everything
     const cookieHash = await getCookieHash(cookieStore)
+    const headerStore = await headers()
+    const authHeader = headerStore.get('authorization')
+    const hasBearerToken = authHeader?.startsWith('Bearer ')
     const t2 = performance.now();
 
     if (process.env.NODE_ENV === 'development') {
-      console.log(`[AUTH-PERF] createContext setup: cookies: ${(t1 - t0).toFixed(2)}ms, hash: ${(t2 - t1).toFixed(2)}ms. Total: ${(t2 - t0).toFixed(2)}ms`)
+      console.log(`[AUTH-PERF] createContext setup: cookies: ${(t1 - t0).toFixed(2)}ms, hash/headers: ${(t2 - t1).toFixed(2)}ms. Total: ${(t2 - t0).toFixed(2)}ms`)
     }
 
-    if (!cookieHash) {
+    // 1b. BEARER TOKEN FAST PATH (Mobile Native Apps)
+    if (hasBearerToken) {
+      const token = authHeader!.substring(7)
+      const decodedUserId = decodeSupabaseToken(token)
+
+      if (decodedUserId) {
+        const userIdCached = getCachedSessionByUserId(decodedUserId)
+        if (userIdCached) {
+          const finalMetrics = endAuthTiming(metrics, {
+            userFound: true,
+            profileFound: !!userIdCached.profile,
+            cacheHit: true,
+            contextSize: userIdCached.metrics.contextSize
+          })
+
+          return {
+            get supabase() {
+              if (!_lazySupabase) _lazySupabase = createSupabaseClientSync(cookieStore as any);
+              return _lazySupabase;
+            },
+            user: userIdCached.user,
+            profile: userIdCached.profile,
+            metrics: finalMetrics
+          }
+        }
+      }
+    }
+
+    if (!cookieHash && !hasBearerToken) {
       const finalMetrics = endAuthTiming(metrics, {
         userFound: false,
         profileFound: false,
