@@ -348,7 +348,7 @@ interface RealtimeDashboardData {
   isLoading: boolean
   isError: boolean
   error: unknown
-  refetch: () => void
+  refetch: (options?: { forceFresh?: boolean }) => Promise<any>
   activeUsers: number
   dataSource: 'cache' | 'fresh' | 'loading'
   lastUpdated: Date | null
@@ -356,6 +356,12 @@ interface RealtimeDashboardData {
   recentActivityDataReady: boolean
   /** Whether skeleton should be shown (respects minimum display time) */
   showSkeleton: boolean
+  attendance?: {
+    todayRecord: any
+    pendingRecord: any
+    settings: any
+    closures: any
+  }
 }
 
 // Type for the unified dashboard data returned by the tRPC query
@@ -482,6 +488,16 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
   // State to force fresh data fetch
   const [forceFresh, setForceFresh] = useState(false)
 
+  // Calculate local date for timezone consistency
+  const localDateStr = useMemo(() => {
+    // Current date in YYYY-MM-DD format using local time
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
+
   // Progressive loading state management
   const [magicCardsDataReady, setMagicCardsDataReady] = useState(false)
   const [recentActivityDataReady, setRecentActivityDataReady] = useState(false)
@@ -499,7 +515,10 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
 
   // Use the unified endpoint for all data
   // IMPORTANT: Use shared config to ensure cache key consistency with prefetch
-  const queryParams = forceFresh ? DASHBOARD_FRESH_PARAMS : DASHBOARD_QUERY_PARAMS
+  const queryParams = {
+    ...(forceFresh ? DASHBOARD_FRESH_PARAMS : DASHBOARD_QUERY_PARAMS),
+    localDate: localDateStr
+  }
 
   const {
     data: dashboardData,
@@ -531,25 +550,29 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
 
   // Manual refresh function that ensures fresh data by invalidating server cache first
   // This is critical for cross-browser updates where the server cache might return stale data
-  const refetch = useCallback(async () => {
-    console.log('[REALTIME] Manual dashboard refresh triggered')
+  const refetch = useCallback(async (options?: { forceFresh?: boolean }) => {
+    console.log(`[REALTIME] Dashboard refresh triggered${options?.forceFresh ? ' (FORCE FRESH)' : ''}`)
 
-    // First invalidate server cache to ensure we get fresh data
-    // This is the key fix for the race condition where refetch gets stale cached data
-    try {
-      const result = await invalidateCacheMutation.mutateAsync({ reason: 'realtime-refresh' })
-      console.log(`[REALTIME] Server cache invalidated. Version: ${result.cacheVersion}, Entries cleared: ${result.invalidatedCount}`)
-    } catch (e) {
-      console.warn('[REALTIME] Server cache invalidation failed, proceeding with refetch anyway:', e)
+    // If forceFresh is requested, we MUST invalidate the server cache first
+    // This overcomes any race conditions or stale cache layers
+    if (options?.forceFresh) {
+      try {
+        const result = await invalidateCacheMutation.mutateAsync({ reason: 'force-fresh-refresh' })
+        console.log(`[REALTIME] Server cache invalidated (Force). Version: ${result.cacheVersion}, Entries cleared: ${result.invalidatedCount}`)
+      } catch (e) {
+        console.warn('[REALTIME] Server cache invalidation failed during force-fresh:', e)
+      }
+    } else {
+      // Non-blocking invalidation for standard refreshes
+      invalidateCacheMutation.mutate({ reason: 'realtime-refresh' })
     }
 
-    // Now refetch - the server cache is cleared so we'll get fresh data
-    console.log('[REALTIME] Fetching fresh dashboard data...')
+    // Now refetch everything
+    // Use invalidate() to ensure all mounted components using these queries are updated
+    utils.admin.dashboard.getUnifiedDashboardData.invalidate()
+    utils.attendance.invalidate()
 
-    // Also invalidate related queries to ensure complete refresh
-    utils.attendance.getAttendance.invalidate()
-    utils.attendance.getLeaves.invalidate()
-
+    // Also call the specific refetch for this hook's data
     return trpcRefetch()
   }, [trpcRefetch, invalidateCacheMutation, utils])
 
@@ -694,29 +717,6 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
 
             console.log('[REALTIME] 📢 [Management] Database change detected on profiles table:', payload.eventType)
 
-            // Enhanced event broadcasting for user creation
-            if (payload.eventType === 'INSERT' && payload.new && typeof payload.new === 'object' && 'id' in payload.new) {
-              try {
-                const eventBroadcaster = getEventBroadcaster()
-                await eventBroadcaster.broadcastEvent('user_created', {
-                  userId: (payload.new as any).id,
-                  email: (payload.new as any).email || '',
-                  fullName: (payload.new as any).full_name || '',
-                  createdBy: (payload.new as any).created_by || 'system',
-                  createdByName: (payload.new as any).created_by_name || 'System',
-                  userRole: (payload.new as any).role || 'user'
-                }, {
-                  priority: 'critical',
-                  metadata: {
-                    source: 'database-change',
-                    table: 'profiles',
-                    operation: 'INSERT'
-                  }
-                })
-              } catch (error) {
-                console.warn('[REALTIME] Failed to broadcast user creation event:', error)
-              }
-            }
 
             console.log('[REALTIME] Triggering dashboard refresh due to profiles change...')
             refetch()
@@ -731,33 +731,6 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
 
             console.log('[REALTIME] 📢 [Management] Database change detected on activities table:', payload.eventType)
 
-            // Enhanced event broadcasting for user activities
-            if (payload.new && typeof payload.new === 'object' && 'id' in payload.new) {
-              try {
-                const eventBroadcaster = getEventBroadcaster()
-                await eventBroadcaster.broadcastEvent('user_activity', {
-                  activityId: (payload.new as any).id,
-                  userId: (payload.new as any).user_id || '',
-                  userName: (payload.new as any).user_name || 'Unknown User',
-                  action: (payload.new as any).action || 'activity',
-                  description: (payload.new as any).description || `${(payload.new as any).action || 'activity'} performed`,
-                  metadata: {
-                    source: 'database-change',
-                    table: 'activities',
-                    operation: payload.eventType
-                  }
-                }, {
-                  priority: payload.eventType === 'INSERT' ? 'critical' : 'secondary',
-                  metadata: {
-                    source: 'database-change',
-                    table: 'activities',
-                    operation: payload.eventType
-                  }
-                })
-              } catch (error) {
-                console.warn('[REALTIME] Failed to broadcast user activity event:', error)
-              }
-            }
 
             console.log('[REALTIME] Triggering dashboard refresh due to activities change...')
             refetch()
@@ -808,6 +781,18 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
             refetch()
           }
         )
+        .on(
+          'broadcast',
+          { event: 'realtime-event' },
+          async ({ payload }: any) => {
+            if (!isMountedRef.current) return
+            // Check if this is a sync event
+            if (payload?.metadata?.category === 'dashboard_sync') {
+              console.log('[REALTIME] 🚀 [Management] Sync broadcast received')
+              refetch({ forceFresh: true })
+            }
+          }
+        )
     } else {
       // USER SUBSCRIPTIONS: Activities, Attendance, and Leaves
       // IMPORTANT: We use Profile UUID (userId) for all filters
@@ -826,35 +811,6 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
             if (!isMountedRef.current) return
             console.log('[REALTIME] 📢 [User] Database change detected on own activities:', payload.eventType)
 
-            // Enhanced event broadcasting for user's own activities
-            if (payload.new && typeof payload.new === 'object' && 'id' in payload.new) {
-              try {
-                const eventBroadcaster = getEventBroadcaster()
-                await eventBroadcaster.broadcastEvent('user_activity', {
-                  activityId: (payload.new as any).id,
-                  userId: (payload.new as any).user_id || '',
-                  userName: (payload.new as any).user_name || 'You',
-                  action: (payload.new as any).action || 'activity',
-                  description: (payload.new as any).description || `You performed ${(payload.new as any).action || 'an activity'}`,
-                  metadata: {
-                    source: 'database-change',
-                    table: 'activities',
-                    operation: payload.eventType,
-                    isOwnActivity: true
-                  }
-                }, {
-                  priority: payload.eventType === 'INSERT' ? 'secondary' : 'detailed',
-                  metadata: {
-                    source: 'database-change',
-                    table: 'activities',
-                    operation: payload.eventType,
-                    isOwnActivity: true
-                  }
-                })
-              } catch (error) {
-                console.warn('[REALTIME] Failed to broadcast user activity event:', error)
-              }
-            }
 
             // For regular users, also invalidate their attendance if an activity related to attendance occurred
             if ((payload.new as any)?.module === 'attendance') {
@@ -900,6 +856,18 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
 
             console.log('[REALTIME] Triggering dashboard refresh due to leaves change...')
             refetch()
+          }
+        )
+        .on(
+          'broadcast',
+          { event: 'realtime-event' },
+          async ({ payload }: any) => {
+            if (!isMountedRef.current) return
+            // Check if this is a sync event
+            if (payload?.metadata?.category === 'dashboard_sync') {
+              console.log('[REALTIME] 🚀 [User] Sync broadcast received')
+              refetch({ forceFresh: true })
+            }
           }
         )
     }
@@ -1033,8 +1001,8 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
   useEffect(() => {
     if (!userId) return
 
-    const channelName = role === 'admin'
-      ? 'dashboard-admin-shared'
+    const channelName = (role === 'admin' || role === 'moderator')
+      ? 'dashboard-management-shared'
       : `dashboard-user-${userId}`
 
     const handleVisibilityChange = () => {
@@ -1150,6 +1118,7 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
   const recentActivities: RecentActivity[] = hasValidData ? (dashboardData.detailed?.recentActivities || []) : []
   const analytics: AnalyticsMetric[] = hasValidData ? (dashboardData.secondary?.analytics || []) : []
   const activeUsers = hasValidData ? (dashboardData.critical?.activeUsers || 0) : 0
+  const attendanceData = hasValidData ? dashboardData.attendance : undefined
 
   // Determine if we're in a background refetch state (has data but fetching new)
   const isBackgroundRefetch = isFetching && !isLoading && hasValidData
@@ -1169,7 +1138,8 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
     // Use showSkeleton state which respects minimum display time and route changes
     magicCardsDataReady: Boolean(!showSkeleton && (magicCardsDataReady || isBackgroundRefetch)),
     recentActivityDataReady: Boolean(!showSkeleton && (recentActivityDataReady || isBackgroundRefetch)),
-    showSkeleton
+    showSkeleton,
+    attendance: attendanceData
   }
 }
 

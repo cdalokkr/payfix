@@ -7,6 +7,8 @@ import { TRPCError } from '@trpc/server'
 import { attendance, profiles, leaves, officeSettings, officeClosures, activities } from '@/lib/db/schema'
 import { eq, and, gte, lte, desc, sql, inArray } from 'drizzle-orm'
 import { AttendanceService } from '@/lib/services/attendance.service'
+import { invalidateDashboardCache } from './admin-dashboard-optimized'
+import { broadcastServerEvent } from '@/lib/events/server-broadcaster'
 
 export const attendanceRouter = router({
     // --- ATTENDANCE ---
@@ -36,13 +38,23 @@ export const attendanceRouter = router({
             isExtraDay: z.boolean().optional()
         }).optional())
         .mutation(async ({ ctx, input }) => {
-            return await AttendanceService.clockIn({
+            const result = await AttendanceService.clockIn({
                 profileId: ctx.profile.id,
                 fullName: ctx.profile.full_name || undefined,
                 email: ctx.profile.email,
                 localDate: input?.localDate,
                 isExtraDay: input?.isExtraDay
             })
+            // Invalidate dashboard cache immediately on server
+            invalidateDashboardCache()
+
+            // Broadcast sync event to all clients
+            broadcastServerEvent('dashboard_sync', {
+                action: 'clock-in',
+                userId: ctx.profile.id
+            }, ctx.profile.id)
+
+            return result
         }),
 
     clockOut: protectedProcedure
@@ -50,12 +62,22 @@ export const attendanceRouter = router({
             localDate: z.string().optional()
         }).optional())
         .mutation(async ({ ctx, input }) => {
-            return await AttendanceService.clockOut({
+            const result = await AttendanceService.clockOut({
                 profileId: ctx.profile.id,
                 fullName: ctx.profile.full_name || undefined,
                 email: ctx.profile.email,
                 localDate: input?.localDate
             })
+            // Invalidate dashboard cache immediately on server
+            invalidateDashboardCache()
+
+            // Broadcast sync event to all clients
+            broadcastServerEvent('dashboard_sync', {
+                action: 'clock-out',
+                userId: ctx.profile.id
+            }, ctx.profile.id)
+
+            return result
         }),
 
     verifyAttendance: moderatorProcedure
@@ -66,7 +88,7 @@ export const attendanceRouter = router({
             isHalfDay: z.boolean().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
-            return await AttendanceService.verifyAttendance({
+            const result = await AttendanceService.verifyAttendance({
                 id: input.id,
                 status: input.status,
                 remarks: input.remarks,
@@ -74,6 +96,16 @@ export const attendanceRouter = router({
                 verifiedBy: ctx.profile.id,
                 verifierName: ctx.profile.full_name || ctx.profile.email
             })
+            // Invalidate dashboard cache immediately on server
+            invalidateDashboardCache()
+
+            // Broadcast sync event to all clients
+            broadcastServerEvent('dashboard_sync', {
+                action: 'verify-attendance',
+                targetUserId: result.profile_id
+            }, result.profile_id)
+
+            return result
         }),
 
     bulkVerifyAttendance: moderatorProcedure
@@ -83,13 +115,23 @@ export const attendanceRouter = router({
             remarks: z.string().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
-            return await AttendanceService.bulkVerifyAttendance({
+            const result = await AttendanceService.bulkVerifyAttendance({
                 ids: input.ids,
                 status: input.status,
                 remarks: input.remarks,
                 verifiedBy: ctx.profile.id,
                 verifierName: ctx.profile.full_name || ctx.profile.email
             })
+
+            // Invalidate dashboard cache immediately on server
+            invalidateDashboardCache()
+
+            // Broadcast sync event to all clients
+            broadcastServerEvent('dashboard_sync', {
+                action: 'bulk-verify'
+            })
+
+            return result
         }),
 
     manualUpdate: moderatorProcedure
@@ -102,11 +144,22 @@ export const attendanceRouter = router({
             remarks: z.string().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
-            return await AttendanceService.manualUpdate({
+            const result = await AttendanceService.manualUpdate({
                 ...input,
                 updatedBy: ctx.profile.id,
                 updaterName: ctx.profile.full_name || ctx.profile.email
             })
+
+            // Invalidate dashboard cache immediately on server
+            invalidateDashboardCache()
+
+            // Broadcast sync event to all clients
+            broadcastServerEvent('dashboard_sync', {
+                action: 'manual-update',
+                targetUserId: (result as any)?.profile_id
+            }, (result as any)?.profile_id)
+
+            return result
         }),
 
     // --- LEAVES ---

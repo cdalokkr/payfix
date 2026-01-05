@@ -3,13 +3,20 @@
 import { ColumnDef, Row } from "@tanstack/react-table"
 import { Checkbox } from "@/components/ui/checkbox"
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header"
-import { EditButton, DeleteButton, ResetPasswordButton, ActivateButton, DeactivateButton } from "@/components/ui/action-button"
 import { Button } from "@/components/ui/button"
 import { Profile, UserRole } from "@/types"
 import { getDisplayName } from "@/lib/utils/user-name"
-import { AlertTriangle, UserCheck, UserX, X } from "lucide-react"
+import { MoreHorizontal, Edit, Trash2, Lock, UserCheck, UserX, AlertTriangle, X } from "lucide-react"
 import { UserAvatarProfile } from "@/components/user-avatar-profile"
 import { cn } from "@/lib/utils"
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 interface ColumnActionsProps {
     user: Profile
@@ -21,105 +28,69 @@ interface ColumnActionsProps {
     isToggling?: boolean
 }
 
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 function ColumnActions({ user, row, onEdit, onDelete, onResetPassword, onToggleStatus, isToggling }: ColumnActionsProps) {
     const isActive = user.status === 'active'
 
     return (
-        <div className="flex items-center gap-2">
-            <TooltipProvider>
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <div>
-                            {isActive ? (
-                                <DeactivateButton
-                                    onClick={() => {
-                                        row.toggleSelected(true)
-                                        onToggleStatus(user)
-                                    }}
-                                    aria-label={`Deactivate user ${getDisplayName(user)}`}
-                                    size="sm"
-                                    variant="icon-only"
-                                    loading={isToggling}
-                                />
-                            ) : (
-                                <ActivateButton
-                                    onClick={() => {
-                                        row.toggleSelected(true)
-                                        onToggleStatus(user)
-                                    }}
-                                    aria-label={`Activate user ${getDisplayName(user)}`}
-                                    size="sm"
-                                    variant="icon-only"
-                                    loading={isToggling}
-                                />
-                            )}
-                        </div>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                        <p>{isActive ? 'Deactivate' : 'Activate'} user</p>
-                    </TooltipContent>
-                </Tooltip>
-
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <div>
-                            <EditButton
-                                onClick={() => {
-                                    row.toggleSelected(true)
-                                    onEdit(user)
-                                }}
-                                aria-label={`Edit user ${getDisplayName(user)}`}
-                                size="sm"
-                                variant="icon-only"
-                            />
-                        </div>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                        <p>Edit user</p>
-                    </TooltipContent>
-                </Tooltip>
-
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <div>
-                            <ResetPasswordButton
-                                onClick={() => {
-                                    row.toggleSelected(true)
-                                    onResetPassword(user)
-                                }}
-                                aria-label={`Reset password for ${getDisplayName(user)}`}
-                                size="sm"
-                                variant="icon-only"
-                            />
-                        </div>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                        <p>Reset password</p>
-                    </TooltipContent>
-                </Tooltip>
-
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <div>
-                            <DeleteButton
-                                onClick={() => {
-                                    row.toggleSelected(true)
-                                    onDelete(user)
-                                }}
-                                aria-label={`Delete user ${getDisplayName(user)}`}
-                                size="sm"
-                                variant="icon-only"
-                            />
-                        </div>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                        <p>Delete user</p>
-                    </TooltipContent>
-                </Tooltip>
-            </TooltipProvider>
-        </div>
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 hover:bg-muted transition-colors"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <span className="sr-only">Open menu</span>
+                    <MoreHorizontal className="h-4 w-4" />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[180px]">
+                <DropdownMenuLabel>Actions for {getDisplayName(user)}</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => {
+                    row.toggleSelected(true)
+                    onEdit(user)
+                }}>
+                    <Edit className="mr-2 h-4 w-4 text-purple-600" />
+                    <span>Edit User</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => {
+                    row.toggleSelected(true)
+                    onResetPassword(user)
+                }}>
+                    <Lock className="mr-2 h-4 w-4 text-amber-600" />
+                    <span>Reset Password</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => {
+                    row.toggleSelected(true)
+                    onToggleStatus(user)
+                }} disabled={isToggling}>
+                    {isActive ? (
+                        <>
+                            <UserX className="mr-2 h-4 w-4 text-rose-600" />
+                            <span>Deactivate User</span>
+                        </>
+                    ) : (
+                        <>
+                            <UserCheck className="mr-2 h-4 w-4 text-emerald-600" />
+                            <span>Activate User</span>
+                        </>
+                    )}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                    onClick={() => {
+                        row.toggleSelected(true)
+                        onDelete(user)
+                    }}
+                    className="text-rose-600 focus:text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-950/30"
+                >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    <span>Delete User</span>
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
     )
 }
 
@@ -186,7 +157,7 @@ export function createUsersColumns(
                     className={`h-4.5 w-4.5 rounded-sm border border-muted-foreground/50 ${getCheckboxColorClass(row.original.id, table)}`}
                 />
             ),
-            size: 30,
+            size: 50,
         })
     } else {
         cols.push({
@@ -203,7 +174,7 @@ export function createUsersColumns(
             ),
             enableSorting: false,
             enableHiding: false,
-            size: 40,
+            size: 50,
         })
     }
 
@@ -223,13 +194,13 @@ export function createUsersColumns(
             },
             enableSorting: false,
             enableHiding: false,
-            size: 60,
+            size: 50,
         },
         {
             accessorKey: "full_name",
             id: "name",
             header: ({ column }) => (
-                <DataTableColumnHeader column={column} title="Name" />
+                <DataTableColumnHeader column={column} title="Display Name" />
             ),
             cell: ({ row }) => {
                 const user = row.original
@@ -279,7 +250,7 @@ export function createUsersColumns(
                     </div>
                 )
             },
-            size: 350,
+            size: 250,
             enableColumnFilter: true,
         },
         {
@@ -298,53 +269,7 @@ export function createUsersColumns(
                 )
             },
             enableSorting: false,
-            size: 80,
-        },
-        {
-            accessorKey: "sex",
-            header: ({ column }) => (
-                <DataTableColumnHeader column={column} title="Sex" />
-            ),
-            cell: ({ row }) => {
-                const user = row.original
-                const hasUpdate = isUpdated(user.id, ['sex'])
-                const sex = row.getValue("sex") as string
-                return (
-                    <div className={`capitalize whitespace-nowrap relative ${hasUpdate ? updatedBorderClass : ''}`}>
-                        {sex || "N/A"}
-                    </div>
-                )
-            },
-            filterFn: (row, id, value) => {
-                if (!value || value === "all") return true
-                return row.getValue(id) === value
-            },
-            size: 30,
-        },
-        {
-            accessorKey: "date_of_birth",
-            id: "dob",
-            header: ({ column }) => (
-                <DataTableColumnHeader column={column} title="DOB" />
-            ),
-            cell: ({ row }) => {
-                const user = row.original
-                const hasUpdate = isUpdated(user.id, ['dateOfBirth'])
-                const dob = row.getValue("dob") as string
-                if (!dob) return <div className={`relative ${hasUpdate ? updatedBorderClass : ''}`}>N/A</div>
-                const date = new Date(dob)
-                const formatted = date.toLocaleDateString("en-GB", {
-                    day: "2-digit",
-                    month: "2-digit",
-                    year: "numeric",
-                })
-                return (
-                    <div className={`whitespace-nowrap relative ${hasUpdate ? updatedBorderClass : ''}`}>
-                        {formatted}
-                    </div>
-                )
-            },
-            size: 60,
+            size: 120,
         },
         {
             id: "role",
@@ -375,7 +300,7 @@ export function createUsersColumns(
                 if (value === undefined || value === null || value === "" || value === "all") return true
                 return row.getValue(id) === value
             },
-            size: 30,
+            size: 120,
             enableColumnFilter: true,
         },
         {
@@ -394,7 +319,7 @@ export function createUsersColumns(
                     </div>
                 )
             },
-            size: 150,
+            size: 200,
         }
     )
 

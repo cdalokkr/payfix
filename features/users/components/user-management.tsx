@@ -213,7 +213,7 @@ export default function UserManagement({ initialData }: UserManagementProps) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="[&_td:not(:first-child)]:px-0.5 [&_th:not(:first-child)]:px-0.5 [&_td]:py-1.5 [&_table]:text-xs [&_td:nth-child(5)]:pr-0 [&_th:nth-child(5)]:pr-0 [&_td:nth-child(6)]:pl-0 [&_th:nth-child(6)]:pl-0 [&_td:nth-child(6)]:pr-0 [&_th:nth-child(6)]:pr-0 [&_td:nth-child(7)]:pl-0 [&_th:nth-child(7)]:pl-0 [&_td:nth-child(7)]:pr-0 [&_th:nth-child(7)]:pr-0 [&_td:nth-child(8)]:pl-0 [&_th:nth-child(8)]:pl-0 [&_td:nth-child(8)]:pr-0 [&_th:nth-child(8)]:pr-0 [&_td:nth-child(9)]:pl-0 [&_th:nth-child(9)]:pl-0">
+          <div className="[&_td:not(:first-child)]:px-3 [&_th:not(:first-child)]:px-3 [&_td]:py-3 [&_table]:text-xs">
             {hasMounted ? (
               <Tabs defaultValue="live" className="w-full" onValueChange={(val) => {
                 setActiveTab(val as 'live' | 'deleted')

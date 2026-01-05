@@ -42,7 +42,7 @@ export function AttendanceDashboard() {
     const monthStart = startOfMonth(currentMonth)
     const monthEnd = endOfMonth(currentMonth)
 
-    const { data: attendance, isLoading: isAttendanceLoading } = trpc.attendance.getAttendance.useQuery({
+    const { data: attendance, isLoading: isAttendanceLoading, isFetching: isAttendanceFetching } = trpc.attendance.getAttendance.useQuery({
         startDate: format(monthStart, 'yyyy-MM-dd'),
         endDate: format(monthEnd, 'yyyy-MM-dd')
     })
@@ -167,8 +167,8 @@ export function AttendanceDashboard() {
                                 )}>
                                     <Icon size={28} weight="duotone" />
                                 </div>
-                                {isAttendanceLoading ? (
-                                    <Skeleton className="h-8 w-10" />
+                                {isAttendanceLoading || isAttendanceFetching ? (
+                                    <div className="h-8 w-12 bg-muted/30 rounded-md animate-pulse self-center" />
                                 ) : (
                                     <span className={cn("text-2xl font-black tabular-nums tracking-tight", stat.color)}>{stat.value}</span>
                                 )}
@@ -211,8 +211,8 @@ export function AttendanceDashboard() {
                                 )}>
                                     <Icon size={28} weight="duotone" />
                                 </div>
-                                {isAttendanceLoading ? (
-                                    <Skeleton className="h-8 w-10" />
+                                {isAttendanceLoading || isAttendanceFetching ? (
+                                    <div className="h-8 w-12 bg-muted/30 rounded-md animate-pulse self-center" />
                                 ) : (
                                     <span className={cn("text-2xl font-black tabular-nums tracking-tight", stat.color)}>{stat.value}</span>
                                 )}

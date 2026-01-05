@@ -4,7 +4,7 @@
 // Using Drizzle ORM for maximum performance
 // ============================================
 import { db } from '@/lib/db'
-import { profiles, activities, analyticsMetrics, designations } from '@/lib/db/schema'
+import { profiles, activities, analyticsMetrics, designations, attendance, officeSettings, officeClosures } from '@/lib/db/schema'
 import { eq, and, gte, lte, desc, sql, or, ilike, count } from 'drizzle-orm'
 
 // Performance monitoring for database queries
@@ -108,6 +108,8 @@ export class OptimizedQueryManager {
     analyticsDays?: number
     activitiesLimit?: number
     useCache?: boolean
+    profileId?: string
+    localDate?: string
   } = {}): Promise<{
     critical: {
       totalUsers: number;
@@ -118,10 +120,16 @@ export class OptimizedQueryManager {
     }
     secondary: { totalActivities: number; todayActivities: number; analytics: any[] }
     detailed: { recentActivities: any[] }
+    attendance?: {
+      todayRecord: any
+      pendingRecord: any
+      settings: any
+      closures: any
+    }
   }> {
     const startTime = startQueryTiming('getDashboardMetricsUnified')
-    const { analyticsDays = 7, activitiesLimit = 10, useCache = true } = options
-    const queryHash = hashQuery('dashboard_metrics_unified', { analyticsDays, activitiesLimit })
+    const { analyticsDays = 7, activitiesLimit = 10, useCache = true, profileId, localDate } = options
+    const queryHash = hashQuery('dashboard_metrics_unified', { analyticsDays, activitiesLimit, profileId, localDate })
 
     type DashboardMetricsResult = {
       critical: {
@@ -133,6 +141,12 @@ export class OptimizedQueryManager {
       }
       secondary: { totalActivities: number; todayActivities: number; analytics: any[] }
       detailed: { recentActivities: any[] }
+      attendance?: {
+        todayRecord: any
+        pendingRecord: any
+        settings: any
+        closures: any
+      }
     }
 
     try {
@@ -161,7 +175,10 @@ export class OptimizedQueryManager {
         todayActivitiesResult,
         activeUsersCountResult,
         analyticsData,
-        recentActivities
+        recentActivities,
+        attendanceData,
+        settingsData,
+        closuresData
       ] = await Promise.all([
         // 1. Consolidated Role counts
         db.select({
@@ -178,9 +195,6 @@ export class OptimizedQueryManager {
         }).from(activities),
 
         // 2c. Optimized Active User Count
-        // For small datasets (< 10k), COUNT(DISTINCT) is often faster than a GROUP BY subquery
-        // because it avoids the overhead of materializing the subquery.
-        // 2c. Optimized Active User Count - Stable distinct count for small datasets
         db.select({ count: sql<number>`count(distinct ${activities.user_id})` }).from(activities)
           .where(gte(activities.created_at, sevenDaysAgo)),
 
@@ -191,7 +205,7 @@ export class OptimizedQueryManager {
           limit: analyticsDays * 24
         }),
 
-        // 4. Recent activities with optimized profile join
+        // 4. Recent activities
         db.query.activities.findMany({
           with: {
             profile: {
@@ -206,7 +220,18 @@ export class OptimizedQueryManager {
           },
           orderBy: [desc(activities.created_at)],
           limit: activitiesLimit
-        })
+        }),
+
+        // 5. User-specific attendance data
+        profileId ? db.select().from(attendance)
+          .where(and(
+            eq(attendance.profile_id, profileId),
+            gte(attendance.date, sql`${new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0]}`)
+          )) : Promise.resolve([]),
+
+        // 6. Office settings and closures
+        profileId ? db.select().from(officeSettings).limit(1) : Promise.resolve([]),
+        profileId ? db.select().from(officeClosures).where(gte(officeClosures.date, sql`CURRENT_DATE`)) : Promise.resolve([])
       ])
 
       const totalActivitiesCount = Number((totalActivitiesResult as any)?.[0]?.count || 0)
@@ -236,7 +261,13 @@ export class OptimizedQueryManager {
             ...a,
             profiles: a.profile // Map for compatibility
           }))
-        }
+        },
+        attendance: profileId ? {
+          todayRecord: (attendanceData as any[]).find(r => r.date === (localDate || new Date().toISOString().split('T')[0])),
+          pendingRecord: (attendanceData as any[]).filter(r => !r.check_out).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0],
+          settings: (settingsData as any[])[0] || null,
+          closures: (closuresData as any[]) || []
+        } : undefined
       }
 
       // Cache the result

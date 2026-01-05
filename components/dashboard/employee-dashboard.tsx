@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
+import { getEventBroadcaster } from "@/lib/events/event-broadcaster"
 
 
 
@@ -74,27 +75,26 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
         isLoading,
         refetch,
         magicCardsDataReady,
-        recentActivityDataReady
+        recentActivityDataReady,
+        attendance: attendanceUnified
     } = useUserRealtimeDashboard(profile?.id || '', initialData, 'employee')
 
-    // Fetch last 2 days for attendance status
-    const yesterday = new Date()
-    yesterday.setDate(yesterday.getDate() - 1)
-    const yesterdayStr = format(yesterday, 'yyyy-MM-dd')
+    // Extract unified attendance data
+    const attendance = attendanceUnified?.todayRecord ? [attendanceUnified.todayRecord] : []
+    if (attendanceUnified?.pendingRecord && !attendance.find(r => r.id === attendanceUnified.pendingRecord.id)) {
+        attendance.push(attendanceUnified.pendingRecord)
+    }
 
-    const { data: attendance, isLoading: attendanceLoading } = trpc.attendance.getAttendance.useQuery({
-        startDate: yesterdayStr,
-        endDate: todayStr
-    })
-
-    const { data: settings } = trpc.attendance.getOfficeSettings.useQuery()
-    const { data: closures } = trpc.attendance.getOfficeClosures.useQuery()
+    const settings = attendanceUnified?.settings
+    const closures = attendanceUnified?.closures || []
+    const attendanceLoading = isLoading && !attendanceUnified
 
     const clockInMutation = trpc.attendance.clockIn.useMutation({
         onSuccess: () => {
             toast.success("Clocked in successfully")
             utils.attendance.getAttendance.invalidate()
-            refetch()
+            // High-priority refresh to bypass server cache
+            refetch({ forceFresh: true })
         },
         onError: (error) => toast.error(error.message)
     })
@@ -103,7 +103,8 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
         onSuccess: () => {
             toast.success("Clocked out successfully")
             utils.attendance.getAttendance.invalidate()
-            refetch()
+            // High-priority refresh to bypass server cache
+            refetch({ forceFresh: true })
         },
         onError: (error) => toast.error(error.message)
     })
@@ -115,7 +116,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
     const isClockedIn = !!pendingRecord
     const isMarked = !!todayRecord?.check_in && !!todayRecord?.check_out
     const isTodayOffDay = settings?.off_days?.includes(new Date().getDay())
-    const todayClosure = closures?.find(c => c.date === todayStr)
+    const todayClosure = closures?.find((c: any) => c.date === todayStr)
     const isTodayHoliday = !!todayClosure
 
     const handleClockIn = async (isExtra: boolean = false) => {
@@ -167,7 +168,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                                     </div>
                                     <div className="flex flex-col">
                                         <p className="text-[10px] font-bold uppercase tracking-widest text-green-600/60 leading-none mb-1.5">Attendance</p>
-                                        <p className="text-sm font-bold text-green-700 dark:text-green-400">Marked for Today</p>
+                                        <p className="text-sm font-bold text-green-700 dark:text-green-400">Marked Today</p>
                                     </div>
                                 </div>
                             ) : isClockedIn ? (

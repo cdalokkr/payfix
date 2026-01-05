@@ -89,12 +89,13 @@ export const adminDashboardRouter = router({
         analyticsDays: z.number().default(7),
         activitiesLimit: z.number().default(10),
         enableCache: z.boolean().default(true),
-        priority: z.enum(['speed', 'freshness']).default('speed')
+        priority: z.enum(['speed', 'freshness']).default('speed'),
+        localDate: z.string().optional()
       })
     )
     .query(async ({ ctx, input }) => {
       const metrics = startDashboardTiming('getUnifiedDashboardData')
-      const cacheKey = `unified-dashboard-${ctx.user.id}-${input.analyticsDays}-${input.activitiesLimit}-${input.priority}-v${cacheVersion}`
+      const cacheKey = `unified-dashboard-${ctx.user.id}-${input.analyticsDays}-${input.activitiesLimit}-${input.priority}-${input.localDate || 'no-date'}-v${cacheVersion}`
 
       try {
         // Check local request cache first
@@ -120,7 +121,9 @@ export const adminDashboardRouter = router({
         const dbResult = await queryManager.getDashboardMetricsUnified({
           analyticsDays: input.analyticsDays,
           activitiesLimit: input.activitiesLimit,
-          useCache: input.priority === 'speed' && input.enableCache
+          useCache: input.priority === 'speed' && input.enableCache,
+          profileId: ctx.profile.role === 'employee' ? ctx.profile.id : undefined,
+          localDate: input.localDate
         })
 
         const result = {
@@ -194,7 +197,7 @@ export const adminDashboardRouter = router({
     }),
 
   // Cache invalidation endpoint
-  invalidateCache: adminProcedure
+  invalidateCache: protectedProcedure
     .input(
       z.object({
         pattern: z.string().optional(),

@@ -10,12 +10,12 @@ import Link from "next/link"
 import { DailyAttendanceCard } from "./DailyAttendanceCard"
 
 export function EmployeePayrollDashboard() {
-    const { data: attendance } = trpc.attendance.getAttendance.useQuery({
+    const { data: attendance, isLoading: attendanceLoading, isFetching: attendanceFetching } = trpc.attendance.getAttendance.useQuery({
         startDate: format(new Date(), 'yyyy-MM-dd'),
         endDate: format(new Date(), 'yyyy-MM-dd')
     })
 
-    const { data: leaves } = trpc.attendance.getLeaves.useQuery({
+    const { data: leaves, isLoading: leavesLoading, isFetching: leavesFetching } = trpc.attendance.getLeaves.useQuery({
         status: 'all'
     })
 
@@ -38,6 +38,7 @@ export function EmployeePayrollDashboard() {
                     cardBgColor="bg-amber-50/30 dark:bg-amber-500/5"
                     borderColor="border-amber-200/50"
                     delay={0.1}
+                    loading={leavesLoading || leavesFetching}
                 />
                 <MetricCard
                     title="Attendance Status"
@@ -49,6 +50,7 @@ export function EmployeePayrollDashboard() {
                     cardBgColor="bg-green-50/30 dark:bg-green-500/5"
                     borderColor="border-green-200/50"
                     delay={0.2}
+                    loading={attendanceLoading || attendanceFetching}
                 />
                 <MetricCard
                     title="Work Hours"
@@ -60,6 +62,7 @@ export function EmployeePayrollDashboard() {
                     cardBgColor="bg-blue-50/30 dark:bg-blue-500/5"
                     borderColor="border-blue-200/50"
                     delay={0.3}
+                    loading={attendanceLoading || attendanceFetching}
                 />
             </div>
 

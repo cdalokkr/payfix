@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { trpc } from "@/lib/trpc/client"
 import { Search, Loader2, Clock, CheckCircle2, XCircle, FileText, Save } from "lucide-react"
 import { toast } from "sonner"
+import { getEventBroadcaster } from "@/lib/events/event-broadcaster"
 import { Label } from "@/components/ui/label"
 import { MetricCard } from "@/components/dashboard/metric-card"
 import { cn } from "@/lib/utils"
@@ -46,7 +47,9 @@ export function AdminAttendanceVerification() {
 
     // Enable real-time updates for managers (Admin/Moderator)
     // This will automatically invalidate queries when attendance or activities change
-    useUserRealtimeDashboard(
+    const {
+        refetch: dashboardRefetch
+    } = useUserRealtimeDashboard(
         profile?.id || '',
         undefined,
         (profile?.role as any) || 'moderator'
@@ -57,6 +60,9 @@ export function AdminAttendanceVerification() {
             toast.success('Successfully updated records')
             setRowSelection({})
             utils.attendance.getAttendance.invalidate()
+
+            // High-priority dashboard refresh
+            dashboardRefetch({ forceFresh: true })
         },
         onError: (error) => toast.error(error.message)
     })
@@ -89,17 +95,23 @@ export function AdminAttendanceVerification() {
         onSuccess: (data) => {
             toast.success(`Attendance marked as ${data.status}`)
             utils.attendance.getAttendance.invalidate()
+
+            // High-priority dashboard refresh
+            dashboardRefetch({ forceFresh: true })
         },
         onError: (error) => toast.error(error.message)
     })
 
     const manualUpdateMutation = trpc.attendance.manualUpdate.useMutation({
-        onSuccess: () => {
+        onSuccess: (data: any) => {
             toast.success("Record updated successfully")
             // Small delay to show success state on button
             setTimeout(() => {
                 handleOpenChange(false)
                 utils.attendance.getAttendance.invalidate()
+
+                // High-priority dashboard refresh
+                dashboardRefetch({ forceFresh: true })
             }, 1000)
         },
         onError: (error) => toast.error(error.message)

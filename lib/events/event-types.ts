@@ -18,6 +18,7 @@ export type EventCategory =
     | 'user_activity'
     | 'admin_action'
     | 'system_notification'
+    | 'dashboard_sync'
 
 // ============================================
 // EVENT INTERFACES
@@ -159,7 +160,7 @@ export const EVENT_ROUTING_RULES: Record<EventCategory, RoutingRule> = {
         targetRoles: ['admin', 'user'], // All users should see relevant activity
         channels: {
             primary: 'dashboard-activity',
-            secondary: ['notifications-user', 'notifications-admin']
+            secondary: ['notifications-user', 'notifications-admin', 'dashboard-management-shared']
         },
         ttlByPriority: {
             'ultra-critical': 1,
@@ -216,6 +217,27 @@ export const EVENT_ROUTING_RULES: Record<EventCategory, RoutingRule> = {
             enabled: true,
             timeout: 500,
             maxSize: 50
+        }
+    },
+    dashboard_sync: {
+        name: 'dashboard-sync',
+        eventTypes: ['dashboard_sync'],
+        targetRoles: ['admin', 'moderator', 'user'],
+        channels: {
+            primary: 'dashboard-management-shared',
+            secondary: ['dashboard-activity']
+        },
+        ttlByPriority: {
+            'ultra-critical': 1,
+            'critical': 1,
+            'secondary': 1,
+            'detailed': 1
+        },
+        persistent: false,
+        batching: {
+            enabled: false,
+            timeout: 0,
+            maxSize: 0
         }
     }
 }

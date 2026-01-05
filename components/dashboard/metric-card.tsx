@@ -202,12 +202,13 @@ export function MetricCard({
                                     {loading ? (
                                         <motion.div
                                             key="skeleton"
-                                            initial={{ opacity: 0, filter: 'blur(4px)' }}
-                                            animate={{ opacity: 1, filter: 'blur(0px)' }}
-                                            exit={{ opacity: 0, filter: 'blur(4px)' }}
-                                            transition={{ duration: 0.3 }}
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            exit={{ opacity: 0 }}
+                                            transition={{ duration: 0.2 }}
+                                            className="h-8 flex items-center"
                                         >
-                                            <div className="h-8 w-20 bg-muted/40 rounded-lg animate-pulse" />
+                                            <div className="h-6 w-16 bg-muted/30 rounded-md animate-pulse" />
                                         </motion.div>
                                     ) : (
                                         <motion.span

@@ -18,8 +18,8 @@ export function AdminPayrollDashboard() {
         (profile?.role as any) || 'moderator'
     )
 
-    const { data: attendance } = trpc.attendance.getAttendance.useQuery({})
-    const { data: leaves } = trpc.attendance.getLeaves.useQuery({ status: 'pending' })
+    const { data: attendance, isLoading: attendanceLoading, isFetching: attendanceFetching } = trpc.attendance.getAttendance.useQuery({})
+    const { data: leaves, isLoading: leavesLoading, isFetching: leavesFetching } = trpc.attendance.getLeaves.useQuery({ status: 'pending' })
 
     const pendingVerification = attendance?.filter(a => a.status === 'pending').length || 0
     const pendingLeaves = leaves?.length || 0
@@ -38,6 +38,7 @@ export function AdminPayrollDashboard() {
                     borderColor="border-amber-200/50 dark:border-amber-900/50"
                     cardBgColor="bg-amber-50/50 dark:bg-amber-900/5"
                     delay={0.1}
+                    loading={attendanceLoading || attendanceFetching}
                 />
                 <MetricCard
                     title="Pending Leave Approvals"
@@ -49,6 +50,7 @@ export function AdminPayrollDashboard() {
                     borderColor="border-rose-200/50 dark:border-rose-900/50"
                     cardBgColor="bg-rose-50/50 dark:bg-rose-900/5"
                     delay={0.2}
+                    loading={leavesLoading || leavesFetching}
                 />
                 <MetricCard
                     title="Total Attendance Records"
@@ -60,6 +62,7 @@ export function AdminPayrollDashboard() {
                     borderColor="border-indigo-200/50 dark:border-indigo-900/50"
                     cardBgColor="bg-indigo-50/50 dark:bg-indigo-900/5"
                     delay={0.3}
+                    loading={attendanceLoading || attendanceFetching}
                 />
             </div>
 
