@@ -77,16 +77,17 @@ export function AttendanceSummaryContent({
             header: "Date",
             cell: ({ row }) => format(new Date(row.getValue("date")), "MMM dd, yyyy"),
         },
+
         {
             accessorKey: "check_in",
-            header: "Time In",
+            header: "In",
             cell: ({ row }) => row.getValue("check_in")
                 ? format(new Date(row.getValue("check_in")), "hh:mm a")
                 : "-",
         },
         {
             accessorKey: "check_out",
-            header: "Time Out",
+            header: "Out",
             cell: ({ row }) => row.getValue("check_out")
                 ? format(new Date(row.getValue("check_out")), "hh:mm a")
                 : "-",
@@ -97,34 +98,43 @@ export function AttendanceSummaryContent({
             cell: ({ row }) => {
                 const status = row.getValue("status") as string
                 return (
-                    <div className="flex flex-col gap-1">
-                        <Badge
-                            variant="secondary"
-                            className={cn(
-                                "capitalize font-bold text-[10px]",
-                                status === 'verified' && "bg-green-500/10 text-green-700 border-green-500/20",
-                                status === 'pending' && "bg-amber-500/10 text-amber-700 border-amber-500/20",
-                                status === 'rejected' && "bg-red-500/10 text-red-700 border-red-500/20"
-                            )}
-                        >
-                            {status}
-                        </Badge>
-                        {row.original.is_half_day && (
-                            <Badge variant="outline" className="text-[9px] h-3.5 bg-amber-500/5 border-amber-500/20 text-amber-600 font-medium px-1.5">
-                                Half Day
-                            </Badge>
+                    <Badge
+                        variant="secondary"
+                        className={cn(
+                            "capitalize font-black text-[9px] px-1.5 h-3.5",
+                            status === 'verified' && "bg-green-500/10 text-green-700 border-green-500/20",
+                            status === 'pending' && "bg-amber-500/10 text-amber-700 border-amber-500/20",
+                            status === 'rejected' && "bg-red-500/10 text-red-700 border-red-500/20"
                         )}
-                    </div>
+                    >
+                        {status}
+                    </Badge>
+                )
+            },
+        },
+        {
+            id: "attendance_type",
+            header: "Type",
+            cell: ({ row }) => {
+                const isHalfDay = row.original.is_half_day
+                return isHalfDay ? (
+                    <Badge variant="outline" className="text-[9px] h-3.5 bg-amber-500/5 border-amber-500/20 text-amber-600 font-bold px-1.5 whitespace-nowrap">
+                        Half Day
+                    </Badge>
+                ) : (
+                    <Badge variant="outline" className="text-[9px] h-3.5 bg-blue-500/5 border-blue-500/20 text-blue-600 font-bold px-1.5 whitespace-nowrap">
+                        Full Day
+                    </Badge>
                 )
             },
         },
         {
             id: "total_hours",
-            header: "Total Hrs",
+            header: "Total",
             cell: ({ row }) => {
                 const workingHours = row.original.working_hours as number
                 return (
-                    <span className="font-medium tabular-nums text-foreground">
+                    <span className="font-bold tabular-nums text-foreground">
                         {workingHours ? `${Number(workingHours).toFixed(1)}h` : "-"}
                     </span>
                 )
@@ -132,7 +142,7 @@ export function AttendanceSummaryContent({
         },
         {
             accessorKey: "working_hours",
-            header: "Extra Hrs",
+            header: "Extra",
             cell: ({ row }) => {
                 const workingHours = row.getValue("working_hours") as number
                 const dateStr = row.getValue("date") as string
@@ -140,23 +150,17 @@ export function AttendanceSummaryContent({
                 if (!workingHours) return "-"
 
                 const dayOfWeek = getDay(new Date(dateStr))
-                const scheduledHours = scheduledHoursMap[dayOfWeek] ?? 9 // Default 9 hours if not set
+                const scheduledHours = scheduledHoursMap[dayOfWeek] ?? 9
                 const extraHours = workingHours - scheduledHours
 
-                const isPositive = extraHours > 0
-                const isNegative = extraHours < 0
-                const displayValue = isPositive
-                    ? `+${extraHours.toFixed(1)}h`
-                    : `${extraHours.toFixed(1)}h`
+                // Rule: Don't show negative extra hours
+                const displayExtra = Math.max(0, extraHours)
+
+                if (displayExtra === 0) return <span className="text-muted-foreground/40 font-medium">0.0h</span>
 
                 return (
-                    <span className={cn(
-                        "font-medium tabular-nums",
-                        isPositive && "text-green-600",
-                        isNegative && "text-red-600",
-                        !isPositive && !isNegative && "text-muted-foreground"
-                    )}>
-                        {displayValue}
+                    <span className="font-bold tabular-nums text-green-600">
+                        +{displayExtra.toFixed(1)}h
                     </span>
                 )
             },

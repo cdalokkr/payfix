@@ -228,8 +228,10 @@ DO $$ BEGIN
     END IF;
 EXCEPTION WHEN OTHERS THEN NULL; END $$;
 
-ALTER PUBLICATION supabase_realtime ADD TABLE profiles, activities, analytics_metrics;
+ALTER PUBLICATION supabase_realtime ADD TABLE profiles, activities, analytics_metrics, attendance, leaves;
 
 ALTER TABLE profiles REPLICA IDENTITY FULL;
 ALTER TABLE activities REPLICA IDENTITY FULL;
 ALTER TABLE analytics_metrics REPLICA IDENTITY FULL;
+ALTER TABLE attendance REPLICA IDENTITY FULL;
+ALTER TABLE leaves REPLICA IDENTITY FULL;

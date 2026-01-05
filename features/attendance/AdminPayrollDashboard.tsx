@@ -6,8 +6,18 @@ import { Button } from "@/components/ui/button"
 import { trpc } from "@/lib/trpc/client"
 import { Users, CalendarCheck, CalendarOff, Clock, Settings, ArrowRight } from "lucide-react"
 import Link from "next/link"
+import { useUserRealtimeDashboard } from "@/hooks/use-realtime-dashboard-data"
 
 export function AdminPayrollDashboard() {
+    const { data: profile } = trpc.profile.get.useQuery()
+
+    // Enable real-time updates for managers
+    useUserRealtimeDashboard(
+        profile?.id || '',
+        undefined,
+        (profile?.role as any) || 'moderator'
+    )
+
     const { data: attendance } = trpc.attendance.getAttendance.useQuery({})
     const { data: leaves } = trpc.attendance.getLeaves.useQuery({ status: 'pending' })
 

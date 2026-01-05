@@ -10,6 +10,7 @@ import { toast } from "sonner"
 import { Label } from "@/components/ui/label"
 import { MetricCard } from "@/components/dashboard/metric-card"
 import { cn } from "@/lib/utils"
+import { useUserRealtimeDashboard } from "@/hooks/use-realtime-dashboard-data"
 
 import { createAttendanceColumns } from "./attendance-columns"
 import { DataTable } from "@/components/ui/data-table"
@@ -41,6 +42,15 @@ export function AdminAttendanceVerification() {
     }, [])
 
     const utils = trpc.useUtils()
+    const { data: profile } = trpc.profile.get.useQuery()
+
+    // Enable real-time updates for managers (Admin/Moderator)
+    // This will automatically invalidate queries when attendance or activities change
+    useUserRealtimeDashboard(
+        profile?.id || '',
+        undefined,
+        (profile?.role as any) || 'moderator'
+    )
 
     const bulkVerifyMutation = trpc.attendance.bulkVerifyAttendance.useMutation({
         onSuccess: () => {

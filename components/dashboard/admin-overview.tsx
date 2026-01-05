@@ -88,7 +88,7 @@ export function AdminOverview({
     magicCardsDataReady,
     recentActivityDataReady,
     showSkeleton
-  } = useAdminRealtimeDashboard(profile?.user_id || '', initialData)
+  } = useAdminRealtimeDashboard(profile?.id || '', initialData)
 
   // Detect route changes to reset skeleton state
   useEffect(() => {

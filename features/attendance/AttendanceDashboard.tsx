@@ -11,8 +11,28 @@ import { CardShell } from "./CardShell"
 import { AttendanceCalendarContent } from "./AttendanceCalendarContent"
 import { AttendanceSummaryContent } from "./AttendanceSummaryContent"
 import { Calendar as CalendarIcon, Briefcase as BriefcaseIcon } from "@phosphor-icons/react"
+import { useUserRealtimeDashboard } from "@/hooks/use-realtime-dashboard-data"
+import { getDay } from "date-fns"
+
+// Helper to calculate scheduled hours from time strings
+function calculateScheduledHours(checkIn: string, checkOut: string): number {
+    const [inH, inM] = checkIn.split(':').map(Number)
+    const [outH, outM] = checkOut.split(':').map(Number)
+    const inMinutes = inH * 60 + inM
+    const outMinutes = outH * 60 + outM
+    return (outMinutes - inMinutes) / 60
+}
 
 export function AttendanceDashboard() {
+    const { data: profile } = trpc.profile.get.useQuery()
+
+    // Enable real-time updates for the employee
+    useUserRealtimeDashboard(
+        profile?.id || '',
+        undefined,
+        'employee'
+    )
+
     const today = new Date()
     const [currentMonth, setCurrentMonth] = useState(startOfMonth(today))
     const [selectedDate, setSelectedDate] = useState<Date | undefined>(today)
@@ -49,11 +69,18 @@ export function AttendanceDashboard() {
         let leave = 0
         let holiday = 0
         let noOfficeOut = 0
+        let halfDay = 0
+        let fullDay = 0
+        let totalExtraHours = 0
+
+        // Pre-calculate scheduled hours map
+        const defaultScheduledHours = settings ? calculateScheduledHours(settings.default_check_in, settings.default_check_out) : 9
 
         days.forEach(day => {
             const dateStr = format(day, 'yyyy-MM-dd')
             const record = attendanceMap[dateStr]
-            const isOffDay = settings?.off_days?.includes(day.getDay())
+            const dayOfWeek = day.getDay()
+            const isOffDay = settings?.off_days?.includes(dayOfWeek)
 
             const isHoliday = closures?.some(c => c.date === dateStr)
             if (isHoliday) {
@@ -72,24 +99,40 @@ export function AttendanceDashboard() {
             }
 
             if (record) {
+                if (record.is_half_day) {
+                    halfDay++
+                }
+
                 if (record.status === 'verified') {
                     present++
+                    if (!record.is_half_day) {
+                        fullDay++
+                    }
                 } else if (record.check_in && record.check_out) {
                     marked++
                 } else if (record.check_in && !record.check_out) {
                     noOfficeOut++
+                }
+
+                // Calculate extra hours for Total Extra Hrs card
+                if (record.working_hours && settings) {
+                    const scheduled = defaultScheduledHours // Simple version for stats
+                    const extra = (record.working_hours as number) - scheduled
+                    if (extra > 0) {
+                        totalExtraHours += extra
+                    }
                 }
             } else if (day < today && !isOffDay) {
                 absent++
             }
         })
 
-        return { marked, present, absent, leave, holiday, noOfficeOut }
+        return { marked, present, absent, leave, holiday, noOfficeOut, halfDay, fullDay, totalExtraHours }
     }, [attendanceMap, leaves, closures, settings, monthStart, monthEnd, today])
 
     return (
         <div className="space-y-8">
-            {/* Monthly Statistics Overview */}
+            {/* Monthly Statistics Overview - Row 1: Base Metrics */}
             <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
                 {[
                     { label: "Marked Days", value: stats.marked, icon: CalendarDotsIcon, color: "text-primary", bg: "bg-primary/10", border: "border-primary/20" },
@@ -107,6 +150,50 @@ export function AttendanceDashboard() {
                             animate={{ opacity: 1, scale: 1 }}
                             whileHover={{ y: -2, transition: { duration: 0.2 } }}
                             transition={{ delay: 0.1 + i * 0.05 }}
+                            className={cn(
+                                "flex flex-col p-3 rounded-xl border transition-all duration-300",
+                                "bg-background/40 hover:bg-background/80",
+                                "group cursor-default shadow-sm",
+                                stat.border
+                            )}
+                        >
+                            <div className="flex items-center justify-between mb-2">
+                                <div className={cn(
+                                    "p-1.5 rounded-lg transition-transform duration-300 group-hover:scale-110",
+                                    stat.bg,
+                                    stat.color
+                                )}>
+                                    <Icon size={28} weight="duotone" />
+                                </div>
+                                {isAttendanceLoading ? (
+                                    <Skeleton className="h-8 w-10" />
+                                ) : (
+                                    <span className={cn("text-2xl font-black tabular-nums tracking-tight", stat.color)}>{stat.value}</span>
+                                )}
+                            </div>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground truncate">
+                                {stat.label}
+                            </p>
+                        </motion.div>
+                    )
+                })}
+            </div>
+
+            {/* Monthly Statistics Overview - Row 2: Detailed Metrics */}
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                {[
+                    { label: "Total Full Day", value: stats.fullDay, icon: CalendarCheckIcon, color: "text-emerald-600", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
+                    { label: "Total Half Day", value: stats.halfDay, icon: CalendarMinusIcon, color: "text-orange-600", bg: "bg-orange-500/10", border: "border-orange-500/20" },
+                    { label: "Total Extra Hrs", value: `${stats.totalExtraHours.toFixed(1)}h`, icon: ClockUserIcon, color: "text-amber-600", bg: "bg-amber-500/10", border: "border-amber-500/20" },
+                ].map((stat, i) => {
+                    const Icon = stat.icon;
+                    return (
+                        <motion.div
+                            key={i}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            whileHover={{ y: -2, transition: { duration: 0.2 } }}
+                            transition={{ delay: 0.4 + i * 0.1 }}
                             className={cn(
                                 "flex flex-col p-3 rounded-xl border transition-all duration-300",
                                 "bg-background/40 hover:bg-background/80",

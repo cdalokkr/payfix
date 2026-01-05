@@ -545,8 +545,13 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
 
     // Now refetch - the server cache is cleared so we'll get fresh data
     console.log('[REALTIME] Fetching fresh dashboard data...')
+
+    // Also invalidate related queries to ensure complete refresh
+    utils.attendance.getAttendance.invalidate()
+    utils.attendance.getLeaves.invalidate()
+
     return trpcRefetch()
-  }, [trpcRefetch, invalidateCacheMutation])
+  }, [trpcRefetch, invalidateCacheMutation, utils])
 
   // Ref to track if component is mounted (for handling React Strict Mode)
   const isMountedRef = useRef(true)
@@ -633,10 +638,10 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
     supabaseRef.current = supabase
 
     // Create role-specific channel name
-    // IMPORTANT: For admins, use a SHARED channel so all admins receive each other's updates
+    // IMPORTANT: For admins and moderators, use a SHARED channel so they receive each other's updates
     // For users, use user-specific channels since they only need their own activity updates
-    const channelName = role === 'admin'
-      ? 'dashboard-admin-shared'  // All admins share this channel for cross-browser updates
+    const channelName = (role === 'admin' || role === 'moderator')
+      ? 'dashboard-management-shared' // All managers share this channel
       : `dashboard-user-${userId}` // Users have individual channels
 
     // Track if THIS effect instance incremented the subscriber count
@@ -644,7 +649,7 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
     let didIncrement = false
 
     console.log(`🔌 Setting up ${role} real-time dashboard subscriptions on channel: ${channelName}`)
-    console.log(`📡 Channel type: ${role === 'admin' ? 'SHARED (all admins)' : 'USER-SPECIFIC'}`)
+    console.log(`📡 Channel type: ${(role === 'admin' || role === 'moderator') ? 'SHARED (all managers)' : 'USER-SPECIFIC'}`)
 
     // Check if we already have an active channel with this name
     // This prevents the "mismatch between server and client bindings" error
@@ -675,9 +680,9 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
     console.log(`🆕 Creating new channel: ${channelName}`)
     let channel = supabase.channel(channelName)
 
-    if (role === 'admin') {
-      // ADMIN SUBSCRIPTIONS: Full access to all tables
-      console.log('👑 Admin mode: Subscribing to profiles, activities, and analytics_metrics')
+    if (role === 'admin' || role === 'moderator') {
+      // MANAGEMENT SUBSCRIPTIONS: Access to all tables
+      console.log(`👑 ${role === 'admin' ? 'Admin' : 'Moderator'} mode: Subscribing to profiles, activities, attendance, leaves, and analytics_metrics`)
 
       channel = channel
         .on(
@@ -687,25 +692,19 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
             // Only process if still mounted
             if (!isMountedRef.current) return
 
-            console.log('[REALTIME] 📢 [Admin] Database change detected on profiles table:', payload.eventType, {
-              table: 'profiles',
-              eventType: payload.eventType,
-              new: payload.new,
-              old: payload.old,
-              timestamp: new Date().toISOString()
-            })
+            console.log('[REALTIME] 📢 [Management] Database change detected on profiles table:', payload.eventType)
 
             // Enhanced event broadcasting for user creation
             if (payload.eventType === 'INSERT' && payload.new && typeof payload.new === 'object' && 'id' in payload.new) {
               try {
                 const eventBroadcaster = getEventBroadcaster()
                 await eventBroadcaster.broadcastEvent('user_created', {
-                  userId: payload.new.id,
-                  email: payload.new.email || '',
-                  fullName: payload.new.full_name || '',
-                  createdBy: payload.new.created_by || 'system',
-                  createdByName: payload.new.created_by_name || 'System',
-                  userRole: payload.new.role || 'user'
+                  userId: (payload.new as any).id,
+                  email: (payload.new as any).email || '',
+                  fullName: (payload.new as any).full_name || '',
+                  createdBy: (payload.new as any).created_by || 'system',
+                  createdByName: (payload.new as any).created_by_name || 'System',
+                  userRole: (payload.new as any).role || 'user'
                 }, {
                   priority: 'critical',
                   metadata: {
@@ -714,7 +713,6 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
                     operation: 'INSERT'
                   }
                 })
-                console.log('[REALTIME] ✅ User creation event broadcasted successfully')
               } catch (error) {
                 console.warn('[REALTIME] Failed to broadcast user creation event:', error)
               }
@@ -731,24 +729,18 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
             // Only process if still mounted
             if (!isMountedRef.current) return
 
-            console.log('[REALTIME] 📢 [Admin] Database change detected on activities table:', payload.eventType, {
-              table: 'activities',
-              eventType: payload.eventType,
-              new: payload.new,
-              old: payload.old,
-              timestamp: new Date().toISOString()
-            })
+            console.log('[REALTIME] 📢 [Management] Database change detected on activities table:', payload.eventType)
 
             // Enhanced event broadcasting for user activities
             if (payload.new && typeof payload.new === 'object' && 'id' in payload.new) {
               try {
                 const eventBroadcaster = getEventBroadcaster()
                 await eventBroadcaster.broadcastEvent('user_activity', {
-                  activityId: payload.new.id,
-                  userId: payload.new.user_id || '',
-                  userName: payload.new.user_name || 'Unknown User',
-                  action: payload.new.action || 'activity',
-                  description: payload.new.description || `${payload.new.action || 'activity'} performed`,
+                  activityId: (payload.new as any).id,
+                  userId: (payload.new as any).user_id || '',
+                  userName: (payload.new as any).user_name || 'Unknown User',
+                  action: (payload.new as any).action || 'activity',
+                  description: (payload.new as any).description || `${(payload.new as any).action || 'activity'} performed`,
                   metadata: {
                     source: 'database-change',
                     table: 'activities',
@@ -762,7 +754,6 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
                     operation: payload.eventType
                   }
                 })
-                console.log('[REALTIME] ✅ User activity event broadcasted successfully')
               } catch (error) {
                 console.warn('[REALTIME] Failed to broadcast user activity event:', error)
               }
@@ -774,27 +765,53 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
         )
         .on(
           'postgres_changes',
+          { event: '*', schema: 'public', table: 'attendance' },
+          async (payload) => {
+            // Only process if still mounted
+            if (!isMountedRef.current) return
+
+            console.log('[REALTIME] 📢 [Management] Database change detected on attendance table:', payload.eventType)
+
+            // Invalidate attendance queries
+            utils.attendance.getAttendance.invalidate()
+
+            console.log('[REALTIME] Triggering dashboard refresh due to attendance change...')
+            refetch()
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'leaves' },
+          async (payload) => {
+            // Only process if still mounted
+            if (!isMountedRef.current) return
+
+            console.log('[REALTIME] 📢 [Management] Database change detected on leaves table:', payload.eventType)
+
+            // Invalidate leaves queries
+            utils.attendance.getLeaves.invalidate()
+
+            console.log('[REALTIME] Triggering dashboard refresh due to leaves change...')
+            refetch()
+          }
+        )
+        .on(
+          'postgres_changes',
           { event: '*', schema: 'public', table: 'analytics_metrics' },
           (payload) => {
             // Only process if still mounted
             if (!isMountedRef.current) return
 
-            console.log('[REALTIME] 📢 [Admin] Database change detected on analytics_metrics table:', payload.eventType, {
-              table: 'analytics_metrics',
-              eventType: payload.eventType,
-              new: payload.new,
-              old: payload.old,
-              timestamp: new Date().toISOString()
-            })
+            console.log('[REALTIME] 📢 [Management] Database change detected on analytics_metrics table:', payload.eventType)
 
-            // Analytics events are typically less urgent, so use lower priority
             console.log('[REALTIME] Triggering dashboard refresh due to analytics_metrics change...')
             refetch()
           }
         )
     } else {
-      // USER SUBSCRIPTIONS: Only their own activities
-      console.log(`👤 User mode: Subscribing only to activities for user_id=${userId}`)
+      // USER SUBSCRIPTIONS: Activities, Attendance, and Leaves
+      // IMPORTANT: We use Profile UUID (userId) for all filters
+      console.log(`👤 User mode: Subscribing to own data (activities, attendance, leaves) for Profile UUID: ${userId}`)
 
       channel = channel
         .on(
@@ -806,28 +823,19 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
             filter: `user_id=eq.${userId}`
           },
           async (payload) => {
-            // Only process if still mounted
             if (!isMountedRef.current) return
-
-            console.log('[REALTIME] 📢 [User] Database change detected on own activities:', payload.eventType, {
-              table: 'activities',
-              eventType: payload.eventType,
-              userId: userId,
-              new: payload.new,
-              old: payload.old,
-              timestamp: new Date().toISOString()
-            })
+            console.log('[REALTIME] 📢 [User] Database change detected on own activities:', payload.eventType)
 
             // Enhanced event broadcasting for user's own activities
             if (payload.new && typeof payload.new === 'object' && 'id' in payload.new) {
               try {
                 const eventBroadcaster = getEventBroadcaster()
                 await eventBroadcaster.broadcastEvent('user_activity', {
-                  activityId: payload.new.id,
-                  userId: payload.new.user_id || '',
-                  userName: payload.new.user_name || 'You',
-                  action: payload.new.action || 'activity',
-                  description: payload.new.description || `You performed ${payload.new.action || 'an activity'}`,
+                  activityId: (payload.new as any).id,
+                  userId: (payload.new as any).user_id || '',
+                  userName: (payload.new as any).user_name || 'You',
+                  action: (payload.new as any).action || 'activity',
+                  description: (payload.new as any).description || `You performed ${(payload.new as any).action || 'an activity'}`,
                   metadata: {
                     source: 'database-change',
                     table: 'activities',
@@ -843,13 +851,54 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
                     isOwnActivity: true
                   }
                 })
-                console.log('[REALTIME] ✅ User activity event broadcasted successfully')
               } catch (error) {
                 console.warn('[REALTIME] Failed to broadcast user activity event:', error)
               }
             }
 
-            console.log('[REALTIME] Triggering dashboard refresh due to user activities change...')
+            // For regular users, also invalidate their attendance if an activity related to attendance occurred
+            if ((payload.new as any)?.module === 'attendance') {
+              utils.attendance.getAttendance.invalidate()
+            }
+
+            refetch()
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'attendance',
+            filter: `profile_id=eq.${userId}`
+          },
+          async (payload) => {
+            if (!isMountedRef.current) return
+            console.log('[REALTIME] 📢 [User] Database change detected on own attendance:', payload.eventType)
+
+            // Invalidate attendance queries to refresh dashboard and calendar
+            utils.attendance.getAttendance.invalidate()
+
+            console.log('[REALTIME] Triggering dashboard refresh due to attendance change...')
+            refetch()
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'leaves',
+            filter: `profile_id=eq.${userId}`
+          },
+          async (payload) => {
+            if (!isMountedRef.current) return
+            console.log('[REALTIME] 📢 [User] Database change detected on own leaves:', payload.eventType)
+
+            // Invalidate leaves queries
+            utils.attendance.getLeaves.invalidate()
+
+            console.log('[REALTIME] Triggering dashboard refresh due to leaves change...')
             refetch()
           }
         )

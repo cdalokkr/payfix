@@ -75,7 +75,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
         refetch,
         magicCardsDataReady,
         recentActivityDataReady
-    } = useUserRealtimeDashboard(profile?.user_id || '', initialData, 'employee')
+    } = useUserRealtimeDashboard(profile?.id || '', initialData, 'employee')
 
     // Fetch last 2 days for attendance status
     const yesterday = new Date()
