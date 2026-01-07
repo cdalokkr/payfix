@@ -13,6 +13,7 @@ import { ActionButton } from '@/components/ui/action-button'
 import { PageHeading } from '@/components/ui/page-heading'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
+import { useProfile } from '@/lib/context/profile-context'
 
 const ModernAddUserForm = dynamic(() => import('@/features/users/components/ModernAddUserForm').then(mod => mod.ModernAddUserForm), {
   loading: () => null,
@@ -59,9 +60,7 @@ export function AdminOverview({
   const [isReturnVisit, setIsReturnVisit] = useState(false)
 
   // Get current user's profile to obtain userId for role-based real-time subscriptions
-  const { data: profile } = trpc.profile.get.useQuery(undefined, {
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
-  })
+  const { profile } = useProfile()
 
   // Get last session info
   const { data: sessionInfo, isLoading: sessionLoading } = trpc.profile.getLastSession.useQuery(undefined, {

@@ -6,10 +6,11 @@ import { Button } from "@/components/ui/button"
 import { trpc } from "@/lib/trpc/client"
 import { Users, CalendarCheck, CalendarOff, Clock, Settings, ArrowRight } from "lucide-react"
 import Link from "next/link"
+import { useProfile } from '@/lib/context/profile-context'
 import { useUserRealtimeDashboard } from "@/hooks/use-realtime-dashboard-data"
 
 export function AdminPayrollDashboard() {
-    const { data: profile } = trpc.profile.get.useQuery()
+    const { profile } = useProfile()
 
     // Enable real-time updates for managers (existing hook for general dashboard sync)
     useUserRealtimeDashboard(

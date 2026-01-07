@@ -16,6 +16,7 @@ import { toast } from "sonner"
 import { useEffect, useState, useMemo, useRef } from "react"
 import { cn } from "@/lib/utils"
 import { getEventBroadcaster } from "@/lib/events/event-broadcaster"
+import { useProfile } from "@/lib/context/profile-context"
 
 
 
@@ -73,7 +74,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
     }, [])
 
     // Get profile to obtain userId for real-time subscriptions
-    const { data: profile } = trpc.profile.get.useQuery()
+    const { profile } = useProfile()
 
     // OPTIMIZATION: Employees don't need the heavy unified dashboard query
     // Just fetch recent activities with a lightweight query

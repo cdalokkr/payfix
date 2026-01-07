@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label"
 import { MetricCard } from "@/components/dashboard/metric-card"
 import { cn } from "@/lib/utils"
 import { useUserRealtimeDashboard } from "@/hooks/use-realtime-dashboard-data"
+import { useProfile } from "@/lib/context/profile-context"
 
 import { createAttendanceColumns } from "./attendance-columns"
 import { DataTable } from "@/components/ui/data-table"
@@ -43,7 +44,9 @@ export function AdminAttendanceVerification() {
     }, [])
 
     const utils = trpc.useUtils()
-    const { data: profile } = trpc.profile.get.useQuery()
+
+    // Get profile from context (shared across all components)
+    const { profile } = useProfile()
 
     // Enable real-time updates for managers (Admin/Moderator)
     // This will automatically invalidate queries when attendance or activities change

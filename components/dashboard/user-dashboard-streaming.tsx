@@ -3,14 +3,14 @@
 import React from 'react'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { UserOverview } from '@/components/dashboard/user-overview'
-import { trpc } from '@/lib/trpc/client'
 import { DashboardPageLayout } from '@/components/dashboard/dashboard-page-layout'
+import { useProfile } from '@/lib/context/profile-context'
 
 import { Skeleton } from '@/components/ui/skeleton'
 
 // Streaming wrapper component for user dashboard
-export function UserDashboardStreaming({ initialData }: { initialData?: any }) {
-    const { data: profile, isLoading } = trpc.profile.get.useQuery()
+export function UserDashboardStreaming() {
+    const { profile, isLoading } = useProfile()
 
     if (isLoading) {
         return (
@@ -38,7 +38,6 @@ export function UserDashboardStreaming({ initialData }: { initialData?: any }) {
                     <ErrorBoundary level="section">
                         <UserOverview
                             profile={profile}
-                            initialData={initialData}
                             onLoadingChange={(loading) => {
                                 // Determine if we should show global loading state
                                 // For now just log it or ignore if handled locally

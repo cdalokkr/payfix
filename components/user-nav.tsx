@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from "react"
+import React, { useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import {
     LogOut,
@@ -36,7 +36,7 @@ interface UserNavProps {
     user: Profile | null
 }
 
-export function UserNav({ user }: UserNavProps) {
+function UserNavComponent({ user }: UserNavProps) {
     const router = useRouter()
     const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false)
     const [isProgressModalOpen, setIsProgressModalOpen] = useState(false)
@@ -48,8 +48,8 @@ export function UserNav({ user }: UserNavProps) {
         setIsProgressModalOpen(true)
     }
 
-    // Get user initials
-    const getInitials = () => {
+    // Get user initials - memoized to prevent recalculation on every render
+    const initials = useMemo(() => {
         if (!user) return 'U'
         if (user.full_name) {
             return user.full_name
@@ -63,26 +63,31 @@ export function UserNav({ user }: UserNavProps) {
             return user.first_name[0].toUpperCase()
         }
         return user.email?.[0].toUpperCase() || 'U'
-    }
+    }, [user])
 
-    const displayName = user?.full_name || user?.first_name || 'User'
-    const displayEmail = user?.email || ''
+    const displayName = useMemo(() => user?.full_name || user?.first_name || 'User', [user])
+    const displayEmail = useMemo(() => user?.email || '', [user])
     const profileUrl = user?.role ? `/${user.role}/profile` : '/login'
 
     return (
         <>
             <DropdownMenu>
-                <DropdownMenuTrigger className="relative h-8 w-8 rounded-full hover:bg-muted hover:ring-2 hover:ring-primary transition-all outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-                    <Avatar className="h-8 w-8">
-                        <AvatarImage src={user?.avatar_url || ''} alt={displayName} />
-                        <AvatarFallback className="bg-primary/10 text-primary font-semibold">{getInitials()}</AvatarFallback>
-                    </Avatar>
+                <DropdownMenuTrigger asChild>
+                    <div
+                        className="relative h-8 w-8 rounded-full hover:bg-muted hover:ring-2 hover:ring-primary transition-all outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        suppressHydrationWarning
+                    >
+                        <Avatar className="h-8 w-8">
+                            <AvatarImage src={user?.avatar_url || ''} alt={displayName} />
+                            <AvatarFallback className="bg-primary/10 text-primary font-semibold">{initials}</AvatarFallback>
+                        </Avatar>
+                    </div>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56" align="end">
                     <div className="flex items-center justify-start gap-2 p-2">
                         <Avatar className="h-8 w-8">
                             <AvatarImage src={user?.avatar_url || ''} alt={displayName} />
-                            <AvatarFallback className="bg-primary/10 text-primary font-semibold">{getInitials()}</AvatarFallback>
+                            <AvatarFallback className="bg-primary/10 text-primary font-semibold">{initials}</AvatarFallback>
                         </Avatar>
                         <div className="flex flex-col space-y-1 leading-none">
                             {displayName && <p className="font-medium text-sm">{displayName}</p>}
@@ -144,3 +149,12 @@ export function UserNav({ user }: UserNavProps) {
         </>
     )
 }
+
+// Memoize to prevent re-renders when user prop hasn't changed
+// Custom comparison to avoid re-rendering when user object reference changes but values are the same
+export const UserNav = React.memo(UserNavComponent, (prevProps, nextProps) => {
+    // Only re-render if user ID or avatar changes (the most common updates)
+    return prevProps.user?.id === nextProps.user?.id &&
+        prevProps.user?.avatar_url === nextProps.user?.avatar_url &&
+        prevProps.user?.full_name === nextProps.user?.full_name
+})

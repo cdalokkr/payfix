@@ -14,6 +14,7 @@ import { Calendar as CalendarIcon, Briefcase as BriefcaseIcon } from "@phosphor-
 import { useUserRealtimeDashboard } from "@/hooks/use-realtime-dashboard-data"
 import { getDay } from "date-fns"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { useProfile } from "@/lib/context/profile-context"
 
 // Helper to calculate scheduled hours from time strings
 function calculateScheduledHours(checkIn: string, checkOut: string): number {
@@ -25,7 +26,7 @@ function calculateScheduledHours(checkIn: string, checkOut: string): number {
 }
 
 export function AttendanceDashboard() {
-    const { data: profile } = trpc.profile.get.useQuery()
+    const { profile } = useProfile()
     const isMobile = useIsMobile()
 
     // Enable real-time updates for the employee

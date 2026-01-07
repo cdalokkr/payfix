@@ -22,7 +22,7 @@ interface DashboardPerformanceMetrics {
 
 // Request deduplication cache
 const requestCache = new Map<string, { data: unknown; expiry: number; promise: Promise<unknown> }>()
-const CACHE_TTL = 5 * 1000 // 5 seconds (reduced from 15s for faster updates after user operations)
+const CACHE_TTL = 10 * 60 * 1000 // 10 minutes (aggressive caching for performance)
 
 // Cache version mechanism
 let cacheVersion = 0

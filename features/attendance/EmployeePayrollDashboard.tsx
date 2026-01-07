@@ -9,10 +9,11 @@ import { format } from "date-fns"
 import Link from "next/link"
 import { DailyAttendanceCard } from "./DailyAttendanceCard"
 import { useUserRealtimeDashboard } from "@/hooks/use-realtime-dashboard-data"
+import { useProfile } from '@/lib/context/profile-context'
 
 
 export function EmployeePayrollDashboard() {
-    const { data: profile } = trpc.profile.get.useQuery()
+    const { profile } = useProfile()
 
     // Enable real-time subscription for attendance updates
     // This will show toasts on verify/reject/edit and auto-refresh data

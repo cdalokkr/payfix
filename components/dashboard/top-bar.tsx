@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/breadcrumb"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { UserNav } from "@/components/user-nav"
+import { NotificationBell } from "@/components/dashboard/notification-bell"
 import { Profile } from "@/types"
 
 interface TopBarProps {
@@ -23,7 +24,7 @@ interface TopBarProps {
   user?: Profile | null
 }
 
-export function TopBar({ className, user }: TopBarProps) {
+function TopBarComponent({ className, user }: TopBarProps) {
   const pathname = usePathname()
 
   // Generate breadcrumb from pathname
@@ -83,6 +84,8 @@ export function TopBar({ className, user }: TopBarProps) {
       </div>
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2 pr-2 border-r border-border/40">
+          <NotificationBell />
+          <div className="h-6 w-px bg-border/40" />
           <ThemeToggle />
         </div>
         <UserNav user={user || null} />
@@ -90,3 +93,6 @@ export function TopBar({ className, user }: TopBarProps) {
     </header>
   )
 }
+
+// Memoize to prevent re-renders when user prop hasn't changed
+export const TopBar = React.memo(TopBarComponent)

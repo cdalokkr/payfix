@@ -4,8 +4,8 @@
 import { z } from 'zod'
 import { router, protectedProcedure, adminProcedure, moderatorProcedure } from '../server'
 import { TRPCError } from '@trpc/server'
-import { attendance, profiles, leaves, officeSettings, officeClosures, activities } from '@/lib/db/schema'
-import { eq, and, gte, lte, desc, sql, inArray } from 'drizzle-orm'
+import { attendance, profiles, leaves, officeSettings, officeClosures, activities, notifications } from '@/lib/db/schema'
+import { eq, and, gte, lte, desc, sql, inArray, or } from 'drizzle-orm'
 import { AttendanceService } from '@/lib/services/attendance.service'
 import { invalidateDashboardCache } from './admin-dashboard-optimized'
 import { broadcastServerEvent } from '@/lib/events/server-broadcaster'
@@ -80,6 +80,25 @@ export const attendanceRouter = router({
                 recordId: result.id
             }, ctx.profile.id)
 
+            // Send notifications to admins and moderators
+            const adminModerators = await ctx.db.query.profiles.findMany({
+                where: or(eq(profiles.role, 'admin'), eq(profiles.role, 'moderator')),
+                columns: { id: true, user_id: true, role: true }
+            })
+
+            // Send notifications to admins and moderators with role-specific links
+            await Promise.all(adminModerators.map(user => {
+                const role = user.role || 'admin'
+                const link = role === 'admin' ? '/admin/payroll/attendance' : '/moderator/payroll/attendance'
+                return ctx.db.insert(notifications).values({
+                    user_id: user.user_id,
+                    title: 'Employee Clocked In',
+                    message: `${ctx.profile.full_name || ctx.profile.email} has clocked in`,
+                    type: 'attendance',
+                    link
+                })
+            }))
+
             return result
         }),
 
@@ -111,6 +130,25 @@ export const attendanceRouter = router({
                 date: input?.localDate || new Date().toISOString().split('T')[0],
                 recordId: result.id
             }, ctx.profile.id)
+
+            // Send notifications to admins and moderators
+            const adminModerators = await ctx.db.query.profiles.findMany({
+                where: or(eq(profiles.role, 'admin'), eq(profiles.role, 'moderator')),
+                columns: { id: true, user_id: true, role: true }
+            })
+
+            // Send notifications to admins and moderators with role-specific links
+            await Promise.all(adminModerators.map(user => {
+                const role = user.role || 'admin'
+                const link = role === 'admin' ? '/admin/payroll/attendance' : '/moderator/payroll/attendance'
+                return ctx.db.insert(notifications).values({
+                    user_id: user.user_id,
+                    title: 'Employee Clocked Out',
+                    message: `${ctx.profile.full_name || ctx.profile.email} has clocked out`,
+                    type: 'attendance',
+                    link
+                })
+            }))
 
             return result
         }),

@@ -1,6 +1,3 @@
-// ============================================
-// components/theme-toggle.tsx
-// ============================================
 'use client'
 
 import { useTheme } from 'next-themes'
@@ -16,10 +13,8 @@ export function ThemeToggle() {
     setMounted(true)
   }, [])
 
-  if (!mounted) {
-    return <Button variant="outline" size="icon" disabled />
-  }
-
+  // Don't show loading state - render immediately to prevent flicker
+  // The theme will be correct after hydration
   return (
     <Button
       variant="outline"
@@ -27,6 +22,8 @@ export function ThemeToggle() {
       onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
       aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
       aria-pressed={theme === 'dark'}
+      className="transition-opacity"
+      style={{ opacity: mounted ? 1 : 0.5 }}
     >
       {theme === 'dark' ? (
         <Sun className="h-5 w-5" aria-hidden="true" />

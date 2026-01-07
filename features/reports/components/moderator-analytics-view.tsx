@@ -14,6 +14,7 @@ import { useUserRealtimeDashboard } from "@/hooks/use-realtime-dashboard-data"
 import { AnalyticsTab } from "./analytics-tab"
 import { MetricCard } from '@/components/dashboard/metric-card'
 import { AdminActivityChart } from "./admin-activity-chart"
+import { useProfile } from '@/lib/context/profile-context'
 
 export function ModeratorAnalyticsView() {
     const { theme } = useTheme()
@@ -21,10 +22,7 @@ export function ModeratorAnalyticsView() {
     const [dateRange, setDateRange] = useState<{ from: Date; to: Date } | undefined>()
     const [isRefreshing, setIsRefreshing] = useState(false)
 
-    // Get current user's profile for realtime subscriptions
-    const { data: profile } = trpc.profile.get.useQuery(undefined, {
-        staleTime: 5 * 60 * 1000,
-    })
+    const { profile } = useProfile()
 
     // Use realtime dashboard hook for live updates (moderator version)
     const {

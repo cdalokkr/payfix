@@ -12,8 +12,10 @@ import { BottomNav } from './bottom-nav'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { ProfileProvider } from '@/lib/context/profile-context'
 import { Profile } from '@/types'
 import { cn } from '@/lib/utils'
+import { useDashboardCacheInvalidation } from '@/hooks/use-dashboard-cache-invalidation'
 
 // Dynamic imports for heavy dashboard components to reduce initial bundle size
 const AdminOverview = dynamic(
@@ -188,11 +190,17 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   // Use cached profile as initial data and always fetch fresh data in background
   const { data: profile, isLoading: profileLoading, isError: profileError } = trpc.profile.get.useQuery(undefined, {
     initialData: initialProfile || undefined, // Use cached profile from localStorage
-    staleTime: 30 * 1000, // 30 seconds - reduced to ensure fresher avatar data
+    staleTime: 5 * 60 * 1000, // 5 minutes - prevent unnecessary refetches during navigation
+    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
+    refetchOnMount: false, // Use cached data if available, don't refetch on every mount
+    refetchOnWindowFocus: false, // Don't refetch when window regains focus
     enabled: !isLoggingOut, // Prevent fetching when logging out to avoid 401 errors
     retry: 2, // Limit retries to prevent infinite loading
     retryDelay: 1000,
   })
+
+  // Enable real-time cache invalidation for dashboard data
+  useDashboardCacheInvalidation()
 
   // Memoize the setContentLoading callback to prevent unnecessary re-renders
   const handleLoadingChange = useCallback((loading: boolean) => {
@@ -256,6 +264,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   // Determine the current user role, prioritizing fresh profile data
   const currentRole = profile?.role || storedProfile?.role;
   const currentUser = profile || storedProfile || null;
+
+  // Memoize profile context value to prevent unnecessary re-renders
+  const profileContextValue = useMemo(() => ({
+    profile,
+    isLoading: profileLoading
+  }), [profile, profileLoading]);
 
   // Show loading dialog while role is being determined (but don't block the UI)
   if (!currentRole && (pathname === '/admin' || pathname === '/user')) {
@@ -337,24 +351,26 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           )}
         </DialogContent>
       </Dialog>
-      <SidebarProvider>
-        <AppSidebar
-          role={currentRole || 'employee'}
-          tenants={tenants}
-          defaultTenant={defaultTenant}
-          onTenantSwitch={handleTenantSwitch}
-          user={currentUser}
-          className={cn(currentRole === 'employee' && "hidden lg:flex")}
-        />
-        <SidebarInset className="flex flex-col h-screen overflow-hidden">
-          <TopBar user={currentUser} />
-          <div className="flex-1 overflow-y-auto pt-6 pb-20 lg:pb-4 scroll-smooth">
-            {children || <DashboardContent profile={profile} isLoading={profileLoading} onLoadingChange={handleLoadingChange} />}
-          </div>
-          <BottomNav />
-          <StatusBar className="hidden lg:flex" />
-        </SidebarInset>
-      </SidebarProvider>
+      <ProfileProvider value={profileContextValue}>
+        <SidebarProvider>
+          <AppSidebar
+            role={currentRole || 'employee'}
+            tenants={tenants}
+            defaultTenant={defaultTenant}
+            onTenantSwitch={handleTenantSwitch}
+            user={currentUser}
+            className={cn(currentRole === 'employee' && "hidden lg:flex")}
+          />
+          <SidebarInset className="flex flex-col h-screen overflow-hidden">
+            <TopBar user={currentUser} />
+            <div className="flex-1 overflow-y-auto pt-6 pb-20 lg:pb-4 scroll-smooth">
+              {children || <DashboardContent profile={profile} isLoading={profileLoading} onLoadingChange={handleLoadingChange} />}
+            </div>
+            <BottomNav />
+            <StatusBar className="hidden lg:flex" />
+          </SidebarInset>
+        </SidebarProvider>
+      </ProfileProvider>
     </>
   )
 }

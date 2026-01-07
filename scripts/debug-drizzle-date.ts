@@ -52,7 +52,7 @@ async function debugDrizzleDate() {
             console.log(`  [Record ${i + 1}]`);
             console.log(`    date value:`, r.date);
             console.log(`    date type:`, typeof r.date);
-            console.log(`    date instanceof Date:`, r.date instanceof Date);
+            console.log(`    date instanceof Date:`, (r.date as any) instanceof Date);
             console.log(`    date.constructor.name:`, r.date?.constructor?.name);
             console.log(`    JSON.stringify(date):`, JSON.stringify(r.date));
             console.log(`    String(date):`, String(r.date));
@@ -62,8 +62,9 @@ async function debugDrizzleDate() {
             console.log(`    String(date) === todayLocal?`, String(r.date) === todayLocal);
 
             // If it's a Date object
-            if (r.date instanceof Date) {
-                const normalized = `${r.date.getFullYear()}-${String(r.date.getMonth() + 1).padStart(2, '0')}-${String(r.date.getDate()).padStart(2, '0')}`;
+            if ((r.date as any) instanceof Date) {
+                const dateObj = r.date as any as Date;
+                const normalized = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
                 console.log(`    Normalized from Date:`, normalized);
                 console.log(`    normalized === todayLocal?`, normalized === todayLocal);
             }

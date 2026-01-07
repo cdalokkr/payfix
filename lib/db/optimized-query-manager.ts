@@ -170,11 +170,58 @@ export class OptimizedQueryManager {
     }
 
     try {
-      // Check cache first - NEVER cache employee-specific queries (attendance button must be fresh)
-      const shouldUseCache = useCache && !profileId;  // Skip cache for employee dashboards
+      // Check cache first
+      const shouldUseCache = useCache;
       if (shouldUseCache) {
         const cached = getCachedQuery<DashboardMetricsResult>(queryHash)
         if (cached) {
+          // For employee dashboards: merge cached global data with FRESH attendance
+          if (profileId) {
+            // Fetch only fresh attendance data
+            const todayStart = new Date(new Date().setHours(0, 0, 0, 0))
+            const [attendanceData, settingsData, closuresData] = await Promise.all([
+              (async () => {
+                const [year, month, day] = (localDate || new Date().toISOString().split('T')[0]).split('-').map(Number);
+                const yesterday = new Date(year, month - 1, day - 1);
+                const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+                return db.select().from(attendance)
+                  .where(and(
+                    eq(attendance.profile_id, profileId!),
+                    gte(attendance.date, sql`${yesterdayStr}`)
+                  ));
+              })(),
+              db.select().from(officeSettings).limit(1),
+              db.select().from(officeClosures).where(gte(officeClosures.date, sql`CURRENT_DATE`))
+            ])
+
+            // Merge cached data with fresh attendance
+            const serverLocalDate = (() => {
+              const d = new Date();
+              return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            })();
+            const targetDate = localDate || serverLocalDate;
+            const normalizeDate = (d: any): string => {
+              if (!d) return '';
+              if (d instanceof Date) {
+                return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+              }
+              const str = String(d);
+              return str.split('T')[0];
+            };
+            const records = attendanceData as any[];
+
+            return {
+              ...cached,
+              attendance: {
+                todayRecord: records.find(r => normalizeDate(r.date) === targetDate),
+                pendingRecord: records.filter(r => !r.check_out).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0],
+                settings: (settingsData as any[])[0] || null,
+                closures: (closuresData as any[]) || []
+              }
+            }
+          }
+
+          // Admin dashboard - return full cached result
           recordQueryMetrics({
             queryType: 'getDashboardMetricsUnified',
             executionTime: performance.now() - startTime,
@@ -334,9 +381,24 @@ export class OptimizedQueryManager {
         })() : undefined
       }
 
-      // Cache the result - NEVER cache employee-specific data to keep attendance button fresh
-      if (useCache && !profileId) {
-        setCachedQuery<DashboardMetricsResult>(queryHash, result, 60 * 1000) // Cache admin dashboard only
+      // IMPROVED CACHING STRATEGY:
+      // - Cache for 10 minutes (600s) instead of 60s for better performance
+      // - Cache admin data (no profileId) aggressively
+      // - Cache employee global data (stats, activities) but attendance is ALWAYS fresh
+      // - Real-time invalidation via Supabase will clear stale cache
+      if (useCache) {
+        if (!profileId) {
+          // Admin dashboard - cache everything for 10 minutes
+          setCachedQuery<DashboardMetricsResult>(queryHash, result, 10 * 60 * 1000)
+        } else {
+          // Employee dashboard - cache global stats but attendance is fetched fresh
+          // Clone result without attendance data for caching
+          const cacheableResult = {
+            ...result,
+            attendance: undefined // Don't cache attendance - always fetch fresh
+          }
+          setCachedQuery<DashboardMetricsResult>(queryHash, cacheableResult, 10 * 60 * 1000)
+        }
       }
 
       recordQueryMetrics({

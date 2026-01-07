@@ -1,12 +1,10 @@
 "use client"
 
 import { SettingsView } from "@/features/settings/components/settings-view"
-import { trpc } from "@/lib/trpc/client"
+import { useProfile } from '@/lib/context/profile-context'
 
 export default function AdminProfilePage() {
-    const { data: user, isLoading } = trpc.profile.get.useQuery(undefined, {
-        staleTime: Infinity, // Use cached data from sidebar/topbar, don't refetch on mount
-    })
+    const { profile: user, isLoading } = useProfile() // Use cached data from sidebar/topbar, don't refetch on mount
 
     if (isLoading) {
         return (
