@@ -19,6 +19,7 @@ export type EventCategory =
     | 'admin_action'
     | 'system_notification'
     | 'dashboard_sync'
+    | 'attendance_update'
 
 // ============================================
 // EVENT INTERFACES
@@ -239,6 +240,27 @@ export const EVENT_ROUTING_RULES: Record<EventCategory, RoutingRule> = {
             timeout: 0,
             maxSize: 0
         }
+    },
+    attendance_update: {
+        name: 'attendance-update',
+        eventTypes: ['attendance_update'],
+        targetRoles: ['admin', 'moderator', 'user'],
+        channels: {
+            primary: 'dashboard-management-shared',
+            secondary: ['dashboard-activity']
+        },
+        ttlByPriority: {
+            'ultra-critical': 1,
+            'critical': 2,
+            'secondary': 5,
+            'detailed': 10
+        },
+        persistent: false,
+        batching: {
+            enabled: false,  // Disable batching for immediate updates
+            timeout: 0,
+            maxSize: 0
+        }
     }
 }
 
@@ -335,6 +357,50 @@ export interface SystemNotificationEvent extends RealtimeEvent {
     }
 }
 
+/**
+ * Attendance Update Event
+ * Real-time attendance updates between employees and management
+ * Visible to all user roles with payload-based filtering
+ */
+export type AttendanceAction =
+    | 'clock-in'
+    | 'clock-out'
+    | 'verified'
+    | 'rejected'
+    | 'manual-update'
+    | 'bulk-verify'
+    | 'leave-applied'
+    | 'leave-approved'
+    | 'leave-rejected'
+
+export interface AttendanceUpdateEvent extends RealtimeEvent {
+    metadata: EventMetadata & {
+        category: 'attendance_update'
+        targetRoles: ['admin', 'moderator', 'user']
+    }
+    payload: EventPayload & {
+        data: {
+            action: AttendanceAction
+            /** ID of the attendance/leave record */
+            recordId?: string
+            /** Profile ID of the employee whose attendance is affected */
+            employeeId: string
+            /** Name of the employee for display purposes */
+            employeeName?: string
+            /** Profile ID of who performed the action (for verify/reject) */
+            performedById?: string
+            /** Name of who performed the action */
+            performedByName?: string
+            /** New status after the action */
+            newStatus?: string
+            /** Date of the attendance record (YYYY-MM-DD) */
+            date?: string
+            /** Additional remarks */
+            remarks?: string
+        }
+    }
+}
+
 // ============================================
 // UTILITY TYPES
 // ============================================
@@ -344,6 +410,7 @@ export type AnyRealtimeEvent =
     | UserActivityEvent
     | AdminActionEvent
     | SystemNotificationEvent
+    | AttendanceUpdateEvent
 
 // ============================================
 // EVENT VALIDATION

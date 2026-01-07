@@ -90,6 +90,14 @@ export function LoginForm() {
         warning: data?.warning
       })
 
+      // OPTIMIZED: Only prefetch for admins and moderators (employees have their own lightweight queries)
+      // This avoids a 700ms+ unified dashboard query that employees don't use
+      const prefetchPromise = data?.profile?.role !== 'employee'
+        ? prefetch().catch(err => {
+          console.warn('[LoginForm] Prefetch failed, dashboard will fetch on load:', err)
+        })
+        : Promise.resolve()
+
       // Optimized: Pre-populate the tRPC cache for the profile and last session so the dashboard feels instant
       if (data?.profile) {
         utils.profile.get.setData(undefined, data.profile as any)
@@ -127,10 +135,6 @@ export function LoginForm() {
         // Role-based redirect
         if (data.profile.role === 'admin') {
           redirectPath = '/admin'
-          // PREFETCH dashboard data before redirect (non-blocking)
-          prefetch().catch(err => {
-            console.warn('[LoginForm] Prefetch failed, dashboard will fetch on load:', err)
-          })
         } else if (data.profile.role === 'moderator') {
           redirectPath = '/moderator'
         } else if (data.profile.role === 'employee') {
@@ -139,6 +143,12 @@ export function LoginForm() {
           redirectPath = '/moderator'
         }
       }
+
+      // Wait for prefetch to complete (with a timeout to not block redirect too long)
+      await Promise.race([
+        prefetchPromise,
+        new Promise(resolve => setTimeout(resolve, 300)) // Max 300ms wait
+      ])
 
       try {
         // Reduced delay since we pre-populated the cache

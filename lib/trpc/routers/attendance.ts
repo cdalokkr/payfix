@@ -13,6 +13,23 @@ import { broadcastServerEvent } from '@/lib/events/server-broadcaster'
 export const attendanceRouter = router({
     // --- ATTENDANCE ---
 
+    // Simple endpoint for attendance button state - always fresh, no caching
+    getTodayStatus: protectedProcedure
+        .input(z.object({ localDate: z.string() }))
+        .query(async ({ ctx, input }) => {
+            const record = await ctx.db.query.attendance.findFirst({
+                where: and(
+                    eq(attendance.profile_id, ctx.profile.id),
+                    eq(attendance.date, input.localDate)
+                ),
+                columns: { check_in: true, check_out: true }
+            });
+
+            if (!record) return { status: 'not_clocked_in' as const };
+            if (record.check_in && !record.check_out) return { status: 'clocked_in' as const };
+            return { status: 'marked' as const };
+        }),
+
     getAttendance: protectedProcedure
         .input(z.object({
             profileId: z.string().uuid().optional(),
@@ -54,6 +71,15 @@ export const attendanceRouter = router({
                 userId: ctx.profile.id
             }, ctx.profile.id)
 
+            // Broadcast attendance-specific event for real-time updates
+            broadcastServerEvent('attendance_update', {
+                action: 'clock-in',
+                employeeId: ctx.profile.id,
+                employeeName: ctx.profile.full_name,
+                date: input?.localDate || new Date().toISOString().split('T')[0],
+                recordId: result.id
+            }, ctx.profile.id)
+
             return result
         }),
 
@@ -75,6 +101,15 @@ export const attendanceRouter = router({
             broadcastServerEvent('dashboard_sync', {
                 action: 'clock-out',
                 userId: ctx.profile.id
+            }, ctx.profile.id)
+
+            // Broadcast attendance-specific event for real-time updates
+            broadcastServerEvent('attendance_update', {
+                action: 'clock-out',
+                employeeId: ctx.profile.id,
+                employeeName: ctx.profile.full_name,
+                date: input?.localDate || new Date().toISOString().split('T')[0],
+                recordId: result.id
             }, ctx.profile.id)
 
             return result
@@ -105,6 +140,18 @@ export const attendanceRouter = router({
                 targetUserId: result.profile_id
             }, result.profile_id)
 
+            // Broadcast attendance-specific event for real-time updates
+            broadcastServerEvent('attendance_update', {
+                action: input.status === 'verified' ? 'verified' : 'rejected',
+                employeeId: result.profile_id,
+                performedById: ctx.profile.id,
+                performedByName: ctx.profile.full_name,
+                newStatus: input.status,
+                date: result.date,
+                recordId: result.id,
+                remarks: input.remarks
+            }, result.profile_id)
+
             return result
         }),
 
@@ -129,6 +176,15 @@ export const attendanceRouter = router({
             // Broadcast sync event to all clients
             broadcastServerEvent('dashboard_sync', {
                 action: 'bulk-verify'
+            })
+
+            // Broadcast attendance-specific event for real-time updates
+            broadcastServerEvent('attendance_update', {
+                action: 'bulk-verify',
+                employeeId: 'bulk', // Special marker for bulk operations
+                performedById: ctx.profile.id,
+                performedByName: ctx.profile.full_name,
+                newStatus: input.status
             })
 
             return result
@@ -157,6 +213,17 @@ export const attendanceRouter = router({
             broadcastServerEvent('dashboard_sync', {
                 action: 'manual-update',
                 targetUserId: (result as any)?.profile_id
+            }, (result as any)?.profile_id)
+
+            // Broadcast attendance-specific event for real-time updates
+            broadcastServerEvent('attendance_update', {
+                action: 'manual-update',
+                employeeId: (result as any)?.profile_id,
+                performedById: ctx.profile.id,
+                performedByName: ctx.profile.full_name,
+                newStatus: input.status,
+                date: (result as any)?.date,
+                recordId: input.id
             }, (result as any)?.profile_id)
 
             return result

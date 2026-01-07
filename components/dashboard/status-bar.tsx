@@ -4,7 +4,7 @@
 
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useIndependentCacheStatus } from '@/hooks/use-independent-cache-status'
 import {
   CheckCircle,
@@ -62,21 +62,32 @@ function CompactIndependentStatus({ status, detail }: { status: string; detail: 
 
 // Simple last updated indicator
 function SimpleLastUpdated({ timestamp }: { timestamp: number }) {
-  const getRelativeTime = (timestamp: number) => {
-    if (typeof window === 'undefined') return 'Loading...'
+  const [relativeTime, setRelativeTime] = useState('Loading...')
 
-    const now = Date.now()
-    const diff = now - timestamp
-    const seconds = Math.floor(diff / 1000)
+  useEffect(() => {
+    const calculateRelativeTime = () => {
+      const now = Date.now()
+      const diff = now - timestamp
+      const seconds = Math.floor(diff / 1000)
 
-    if (seconds < 60) return 'Just now'
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
-    return `${Math.floor(seconds / 3600)}h ago`
-  }
+      if (seconds < 60) return 'Just now'
+      if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
+      return `${Math.floor(seconds / 3600)}h ago`
+    }
+
+    setRelativeTime(calculateRelativeTime())
+
+    // Update every 30 seconds
+    const interval = setInterval(() => {
+      setRelativeTime(calculateRelativeTime())
+    }, 30000)
+
+    return () => clearInterval(interval)
+  }, [timestamp])
 
   return (
-    <span className="text-xs text-muted-foreground">
-      {getRelativeTime(timestamp)}
+    <span className="text-xs text-muted-foreground" suppressHydrationWarning>
+      {relativeTime}
     </span>
   )
 }

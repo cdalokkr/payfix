@@ -1,0 +1,22 @@
+[dotenv@17.2.3] injecting env (4) from .env.local -- tip: ≡ƒöÉ prevent building .env in docker: https://dotenvx.com/prebuild
+============================================================
+≡ƒôà Testing attendance for TODAY: 2026-01-07
+≡ƒæñ Profile ID: c4b9da11-f942-4c2b-b2ef-56dbde3125f8
+============================================================
+
+≡ƒôè Today's Attendance Record:
+------------------------------------------------------------
+  No attendance record found for today
+
+≡ƒö╡ BUTTON STATE: "Office - In"
+   ΓåÆ User has not clocked in yet
+
+
+============================================================
+≡ƒôà Recent Attendance Records (last 3 days):
+============================================================
+  No recent records found
+
+============================================================
+Γ£à Test completed
+============================================================

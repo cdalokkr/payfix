@@ -4,6 +4,7 @@ import { trpc } from '@/lib/trpc/client'
 import { createClient } from '@/lib/supabase/client'
 import { useEffect, useCallback, useState, useRef, useMemo } from 'react'
 import { usePathname } from 'next/navigation'
+import { toast } from 'sonner'
 import type { UserRole } from '@/types'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import {
@@ -515,10 +516,9 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
 
   // Use the unified endpoint for all data
   // IMPORTANT: Use shared config to ensure cache key consistency with prefetch
-  const queryParams = {
-    ...(forceFresh ? DASHBOARD_FRESH_PARAMS : DASHBOARD_QUERY_PARAMS),
-    localDate: localDateStr
-  }
+  // CACHE KEY FIX: Use exact same params as prefetch to ensure cache hit
+  // Don't add localDate here - unified dashboard handles date internally
+  const queryParams = forceFresh ? DASHBOARD_FRESH_PARAMS : DASHBOARD_QUERY_PARAMS
 
   const {
     data: dashboardData,
@@ -786,9 +786,55 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
           { event: 'realtime-event' },
           async ({ payload }: any) => {
             if (!isMountedRef.current) return
-            // Check if this is a sync event
-            if (payload?.metadata?.category === 'dashboard_sync') {
+
+            const category = payload?.metadata?.category
+
+            // Handle dashboard_sync events (legacy support)
+            if (category === 'dashboard_sync') {
               console.log('[REALTIME] 🚀 [Management] Sync broadcast received')
+
+              // Show attendance toasts for management
+              const action = payload?.payload?.action
+              const employeeName = payload?.payload?.employeeName
+              if (action === 'clock-in') {
+                toast.info('New Clock-In', {
+                  description: employeeName ? `${employeeName} clocked in` : 'An employee clocked in'
+                })
+              } else if (action === 'clock-out') {
+                toast.info('New Clock-Out', {
+                  description: employeeName ? `${employeeName} clocked out` : 'An employee clocked out'
+                })
+              }
+
+              refetch({ forceFresh: true })
+            }
+
+            // Handle attendance_update events (enhanced notifications)
+            if (category === 'attendance_update') {
+              console.log('[REALTIME] 🔔 [Management] Attendance update broadcast received:', payload?.payload?.data || payload?.payload)
+
+              const data = payload?.payload?.data || payload?.payload
+              const action = data?.action
+              const employeeName = data?.employeeName || 'Employee'
+              const date = data?.date
+
+              // Show toast based on action type
+              if (action === 'clock-in') {
+                toast.info('New Clock-In', {
+                  description: `${employeeName} clocked in${date ? ` for ${date}` : ''}`
+                })
+              } else if (action === 'clock-out') {
+                toast.info('New Clock-Out', {
+                  description: `${employeeName} clocked out${date ? ` for ${date}` : ''}`
+                })
+              }
+              // Note: verified/rejected/manual-update by self will show via mutation success toasts
+
+              // Invalidate attendance queries for UI refresh
+              utils.attendance.getAttendance.invalidate()
+              utils.attendance.getLeaves.invalidate()
+
+              // Trigger dashboard refresh
               refetch({ forceFresh: true })
             }
           }
@@ -863,9 +909,60 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
           { event: 'realtime-event' },
           async ({ payload }: any) => {
             if (!isMountedRef.current) return
-            // Check if this is a sync event
-            if (payload?.metadata?.category === 'dashboard_sync') {
+
+            const category = payload?.metadata?.category
+
+            // Handle dashboard_sync events (legacy support)
+            if (category === 'dashboard_sync') {
               console.log('[REALTIME] 🚀 [User] Sync broadcast received')
+
+              // Show attendance toasts for employees
+              const action = payload?.payload?.action
+              if (action === 'verified' || action === 'verify-attendance') {
+                const status = payload?.payload?.newStatus
+                if (status === 'verified') {
+                  toast.success('Attendance Verified!', {
+                    description: 'Your attendance has been approved'
+                  })
+                } else if (status === 'rejected') {
+                  toast.error('Attendance Rejected', {
+                    description: payload?.payload?.remarks || 'Your attendance was rejected'
+                  })
+                }
+              }
+
+              refetch({ forceFresh: true })
+            }
+
+            // Handle attendance_update events (enhanced bi-directional notifications)
+            if (category === 'attendance_update') {
+              console.log('[REALTIME] 🔔 [User] Attendance update broadcast received:', payload?.payload?.data || payload?.payload)
+
+              const data = payload?.payload?.data || payload?.payload
+              const action = data?.action
+              const performerName = data?.performedByName || 'Manager'
+              const remarks = data?.remarks
+              const date = data?.date
+
+              // Show toast based on action type
+              if (action === 'verified') {
+                toast.success('Attendance Approved! ✓', {
+                  description: `Verified by ${performerName}${date ? ` for ${date}` : ''}`
+                })
+              } else if (action === 'rejected') {
+                toast.error('Attendance Rejected', {
+                  description: remarks || `Rejected by ${performerName}${date ? ` for ${date}` : ''}`
+                })
+              } else if (action === 'manual-update') {
+                toast.info('Attendance Updated', {
+                  description: `Your record was updated by ${performerName}${date ? ` for ${date}` : ''}`
+                })
+              }
+
+              // Invalidate attendance queries for UI refresh
+              utils.attendance.getAttendance.invalidate()
+
+              // Trigger full dashboard refresh
               refetch({ forceFresh: true })
             }
           }

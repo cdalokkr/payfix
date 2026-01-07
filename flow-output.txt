@@ -1,0 +1,37 @@
+[dotenv@17.2.3] injecting env (4) from .env.local -- tip: ≡ƒöÉ encrypt with Dotenvx: https://dotenvx.com
+============================================================
+≡ƒöä Testing Attendance Flow
+≡ƒôà Date: 2026-01-07
+≡ƒæñ Profile: c4b9da11-f942-4c2b-b2ef-56dbde3125f8
+============================================================
+
+≡ƒôî STEP 1: Initial State
+----------------------------------------
+  Record: EXISTS
+  Button State: ≡ƒƒó "Marked Today's"
+
+≡ƒôî STEP 2: Simulating Clock-In
+----------------------------------------
+  ΓÜá∩╕Å Record already exists, deleting first...
+  Γ£à Clock-in inserted
+  Button State: ≡ƒƒá "Office - Out"
+  ΓåÆ Expected: ≡ƒƒá "Office - Out"
+
+≡ƒôî STEP 3: Simulating Clock-Out
+----------------------------------------
+  Γ£à Clock-out updated
+  Button State: ≡ƒƒó "Marked Today's"
+  ΓåÆ Expected: ≡ƒƒó "Marked Today's"
+
+≡ƒôî FINAL: Verification
+----------------------------------------
+  Date: 2026-01-07
+  Check-in: 2026-01-06T23:03:00.054+00:00
+  Check-out: 2026-01-06T23:03:01.282+00:00
+  Working Hours: 0.0003411111111111111
+  Status: pending
+  Final Button State: ≡ƒƒó "Marked Today's"
+
+============================================================
+Γ£à Test completed - Refresh UI to verify button states
+============================================================

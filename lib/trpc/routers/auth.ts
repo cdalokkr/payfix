@@ -7,10 +7,11 @@ import { router, publicProcedure, protectedProcedure } from '../server'
 import { loginSchema, changePasswordSchema } from '@/lib/validations/auth'
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
-import { profiles, activities, designations } from '@/lib/db/schema'
+import { profiles, activities, designations, attendance } from '@/lib/db/schema'
 import { eq, and, desc, count } from 'drizzle-orm'
 import { performLogout, preSeedSessionCache } from '@/lib/auth/optimized-context'
 import { formatActivityDescription } from '@/lib/utils/activity-logger'
+import { queryManager } from '@/lib/db/optimized-query-manager'
 
 // Custom error types for specific validation scenarios
 const AuthErrorTypes = {
@@ -71,6 +72,12 @@ export const authRouter = router({
           userId: data.user?.id,
           error: error?.message
         })
+
+        // OPTIMIZATION: Warm up DB connection immediately after successful auth
+        // This pre-establishes the connection pool before dashboard queries are fired
+        if (!error && data.user) {
+          queryManager.warmupConnection().catch(() => { })
+        }
 
         if (error) {
           // Parse Supabase error to provide specific error types
@@ -215,10 +222,9 @@ export const authRouter = router({
           profileData.role = 'employee' // Default to employee role
         }
 
-        // PRE-SEED CACHE: Pre-populate session cache for instant first dashboard load
-        // This eliminates the ~600ms cache miss on the first protected procedure after login
+        // PRE-SEED SESSION CACHE: Pre-populate session cache for instant first dashboard load
         preSeedSessionCache(data.user, profileData as any).catch(err => {
-          console.warn('[AUTH-LOGIN] Pre-seed cache failed (non-critical):', err)
+          console.warn('[AUTH-LOGIN] Pre-seed session cache failed (non-critical):', err)
         })
 
         return {

@@ -103,6 +103,25 @@ function setCachedQuery<T>(queryHash: string, data: T, ttl: number = CACHE_TTL_D
 
 // Optimized query execution manager
 export class OptimizedQueryManager {
+  /**
+   * Warm up the database connection pool by executing a simple query.
+   * Call this during login to pre-establish connections before dashboard data is needed.
+   * This reduces cold start latency on the first dashboard load.
+   */
+  async warmupConnection(): Promise<void> {
+    const startTime = performance.now()
+    try {
+      // Execute a minimal query to establish connection
+      await db.execute(sql`SELECT 1`)
+      const duration = performance.now() - startTime
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[DB-PERF] Connection warmup: ${duration.toFixed(2)}ms`)
+      }
+    } catch (error) {
+      console.warn('[DB-PERF] Connection warmup failed (non-critical):', error)
+    }
+  }
+
   // BATCH QUERY 1: Get all dashboard metrics in a single optimized execution
   async getDashboardMetricsUnified(options: {
     analyticsDays?: number
@@ -110,6 +129,7 @@ export class OptimizedQueryManager {
     useCache?: boolean
     profileId?: string
     localDate?: string
+    priority?: 'speed' | 'freshness'
   } = {}): Promise<{
     critical: {
       totalUsers: number;
@@ -128,8 +148,8 @@ export class OptimizedQueryManager {
     }
   }> {
     const startTime = startQueryTiming('getDashboardMetricsUnified')
-    const { analyticsDays = 7, activitiesLimit = 10, useCache = true, profileId, localDate } = options
-    const queryHash = hashQuery('dashboard_metrics_unified', { analyticsDays, activitiesLimit, profileId, localDate })
+    const { analyticsDays = 7, activitiesLimit = 10, useCache = true, profileId, localDate, priority = 'speed' } = options
+    const queryHash = hashQuery('dashboard_metrics_unified', { analyticsDays, activitiesLimit, profileId, localDate, priority })
 
     type DashboardMetricsResult = {
       critical: {
@@ -150,8 +170,9 @@ export class OptimizedQueryManager {
     }
 
     try {
-      // Check cache first
-      if (useCache) {
+      // Check cache first - NEVER cache employee-specific queries (attendance button must be fresh)
+      const shouldUseCache = useCache && !profileId;  // Skip cache for employee dashboards
+      if (shouldUseCache) {
         const cached = getCachedQuery<DashboardMetricsResult>(queryHash)
         if (cached) {
           recordQueryMetrics({
@@ -169,44 +190,51 @@ export class OptimizedQueryManager {
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
       const analyticsDaysAgo = new Date(Date.now() - analyticsDays * 24 * 60 * 60 * 1000)
 
+      // OPTIMIZED: Combined stats query - SKIP for specific profile requests (employees)
+      // because they don't see these global metrics in their dashboard
+      const shouldFetchGlobalStats = !profileId
+
+      const combinedStatsQuery = shouldFetchGlobalStats
+        ? db.execute(sql`
+            SELECT 
+              (SELECT count(*) FROM profiles WHERE role = 'employee') as employee_count,
+              (SELECT count(*) FROM profiles WHERE role = 'moderator') as moderator_count,
+              (SELECT count(*) FROM profiles WHERE role = 'admin') as admin_count,
+              (SELECT count(*) FROM activities) as total_activities,
+              (SELECT count(*) FROM activities WHERE created_at >= ${todayStart.toISOString()}::timestamp) as today_activities,
+              (SELECT count(DISTINCT user_id) FROM activities WHERE created_at >= ${sevenDaysAgo.toISOString()}::timestamp) as active_users
+          `)
+        : Promise.resolve([{
+          employee_count: 0, moderator_count: 0, admin_count: 0,
+          total_activities: 0, today_activities: 0, active_users: 0
+        }] as any)
+
+      // Only fetch attendance data if profileId is provided (employee viewing their own data)
+      const shouldFetchAttendance = !!profileId
+
       const [
-        roleCountsResult,
-        totalActivitiesResult,
-        todayActivitiesResult,
-        activeUsersCountResult,
+        combinedStats,
         analyticsData,
         recentActivities,
         attendanceData,
         settingsData,
         closuresData
       ] = await Promise.all([
-        // 1. Consolidated Role counts
-        db.select({
-          role: profiles.role,
-          count: count()
-        }).from(profiles).groupBy(profiles.role),
+        // 1. OPTIMIZED: Single combined stats query
+        combinedStatsQuery,
 
-        // 2a. Total Activities - Minimal query
-        db.select({ count: count(activities.id) }).from(activities),
+        // 2. Analytics data (TimeSeries) - SKIP for specific profile requests
+        shouldFetchGlobalStats
+          ? db.query.analyticsMetrics.findMany({
+            where: gte(analyticsMetrics.metric_date, analyticsDaysAgo.toISOString().split('T')[0]),
+            orderBy: [desc(analyticsMetrics.metric_date)],
+            limit: analyticsDays * 24
+          })
+          : Promise.resolve([]),
 
-        // 2b. Today Activities - Filtered count
-        db.select({
-          count: sql<number>`count(*) filter (where ${activities.created_at} >= ${todayStart.toISOString()}::timestamp)`
-        }).from(activities),
-
-        // 2c. Optimized Active User Count
-        db.select({ count: sql<number>`count(distinct ${activities.user_id})` }).from(activities)
-          .where(gte(activities.created_at, sevenDaysAgo)),
-
-        // 3. Analytics data (TimeSeries)
-        db.query.analyticsMetrics.findMany({
-          where: gte(analyticsMetrics.metric_date, analyticsDaysAgo.toISOString().split('T')[0]),
-          orderBy: [desc(analyticsMetrics.metric_date)],
-          limit: analyticsDays * 24
-        }),
-
-        // 4. Recent activities
+        // 3. Recent activities - Filtered for employee if profileId exists
         db.query.activities.findMany({
+          where: profileId ? eq(activities.user_id, profileId) : undefined,
           with: {
             profile: {
               columns: {
@@ -222,26 +250,40 @@ export class OptimizedQueryManager {
           limit: activitiesLimit
         }),
 
-        // 5. User-specific attendance data
-        profileId ? db.select().from(attendance)
-          .where(and(
-            eq(attendance.profile_id, profileId),
-            gte(attendance.date, sql`${new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0]}`)
-          )) : Promise.resolve([]),
+        // 4. User-specific attendance data (only if needed)
+        // CRITICAL: Use client's localDate to calculate date range for timezone consistency
+        // This prevents issues where server UTC time differs from user's local date
+        shouldFetchAttendance ? (() => {
+          // Calculate yesterday based on client's local date, not server time
+          const clientDate = localDate || new Date().toISOString().split('T')[0];
+          const [year, month, day] = clientDate.split('-').map(Number);
+          const yesterday = new Date(year, month - 1, day - 1);
+          const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
 
-        // 6. Office settings and closures
-        profileId ? db.select().from(officeSettings).limit(1) : Promise.resolve([]),
-        profileId ? db.select().from(officeClosures).where(gte(officeClosures.date, sql`CURRENT_DATE`)) : Promise.resolve([])
+          return db.select().from(attendance)
+            .where(and(
+              eq(attendance.profile_id, profileId!),
+              gte(attendance.date, sql`${yesterdayStr}`)
+            ));
+        })() : Promise.resolve([]),
+
+        // 5. Office settings (only if needed)
+        shouldFetchAttendance ? db.select().from(officeSettings).limit(1) : Promise.resolve([]),
+
+        // 6. Office closures (only if needed)
+        shouldFetchAttendance ? db.select().from(officeClosures).where(gte(officeClosures.date, sql`CURRENT_DATE`)) : Promise.resolve([])
       ])
 
-      const totalActivitiesCount = Number((totalActivitiesResult as any)?.[0]?.count || 0)
-      const todayActivitiesCount = Number((todayActivitiesResult as any)?.[0]?.count || 0)
-      const activeUsersCount = Number((activeUsersCountResult as any)?.[0]?.count || 0)
+      // Extract combined stats (result is array with single row)
+      const stats = (combinedStats as any)?.[0] || {}
+      const employeeCount = Number(stats.employee_count || 0)
+      const moderatorCount = Number(stats.moderator_count || 0)
+      const adminCount = Number(stats.admin_count || 0)
+      const totalActivitiesCount = Number(stats.total_activities || 0)
+      const todayActivitiesCount = Number(stats.today_activities || 0)
+      const activeUsersCount = Number(stats.active_users || 0)
 
-      // Process role counts from the grouped result
-      const employeeCount = Number(roleCountsResult.find(r => r.role === 'employee')?.count || 0)
-      const moderatorCount = Number(roleCountsResult.find(r => r.role === 'moderator')?.count || 0)
-      const adminCount = Number(roleCountsResult.find(r => r.role === 'admin')?.count || 0)
+
 
       const result: DashboardMetricsResult = {
         critical: {
@@ -262,17 +304,39 @@ export class OptimizedQueryManager {
             profiles: a.profile // Map for compatibility
           }))
         },
-        attendance: profileId ? {
-          todayRecord: (attendanceData as any[]).find(r => r.date === (localDate || new Date().toISOString().split('T')[0])),
-          pendingRecord: (attendanceData as any[]).filter(r => !r.check_out).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0],
-          settings: (settingsData as any[])[0] || null,
-          closures: (closuresData as any[]) || []
-        } : undefined
+        attendance: profileId ? (() => {
+          // Normalize date comparison - Drizzle may return Date objects for date columns
+          // CRITICAL: Use client's localDate for accurate timezone handling
+          // Fallback computes local date (not UTC) to avoid timezone mismatches
+          const serverLocalDate = (() => {
+            const d = new Date();
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          })();
+          const targetDate = localDate || serverLocalDate;
+
+          const normalizeDate = (d: any): string => {
+            if (!d) return '';
+            if (d instanceof Date) {
+              return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            }
+            // Handle string dates that might have time component
+            const str = String(d);
+            return str.split('T')[0];  // Strip any time component
+          };
+
+          const records = attendanceData as any[];
+          return {
+            todayRecord: records.find(r => normalizeDate(r.date) === targetDate),
+            pendingRecord: records.filter(r => !r.check_out).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0],
+            settings: (settingsData as any[])[0] || null,
+            closures: (closuresData as any[]) || []
+          };
+        })() : undefined
       }
 
-      // Cache the result
-      if (useCache) {
-        setCachedQuery<DashboardMetricsResult>(queryHash, result, 15 * 1000) // 15 seconds cache
+      // Cache the result - NEVER cache employee-specific data to keep attendance button fresh
+      if (useCache && !profileId) {
+        setCachedQuery<DashboardMetricsResult>(queryHash, result, 60 * 1000) // Cache admin dashboard only
       }
 
       recordQueryMetrics({
@@ -572,3 +636,6 @@ export function clearQueryCaches(): void {
   queryCache.clear()
   console.log('[DB-PERF] All query caches cleared')
 }
+
+// Singleton instance for use across the app
+export const queryManager = new OptimizedQueryManager()

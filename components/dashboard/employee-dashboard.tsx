@@ -11,10 +11,9 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { ActivityLogFeed, type UserActivity } from "@/components/dashboard/activity-log-feed"
 import { motion } from "framer-motion"
 import { format } from "date-fns"
-import { useUserRealtimeDashboard } from "@/hooks/use-realtime-dashboard-data"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo, useRef } from "react"
 import { cn } from "@/lib/utils"
 import { getEventBroadcaster } from "@/lib/events/event-broadcaster"
 
@@ -57,7 +56,15 @@ function ActivitiesCard({ activities, loading }: ActivitiesCardProps) {
 
 export default function EmployeeDashboard({ initialData }: { initialData?: any }) {
     const utils = trpc.useUtils()
-    const todayStr = format(new Date(), 'yyyy-MM-dd')
+    const todayStr = useMemo(() => {
+        const now = new Date();
+        const istOffset = 5.5 * 60 * 60 * 1000;
+        const istDate = new Date(now.getTime() + istOffset);
+        const year = istDate.getUTCFullYear();
+        const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(istDate.getUTCDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }, []);
     const [currentTime, setCurrentTime] = useState(new Date())
 
     useEffect(() => {
@@ -68,56 +75,107 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
     // Get profile to obtain userId for real-time subscriptions
     const { data: profile } = trpc.profile.get.useQuery()
 
-    // Use the optimized unified dashboard hook
-    const {
-        stats,
-        recentActivities,
-        isLoading,
-        refetch,
-        magicCardsDataReady,
-        recentActivityDataReady,
-        attendance: attendanceUnified
-    } = useUserRealtimeDashboard(profile?.id || '', initialData, 'employee')
+    // OPTIMIZATION: Employees don't need the heavy unified dashboard query
+    // Just fetch recent activities with a lightweight query
+    const { data: activitiesData, isLoading: activitiesLoading } = trpc.admin.dashboard.getRecentActivities.useQuery(
+        { limit: 10 },
+        { staleTime: 30000, refetchOnWindowFocus: false }
+    )
+    const recentActivities = activitiesData?.data || []
+    const isLoading = activitiesLoading
 
-    // Extract unified attendance data
-    const attendance = attendanceUnified?.todayRecord ? [attendanceUnified.todayRecord] : []
-    if (attendanceUnified?.pendingRecord && !attendance.find(r => r.id === attendanceUnified.pendingRecord.id)) {
-        attendance.push(attendanceUnified.pendingRecord)
-    }
+    // =====================================================
+    // ATTENDANCE BUTTON STATE - Simple, Fast, Fresh
+    // =====================================================
+    // Uses dedicated endpoint that returns: 'not_clocked_in' | 'clocked_in' | 'marked'
+    const { data: attendanceStatus, refetch: refetchStatus, isLoading: statusLoading } = trpc.attendance.getTodayStatus.useQuery(
+        { localDate: todayStr },
+        {
+            staleTime: 0,  // Always fetch fresh data
+            refetchOnMount: 'always',  // Fresh on every dashboard visit
+            refetchOnWindowFocus: false, // Don't spam on tab switch
+            initialData: initialData?.attendanceStatus,
+            placeholderData: (prev: any) => prev || initialData?.attendanceStatus
+        }
+    )
 
-    const settings = attendanceUnified?.settings
-    const closures = attendanceUnified?.closures || []
-    const attendanceLoading = isLoading && !attendanceUnified
+    // Get office settings for off-day/holiday checks
+    const { data: settings } = trpc.attendance.getOfficeSettings.useQuery()
+    const { data: closures } = trpc.attendance.getOfficeClosures.useQuery()
 
-    const clockInMutation = trpc.attendance.clockIn.useMutation({
-        onSuccess: () => {
-            toast.success("Clocked in successfully")
-            utils.attendance.getAttendance.invalidate()
-            // High-priority refresh to bypass server cache
-            refetch({ forceFresh: true })
-        },
-        onError: (error) => toast.error(error.message)
-    })
-
-    const clockOutMutation = trpc.attendance.clockOut.useMutation({
-        onSuccess: () => {
-            toast.success("Clocked out successfully")
-            utils.attendance.getAttendance.invalidate()
-            // High-priority refresh to bypass server cache
-            refetch({ forceFresh: true })
-        },
-        onError: (error) => toast.error(error.message)
-    })
-
-    // Find today's record and pending record
-    const todayRecord = attendance?.find(r => r.date === todayStr)
-    const pendingRecord = attendance?.filter(r => !r.check_out).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
-
-    const isClockedIn = !!pendingRecord
-    const isMarked = !!todayRecord?.check_in && !!todayRecord?.check_out
     const isTodayOffDay = settings?.off_days?.includes(new Date().getDay())
     const todayClosure = closures?.find((c: any) => c.date === todayStr)
     const isTodayHoliday = !!todayClosure
+
+    // Optimistic state for instant button transitions
+    const [optimisticState, setOptimisticState] = useState<'idle' | 'clocked_in' | 'marked'>('idle')
+
+    // Reset optimistic state on component mount (fresh page load)
+    useEffect(() => {
+        setOptimisticState('idle')
+    }, [])
+
+    // --- Logout Stability Fix ---
+    // Prevent button flicker during signout by freezing the state
+    const [isLoggingOut, setIsLoggingOut] = useState(false)
+    const frozenStatusRef = useRef<string | null>(null)
+
+    useEffect(() => {
+        const handleLoggingOut = () => {
+            setIsLoggingOut(true)
+            // Capture last known status to freeze the UI
+            frozenStatusRef.current = optimisticState !== 'idle' ? optimisticState : (attendanceStatus?.status ?? 'not_clocked_in')
+        }
+        window.addEventListener('loggingOut', handleLoggingOut)
+        return () => window.removeEventListener('loggingOut', handleLoggingOut)
+    }, [attendanceStatus?.status, optimisticState])
+
+    const clockInMutation = trpc.attendance.clockIn.useMutation({
+        onMutate: () => {
+            setOptimisticState('clocked_in')
+        },
+        onSuccess: () => {
+            toast.success("Clocked in successfully")
+            refetchStatus()  // Refresh button state
+            utils.attendance.invalidate()
+        },
+        onError: (error) => {
+            setOptimisticState('idle')
+            toast.error(error.message)
+        }
+    })
+
+    const clockOutMutation = trpc.attendance.clockOut.useMutation({
+        onMutate: () => {
+            setOptimisticState('marked')
+        },
+        onSuccess: () => {
+            toast.success("Clocked out successfully")
+            refetchStatus()  // Refresh button state
+            utils.attendance.invalidate()
+        },
+        onError: (error) => {
+            setOptimisticState('clocked_in')
+            toast.error(error.message)
+        }
+    })
+
+    // Sync optimistic state when real data arrives
+    useEffect(() => {
+        if (attendanceStatus && !clockInMutation.isPending && !clockOutMutation.isPending) {
+            setOptimisticState('idle')
+        }
+    }, [attendanceStatus?.status, clockInMutation.isPending, clockOutMutation.isPending])
+
+    // =====================================================
+    // BUTTON STATE LOGIC (Simple and Clear)
+    // =====================================================
+    // Priority: Logging out (Freeze) > Optimistic state > Server status
+    const serverStatus = attendanceStatus?.status ?? 'not_clocked_in'
+    const buttonStatus = isLoggingOut
+        ? (frozenStatusRef.current || 'not_clocked_in')
+        : (optimisticState !== 'idle' ? optimisticState : serverStatus)
+    const attendanceLoading = statusLoading && optimisticState === 'idle' && !isLoggingOut
 
     const handleClockIn = async (isExtra: boolean = false) => {
         try {
@@ -132,6 +190,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
     }
 
     return (
+
         <div className="space-y-6 gesture-friendly">
             {/* Quick Actions Row */}
             <div className="grid grid-cols-1 gap-6">
@@ -150,28 +209,19 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                                 <h3 className="text-xl font-bold tracking-tight">Quick Actions</h3>
                             </div>
                             <div className="text-right px-4">
-                                <p className="text-lg font-bold tracking-tight tabular-nums text-foreground">{format(currentTime, "hh:mm:ss a")}</p>
+                                <p className="text-lg font-bold tracking-tight tabular-nums text-foreground" suppressHydrationWarning>{format(currentTime, "hh:mm:ss a")}</p>
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Current Time</p>
                             </div>
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 py-2">
-                            {/* Attendance Action (First Position) */}
+                            {/* Attendance Button - Status-based rendering */}
                             {attendanceLoading ? (
                                 <div className="flex items-center justify-center p-4 rounded-2xl border border-muted-foreground/10 bg-muted/5 animate-pulse min-h-[82px]">
                                     <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                                 </div>
-                            ) : isMarked ? (
-                                <div className="flex items-center gap-3 p-4 rounded-2xl border border-green-200/50 bg-green-50/30 dark:bg-green-500/5 cursor-default relative overflow-hidden group">
-                                    <div className="p-2.5 rounded-xl bg-green-500/10 text-green-700 dark:text-green-400">
-                                        <UserCheck className="h-5 w-5" />
-                                    </div>
-                                    <div className="flex flex-col">
-                                        <p className="text-[10px] font-bold uppercase tracking-widest text-green-600/60 leading-none mb-1.5">Attendance</p>
-                                        <p className="text-sm font-bold text-green-700 dark:text-green-400">Marked Today</p>
-                                    </div>
-                                </div>
-                            ) : isClockedIn ? (
+                            ) : buttonStatus === 'clocked_in' ? (
+                                // STATUS: clocked_in → Show "Office - Out" button
                                 <button
                                     onClick={handleClockOut}
                                     disabled={clockOutMutation.isPending}
@@ -185,7 +235,19 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                                         <p className="text-sm font-bold group-hover/action:text-orange-600 transition-colors">Office - Out</p>
                                     </div>
                                 </button>
+                            ) : buttonStatus === 'marked' ? (
+                                // STATUS: marked → Show "Marked Today's" badge
+                                <div className="flex items-center gap-3 p-4 rounded-2xl border border-green-200/50 bg-green-50/30 dark:bg-green-500/5 cursor-default relative overflow-hidden group">
+                                    <div className="p-2.5 rounded-xl bg-green-500/10 text-green-700 dark:text-green-400">
+                                        <UserCheck className="h-5 w-5" />
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-green-600/60 leading-none mb-1.5">Attendance</p>
+                                        <p className="text-sm font-bold text-green-700 dark:text-green-400">Marked Today's</p>
+                                    </div>
+                                </div>
                             ) : isTodayHoliday ? (
+                                // Holiday check
                                 <div className="flex items-center gap-3 p-4 rounded-2xl border border-amber-200/50 bg-amber-50/30 dark:bg-amber-500/5 cursor-default group">
                                     <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-400">
                                         <Calendar className="h-5 w-5" />
@@ -196,6 +258,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                                     </div>
                                 </div>
                             ) : isTodayOffDay ? (
+                                // Week off check
                                 <div className="flex items-center gap-3 p-4 rounded-2xl border border-muted-foreground/10 bg-muted/5 cursor-default group">
                                     <div className="p-2.5 rounded-xl bg-muted/10 text-muted-foreground">
                                         <Calendar className="h-5 w-5" />
@@ -206,6 +269,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                                     </div>
                                 </div>
                             ) : (
+                                // STATUS: not_clocked_in → Show "Office - In" button
                                 <button
                                     onClick={() => handleClockIn(false)}
                                     disabled={clockInMutation.isPending}
@@ -254,7 +318,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
             </div>
 
             {/* Recent Activities */}
-            <ActivitiesCard activities={recentActivities as any} loading={!recentActivityDataReady && !initialData} />
+            <ActivitiesCard activities={recentActivities as any} loading={activitiesLoading} />
         </div>
     )
 }

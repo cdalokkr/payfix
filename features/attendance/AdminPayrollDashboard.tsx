@@ -11,7 +11,7 @@ import { useUserRealtimeDashboard } from "@/hooks/use-realtime-dashboard-data"
 export function AdminPayrollDashboard() {
     const { data: profile } = trpc.profile.get.useQuery()
 
-    // Enable real-time updates for managers
+    // Enable real-time updates for managers (existing hook for general dashboard sync)
     useUserRealtimeDashboard(
         profile?.id || '',
         undefined,

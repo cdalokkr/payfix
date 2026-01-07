@@ -1,0 +1,27 @@
+[dotenv@17.2.3] injecting env (4) from .env.local -- tip: ≡ƒöÉ prevent committing .env to code: https://dotenvx.com/precommit
+============================================================
+≡ƒöì Debugging Drizzle Date Format
+============================================================
+
+≡ƒôà Date Calculations:
+  JS ISO Date: 2026-01-06
+  Local Date: 2026-01-07
+  Are they equal? false
+
+≡ƒôè Direct Drizzle Query Results:
+------------------------------------------------------------
+DrizzleQueryError: Failed query: select "id", "profile_id", "date", "check_in", "check_out", "working_hours", "status", "remarks", "verified_by", "is_extra_day", "is_half_day", "created_at", "updated_at" from "attendance" where ("attendance"."profile_id" = $1 and "attendance"."date" >= CURRENT_DATE - INTERVAL '5 days') order by "attendance"."date" desc
+params: c4b9da11-f942-4c2b-b2ef-56dbde3125f8
+    at PostgresJsPreparedQuery.queryWithCache (D:\payfix\node_modules\src\pg-core\session.ts:73:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async <anonymous> (D:\payfix\node_modules\src\postgres-js\session.ts:58:17)
+    at async debugDrizzleDate (D:\payfix\scripts\debug-drizzle-date.ts:39:21) {
+  query: `select "id", "profile_id", "date", "check_in", "check_out", "working_hours", "status", "remarks", "verified_by", "is_extra_day", "is_half_day", "created_at", "updated_at" from "attendance" where ("attendance"."profile_id" = $1 and "attendance"."date" >= CURRENT_DATE - INTERVAL '5 days') order by "attendance"."date" desc`,
+  params: [ 'c4b9da11-f942-4c2b-b2ef-56dbde3125f8' ],
+  cause: AggregateError [ECONNREFUSED]: 
+      at internalConnectMultiple (node:net:1134:18)
+      at afterConnectMultiple (node:net:1715:7) {
+    code: 'ECONNREFUSED',
+    [errors]: [ [Error], [Error] ]
+  }
+}

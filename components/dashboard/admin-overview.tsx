@@ -90,6 +90,8 @@ export function AdminOverview({
     showSkeleton
   } = useAdminRealtimeDashboard(profile?.id || '', initialData)
 
+
+
   // Detect route changes to reset skeleton state
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
@@ -125,7 +127,7 @@ export function AdminOverview({
             Failed to load dashboard data. Please try refreshing the page.
           </AlertDescription>
         </Alert>
-        <Button onClick={refetch} variant="outline">
+        <Button onClick={() => refetch()} variant="outline">
           <RefreshCw className="h-4 w-4 mr-2" />
           Retry
         </Button>

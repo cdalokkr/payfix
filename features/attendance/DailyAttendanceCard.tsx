@@ -27,19 +27,35 @@ export function DailyAttendanceCard({ className }: { className?: string }) {
     const { data: closures } = trpc.attendance.getOfficeClosures.useQuery()
 
     const [currentTime, setCurrentTime] = useState(new Date())
+
+    // Optimistic state to show immediate button transitions
+    const [optimisticState, setOptimisticState] = useState<'idle' | 'clocked-in' | 'marked'>('idle')
+
     const clockInMutation = trpc.attendance.clockIn.useMutation({
+        onMutate: () => {
+            setOptimisticState('clocked-in')
+        },
         onSuccess: () => {
             toast.success("Clocked in successfully")
-            utils.attendance.getAttendance.invalidate()
+            utils.attendance.invalidate()
         },
-        onError: (error) => toast.error(error.message)
+        onError: (error) => {
+            setOptimisticState('idle')
+            toast.error(error.message)
+        }
     })
     const clockOutMutation = trpc.attendance.clockOut.useMutation({
+        onMutate: () => {
+            setOptimisticState('marked')
+        },
         onSuccess: () => {
             toast.success("Clocked out successfully")
-            utils.attendance.getAttendance.invalidate()
+            utils.attendance.invalidate()
         },
-        onError: (error) => toast.error(error.message)
+        onError: (error) => {
+            setOptimisticState('clocked-in')
+            toast.error(error.message)
+        }
     })
 
     useEffect(() => {
@@ -47,13 +63,39 @@ export function DailyAttendanceCard({ className }: { className?: string }) {
         return () => clearInterval(timer)
     }, [])
 
-    // Find today's record
-    const todayRecord = attendance?.find(r => r.date === todayStr)
+    // Reset optimistic state on component mount (fresh page load)
+    useEffect(() => {
+        setOptimisticState('idle')
+    }, [])
+
+    // Reset optimistic state when attendance data updates, unless a mutation is in progress
+    useEffect(() => {
+        if (attendance) {
+            if (!clockInMutation.isPending && !clockOutMutation.isPending) {
+                setOptimisticState('idle')
+            }
+        }
+    }, [attendance, clockInMutation.isPending, clockOutMutation.isPending])
+
+    // Helper to normalize date to YYYY-MM-DD string format
+    const normalizeDate = (d: unknown): string => {
+        if (!d) return ''
+        if (d instanceof Date) {
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        }
+        // If it's already a string, ensure it's in YYYY-MM-DD format (handle potential ISO strings)
+        const str = String(d)
+        return str.split('T')[0] // Handle ISO format like "2026-01-07T00:00:00.000Z"
+    }
+
+    // Find today's record using normalized date comparison
+    const todayRecord = attendance?.find(r => normalizeDate(r.date) === todayStr)
     // Find the most recent pending record (could be today or yesterday)
     const pendingRecord = attendance?.filter(r => !r.check_out).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
 
-    const isClockedIn = !!pendingRecord
-    const isMarked = !!todayRecord?.check_in && !!todayRecord?.check_out
+    // Determine button state with optimistic updates taking priority
+    const isClockedIn = optimisticState === 'clocked-in' || (optimisticState === 'idle' && !!pendingRecord)
+    const isMarked = optimisticState === 'marked' || (optimisticState === 'idle' && !!todayRecord?.check_in && !!todayRecord?.check_out)
     const isTodayOffDay = settings?.off_days?.includes(new Date().getDay())
     const todayClosure = closures?.find(c => c.date === todayStr)
     const isTodayHoliday = !!todayClosure
@@ -75,6 +117,7 @@ export function DailyAttendanceCard({ className }: { className?: string }) {
     }
 
     return (
+
         <MetricCard
             className={cn("shadow-xl", className)}
             gradientColor="from-green-500/10 to-transparent"

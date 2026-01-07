@@ -8,8 +8,20 @@ import { CalendarCheck, CalendarOff, Clock, UserCheck, Briefcase, Plane } from "
 import { format } from "date-fns"
 import Link from "next/link"
 import { DailyAttendanceCard } from "./DailyAttendanceCard"
+import { useUserRealtimeDashboard } from "@/hooks/use-realtime-dashboard-data"
+
 
 export function EmployeePayrollDashboard() {
+    const { data: profile } = trpc.profile.get.useQuery()
+
+    // Enable real-time subscription for attendance updates
+    // This will show toasts on verify/reject/edit and auto-refresh data
+    useUserRealtimeDashboard(
+        profile?.id || '',
+        undefined,
+        'employee'  // Employee role
+    )
+
     const { data: attendance, isLoading: attendanceLoading, isFetching: attendanceFetching } = trpc.attendance.getAttendance.useQuery({
         startDate: format(new Date(), 'yyyy-MM-dd'),
         endDate: format(new Date(), 'yyyy-MM-dd')
