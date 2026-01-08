@@ -156,23 +156,6 @@ export function ModernAddUserForm({
       console.warn('⚠️ Client cache invalidation failed:', error)
     }
 
-
-    // Step 3: Also invalidate the comprehensive dashboard data cache
-    try {
-      utils.admin.dashboard.getComprehensiveDashboardData.invalidate()
-      console.log('🔄 Comprehensive dashboard cache invalidated')
-    } catch (error) {
-      // This is optional, may not exist in all setups
-    }
-
-    // Step 4: Invalidate stats endpoint cache
-    try {
-      utils.admin.dashboard.getStats.invalidate()
-      console.log('🔄 Stats cache invalidated')
-    } catch (error) {
-      // This is optional
-    }
-
     console.log('✅ CACHE INVALIDATION INITIATED: All server + client caches clearing in background')
   }
 

@@ -38,13 +38,8 @@ export function ProfileInformationSettings({ user }: ProfileInformationSettingsP
     const invalidateDashboardCache = () => {
         console.log('[ProfileInfo] 🎯 Starting dashboard cache invalidation (non-blocking)...')
 
-        // Step 1: Invalidate client-side tRPC cache immediately (synchronous, fast)
-        if (user.role === 'admin') {
-            utils.admin.dashboard.getUnifiedDashboardData.invalidate()
-            utils.admin.dashboard.getComprehensiveDashboardData.invalidate().catch(() => { })
-        } else {
-            utils.admin.dashboard.getUnifiedDashboardData.invalidate()
-        }
+        // Invalidate client-side tRPC cache immediately (synchronous, fast)
+        utils.admin.dashboard.getUnifiedDashboardData.invalidate()
         console.log('[ProfileInfo] 🔄 Client-side dashboard cache invalidated')
 
 

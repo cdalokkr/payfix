@@ -126,12 +126,13 @@ export const adminDashboardRouter = router({
 
         // PERFORMANCE FIX: Properly await and optimize active users calculation
         (async () => {
-          const { data } = await ctx.supabase
+          const result = await ctx.supabase
             ?.from('activities')
             .select('user_id')
-            .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()) || { data: [] }
+            .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
 
-          const uniqueUsers = new Set(data?.map(a => a.user_id))
+          const data = result?.data || []
+          const uniqueUsers = new Set(data.map((a: { user_id: string }) => a.user_id))
           return { count: uniqueUsers.size }
         })(),
 
@@ -207,12 +208,13 @@ export const adminDashboardRouter = router({
       ctx.supabase?.from('profiles').select('*', { count: 'exact', head: true }) || { count: 0 },
       // Calculate active users (users with activities in last 7 days) - PERFORMANCE FIX
       (async () => {
-        const { data } = await ctx.supabase
+        const result = await ctx.supabase
           ?.from('activities')
           .select('user_id')
-          .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()) || { data: [] }
+          .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
 
-        const uniqueUsers = new Set(data?.map(a => a.user_id))
+        const data = result?.data || []
+        const uniqueUsers = new Set(data.map((a: { user_id: string }) => a.user_id))
         return { count: uniqueUsers.size }
       })()
     ])

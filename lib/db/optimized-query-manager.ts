@@ -244,9 +244,9 @@ export class OptimizedQueryManager {
       const combinedStatsQuery = shouldFetchGlobalStats
         ? db.execute(sql`
             SELECT 
-              (SELECT count(*) FROM profiles WHERE role = 'employee') as employee_count,
-              (SELECT count(*) FROM profiles WHERE role = 'moderator') as moderator_count,
-              (SELECT count(*) FROM profiles WHERE role = 'admin') as admin_count,
+              (SELECT count(*) FROM profiles WHERE role = 'employee'::user_role) as employee_count,
+              (SELECT count(*) FROM profiles WHERE role = 'moderator'::user_role) as moderator_count,
+              (SELECT count(*) FROM profiles WHERE role = 'admin'::user_role) as admin_count,
               (SELECT count(*) FROM activities) as total_activities,
               (SELECT count(*) FROM activities WHERE created_at >= ${todayStart.toISOString()}::timestamp) as today_activities,
               (SELECT count(DISTINCT user_id) FROM activities WHERE created_at >= ${sevenDaysAgo.toISOString()}::timestamp) as active_users

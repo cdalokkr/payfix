@@ -90,8 +90,7 @@ export function LoginForm() {
         warning: data?.warning
       })
 
-      // OPTIMIZED: Only prefetch for admins and moderators (employees have their own lightweight queries)
-      // This avoids a 700ms+ unified dashboard query that employees don't use
+      // OPTIMIZED: Start prefetch IMMEDIATELY for admin/moderator (don't wait for anything)
       const prefetchPromise = data?.profile?.role !== 'employee'
         ? prefetch().catch(err => {
           console.warn('[LoginForm] Prefetch failed, dashboard will fetch on load:', err)
@@ -120,13 +119,24 @@ export function LoginForm() {
           localStorage.setItem('userProfile', JSON.stringify(data.profile))
           sessionStorage.setItem('sessionProfile', JSON.stringify(data.profile))
 
-          // Preload avatar image to prevent fallback flash on dashboard
+          // OPTIMIZED: Use link[rel=preload] for browser-level priority avatar loading
           if (data.profile.avatar_url) {
+            // Method 1: Inject a <link rel="preload"> into head (browser prioritizes this)
+            const existingLink = document.querySelector(`link[href="${data.profile.avatar_url}"]`)
+            if (!existingLink) {
+              const link = document.createElement('link')
+              link.rel = 'preload'
+              link.as = 'image'
+              link.href = data.profile.avatar_url
+              link.setAttribute('fetchpriority', 'high')
+              document.head.appendChild(link)
+            }
+
+            // Method 2: Also use Image() for cache warming
             const img = new Image()
             img.src = data.profile.avatar_url
-            // Hint to the browser for high priority
             img.fetchPriority = 'high'
-            console.log('[LoginForm] Preloading avatar:', data.profile.avatar_url)
+            console.log('[LoginForm] Preloading avatar with high priority:', data.profile.avatar_url)
           }
         } catch (storageError) {
           console.warn('[LoginForm] Failed to store profile in storage:', storageError)
@@ -144,14 +154,15 @@ export function LoginForm() {
         }
       }
 
-      // Wait for prefetch to complete (with a timeout to not block redirect too long)
+      // OPTIMIZED: Wait longer for prefetch (800ms instead of 300ms) so dashboard has data ready
+      // This trades a tiny perceived delay for a significantly faster dashboard render
       await Promise.race([
         prefetchPromise,
-        new Promise(resolve => setTimeout(resolve, 300)) // Max 300ms wait
+        new Promise(resolve => setTimeout(resolve, 800)) // Max 800ms wait for admin prefetch
       ])
 
       try {
-        // Reduced delay since we pre-populated the cache
+        // Navigate after prefetch (or timeout)
         await router.push(redirectPath)
       } catch (redirectError) {
         window.location.href = redirectPath
