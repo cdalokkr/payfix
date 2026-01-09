@@ -8,10 +8,11 @@ import { trpc } from "@/lib/trpc/client"
 import { Users, CalendarCheck, CalendarOff, Clock, Settings, ArrowRight } from "lucide-react"
 import Link from "next/link"
 import { useProfile } from '@/lib/context/profile-context'
-import { createClient } from "@/lib/supabase/client"
+import { useSharedManagementChannel } from "@/hooks/use-shared-management-channel"
 
 export function AdminPayrollDashboard() {
     const { profile } = useProfile()
+    const { subscribe } = useSharedManagementChannel()
 
     // Queries with real-time friendly settings - no staleTime to ensure immediate refetch on invalidation
     const { data: attendance, isLoading: attendanceLoading, isFetching: attendanceFetching, refetch: refetchAttendance } = trpc.attendance.getAttendance.useQuery(
@@ -29,38 +30,28 @@ export function AdminPayrollDashboard() {
         }
     )
 
-    // Direct subscription to dashboard-management-shared channel for real-time updates
+    // Subscribe to shared management channel for real-time updates
+    // Only refetch on clock-in (new records) - clock-out doesn't affect pending counts
     useEffect(() => {
         if (!profile?.id) return
 
-        const supabase = createClient()
-        const channelName = 'dashboard-management-shared'
-
-        console.log('[PAYROLL-DASHBOARD] Setting up real-time subscription')
-
-        const channel = supabase
-            .channel(channelName)
-            .on(
-                'broadcast',
-                { event: 'realtime-event' },
-                (payload) => {
-                    const category = payload.payload?.metadata?.category
-                    if (category === 'attendance_update' || category === 'dashboard_sync') {
-                        console.log('[PAYROLL-DASHBOARD] Received update, refetching...')
-                        refetchAttendance()
-                        refetchLeaves()
-                    }
+        const unsubscribe = subscribe((category, payload) => {
+            if (category === 'attendance_update' || category === 'dashboard_sync') {
+                const action = payload?.action
+                // Only refetch for clock-in (creates new pending record) or verification actions
+                // Clock-out just updates existing record's checkout time - no new pending records
+                if (action === 'clock-in' || action === 'verified' || action === 'rejected') {
+                    console.log(`[PAYROLL-DASHBOARD] Received ${action} via shared channel, refetching...`)
+                    refetchAttendance()
+                    refetchLeaves()
+                } else {
+                    console.log(`[PAYROLL-DASHBOARD] Ignoring ${action} action (doesn't affect card counts)`)
                 }
-            )
-            .subscribe((status) => {
-                console.log('[PAYROLL-DASHBOARD] Subscription status:', status)
-            })
+            }
+        })
 
-        return () => {
-            console.log('[PAYROLL-DASHBOARD] Cleaning up subscription')
-            supabase.removeChannel(channel)
-        }
-    }, [profile?.id, refetchAttendance, refetchLeaves])
+        return unsubscribe
+    }, [profile?.id, subscribe, refetchAttendance, refetchLeaves])
 
     const pendingVerification = attendance?.filter(a => a.status === 'pending').length || 0
     const pendingLeaves = leaves?.length || 0

@@ -11,7 +11,7 @@ import { getEventBroadcaster } from "@/lib/events/event-broadcaster"
 import { Label } from "@/components/ui/label"
 import { MetricCard } from "@/components/dashboard/metric-card"
 import { cn } from "@/lib/utils"
-import { useUserRealtimeDashboard } from "@/hooks/use-realtime-dashboard-data"
+import { useSharedManagementChannel } from "@/hooks/use-shared-management-channel"
 import { useProfile } from "@/lib/context/profile-context"
 
 import { createAttendanceColumns } from "./attendance-columns"
@@ -44,33 +44,19 @@ export function AdminAttendanceVerification() {
     }, [])
 
     const utils = trpc.useUtils()
-
-    // Get profile from context (shared across all components)
     const { profile } = useProfile()
-
-    // Enable real-time updates for managers (Admin/Moderator)
-    // This will automatically invalidate queries when attendance or activities change
-    const {
-        refetch: dashboardRefetch
-    } = useUserRealtimeDashboard(
-        profile?.id || '',
-        undefined,
-        (profile?.role as any) || 'admin'  // Changed from 'moderator' to better default
-    )
+    const { subscribe } = useSharedManagementChannel()
 
     const bulkVerifyMutation = trpc.attendance.bulkVerifyAttendance.useMutation({
         onSuccess: () => {
             toast.success('Successfully updated records')
             setRowSelection({})
             utils.attendance.getAttendance.invalidate()
-
-            // High-priority dashboard refresh
-            dashboardRefetch({ forceFresh: true })
         },
         onError: (error) => toast.error(error.message)
     })
     // Queries with real-time friendly settings - staleTime: 0 ensures immediate refetch on invalidation
-    const { data: attendance, isLoading } = trpc.attendance.getAttendance.useQuery(
+    const { data: attendance, isLoading, refetch: refetchAttendance } = trpc.attendance.getAttendance.useQuery(
         {},
         {
             staleTime: 0, // Always consider stale so invalidation triggers immediate refetch
@@ -78,6 +64,23 @@ export function AdminAttendanceVerification() {
         }
     )
     const { data: settings } = trpc.attendance.getOfficeSettings.useQuery()
+
+    // Subscribe to shared management channel for real-time updates
+    // Data table needs to update on ALL actions (clock-in, clock-out, verified, rejected)
+    // because it shows checkout times and status changes
+    useEffect(() => {
+        if (!profile?.id) return
+
+        const unsubscribe = subscribe((category, payload) => {
+            if (category === 'attendance_update' || category === 'dashboard_sync') {
+                const action = payload?.action || 'unknown'
+                console.log(`[ATTENDANCE-VERIFICATION] Received ${action} via shared channel, refetching table...`)
+                refetchAttendance()
+            }
+        })
+
+        return unsubscribe
+    }, [profile?.id, subscribe, refetchAttendance])
 
     const scheduledHoursMap = useMemo(() => {
         const map: Record<number, number> = {}
@@ -105,9 +108,6 @@ export function AdminAttendanceVerification() {
         onSuccess: (data) => {
             toast.success(`Attendance marked as ${data.status}`)
             utils.attendance.getAttendance.invalidate()
-
-            // High-priority dashboard refresh
-            dashboardRefetch({ forceFresh: true })
         },
         onError: (error) => toast.error(error.message)
     })
@@ -119,9 +119,6 @@ export function AdminAttendanceVerification() {
             setTimeout(() => {
                 handleOpenChange(false)
                 utils.attendance.getAttendance.invalidate()
-
-                // High-priority dashboard refresh
-                dashboardRefetch({ forceFresh: true })
             }, 1000)
         },
         onError: (error) => toast.error(error.message)
