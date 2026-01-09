@@ -85,14 +85,11 @@ function NotificationBellComponent() {
                     ) : (
                         <div className="divide-y">
                             {notifications.map((notification) => {
-                                const NotificationWrapper = notification.link ? Link : 'div'
                                 return (
-                                    <NotificationWrapper
+                                    <div
                                         key={notification.id}
-                                        href={notification.link || '#'}
-                                        onClick={() => handleNotificationClick(notification)}
                                         className={cn(
-                                            'block p-4 hover:bg-accent/50 transition-colors cursor-pointer',
+                                            'p-4 transition-colors',
                                             !notification.is_read && 'bg-accent/20'
                                         )}
                                     >
@@ -114,9 +111,37 @@ function NotificationBellComponent() {
                                                 <p className="text-xs text-muted-foreground/70 mt-1">
                                                     {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
                                                 </p>
+                                                {/* Action buttons */}
+                                                <div className="flex items-center gap-2 mt-2">
+                                                    {notification.link && (
+                                                        <Link
+                                                            href={notification.link}
+                                                            onClick={() => {
+                                                                if (!notification.is_read) {
+                                                                    markAsRead(notification.id)
+                                                                }
+                                                                setOpen(false)
+                                                            }}
+                                                            className="text-xs text-primary hover:underline font-medium"
+                                                        >
+                                                            View
+                                                        </Link>
+                                                    )}
+                                                    {!notification.is_read && (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation()
+                                                                markAsRead(notification.id)
+                                                            }}
+                                                            className="text-xs text-muted-foreground hover:text-foreground"
+                                                        >
+                                                            Mark as read
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
-                                    </NotificationWrapper>
+                                    </div>
                                 )
                             })}
                         </div>

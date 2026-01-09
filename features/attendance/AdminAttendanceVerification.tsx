@@ -55,7 +55,7 @@ export function AdminAttendanceVerification() {
     } = useUserRealtimeDashboard(
         profile?.id || '',
         undefined,
-        (profile?.role as any) || 'moderator'
+        (profile?.role as any) || 'admin'  // Changed from 'moderator' to better default
     )
 
     const bulkVerifyMutation = trpc.attendance.bulkVerifyAttendance.useMutation({
@@ -69,7 +69,14 @@ export function AdminAttendanceVerification() {
         },
         onError: (error) => toast.error(error.message)
     })
-    const { data: attendance, isLoading } = trpc.attendance.getAttendance.useQuery({})
+    // Queries with real-time friendly settings - staleTime: 0 ensures immediate refetch on invalidation
+    const { data: attendance, isLoading } = trpc.attendance.getAttendance.useQuery(
+        {},
+        {
+            staleTime: 0, // Always consider stale so invalidation triggers immediate refetch
+            refetchOnWindowFocus: false, // Rely on real-time instead
+        }
+    )
     const { data: settings } = trpc.attendance.getOfficeSettings.useQuery()
 
     const scheduledHoursMap = useMemo(() => {

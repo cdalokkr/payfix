@@ -16,6 +16,7 @@ import { ProfileProvider } from '@/lib/context/profile-context'
 import { Profile } from '@/types'
 import { cn } from '@/lib/utils'
 import { useDashboardCacheInvalidation } from '@/hooks/use-dashboard-cache-invalidation'
+import { NotificationToastListener } from './notification-toast-listener'
 
 // Dynamic imports for heavy dashboard components to reduce initial bundle size
 const AdminOverview = dynamic(
@@ -352,6 +353,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         </DialogContent>
       </Dialog>
       <ProfileProvider value={profileContextValue}>
+        {/* Listen for real-time notification events and show toasts */}
+        <NotificationToastListener />
         <SidebarProvider>
           <AppSidebar
             role={currentRole || 'employee'}

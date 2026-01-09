@@ -4,7 +4,6 @@ import { trpc } from '@/lib/trpc/client'
 import { createClient } from '@/lib/supabase/client'
 import { useEffect, useCallback, useState, useRef, useMemo } from 'react'
 import { usePathname } from 'next/navigation'
-import { toast } from 'sonner'
 import type { UserRole } from '@/types'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import {
@@ -793,18 +792,7 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
             if (category === 'dashboard_sync') {
               console.log('[REALTIME] 🚀 [Management] Sync broadcast received')
 
-              // Show attendance toasts for management
-              const action = payload?.payload?.action
-              const employeeName = payload?.payload?.employeeName
-              if (action === 'clock-in') {
-                toast.info('New Clock-In', {
-                  description: employeeName ? `${employeeName} clocked in` : 'An employee clocked in'
-                })
-              } else if (action === 'clock-out') {
-                toast.info('New Clock-Out', {
-                  description: employeeName ? `${employeeName} clocked out` : 'An employee clocked out'
-                })
-              }
+              // Toast notifications removed - managed by bell icon now
 
               refetch({ forceFresh: true })
             }
@@ -813,22 +801,7 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
             if (category === 'attendance_update') {
               console.log('[REALTIME] 🔔 [Management] Attendance update broadcast received:', payload?.payload?.data || payload?.payload)
 
-              const data = payload?.payload?.data || payload?.payload
-              const action = data?.action
-              const employeeName = data?.employeeName || 'Employee'
-              const date = data?.date
-
-              // Show toast based on action type
-              if (action === 'clock-in') {
-                toast.info('New Clock-In', {
-                  description: `${employeeName} clocked in${date ? ` for ${date}` : ''}`
-                })
-              } else if (action === 'clock-out') {
-                toast.info('New Clock-Out', {
-                  description: `${employeeName} clocked out${date ? ` for ${date}` : ''}`
-                })
-              }
-              // Note: verified/rejected/manual-update by self will show via mutation success toasts
+              // Toast notifications removed - managed by bell icon now
 
               // Invalidate attendance queries for UI refresh
               utils.attendance.getAttendance.invalidate()
@@ -916,20 +889,7 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
             if (category === 'dashboard_sync') {
               console.log('[REALTIME] 🚀 [User] Sync broadcast received')
 
-              // Show attendance toasts for employees
-              const action = payload?.payload?.action
-              if (action === 'verified' || action === 'verify-attendance') {
-                const status = payload?.payload?.newStatus
-                if (status === 'verified') {
-                  toast.success('Attendance Verified!', {
-                    description: 'Your attendance has been approved'
-                  })
-                } else if (status === 'rejected') {
-                  toast.error('Attendance Rejected', {
-                    description: payload?.payload?.remarks || 'Your attendance was rejected'
-                  })
-                }
-              }
+              // Toast notifications removed - managed by bell icon now
 
               refetch({ forceFresh: true })
             }
@@ -938,26 +898,7 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
             if (category === 'attendance_update') {
               console.log('[REALTIME] 🔔 [User] Attendance update broadcast received:', payload?.payload?.data || payload?.payload)
 
-              const data = payload?.payload?.data || payload?.payload
-              const action = data?.action
-              const performerName = data?.performedByName || 'Manager'
-              const remarks = data?.remarks
-              const date = data?.date
-
-              // Show toast based on action type
-              if (action === 'verified') {
-                toast.success('Attendance Approved! ✓', {
-                  description: `Verified by ${performerName}${date ? ` for ${date}` : ''}`
-                })
-              } else if (action === 'rejected') {
-                toast.error('Attendance Rejected', {
-                  description: remarks || `Rejected by ${performerName}${date ? ` for ${date}` : ''}`
-                })
-              } else if (action === 'manual-update') {
-                toast.info('Attendance Updated', {
-                  description: `Your record was updated by ${performerName}${date ? ` for ${date}` : ''}`
-                })
-              }
+              // Toast notifications removed - managed by bell icon now
 
               // Invalidate attendance queries for UI refresh
               utils.attendance.getAttendance.invalidate()

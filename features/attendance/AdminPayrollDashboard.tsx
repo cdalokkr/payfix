@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { MetricCard } from "@/components/dashboard/metric-card"
 import { Button } from "@/components/ui/button"
@@ -7,20 +8,59 @@ import { trpc } from "@/lib/trpc/client"
 import { Users, CalendarCheck, CalendarOff, Clock, Settings, ArrowRight } from "lucide-react"
 import Link from "next/link"
 import { useProfile } from '@/lib/context/profile-context'
-import { useUserRealtimeDashboard } from "@/hooks/use-realtime-dashboard-data"
+import { createClient } from "@/lib/supabase/client"
 
 export function AdminPayrollDashboard() {
     const { profile } = useProfile()
 
-    // Enable real-time updates for managers (existing hook for general dashboard sync)
-    useUserRealtimeDashboard(
-        profile?.id || '',
-        undefined,
-        (profile?.role as any) || 'moderator'
+    // Queries with real-time friendly settings - no staleTime to ensure immediate refetch on invalidation
+    const { data: attendance, isLoading: attendanceLoading, isFetching: attendanceFetching, refetch: refetchAttendance } = trpc.attendance.getAttendance.useQuery(
+        {},
+        {
+            staleTime: 0, // Always consider stale so invalidation triggers immediate refetch
+            refetchOnWindowFocus: false, // Rely on real-time instead
+        }
+    )
+    const { data: leaves, isLoading: leavesLoading, isFetching: leavesFetching, refetch: refetchLeaves } = trpc.attendance.getLeaves.useQuery(
+        { status: 'pending' },
+        {
+            staleTime: 0, // Always consider stale so invalidation triggers immediate refetch
+            refetchOnWindowFocus: false, // Rely on real-time instead
+        }
     )
 
-    const { data: attendance, isLoading: attendanceLoading, isFetching: attendanceFetching } = trpc.attendance.getAttendance.useQuery({})
-    const { data: leaves, isLoading: leavesLoading, isFetching: leavesFetching } = trpc.attendance.getLeaves.useQuery({ status: 'pending' })
+    // Direct subscription to dashboard-management-shared channel for real-time updates
+    useEffect(() => {
+        if (!profile?.id) return
+
+        const supabase = createClient()
+        const channelName = 'dashboard-management-shared'
+
+        console.log('[PAYROLL-DASHBOARD] Setting up real-time subscription')
+
+        const channel = supabase
+            .channel(channelName)
+            .on(
+                'broadcast',
+                { event: 'realtime-event' },
+                (payload) => {
+                    const category = payload.payload?.metadata?.category
+                    if (category === 'attendance_update' || category === 'dashboard_sync') {
+                        console.log('[PAYROLL-DASHBOARD] Received update, refetching...')
+                        refetchAttendance()
+                        refetchLeaves()
+                    }
+                }
+            )
+            .subscribe((status) => {
+                console.log('[PAYROLL-DASHBOARD] Subscription status:', status)
+            })
+
+        return () => {
+            console.log('[PAYROLL-DASHBOARD] Cleaning up subscription')
+            supabase.removeChannel(channel)
+        }
+    }, [profile?.id, refetchAttendance, refetchLeaves])
 
     const pendingVerification = attendance?.filter(a => a.status === 'pending').length || 0
     const pendingLeaves = leaves?.length || 0

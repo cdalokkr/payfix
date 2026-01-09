@@ -20,6 +20,9 @@ export function useNotifications() {
     const [isSubscribed, setIsSubscribed] = useState(false)
     const subscriptionRef = useRef<any>(null)
     const previousUserIdRef = useRef<string | undefined>(undefined)
+    // Refs to store latest refetch functions to avoid stale closures in subscription callback
+    const refetchRef = useRef<(() => Promise<any>) | null>(null)
+    const refetchCountRef = useRef<(() => Promise<any>) | null>(null)
 
     // Get profile from context (shared across all components)
     const { profile } = useProfile()
@@ -46,6 +49,12 @@ export function useNotifications() {
             refetchOnWindowFocus: false,
         }
     )
+
+    // Keep refs updated with latest refetch functions
+    useEffect(() => {
+        refetchRef.current = refetch
+        refetchCountRef.current = refetchCount
+    }, [refetch, refetchCount])
 
     // Mark as read mutation
     const markAsReadMutation = trpc.notification.markAsRead.useMutation({
@@ -95,45 +104,73 @@ export function useNotifications() {
 
         const supabase = createClient()
 
-        try {
-            console.log('[NOTIFICATIONS] Creating new subscription for userId:', userId)
+        // Handler function to process notification events
+        function handleNotificationEvent(notification?: { title?: string; message?: string; type?: string; link?: string }) {
+            // Dispatch custom event for toast notification (bell icon toast)
+            if (notification) {
+                window.dispatchEvent(new CustomEvent('new-notification', {
+                    detail: {
+                        title: notification.title,
+                        message: notification.message,
+                        type: notification.type,
+                        link: notification.link
+                    }
+                }))
+            }
 
-            // Subscribe to notifications for this user
+            // Refetch queries immediately to update bell icon badge
+            // Use refs to get latest refetch functions (avoids stale closure)
+            if (refetchRef.current) {
+                refetchRef.current().then(() => {
+                    console.log('[NOTIFICATIONS] Notifications refetched successfully')
+                })
+            }
+            if (refetchCountRef.current) {
+                refetchCountRef.current().then(() => {
+                    console.log('[NOTIFICATIONS] Unread count refetched successfully')
+                })
+            }
+        }
+
+        try {
+            console.log('[NOTIFICATIONS] Creating subscriptions for userId:', userId)
+
+            // Subscribe to the dashboard-user channel for broadcast events
+            // This is the primary channel that broadcastServerEvent sends to
             const subscription = supabase
-                .channel(`notifications-changes-${userId}`) // Unique channel name per user
+                .channel(`dashboard-user-${userId}`)
+                .on(
+                    'broadcast',
+                    { event: 'realtime-event' },
+                    (payload) => {
+                        console.log('[NOTIFICATIONS] Broadcast event received:', payload)
+                        const data = payload.payload
+                        // Check if this is a new_notification event
+                        if (data?.metadata?.category === 'new_notification') {
+                            console.log('[NOTIFICATIONS] Processing new_notification broadcast')
+                            const notificationData = data.payload
+                            handleNotificationEvent({
+                                title: notificationData?.title,
+                                message: notificationData?.message,
+                                type: notificationData?.type,
+                                link: notificationData?.link
+                            })
+                        }
+                    }
+                )
+                // Also try postgres_changes as a fallback (may not work due to RLS)
                 .on(
                     'postgres_changes',
                     {
-                        event: '*',
+                        event: 'INSERT',
                         schema: 'public',
                         table: 'notifications',
                         filter: `user_id=eq.${userId}`
                     },
                     (payload) => {
-                        console.log('[NOTIFICATIONS] Real-time event:', payload.eventType)
-
-                        // Show toast for new notifications
-                        if (payload.eventType === 'INSERT' && payload.new) {
-                            const notification = payload.new as Notification
-
-                            // Dispatch custom event for toast notification
-                            window.dispatchEvent(new CustomEvent('new-notification', {
-                                detail: {
-                                    title: notification.title,
-                                    message: notification.message,
-                                    type: notification.type,
-                                    link: notification.link
-                                }
-                            }))
-                        }
-
-                        // Invalidate queries to force refetch (await to ensure completion)
-                        Promise.all([
-                            utils.notification.getAll.invalidate(),
-                            utils.notification.getUnreadCount.invalidate()
-                        ]).then(() => {
-                            console.log('[NOTIFICATIONS] Queries invalidated successfully')
-                        })
+                        console.log('[NOTIFICATIONS] postgres_changes event:', payload.eventType)
+                        const newNotification = payload.new as { title?: string; message?: string; type?: string; link?: string }
+                        handleNotificationEvent(newNotification)
                     }
                 )
                 .subscribe((status) => {
@@ -154,12 +191,14 @@ export function useNotifications() {
                     subscriptionRef.current.unsubscribe()
                     subscriptionRef.current = null
                 }
+                // Reset previousUserIdRef so subscription is recreated on remount (React Strict Mode)
+                previousUserIdRef.current = undefined
                 setIsSubscribed(false)
             }
         } catch (error) {
             console.error('[NOTIFICATIONS] Error setting up subscription:', error)
         }
-    }, [userId, utils]) // Re-subscribe only when userId actually changes
+    }, [userId]) // Re-subscribe only when userId actually changes
 
     return {
         notifications: notifications as Notification[],

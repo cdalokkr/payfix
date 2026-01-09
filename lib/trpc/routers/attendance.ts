@@ -87,16 +87,31 @@ export const attendanceRouter = router({
             })
 
             // Send notifications to admins and moderators with role-specific links
-            await Promise.all(adminModerators.map(user => {
+            await Promise.all(adminModerators.map(async (user) => {
                 const role = user.role || 'admin'
                 const link = role === 'admin' ? '/admin/payroll/attendance' : '/moderator/payroll/attendance'
-                return ctx.db.insert(notifications).values({
+                const title = 'Employee Clocked In'
+                const message = `${ctx.profile.full_name || ctx.profile.email} has clocked in`
+
+                // Insert notification to DB
+                await ctx.db.insert(notifications).values({
                     user_id: user.user_id,
-                    title: 'Employee Clocked In',
-                    message: `${ctx.profile.full_name || ctx.profile.email} has clocked in`,
+                    title,
+                    message,
                     type: 'attendance',
                     link
                 })
+
+                // Broadcast to the specific user (since postgres_changes may not work due to RLS)
+                if (user.user_id) {
+                    broadcastServerEvent('new_notification', {
+                        title,
+                        message,
+                        type: 'attendance',
+                        link,
+                        targetUserId: user.user_id
+                    }, user.user_id)
+                }
             }))
 
             return result
@@ -138,16 +153,31 @@ export const attendanceRouter = router({
             })
 
             // Send notifications to admins and moderators with role-specific links
-            await Promise.all(adminModerators.map(user => {
+            await Promise.all(adminModerators.map(async (user) => {
                 const role = user.role || 'admin'
                 const link = role === 'admin' ? '/admin/payroll/attendance' : '/moderator/payroll/attendance'
-                return ctx.db.insert(notifications).values({
+                const title = 'Employee Clocked Out'
+                const message = `${ctx.profile.full_name || ctx.profile.email} has clocked out`
+
+                // Insert notification to DB
+                await ctx.db.insert(notifications).values({
                     user_id: user.user_id,
-                    title: 'Employee Clocked Out',
-                    message: `${ctx.profile.full_name || ctx.profile.email} has clocked out`,
+                    title,
+                    message,
                     type: 'attendance',
                     link
                 })
+
+                // Broadcast to the specific user (since postgres_changes may not work due to RLS)
+                if (user.user_id) {
+                    broadcastServerEvent('new_notification', {
+                        title,
+                        message,
+                        type: 'attendance',
+                        link,
+                        targetUserId: user.user_id
+                    }, user.user_id)
+                }
             }))
 
             return result

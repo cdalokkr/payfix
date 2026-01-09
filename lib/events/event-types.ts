@@ -20,6 +20,7 @@ export type EventCategory =
     | 'system_notification'
     | 'dashboard_sync'
     | 'attendance_update'
+    | 'new_notification'
 
 // ============================================
 // EVENT INTERFACES
@@ -258,6 +259,27 @@ export const EVENT_ROUTING_RULES: Record<EventCategory, RoutingRule> = {
         persistent: false,
         batching: {
             enabled: false,  // Disable batching for immediate updates
+            timeout: 0,
+            maxSize: 0
+        }
+    },
+    new_notification: {
+        name: 'new-notification',
+        eventTypes: ['new_notification'],
+        targetRoles: ['admin', 'moderator', 'user'],
+        channels: {
+            primary: 'dashboard-management-shared',  // Will be overridden by user-specific channel
+            secondary: []
+        },
+        ttlByPriority: {
+            'ultra-critical': 1,
+            'critical': 2,
+            'secondary': 5,
+            'detailed': 10
+        },
+        persistent: false,
+        batching: {
+            enabled: false,
             timeout: 0,
             maxSize: 0
         }
