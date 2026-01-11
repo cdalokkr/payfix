@@ -80,7 +80,7 @@ export const adminUsersRouter = router({
           ...u,
           created_at: u.created_at ? u.created_at.toISOString() : null,
           updated_at: u.updated_at ? u.updated_at.toISOString() : null,
-          user_id: u.user_id as string, // Cast for frontend
+          user_id: u.id, // profiles.id = auth.users.id
           role: u.role as any, // Cast for frontend UserRole
           status: u.status as any, // Cast for frontend status enum
           designation: u.designation ? {
@@ -146,7 +146,7 @@ export const adminUsersRouter = router({
         where: eq(profiles.id, input.userId),
         columns: {
           status: true,
-          user_id: true,
+          id: true,
           email: true,
         }
       })
@@ -249,7 +249,7 @@ export const adminUsersRouter = router({
       const currentProfile = await ctx.db.query.profiles.findFirst({
         where: eq(profiles.id, input.userId),
         columns: {
-          user_id: true,
+          id: true,
           email: true,
           avatar_url: true,
           first_name: true,
@@ -264,10 +264,10 @@ export const adminUsersRouter = router({
 
       if (!currentProfile) throw new Error('User not found')
 
-      // Update auth email if changed
-      if (currentProfile.email !== input.email && currentProfile.user_id && ctx.supabase) {
+      // Update auth email if changed (profiles.id = auth.users.id)
+      if (currentProfile.email !== input.email && currentProfile.id && ctx.supabase) {
         const { error: authError } = await ctx.supabase.auth.admin.updateUserById(
-          currentProfile.user_id,
+          currentProfile.id,
           { email: input.email, email_confirm: true }
         )
         if (authError) throw new Error(`Auth update failed: ${authError.message}`)
@@ -387,9 +387,7 @@ export const adminUsersRouter = router({
       })
 
       // Invalidate session cache to reflect profile changes immediately
-      if (data?.user_id) {
-        invalidateUserSession(data.user_id as string)
-      }
+      invalidateUserSession(input.userId)
 
       return data
     }),
@@ -399,7 +397,7 @@ export const adminUsersRouter = router({
     .mutation(async ({ ctx, input }) => {
       const targetUser = await ctx.db.query.profiles.findFirst({
         where: eq(profiles.id, input.userId),
-        columns: { email: true, status: true, user_id: true }
+        columns: { email: true, status: true, id: true }
       })
 
       if (!targetUser) throw new Error('User not found')
@@ -467,7 +465,6 @@ export const adminUsersRouter = router({
       // Create the profile using Drizzle
       const [profileData] = await ctx.db.insert(profiles).values({
         id: authData.user!.id,
-        user_id: authData.user!.id,
         email: input.email,
         first_name: input.firstName,
         middle_name: input.middleName,
@@ -587,9 +584,7 @@ export const adminUsersRouter = router({
       })
 
       // Invalidate session cache to reflect avatar change immediately
-      if (data?.user_id) {
-        invalidateUserSession(data.user_id as string)
-      }
+      invalidateUserSession(input.userId)
 
       return data
     }),
@@ -606,16 +601,16 @@ export const adminUsersRouter = router({
       // 1. Get the user's profile to find the auth user_id using Drizzle
       const profile = await ctx.db.query.profiles.findFirst({
         where: eq(profiles.id, input.userId),
-        columns: { user_id: true, email: true }
+        columns: { id: true, email: true }
       })
 
-      if (!profile || !profile.user_id) {
-        throw new Error('User profile not found or not linked to auth user')
+      if (!profile || !profile.id) {
+        throw new Error('User profile not found')
       }
 
       // 2. Update the password in Supabase Auth
       const { error: authError } = await ctx.supabase.auth.admin.updateUserById(
-        profile.user_id as string,
+        profile.id,
         { password: input.password }
       )
 
@@ -638,7 +633,7 @@ export const adminUsersRouter = router({
       })
 
       // 4. Invalidate session to ensure security
-      invalidateUserSession(profile.user_id as string)
+      invalidateUserSession(profile.id)
 
       return { success: true }
     }),

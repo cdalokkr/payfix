@@ -292,7 +292,6 @@ async function seedAdminProfile(): Promise<boolean> {
 async function createAdminProfile(userId: string): Promise<boolean> {
     const profileData = {
         id: userId,
-        user_id: userId,
         email: ADMIN_CONFIG.email,
         full_name: `${ADMIN_CONFIG.firstName} ${ADMIN_CONFIG.lastName}`,
         avatar_url: '/avatars/default-male.png',

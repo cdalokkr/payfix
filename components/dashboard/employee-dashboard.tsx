@@ -12,11 +12,11 @@ import { ActivityLogFeed, type UserActivity } from "@/components/dashboard/activ
 import { motion } from "framer-motion"
 import { format } from "date-fns"
 import { Badge } from "@/components/ui/badge"
-import { toast } from "sonner"
 import { useEffect, useState, useMemo, useRef } from "react"
 import { cn } from "@/lib/utils"
 import { getEventBroadcaster } from "@/lib/events/event-broadcaster"
 import { useProfile } from "@/lib/context/profile-context"
+import { createClient } from "@/lib/supabase/client"
 
 
 
@@ -78,12 +78,48 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
 
     // OPTIMIZATION: Employees don't need the heavy unified dashboard query
     // Just fetch recent activities with a lightweight query
-    const { data: activitiesData, isLoading: activitiesLoading } = trpc.admin.dashboard.getRecentActivities.useQuery(
+    // NOTE: Use refetchOnMount: 'always' to ensure fresh data when returning to dashboard
+    const { data: activitiesData, isLoading: activitiesLoading, refetch: refetchActivities } = trpc.admin.dashboard.getRecentActivities.useQuery(
         { limit: 10 },
-        { staleTime: 30000, refetchOnWindowFocus: false }
+        {
+            staleTime: 30000,
+            refetchOnWindowFocus: false,
+            refetchOnMount: 'always'  // Always refetch when returning to dashboard
+        }
     )
     const recentActivities = activitiesData?.data || []
     const isLoading = activitiesLoading
+
+    // =====================================================
+    // REAL-TIME ACTIVITY UPDATES
+    // =====================================================
+    // Subscribe to activity changes for this employee
+    useEffect(() => {
+        if (!profile?.id) return
+
+        const supabase = createClient()
+        const channel = supabase
+            .channel(`employee-activities-${profile.id}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'activities',
+                    filter: `user_id=eq.${profile.id}`
+                },
+                (payload) => {
+                    console.log('[EMPLOYEE-DASHBOARD] Activity change detected:', payload.eventType)
+                    // Refetch activities to update the log
+                    refetchActivities()
+                }
+            )
+            .subscribe()
+
+        return () => {
+            supabase.removeChannel(channel)
+        }
+    }, [profile?.id, refetchActivities])
 
     // =====================================================
     // ATTENDANCE BUTTON STATE - Simple, Fast, Fresh
@@ -108,13 +144,6 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
     const todayClosure = closures?.find((c: any) => c.date === todayStr)
     const isTodayHoliday = !!todayClosure
 
-    // Optimistic state for instant button transitions
-    const [optimisticState, setOptimisticState] = useState<'idle' | 'clocked_in' | 'marked'>('idle')
-
-    // Reset optimistic state on component mount (fresh page load)
-    useEffect(() => {
-        setOptimisticState('idle')
-    }, [])
 
     // --- Logout Stability Fix ---
     // Prevent button flicker during signout by freezing the state
@@ -124,59 +153,103 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
     useEffect(() => {
         const handleLoggingOut = () => {
             setIsLoggingOut(true)
-            // Capture last known status to freeze the UI
-            frozenStatusRef.current = optimisticState !== 'idle' ? optimisticState : (attendanceStatus?.status ?? 'not_clocked_in')
+            frozenStatusRef.current = attendanceStatus?.status ?? 'not_clocked_in'
         }
         window.addEventListener('loggingOut', handleLoggingOut)
         return () => window.removeEventListener('loggingOut', handleLoggingOut)
-    }, [attendanceStatus?.status, optimisticState])
+    }, [attendanceStatus?.status])
+
+    // Track mutation loading state - THIS prevents flickering
+    const [isMutating, setIsMutating] = useState(false)
 
     const clockInMutation = trpc.attendance.clockIn.useMutation({
         onMutate: () => {
-            setOptimisticState('clocked_in')
+            setIsMutating(true)
         },
-        onSuccess: () => {
-            toast.success("Clocked in successfully")
-            refetchStatus()  // Refresh button state
+        onSuccess: async () => {
+            // Dispatch notification event for bell-style toast
+            window.dispatchEvent(new CustomEvent('new-notification', {
+                detail: {
+                    title: 'Clocked In Successfully',
+                    message: 'Your attendance has been marked. Have a productive day!',
+                    type: 'success'
+                }
+            }))
+
+            // Invalidate caches
             utils.attendance.invalidate()
+            utils.admin.dashboard.getRecentActivities.invalidate()
+
+            // Wait for fresh data before hiding loading
+            await refetchStatus()
+
+            // Extra delay to ensure real-time updates have settled
+            await new Promise(resolve => setTimeout(resolve, 300))
+            setIsMutating(false)
         },
         onError: (error) => {
-            setOptimisticState('idle')
-            toast.error(error.message)
+            setIsMutating(false)
+            // Dispatch error notification
+            window.dispatchEvent(new CustomEvent('new-notification', {
+                detail: {
+                    title: 'Clock In Failed',
+                    message: error.message,
+                    type: 'error'
+                }
+            }))
         }
     })
 
     const clockOutMutation = trpc.attendance.clockOut.useMutation({
         onMutate: () => {
-            setOptimisticState('marked')
+            setIsMutating(true)
         },
-        onSuccess: () => {
-            toast.success("Clocked out successfully")
-            refetchStatus()  // Refresh button state
+        onSuccess: async () => {
+            // Dispatch notification event for bell-style toast
+            window.dispatchEvent(new CustomEvent('new-notification', {
+                detail: {
+                    title: 'Clocked Out Successfully',
+                    message: 'Your work hours have been logged. Great job today!',
+                    type: 'success'
+                }
+            }))
+
+            // Invalidate caches
             utils.attendance.invalidate()
+            utils.admin.dashboard.getRecentActivities.invalidate()
+
+            // Wait for fresh data before hiding loading
+            await refetchStatus()
+
+            // Extra delay to ensure real-time updates have settled
+            await new Promise(resolve => setTimeout(resolve, 300))
+            setIsMutating(false)
         },
         onError: (error) => {
-            setOptimisticState('clocked_in')
-            toast.error(error.message)
+            setIsMutating(false)
+            // Dispatch error notification
+            window.dispatchEvent(new CustomEvent('new-notification', {
+                detail: {
+                    title: 'Clock Out Failed',
+                    message: error.message,
+                    type: 'error'
+                }
+            }))
         }
     })
 
-    // Sync optimistic state when real data arrives
-    useEffect(() => {
-        if (attendanceStatus && !clockInMutation.isPending && !clockOutMutation.isPending) {
-            setOptimisticState('idle')
-        }
-    }, [attendanceStatus?.status, clockInMutation.isPending, clockOutMutation.isPending])
-
     // =====================================================
-    // BUTTON STATE LOGIC (Simple and Clear)
+    // BUTTON STATE LOGIC - Loading-based (no flickering)
     // =====================================================
-    // Priority: Logging out (Freeze) > Optimistic state > Server status
     const serverStatus = attendanceStatus?.status ?? 'not_clocked_in'
-    const buttonStatus = isLoggingOut
-        ? (frozenStatusRef.current || 'not_clocked_in')
-        : (optimisticState !== 'idle' ? optimisticState : serverStatus)
-    const attendanceLoading = statusLoading && optimisticState === 'idle' && !isLoggingOut
+
+    // During mutation, show loading state
+    // Otherwise show server status or frozen status if logging out
+    const buttonStatus = isMutating
+        ? serverStatus // Keep current status while loading
+        : (isLoggingOut ? (frozenStatusRef.current || 'not_clocked_in') : serverStatus)
+
+    const attendanceLoading = statusLoading && !isLoggingOut
 
     const handleClockIn = async (isExtra: boolean = false) => {
         try {
@@ -192,7 +265,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
 
     return (
 
-        <div className="space-y-6 gesture-friendly">
+        <div className={cn("space-y-6 gesture-friendly", isMutating && "cursor-wait")}>
             {/* Quick Actions Row */}
             <div className="grid grid-cols-1 gap-6">
                 <MetricCard
@@ -225,11 +298,11 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                                 // STATUS: clocked_in → Show "Office - Out" button
                                 <button
                                     onClick={handleClockOut}
-                                    disabled={clockOutMutation.isPending}
+                                    disabled={isMutating}
                                     className="flex items-center gap-3 p-4 rounded-2xl border border-orange-100/50 bg-orange-500/[0.08] dark:bg-orange-500/[0.08] hover:bg-orange-500/15 hover:border-orange-500/30 hover:shadow-lg hover:shadow-orange-500/10 transition-all duration-300 group/action cursor-pointer disabled:opacity-50"
                                 >
                                     <div className="p-2.5 rounded-xl bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400 group-hover/action:scale-110 group-hover/action:rotate-3 transition-transform">
-                                        {clockOutMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogOut className="h-5 w-5" />}
+                                        {isMutating ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogOut className="h-5 w-5" />}
                                     </div>
                                     <div className="flex flex-col text-left">
                                         <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5 font-bold">Action</p>
@@ -273,11 +346,11 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                                 // STATUS: not_clocked_in → Show "Office - In" button
                                 <button
                                     onClick={() => handleClockIn(false)}
-                                    disabled={clockInMutation.isPending}
+                                    disabled={isMutating}
                                     className="flex items-center gap-3 p-4 rounded-2xl border border-emerald-100/50 bg-emerald-500/[0.08] dark:bg-emerald-500/[0.08] hover:bg-emerald-500/15 hover:border-emerald-500/30 hover:shadow-lg hover:shadow-emerald-500/10 transition-all duration-300 group/action cursor-pointer disabled:opacity-50"
                                 >
                                     <div className="p-2.5 rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 group-hover/action:scale-110 group-hover/action:-rotate-3 transition-transform">
-                                        {clockInMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogIn className="h-5 w-5" />}
+                                        {isMutating ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogIn className="h-5 w-5" />}
                                     </div>
                                     <div className="flex flex-col text-left">
                                         <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5 font-bold">Action</p>

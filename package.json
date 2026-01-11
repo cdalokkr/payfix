@@ -16,7 +16,11 @@
     "db:setup:info": "echo 'To setup fresh DB, run SQL from supabase/setup-fresh-db.sql in Supabase Editor'",
     "db:pull": "drizzle-kit pull",
     "db:generate": "drizzle-kit generate",
-    "db:seed": "npx tsx scripts/seed-database.ts"
+    "db:seed": "npx tsx scripts/seed-database.ts",
+    "setup:fresh": "npx tsx scripts/setup-fresh.ts",
+    "setup:complete": "npx tsx scripts/complete-setup.ts",
+    "functions:serve": "supabase functions serve",
+    "functions:deploy": "supabase functions deploy"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.36.5",

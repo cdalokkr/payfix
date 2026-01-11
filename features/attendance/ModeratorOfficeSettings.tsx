@@ -42,15 +42,39 @@ export function ModeratorOfficeSettings() {
         onError: (error) => toast.error(error.message)
     })
 
+    // Map numeric day index to day name strings for backend
+    const DAY_INDEX_TO_NAME: Record<number, string> = {
+        0: 'sunday', 1: 'monday', 2: 'tuesday', 3: 'wednesday',
+        4: 'thursday', 5: 'friday', 6: 'saturday'
+    }
+
     const handleUpdateSettings = (e: React.FormEvent) => {
         e.preventDefault()
         if (!settings) return
+
+        // Build daily hours for ALL days, using state values or defaults
+        const formattedDailyHours: Record<string, { checkIn: string, checkOut: string }> = {}
+        const defaultCheckIn = settings.default_check_in.split(':').slice(0, 2).join(':')
+        const defaultCheckOut = settings.default_check_out.split(':').slice(0, 2).join(':')
+
+        // Iterate through all 7 days (0-6)
+        for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
+            const dayName = DAY_INDEX_TO_NAME[dayIndex]
+            const stateHours = dailyHours[dayIndex]
+
+            // Use state hours if available and valid, otherwise use defaults
+            if (stateHours && typeof stateHours === 'object' && 'checkIn' in stateHours) {
+                formattedDailyHours[dayName] = stateHours as { checkIn: string, checkOut: string }
+            } else {
+                formattedDailyHours[dayName] = { checkIn: defaultCheckIn, checkOut: defaultCheckOut }
+            }
+        }
 
         updateSettingsMutation.mutate({
             defaultCheckIn: settings.default_check_in,
             defaultCheckOut: settings.default_check_out,
             offDays: offDays,
-            dailyWorkingHours: dailyHours
+            dailyWorkingHours: formattedDailyHours
         })
     }
 

@@ -103,7 +103,7 @@ export function LeaveApplication() {
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-center py-4">{format(new Date(leave.start_date), 'MMM dd, yyyy')}</TableCell>
-                                        <TableCell className="text-center py-4">{format(new Date(leave.endDate), 'MMM dd, yyyy')}</TableCell>
+                                        <TableCell className="text-center py-4">{format(new Date(leave.end_date), 'MMM dd, yyyy')}</TableCell>
                                         <TableCell className="text-center py-4">
                                             <Badge variant={
                                                 leave.status === 'approved' ? 'success' as any :

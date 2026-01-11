@@ -72,7 +72,7 @@ export function AttendanceCalendarContent({
                         absent: (date) => date.getMonth() === currentMonth.getMonth() && date.getFullYear() === currentMonth.getFullYear() && !attendanceMap[format(date, 'yyyy-MM-dd')] && date < today && date >= monthStart && !settings?.off_days?.includes(date.getDay()),
                         marked: (date) => date.getMonth() === currentMonth.getMonth() && date.getFullYear() === currentMonth.getFullYear() && !!(attendanceMap[format(date, 'yyyy-MM-dd')]?.check_in && attendanceMap[format(date, 'yyyy-MM-dd')]?.check_out),
                         holiday: (date) => date.getMonth() === currentMonth.getMonth() && date.getFullYear() === currentMonth.getFullYear() && !!closures?.some(c => c.date === format(date, 'yyyy-MM-dd')),
-                        leave: (date) => date.getMonth() === currentMonth.getMonth() && date.getFullYear() === currentMonth.getFullYear() && !!leaves?.some(l => isWithinInterval(date, { start: parseISO(l.start_date), end: parseISO(l.endDate) })),
+                        leave: (date) => date.getMonth() === currentMonth.getMonth() && date.getFullYear() === currentMonth.getFullYear() && !!leaves?.some(l => isWithinInterval(date, { start: parseISO(l.start_date), end: parseISO(l.end_date) })),
                         offDay: (date) => date.getMonth() === currentMonth.getMonth() && date.getFullYear() === currentMonth.getFullYear() && !!settings?.off_days?.includes(date.getDay()),
                     }}
                     components={{

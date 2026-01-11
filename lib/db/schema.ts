@@ -18,7 +18,6 @@ export const designations = pgTable('designations', {
 // Profiles
 export const profiles = pgTable('profiles', {
     id: uuid('id').primaryKey(),
-    user_id: uuid('user_id'), // Auth UID
     email: text('email').notNull().unique(),
     full_name: text('full_name'),
     avatar_url: text('avatar_url'),
@@ -70,7 +69,7 @@ export const leaves = pgTable('leaves', {
     profile_id: uuid('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
     leave_type: text('leave_type'),
     start_date: date('start_date').notNull(),
-    endDate: date('end_date').notNull(), // Matching the SQL which had end_date as endDate in my manual map? recheck
+    end_date: date('end_date').notNull(),
     reason: text('reason'),
     status: text('status').notNull().default('pending'),
     is_half_day: boolean('is_half_day').default(false),
@@ -80,12 +79,6 @@ export const leaves = pgTable('leaves', {
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
-
-// Re-check leaves field name from migration
-// CREATE TABLE IF NOT EXISTS public.leaves (
-//     ...
-//     end_date DATE NOT NULL,
-// let's fix to end_date
 
 // Notifications
 export const notifications = pgTable('notifications', {

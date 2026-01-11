@@ -291,7 +291,6 @@ async function preloadProfile(profileId: string): Promise<Profile | null> {
     return {
       ...result,
       id: result.id,
-      user_id: result.user_id || undefined,
       email: result.email,
       full_name: result.full_name || undefined,
       avatar_url: result.avatar_url || undefined,

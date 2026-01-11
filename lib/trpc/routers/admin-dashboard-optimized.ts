@@ -5,7 +5,7 @@
 // ============================================
 import { z } from 'zod'
 import { router, adminProcedure, protectedProcedure, createContext } from '../server'
-import { createOptimizedQueryManager } from '@/lib/db/optimized-query-manager'
+import { createOptimizedQueryManager, clearQueryCaches } from '@/lib/db/optimized-query-manager'
 import { db } from '@/lib/db'
 
 type Context = Awaited<ReturnType<typeof createContext>>
@@ -45,6 +45,11 @@ export function invalidateDashboardCache(pattern?: string): number {
       invalidatedCount++
     }
   }
+
+  // CRITICAL: Also clear the lower-level query cache in OptimizedQueryManager
+  // This ensures fresh data is fetched from the database on the next request
+  clearQueryCaches()
+  console.log(`[DASHBOARD-CACHE] Cleared query caches for fresh data`)
 
   return invalidatedCount
 }
@@ -122,7 +127,9 @@ export const adminDashboardRouter = router({
           analyticsDays: input.analyticsDays,
           activitiesLimit: input.activitiesLimit,
           useCache: input.priority === 'speed' && input.enableCache,
-          profileId: ctx.profile.role === 'employee' ? ctx.profile.id : undefined,
+          // Filter activities by profileId for non-admin users (moderators and employees)
+          // Admin sees ALL activities, others see only their own
+          profileId: ctx.profile.role !== 'admin' ? ctx.profile.id : undefined,
           localDate: input.localDate
         })
 

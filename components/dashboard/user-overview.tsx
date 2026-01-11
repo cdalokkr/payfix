@@ -144,7 +144,7 @@ export function UserOverview({
     magicCardsDataReady,
     recentActivityDataReady,
     refetch: refetchRealtime
-  } = useUserRealtimeDashboard(profile?.user_id || '', initialData, profile?.role || 'moderator')
+  } = useUserRealtimeDashboard(profile?.id || '', initialData, profile?.role || 'moderator')
 
   const { data: unreadCount, isLoading: notificationsLoading } = trpc.notification.getUnreadCount.useQuery()
 

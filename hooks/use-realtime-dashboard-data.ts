@@ -534,8 +534,9 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
       // PERFORMANCE FIX: Disable refetchOnWindowFocus since we handle visibility manually
       // This prevents duplicate API calls when tab regains focus
       refetchOnWindowFocus: false,
-      // Only refetch on mount if we don't have initialData (prevents redundant calls after SSR)
-      refetchOnMount: !initialData,
+      // ALWAYS refetch on mount to ensure fresh data when returning to dashboard
+      // This is critical for showing updated activities after navigation
+      refetchOnMount: 'always',
       refetchOnReconnect: true,
       // CRITICAL: Keep previous data while refetching to prevent zero values flash
       // This ensures the UI shows the last known data during background refetch

@@ -5,6 +5,7 @@ import { designations, profiles, activities } from '@/lib/db/schema'
 import { eq, and, desc, count } from 'drizzle-orm'
 import { designationSchema } from '@/lib/validations/auth'
 import { formatActivityDescription, ChangedField } from '@/lib/utils/activity-logger'
+import { invalidateDashboardCache } from './admin-dashboard-optimized'
 
 export const designationRouter = router({
     getDesignations: adminProcedure.query(async ({ ctx }) => {
@@ -50,6 +51,10 @@ export const designationRouter = router({
                     role: input.role
                 },
             })
+
+            // Invalidate dashboard cache to ensure fresh activity data
+            invalidateDashboardCache()
+
             return {
                 ...data,
                 created_at: data.created_at ? data.created_at.toISOString() : null,
@@ -106,6 +111,9 @@ export const designationRouter = router({
                         },
                     })
                 }
+
+                // Invalidate dashboard cache to ensure fresh activity data
+                invalidateDashboardCache()
             }
 
             return {
@@ -158,6 +166,9 @@ export const designationRouter = router({
                         name: currentData.name
                     },
                 })
+
+                // Invalidate dashboard cache to ensure fresh activity data
+                invalidateDashboardCache()
             }
 
             return { success: true }

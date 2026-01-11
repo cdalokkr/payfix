@@ -53,7 +53,6 @@ CREATE TABLE IF NOT EXISTS public.designations (
 -- PROFILES
 CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-    user_id UUID REFERENCES auth.users(id) UNIQUE,
     email TEXT UNIQUE NOT NULL,
     full_name TEXT,
     avatar_url TEXT,
@@ -247,7 +246,7 @@ BEGIN
     '{status}',
     to_jsonb(NEW.status)
   )
-  WHERE id = NEW.user_id;
+  WHERE id = NEW.id;
   RETURN NEW;
 END;
 $$;

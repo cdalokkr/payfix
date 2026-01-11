@@ -131,21 +131,19 @@ export function ModernAddUserForm({
   const invalidateDashboardCache = async () => {
     console.log('🎯 Starting cache invalidation (server + client)...')
 
-    // Step 1: Invalidate server-side cache first (this is the critical fix)
+    // Step 1: Invalidate server-side cache first - MUST await this!
+    // This fixes the race condition where client refetch gets stale server-cached data
     try {
-      // We don't await this to prevent blocking the UI
-      invalidateServerCacheMutation.mutateAsync({
+      const result = await invalidateServerCacheMutation.mutateAsync({
         reason: 'user-operation'
-      }).then(result => {
-        console.log(`🗑️ Server cache invalidated: ${result.invalidatedCount} entries cleared`)
-      }).catch(error => {
-        console.warn('⚠️ Server cache invalidation failed, continuing with client-side invalidation:', error)
       })
+      console.log(`🗑️ Server cache invalidated: ${result.invalidatedCount} entries cleared`)
     } catch (error) {
-      console.warn('⚠️ Server cache invalidation failed immediately:', error)
+      console.warn('⚠️ Server cache invalidation failed:', error)
     }
 
-    // Step 2: Invalidate client-side tRPC cache (fire and forget for UI responsiveness)
+    // Step 2: Now invalidate client-side tRPC cache
+    // This triggers a refetch which will get fresh data from server
     try {
       if (isProfileMode) {
         utils.profile.get.invalidate()
@@ -156,7 +154,7 @@ export function ModernAddUserForm({
       console.warn('⚠️ Client cache invalidation failed:', error)
     }
 
-    console.log('✅ CACHE INVALIDATION INITIATED: All server + client caches clearing in background')
+    console.log('✅ CACHE INVALIDATION COMPLETE: Server + client caches cleared')
   }
 
   // Prefetch fresh dashboard data so it's ready when user navigates to dashboard
@@ -307,9 +305,9 @@ export function ModernAddUserForm({
         // Invalidate user list to refresh data (user management list)
         utils.admin.users.getUsers.invalidate()
 
-        // SMART CACHE INVALIDATION - Now invalidates both server and client caches
-        // Don't await this to avoid blocking the UI
-        invalidateDashboardCache()
+        // SMART CACHE INVALIDATION - Invalidates server cache first, then client cache
+        // MUST await this to ensure cache is cleared before any refetch happens
+        await invalidateDashboardCache()
 
         // ENHANCED EVENT BROADCASTING: Broadcast user creation event to other admin browsers
         try {
@@ -344,6 +342,7 @@ export function ModernAddUserForm({
         // PREFETCH: Load fresh dashboard data into cache so it's ready when user navigates back
         prefetchDashboardData()
 
+        // Call refetch prop if provided (for dashboard to update immediately)
         if (refetch) {
           refetch()
         }

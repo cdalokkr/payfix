@@ -36,7 +36,7 @@ export const authRouter = router({
         // 0. PRE-AUTH OPTIMIZATION: Check if user is deactivated before expensive auth call
         const preCheck = await ctx.db.query.profiles.findFirst({
           where: eq(profiles.email, input.email),
-          columns: { status: true, user_id: true }
+          columns: { status: true, id: true }
         })
 
         if (preCheck?.status === 'deactive' || preCheck?.status === 'deleted') {
@@ -44,8 +44,8 @@ export const authRouter = router({
           console.warn(`[Auth] Fast-rejected login attempt for ${preCheck?.status} email:`, input.email)
 
           // Clear any residual session cache for this user if we found their ID
-          if (preCheck.user_id) {
-            await performLogout(preCheck.user_id)
+          if (preCheck.id) {
+            await performLogout(preCheck.id)
           }
 
           throw new TRPCError({
@@ -147,7 +147,7 @@ export const authRouter = router({
         // Fetch profile and last logout in parallel for maximum performance
         const [profileData, lastLogoutResult] = await Promise.all([
           ctx.db.query.profiles.findFirst({
-            where: eq(profiles.user_id, data.user.id),
+            where: eq(profiles.id, data.user.id),
             with: { designation: true }
           }),
           ctx.db.query.activities.findFirst({

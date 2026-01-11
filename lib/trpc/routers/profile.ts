@@ -14,7 +14,7 @@ export const profileRouter = router({
   get: protectedProcedure.query(async ({ ctx }) => {
     // Always fetch fresh profile data with designation join
     const data = await ctx.db.query.profiles.findFirst({
-      where: eq(profiles.user_id, ctx.user.id),
+      where: eq(profiles.id, ctx.user.id),
       with: { designation: true }
     })
 
@@ -60,7 +60,7 @@ export const profileRouter = router({
 
       const [updatedProfile] = await ctx.db.update(profiles)
         .set(updateData)
-        .where(eq(profiles.user_id, ctx.user.id))
+        .where(eq(profiles.id, ctx.user.id))
         .returning()
 
       if (!updatedProfile) throw new Error('Failed to update profile')
@@ -117,9 +117,7 @@ export const profileRouter = router({
       })
 
       // Invalidate session cache to reflect avatar change immediately
-      if (updatedProfile.user_id) {
-        invalidateUserSession(updatedProfile.user_id)
-      }
+      invalidateUserSession(ctx.user.id)
 
       return updatedProfile
     }),

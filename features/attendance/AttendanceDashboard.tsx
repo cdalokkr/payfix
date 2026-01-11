@@ -93,7 +93,7 @@ export function AttendanceDashboard() {
 
             const isLeave = leaves?.some(l => {
                 const start = parseISO(l.start_date)
-                const end = parseISO(l.endDate)
+                const end = parseISO(l.end_date)
                 return isWithinInterval(day, { start, end })
             })
             if (isLeave) {

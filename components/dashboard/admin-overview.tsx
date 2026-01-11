@@ -377,12 +377,12 @@ export function AdminOverview({
         onOpenChange={setShowAddUserSheet}
         useSheet={true}
         onSuccess={() => {
-          // Real-time dashboard will automatically refresh via event listeners
-          refetch()
+          // onSuccess is called after 2-second delay, so also ensure forceFresh here
+          refetch({ forceFresh: true })
         }}
         title="Add New User"
         description="Create a new user account with proper access permissions"
-        refetch={refetch}
+        refetch={() => refetch({ forceFresh: true })}
       />
 
     </div>

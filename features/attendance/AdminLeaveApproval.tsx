@@ -156,7 +156,7 @@ export function AdminLeaveApproval() {
                                             </div>
                                         </TableCell>
                                         <TableCell>{format(new Date(leave.start_date), 'MMM dd, yyyy')}</TableCell>
-                                        <TableCell>{format(new Date(leave.endDate), 'MMM dd, yyyy')}</TableCell>
+                                        <TableCell>{format(new Date(leave.end_date), 'MMM dd, yyyy')}</TableCell>
                                         <TableCell>
                                             <Badge variant={
                                                 leave.status === 'approved' ? 'success' as any :

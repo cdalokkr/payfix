@@ -41,7 +41,7 @@ export const moderatorReportsRouter = router({
                     columns: { activity_type: true, user_id: true }
                 }),
                 ctx.db.query.profiles.findMany({
-                    columns: { id: true, user_id: true, role: true, first_name: true, last_name: true, email: true, avatar_url: true }
+                    columns: { id: true, role: true, first_name: true, last_name: true, email: true, avatar_url: true }
                 }),
                 ctx.db.select({ value: count() }).from(profiles).where(eq(profiles.role, 'moderator')),
                 ctx.db.select({ value: count() }).from(profiles).where(eq(profiles.role, 'employee')),
@@ -167,7 +167,7 @@ export const moderatorReportsRouter = router({
                 ...u,
                 created_at: u.created_at ? u.created_at.toISOString() : null,
                 updated_at: u.updated_at ? u.updated_at.toISOString() : null,
-                user_id: u.user_id as string,
+                user_id: u.id,
                 role: u.role as any,
                 designation: u.designation ? {
                     ...u.designation,
@@ -219,7 +219,7 @@ export const moderatorReportsRouter = router({
                     ...profileData,
                     created_at: profileData.created_at ? profileData.created_at.toISOString() : null,
                     updated_at: profileData.updated_at ? profileData.updated_at.toISOString() : null,
-                    user_id: profileData.user_id as string,
+                    user_id: profileData.id,
                     role: profileData.role as any,
                     designation: profileData.designation ? {
                         ...profileData.designation,
@@ -327,7 +327,7 @@ export const moderatorReportsRouter = router({
                     ...a.profile,
                     created_at: a.profile.created_at ? a.profile.created_at.toISOString() : null,
                     updated_at: a.profile.updated_at ? a.profile.updated_at.toISOString() : null,
-                    user_id: a.profile.user_id as string,
+                    user_id: a.profile.id,
                     role: a.profile.role as any,
                 } : null
             })) || []

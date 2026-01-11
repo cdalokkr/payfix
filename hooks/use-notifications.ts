@@ -26,7 +26,7 @@ export function useNotifications() {
 
     // Get profile from context (shared across all components)
     const { profile } = useProfile()
-    const userId = profile?.user_id
+    const userId = profile?.id
 
     // Fetch notifications - with 2-minute caching for performance
     const { data: notifications = [], isLoading, refetch } = trpc.notification.getAll.useQuery(

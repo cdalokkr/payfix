@@ -33,7 +33,7 @@ export function ModeratorAnalyticsView() {
         refetch: realtimeRefetch,
         magicCardsDataReady,
         showSkeleton
-    } = useUserRealtimeDashboard(profile?.user_id || '', undefined, 'moderator')
+    } = useUserRealtimeDashboard(profile?.id || '', undefined, 'moderator')
 
     // Fetch reports data - using the new moderator router
     const { data: reportsData, isLoading: reportsLoading, error: reportsError, refetch: reportsRefetch } = trpc.moderator.reports.getReportsData.useQuery(

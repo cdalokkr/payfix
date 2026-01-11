@@ -83,7 +83,7 @@ export const attendanceRouter = router({
             // Send notifications to admins and moderators
             const adminModerators = await ctx.db.query.profiles.findMany({
                 where: or(eq(profiles.role, 'admin'), eq(profiles.role, 'moderator')),
-                columns: { id: true, user_id: true, role: true }
+                columns: { id: true, role: true }
             })
 
             // Send notifications to admins and moderators with role-specific links
@@ -95,7 +95,7 @@ export const attendanceRouter = router({
 
                 // Insert notification to DB
                 await ctx.db.insert(notifications).values({
-                    user_id: user.user_id,
+                    user_id: user.id,
                     title,
                     message,
                     type: 'attendance',
@@ -103,15 +103,13 @@ export const attendanceRouter = router({
                 })
 
                 // Broadcast to the specific user (since postgres_changes may not work due to RLS)
-                if (user.user_id) {
-                    broadcastServerEvent('new_notification', {
-                        title,
-                        message,
-                        type: 'attendance',
-                        link,
-                        targetUserId: user.user_id
-                    }, user.user_id)
-                }
+                broadcastServerEvent('new_notification', {
+                    title,
+                    message,
+                    type: 'attendance',
+                    link,
+                    targetUserId: user.id
+                }, user.id)
             }))
 
             return result
@@ -149,7 +147,7 @@ export const attendanceRouter = router({
             // Send notifications to admins and moderators
             const adminModerators = await ctx.db.query.profiles.findMany({
                 where: or(eq(profiles.role, 'admin'), eq(profiles.role, 'moderator')),
-                columns: { id: true, user_id: true, role: true }
+                columns: { id: true, role: true }
             })
 
             // Send notifications to admins and moderators with role-specific links
@@ -161,7 +159,7 @@ export const attendanceRouter = router({
 
                 // Insert notification to DB
                 await ctx.db.insert(notifications).values({
-                    user_id: user.user_id,
+                    user_id: user.id,
                     title,
                     message,
                     type: 'attendance',
@@ -169,15 +167,13 @@ export const attendanceRouter = router({
                 })
 
                 // Broadcast to the specific user (since postgres_changes may not work due to RLS)
-                if (user.user_id) {
-                    broadcastServerEvent('new_notification', {
-                        title,
-                        message,
-                        type: 'attendance',
-                        link,
-                        targetUserId: user.user_id
-                    }, user.user_id)
-                }
+                broadcastServerEvent('new_notification', {
+                    title,
+                    message,
+                    type: 'attendance',
+                    link,
+                    targetUserId: user.id
+                }, user.id)
             }))
 
             return result

@@ -48,7 +48,6 @@ INSERT INTO public.profiles (
     last_name,
     mobile_no,
     date_of_birth,
-    user_id,
     middle_name,
     sex,
     designation_id,
@@ -66,7 +65,6 @@ VALUES (
     'admin',
     '8707064200',
     '1982-07-10',
-    '0a4274fb-6fc9-482b-993e-f7c903ec0dd7',  -- This should match the auth.users id
     '',
     'male',
     'd1234567-89ab-cdef-0123-456789abcdef',

@@ -69,7 +69,7 @@ export const adminReportsRouter = router({
 
         // 6. Profiles data
         ctx.db.query.profiles.findMany({
-          columns: { id: true, user_id: true, role: true, first_name: true, last_name: true, email: true, avatar_url: true }
+          columns: { id: true, role: true, first_name: true, last_name: true, email: true, avatar_url: true }
         }),
       ])
 
@@ -522,7 +522,7 @@ export const adminReportsRouter = router({
           ...profileData,
           created_at: profileData.created_at ? profileData.created_at.toISOString() : null,
           updated_at: profileData.updated_at ? profileData.updated_at.toISOString() : null,
-          user_id: profileData.user_id as string,
+          user_id: profileData.id,
           role: profileData.role as any,
           designation: profileData.designation ? {
             ...profileData.designation,
@@ -633,7 +633,7 @@ export const adminReportsRouter = router({
         ...u,
         created_at: u.created_at ? u.created_at.toISOString() : null,
         updated_at: u.updated_at ? u.updated_at.toISOString() : null,
-        user_id: u.user_id as string,
+        user_id: u.id,
         role: u.role as any,
         designation: u.designation ? {
           ...u.designation,
@@ -716,7 +716,7 @@ export const adminReportsRouter = router({
           ...profileData,
           created_at: profileData.created_at ? profileData.created_at.toISOString() : null,
           updated_at: profileData.updated_at ? profileData.updated_at.toISOString() : null,
-          user_id: profileData.user_id as string,
+          user_id: profileData.id,
           role: profileData.role as any,
           designation: profileData.designation ? {
             ...profileData.designation,

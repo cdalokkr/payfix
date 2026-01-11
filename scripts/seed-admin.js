@@ -49,7 +49,6 @@ const masterAdmin = {
     last_name: 'admin',
     mobile_no: '8707064200',
     date_of_birth: '1982-07-10',
-    user_id: '0a4274fb-6fc9-482b-993e-f7c903ec0dd7',
     middle_name: '',
     sex: 'male',
     status: 'active'
@@ -247,7 +246,6 @@ async function createProfile(authUserId) {
             last_name: masterAdmin.last_name,
             mobile_no: masterAdmin.mobile_no,
             date_of_birth: masterAdmin.date_of_birth,
-            user_id: authUserId,
             middle_name: masterAdmin.middle_name,
             sex: masterAdmin.sex,
             status: masterAdmin.status,
@@ -370,7 +368,6 @@ async function verifyAdmin(authUserId) {
     console.log('\n✅ Admin Profile Verified:')
     console.log('   ─────────────────────────────────────')
     console.log(`   ID:           ${profile.id}`)
-    console.log(`   User ID:      ${profile.user_id}`)
     console.log(`   Email:        ${profile.email}`)
     console.log(`   Name:         ${profile.first_name} ${profile.last_name}`)
     console.log(`   Role:         ${profile.role}`)

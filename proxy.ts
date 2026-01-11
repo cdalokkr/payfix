@@ -165,7 +165,7 @@ export async function proxy(request: NextRequest) {
         const { data: profile } = await supabase
             .from('profiles')
             .select('role, status')
-            .eq('user_id', user.id)
+            .eq('id', user.id)
             .single()
 
         if (!profile) {
