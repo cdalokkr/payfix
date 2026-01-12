@@ -188,11 +188,22 @@ export const adminDashboardRouter = router({
   }),
 
   getRecentActivities: protectedProcedure
-    .input(z.object({ limit: z.number().default(10) }))
-    .query(async ({ input }) => {
+    .input(z.object({
+      limit: z.number().default(10),
+      userId: z.string().optional() // Filter activities by user ID (for employee/moderator dashboards)
+    }))
+    .query(async ({ ctx, input }) => {
       const metrics = startDashboardTiming('getRecentActivities')
       try {
-        const data = await queryManager.getActivitiesOptimized({ limit: input.limit })
+        // If userId is provided, filter by that user
+        // If not provided AND user is admin, show all activities
+        // If not provided AND user is NOT admin, show only their own activities
+        const effectiveUserId = input.userId ?? (ctx.profile.role !== 'admin' ? ctx.profile.id : undefined)
+
+        const data = await queryManager.getActivitiesOptimized({
+          limit: input.limit,
+          userId: effectiveUserId
+        })
         return {
           data: data.activities,
           ...endDashboardTiming(metrics)

@@ -32,6 +32,9 @@ export interface UserActivity {
         email: string
         full_name: string | null
         role: string
+        designation?: {
+            name: string
+        } | null
     }
 }
 
@@ -158,7 +161,7 @@ export function ActivityLogFeed({
 
     return (
         <div className={cn("space-y-3", className)}>
-            <AnimatePresence mode="popLayout">
+            <AnimatePresence mode="sync">
                 {displayActivities.map((activity, index) => {
                     const Icon = getActivityIcon(activity.activity_type)
                     const colorClass = getActivityTypeColor(activity.activity_type)
@@ -166,10 +169,15 @@ export function ActivityLogFeed({
                     return (
                         <motion.div
                             key={activity.id}
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: 20 }}
-                            transition={{ delay: Math.min(index * 0.05, 0.5), duration: 0.3 }}
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.9 }}
+                            layout="position"
+                            transition={{
+                                layout: { type: "spring", stiffness: 300, damping: 30 },
+                                opacity: { duration: 0.25 },
+                                scale: { type: "spring", stiffness: 400, damping: 25 }
+                            }}
                             className={cn(
                                 "flex items-start gap-4 p-4 rounded-xl border transition-all duration-300",
                                 "bg-background/40 hover:bg-background/80 group hover:shadow-md",
@@ -195,9 +203,19 @@ export function ActivityLogFeed({
                                         >
                                             {activity.activity_type.replace(/_/g, ' ')}
                                         </Badge>
-                                        {activity.profiles?.full_name && (
-                                            <span className="text-[11px] font-bold text-muted-foreground bg-muted/30 px-2 py-0.5 rounded-full">
-                                                {activity.profiles.full_name}
+                                        {activity.profiles?.role && (
+                                            <span className={cn(
+                                                "text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full",
+                                                activity.profiles.role === 'admin' && "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400",
+                                                activity.profiles.role === 'moderator' && "bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400",
+                                                activity.profiles.role === 'employee' && "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400"
+                                            )}>
+                                                {activity.profiles.role}
+                                            </span>
+                                        )}
+                                        {activity.profiles?.designation?.name && (
+                                            <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 px-2 py-0.5 rounded-md">
+                                                {activity.profiles.designation.name}
                                             </span>
                                         )}
                                         {activity.module && (
@@ -212,7 +230,16 @@ export function ActivityLogFeed({
                                     </div>
                                 </div>
                                 <p className="text-sm font-medium leading-relaxed tracking-tight text-foreground/90 break-words">
-                                    {activity.description || "No description provided"}
+                                    {/* Dynamic format: name - email - activity */}
+                                    {activity.profiles?.full_name && (
+                                        <span className="font-bold text-foreground">{activity.profiles.full_name}</span>
+                                    )}
+                                    {activity.profiles?.full_name && activity.profiles?.email && ' - '}
+                                    {activity.profiles?.email && (
+                                        <span className="text-primary/70">[{activity.profiles.email}]</span>
+                                    )}
+                                    {(activity.profiles?.full_name || activity.profiles?.email) && ' - '}
+                                    <span className="text-foreground/80">{activity.description || "No description provided"}</span>
                                 </p>
                             </div>
                         </motion.div>

@@ -115,6 +115,11 @@ export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
   }
 
   if (!ctx.user || !ctx.profile) {
+    // Differentiate between true unauthorized and transient DB issues
+    if (ctx.user && !ctx.profile) {
+      console.warn('[AUTH-PROC] User authenticated but profile missing - possible DB connection issue');
+    }
+
     if (process.env.NODE_ENV === 'development') {
       console.log('DEBUG: protectedProcedure - throwing UNAUTHORIZED', {
         userFound: !!ctx.user,
@@ -124,6 +129,7 @@ export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
     }
     throw new TRPCError({
       code: 'UNAUTHORIZED',
+      message: ctx.user ? 'Profile temporarily unavailable - please try again' : undefined,
       cause: { performance: ctx.performance }
     })
   }

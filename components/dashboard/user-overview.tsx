@@ -184,42 +184,42 @@ export function UserOverview({
               {/* Edit Profile Item */}
               <Link
                 href="/moderator/profile"
-                className="flex items-center gap-3 p-4 rounded-2xl border border-blue-200/50 bg-blue-50/30 dark:bg-blue-500/5 hover:bg-blue-500/10 hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-500/5 transition-all duration-300 group cursor-pointer"
+                className="flex items-center gap-3 p-4 rounded-2xl border border-blue-200/50 bg-blue-50/30 dark:bg-blue-500/5 hover:bg-blue-500/10 hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-500/5 transition-all duration-300 group/mod-action cursor-pointer"
               >
-                <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-700 dark:text-blue-400 group-hover:scale-110 group-hover:rotate-3 transition-transform">
+                <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-700 dark:text-blue-400 group-hover/mod-action:scale-110 group-hover/mod-action:rotate-3 transition-transform">
                   <User className="h-5 w-5" />
                 </div>
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Settings</p>
-                  <p className="text-sm font-bold group-hover:text-primary transition-colors">Profile</p>
+                  <p className="text-sm font-bold group-hover/mod-action:text-primary transition-colors">Profile</p>
                 </div>
               </Link>
 
               {/* Reports Item */}
               <Link
                 href="/moderator/reports"
-                className="flex items-center gap-3 p-4 rounded-2xl border border-orange-200/50 bg-orange-50/30 dark:bg-orange-500/5 hover:bg-orange-500/10 hover:border-orange-500/50 hover:shadow-lg hover:shadow-orange-500/5 transition-all duration-300 group cursor-pointer"
+                className="flex items-center gap-3 p-4 rounded-2xl border border-orange-200/50 bg-orange-50/30 dark:bg-orange-500/5 hover:bg-orange-500/10 hover:border-orange-500/50 hover:shadow-lg hover:shadow-orange-500/5 transition-all duration-300 group/mod-action cursor-pointer"
               >
-                <div className="p-2.5 rounded-xl bg-orange-500/10 text-orange-700 dark:text-orange-400 group-hover:scale-110 group-hover:-rotate-3 transition-transform">
+                <div className="p-2.5 rounded-xl bg-orange-500/10 text-orange-700 dark:text-orange-400 group-hover/mod-action:scale-110 group-hover/mod-action:-rotate-3 transition-transform">
                   <BarChart3 className="h-5 w-5" />
                 </div>
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Reports</p>
-                  <p className="text-sm font-bold group-hover:text-primary transition-colors">Analytics</p>
+                  <p className="text-sm font-bold group-hover/mod-action:text-primary transition-colors">Analytics</p>
                 </div>
               </Link>
 
               {/* Analytics Item */}
               <Link
                 href="/moderator/analytics"
-                className="flex items-center gap-3 p-4 rounded-2xl border border-green-200/50 bg-green-50/30 dark:bg-green-500/5 hover:bg-green-500/10 hover:border-green-500/50 hover:shadow-lg hover:shadow-green-500/5 transition-all duration-300 group cursor-pointer"
+                className="flex items-center gap-3 p-4 rounded-2xl border border-green-200/50 bg-green-50/30 dark:bg-green-500/5 hover:bg-green-500/10 hover:border-green-500/50 hover:shadow-lg hover:shadow-green-500/5 transition-all duration-300 group/mod-action cursor-pointer"
               >
-                <div className="p-2.5 rounded-xl bg-green-500/10 text-green-700 dark:text-green-400 group-hover:scale-110 group-hover:rotate-3 transition-transform">
+                <div className="p-2.5 rounded-xl bg-green-500/10 text-green-700 dark:text-green-400 group-hover/mod-action:scale-110 group-hover/mod-action:rotate-3 transition-transform">
                   <TrendingUp className="h-5 w-5" />
                 </div>
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Statistics</p>
-                  <p className="text-sm font-bold group-hover:text-primary transition-colors">Insights</p>
+                  <p className="text-sm font-bold group-hover/mod-action:text-primary transition-colors">Insights</p>
                 </div>
               </Link>
             </div>

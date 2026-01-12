@@ -270,53 +270,75 @@ function getCachedSessionByUserId(userId: string): SessionCache | null {
 }
 
 // Preload profile data using Primary Key (id) for maximum performance
+// Includes retry logic for transient connection errors
 async function preloadProfile(profileId: string): Promise<Profile | null> {
-  try {
-    const startTime = performance.now()
+  const MAX_RETRIES = 3;
+  const RETRY_DELAYS = [500, 1000, 2000]; // ms - exponential backoff
 
-    // Primary Key lookups are the fastest possible queries in Postgres
-    const result = await db.query.profiles.findFirst({
-      where: eq(profiles.id, profileId),
-      with: { designation: true }
-    })
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const startTime = performance.now()
 
-    const duration = performance.now() - startTime
-    if (process.env.NODE_ENV === 'development' && duration > 100) {
-      console.log(`[AUTH-PERF] Drizzle profile fetch: ${duration.toFixed(2)}ms`)
+      // Primary Key lookups are the fastest possible queries in Postgres
+      const result = await db.query.profiles.findFirst({
+        where: eq(profiles.id, profileId),
+        with: { designation: true }
+      })
+
+      const duration = performance.now() - startTime
+      if (process.env.NODE_ENV === 'development' && duration > 100) {
+        console.log(`[AUTH-PERF] Drizzle profile fetch: ${duration.toFixed(2)}ms`)
+      }
+
+      if (!result) return null
+
+      // Map Drizzle result to Profile type
+      return {
+        ...result,
+        id: result.id,
+        email: result.email,
+        full_name: result.full_name || undefined,
+        avatar_url: result.avatar_url || undefined,
+        role: result.role as any,
+        designation_id: result.designation_id || undefined,
+        designation: result.designation ? {
+          ...result.designation,
+          created_at: result.designation.created_at?.toISOString() || null,
+          updated_at: result.designation.updated_at?.toISOString() || null,
+          role: result.designation.role as any,
+        } : undefined,
+        first_name: result.first_name || undefined,
+        middle_name: result.middle_name || undefined,
+        last_name: result.last_name || undefined,
+        mobile_no: result.mobile_no || undefined,
+        date_of_birth: result.date_of_birth || undefined,
+        sex: result.sex || undefined,
+        status: result.status as any,
+        allowed_modules: result.allowed_modules || undefined,
+        created_at: result.created_at?.toISOString() || null,
+        updated_at: result.updated_at?.toISOString() || null,
+      } as Profile
+    } catch (error: any) {
+      // Check if this is a connection error that's worth retrying
+      const isConnectionError =
+        error?.cause?.code === 'CONNECT_TIMEOUT' ||
+        error?.cause?.code === 'ECONNREFUSED' ||
+        error?.cause?.code === 'ECONNRESET' ||
+        error?.message?.includes('CONNECT_TIMEOUT') ||
+        error?.message?.includes('connection');
+
+      if (isConnectionError && attempt < MAX_RETRIES) {
+        console.warn(`[AUTH-RETRY] Profile fetch attempt ${attempt + 1}/${MAX_RETRIES} failed (${error?.cause?.code || 'connection error'}), retrying in ${RETRY_DELAYS[attempt]}ms...`);
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]));
+        continue;
+      }
+
+      console.error('Exception preloading profile with Drizzle:', error)
+      return null
     }
-
-    if (!result) return null
-
-    // Map Drizzle result to Profile type
-    return {
-      ...result,
-      id: result.id,
-      email: result.email,
-      full_name: result.full_name || undefined,
-      avatar_url: result.avatar_url || undefined,
-      role: result.role as any,
-      designation_id: result.designation_id || undefined,
-      designation: result.designation ? {
-        ...result.designation,
-        created_at: result.designation.created_at?.toISOString() || null,
-        updated_at: result.designation.updated_at?.toISOString() || null,
-        role: result.designation.role as any,
-      } : undefined,
-      first_name: result.first_name || undefined,
-      middle_name: result.middle_name || undefined,
-      last_name: result.last_name || undefined,
-      mobile_no: result.mobile_no || undefined,
-      date_of_birth: result.date_of_birth || undefined,
-      sex: result.sex || undefined,
-      status: result.status as any,
-      allowed_modules: result.allowed_modules || undefined,
-      created_at: result.created_at?.toISOString() || null,
-      updated_at: result.updated_at?.toISOString() || null,
-    } as Profile
-  } catch (error) {
-    console.error('Exception preloading profile with Drizzle:', error)
-    return null
   }
+
+  return null
 }
 
 // Optimized context creation with async session management

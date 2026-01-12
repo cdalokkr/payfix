@@ -5,22 +5,28 @@ export type ChangedField = string | { name: string; value: any }
 
 interface ActivityDescriptionParams {
     action: ActivityAction
-    actorRole: string
-    actorEmail: string
+    actorRole?: string       // Kept for backward compatibility but not used in description
+    actorEmail?: string      // Kept for backward compatibility but not used in description
     targetEmail?: string
     changedFields?: ChangedField[]
     entityName?: string
     module?: string
 }
 
+/**
+ * Format activity description - returns ONLY the action text.
+ * Role and email are stored in profiles table and fetched via user_id FK when displaying.
+ * 
+ * Examples:
+ * - "Logged in 🔓"
+ * - "Created user 👤 (user@example.com)"
+ * - "Updated 💾 fields: Role (admin) for (user@example.com)"
+ */
 export function formatActivityDescription({
     action,
-    actorRole,
-    actorEmail,
     targetEmail,
     changedFields,
     entityName = 'user',
-    module
 }: ActivityDescriptionParams): string {
     let actionText = ''
     let emoji = ''
@@ -29,22 +35,22 @@ export function formatActivityDescription({
 
     switch (action) {
         case 'login':
-            actionText = 'logged in'
+            actionText = 'Logged in'
             emoji = '🔓'
             break
         case 'logout':
-            actionText = 'logged out'
+            actionText = 'Logged out'
             emoji = '🔒'
             break
         case 'create':
-            actionText = `created ${entityName}`
+            actionText = `Created ${entityName}`
             emoji = entityName === 'user' ? '👤' : '📝'
             if (targetEmail) {
                 targetInfo = `(${targetEmail})`
             }
             break
         case 'update':
-            actionText = 'updated'
+            actionText = 'Updated'
             emoji = '💾'
             if (targetEmail) {
                 targetInfo = `for (${targetEmail})`
@@ -61,22 +67,18 @@ export function formatActivityDescription({
             }
             break
         case 'delete':
-            actionText = 'deleted'
+            actionText = 'Deleted'
             emoji = '⛔'
             if (targetEmail) {
-                targetInfo = `for (${targetEmail})`
+                targetInfo = `(${targetEmail})`
             }
             break
     }
 
-    // Construct the final string
-    // Format: [Role] - [Actor Email] - [Action] [Emoji] [Fields Info] [Target Info]
-    // Note: Timestamp is stored in created_at column and displayed separately in UI
+    // Construct the action-only description
+    // Format: [Action] [Emoji] [Fields Info] [Target Info]
+    // Role and email are NOT included - they come from profiles table via user_id FK
     const parts = [
-        actorRole,
-        '-',
-        `[${actorEmail}]`,
-        '-',
         actionText,
         emoji,
         fieldsInfo,
@@ -86,3 +88,4 @@ export function formatActivityDescription({
     // Filter out empty strings and join with space
     return parts.filter(part => part !== '').join(' ')
 }
+

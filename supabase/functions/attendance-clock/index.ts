@@ -88,7 +88,7 @@ serve(async (req: Request) => {
                 user_id: profile_id,
                 activity_type: 'data_create',
                 module: 'attendance',
-                description: `${full_name || email} clocked in at ${new Date().toLocaleTimeString()}${is_extra_day ? ' (Extra Work)' : ''}`
+                description: `Clocked in at ${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}${is_extra_day ? ' (Extra Work)' : ''}`
             })
 
             return successResponse({ record: data, action: 'clock_in' })
@@ -144,7 +144,7 @@ serve(async (req: Request) => {
                 user_id: profile_id,
                 activity_type: 'data_edit',
                 module: 'attendance',
-                description: `${full_name || email} clocked out at ${new Date().toLocaleTimeString()}`
+                description: `Clocked out at ${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}`
             })
 
             return successResponse({ record: data, action: 'clock_out' })

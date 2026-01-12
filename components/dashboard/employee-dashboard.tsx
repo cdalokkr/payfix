@@ -272,7 +272,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                     className="shadow-xl"
                     gradientColor="from-primary/10 to-transparent"
                     delay={0.1}
-                    disableHover={false}
+                    disableHover={true}
                     borderColor="border-primary/10"
                     cardBgColor="bg-card/50"
                 >

@@ -289,7 +289,16 @@ export class OptimizedQueryManager {
                 email: true,
                 full_name: true,
                 first_name: true,
-                last_name: true
+                last_name: true,
+                role: true,
+                designation_id: true
+              },
+              with: {
+                designation: {
+                  columns: {
+                    name: true
+                  }
+                }
               }
             }
           },
@@ -553,7 +562,16 @@ export class OptimizedQueryManager {
                 email: true,
                 full_name: true,
                 first_name: true,
-                last_name: true
+                last_name: true,
+                role: true,
+                designation_id: true
+              },
+              with: {
+                designation: {
+                  columns: {
+                    name: true
+                  }
+                }
               }
             }
           }

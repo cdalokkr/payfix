@@ -122,7 +122,7 @@ export class AttendanceService {
             user_id: profileId,
             activity_type: 'data_create',
             module: 'attendance',
-            description: `${fullName || email} clocked in at ${new Date().toLocaleTimeString()}${isExtraDay ? ' (Extra Work)' : ''}`,
+            description: `Clocked in at ${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}${isExtraDay ? ' (Extra Work)' : ''}`,
         })
 
         return data
@@ -181,7 +181,7 @@ export class AttendanceService {
             user_id: profileId,
             activity_type: 'data_edit',
             module: 'attendance',
-            description: `${fullName || email} clocked out at ${new Date().toLocaleTimeString()}`,
+            description: `Clocked out at ${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}`,
         })
 
         return data
