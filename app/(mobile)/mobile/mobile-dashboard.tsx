@@ -214,39 +214,50 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
 
                     {/* Integrated Action Button or Geofence Error */}
                     {!isComplete && (
-                        <div className="mt-6 flex justify-center">
+                        <div className="mt-6 flex flex-col items-center gap-4">
+                            {/* Relocated Location Badge */}
+                            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/10">
+                                <div className={`w-2 h-2 rounded-full ${geofenceResult?.isAllowed ? 'bg-green-400' : 'bg-rose-400'} animate-pulse`} />
+                                <span className="text-[10px] font-black uppercase tracking-wider text-white">
+                                    {isLocChecking ? "Detecting Location..." :
+                                        geofenceResult?.isAllowed ? `At ${geofenceResult.withinOffice?.name}` :
+                                            "Location Restricted"}
+                                </span>
+                            </div>
+
                             {isLocChecking ? (
-                                <div className="flex items-center gap-2 px-6 py-3 bg-white/20 rounded-full backdrop-blur-md border border-white/20">
+                                <div className="flex items-center gap-2 px-6 py-3 bg-white/20 rounded-full backdrop-blur-md border border-white/20 w-full justify-center">
                                     <IconLoader2 className="w-4 h-4 animate-spin" />
-                                    <span className="text-xs font-black uppercase tracking-wider">Verifying Location...</span>
+                                    <span className="text-xs font-black uppercase tracking-wider">Verifying...</span>
                                 </div>
                             ) : geofenceResult?.isAllowed ? (
-                                <Link href="/mobile/attendance">
+                                <Link href="/mobile/attendance" className="w-full">
                                     <Button
-                                        className="h-12 px-8 rounded-full bg-white text-slate-900 hover:bg-white/90 font-black text-sm shadow-xl border-none group transition-all"
+                                        className="w-full h-14 px-8 rounded-[1.5rem] bg-white text-slate-900 hover:bg-white/90 font-black text-sm shadow-xl border-none group transition-all flex items-center justify-between overflow-hidden"
                                     >
-                                        {hasCheckedIn ? (
-                                            <>
-                                                <IconLogout className="w-4 h-4 mr-2 stroke-[3]" />
-                                                <span>Clock Out Now</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <IconLogin className="w-4 h-4 mr-2 stroke-[3]" />
-                                                <span>Clock In Now</span>
-                                            </>
-                                        )}
-                                        <IconArrowRight className="w-3.5 h-3.5 ml-4 opacity-50 group-hover:translate-x-1 transition-transform" />
+                                        <div className="flex items-center gap-3">
+                                            <div className={`p-2 rounded-xl flex items-center justify-center ${hasCheckedIn ? 'bg-orange-500/10 text-orange-600' : 'bg-emerald-500/10 text-emerald-600'}`}>
+                                                {hasCheckedIn ? (
+                                                    <IconLogout className="w-5 h-5 stroke-[2.5]" />
+                                                ) : (
+                                                    <IconLogin className="w-5 h-5 stroke-[2.5]" />
+                                                )}
+                                            </div>
+                                            <span>
+                                                {hasCheckedIn ? 'Clock Out' : 'Clock In'}
+                                            </span>
+                                        </div>
+                                        <IconArrowRight className="w-4 h-4 opacity-50 group-hover:translate-x-1 transition-transform" />
                                     </Button>
                                 </Link>
                             ) : (
                                 <div className="flex flex-col items-center gap-2 p-4 bg-rose-500/20 rounded-[2rem] border border-white/20 backdrop-blur-md w-full">
                                     <div className="flex items-center gap-2 text-rose-100">
                                         <IconMapPinOff className="w-5 h-5" />
-                                        <span className="text-sm font-black uppercase tracking-wider">Not In Office</span>
+                                        <span className="text-sm font-black uppercase tracking-wider">Restricted Area</span>
                                     </div>
                                     <p className="text-[10px] font-bold opacity-80 text-center">
-                                        You are outside the required area. Please move back to office.
+                                        Please move into office area to {hasCheckedIn ? 'clock out' : 'clock in'}.
                                     </p>
                                 </div>
                             )}
@@ -306,19 +317,6 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                     </Card>
                 </motion.div>
             )}
-
-            {/* Location Badge */}
-            <motion.div variants={itemVars} className="flex items-center justify-center pt-2">
-                <div className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-slate-100/80 dark:bg-slate-900/80 backdrop-blur-sm border border-slate-200/50 dark:border-slate-800/50 shadow-sm">
-                    <div className={`w-2 h-2 rounded-full ${geofenceResult?.isAllowed ? 'bg-green-500' : 'bg-rose-500'} animate-pulse`} />
-                    <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 opacity-80 uppercase tracking-[0.15em]">
-                        {isLocChecking ? "Detecting Location..." :
-                            geofenceResult?.isAllowed ? `At ${geofenceResult.withinOffice?.name}` :
-                                "Location Restricted"}
-                    </span>
-                </div>
-            </motion.div>
-
         </motion.div>
     )
 }
