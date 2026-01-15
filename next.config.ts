@@ -55,9 +55,9 @@ const nextConfig: NextConfig = {
           {
             key: 'Permissions-Policy',
             value: [
-              'camera=(self)',
-              'microphone=(self)',
-              'geolocation=(self)',
+              'camera=self',
+              'microphone=self',
+              'geolocation=self',
               'interest-cohort=()', // Disable FLoC
               'accelerometer=()',
               'gyroscope=()',

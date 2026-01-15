@@ -43,8 +43,8 @@ export function LocationVerification({ onVerified, onSkip }: LocationVerificatio
     const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
     const [nearestOffice, setNearestOffice] = useState<{ name: string; distance: number } | null>(null)
     const [showManualEntry, setShowManualEntry] = useState(false)
-    const [manualLat, setManualLat] = useState('')
     const [manualLng, setManualLng] = useState('')
+    const [debugInfo, setDebugInfo] = useState<string>('')
 
     const { data: geofenceResult, refetch, isLoading: isChecking } = trpc.officeLocations.checkGeofence.useQuery(
         {
@@ -70,10 +70,15 @@ export function LocationVerification({ onVerified, onSkip }: LocationVerificatio
         setErrorMessage('')
 
         try {
+            const isSecure = window.isSecureContext
+            const protocol = window.location.protocol
+            console.log('[LOCATION] Requesting position...', { isSecure, protocol })
+            setDebugInfo(`Protocol: ${protocol}, SecureContext: ${isSecure}`)
+
             const position = await new Promise<GeolocationPosition>((resolve, reject) => {
                 navigator.geolocation.getCurrentPosition(resolve, reject, {
                     enableHighAccuracy: true,
-                    timeout: 15000,
+                    timeout: 10000,
                     maximumAge: 0,
                 })
             })
@@ -83,10 +88,21 @@ export function LocationVerification({ onVerified, onSkip }: LocationVerificatio
                 lat: position.coords.latitude,
                 lng: position.coords.longitude,
             })
+            setDebugInfo(prev => `${prev}\nSuccess: ${position.coords.latitude}, ${position.coords.longitude}`)
         } catch (error: unknown) {
             setStatus('error')
             const geoError = error as GeolocationPositionError
             console.error('[LOCATION] Geolocation error:', geoError.code, geoError.message)
+
+            let detailedError = `Error Code: ${geoError.code}\nMessage: ${geoError.message}`
+            if (geoError.code === 1) {
+                detailedError += '\n(Permission Denied: Browser or User blocked location)'
+            } else if (geoError.code === 2) {
+                detailedError += '\n(Position Unavailable: GPS signal weak)'
+            } else if (geoError.code === 3) {
+                detailedError += '\n(Timeout: Took too long to get signal)'
+            }
+            setDebugInfo(prev => `${prev}\n${detailedError}`)
 
             switch (geoError.code) {
                 case 1: // PERMISSION_DENIED
@@ -264,9 +280,20 @@ export function LocationVerification({ onVerified, onSkip }: LocationVerificatio
                             size="sm"
                             className="w-full gap-2"
                         >
-                            <IconMapPin className="w-4 h-4" />
+                            <IconSettings className="w-3 h-3" />
                             Use These Coordinates
                         </Button>
+
+                        {/* Debug Info Section */}
+                        {debugInfo && (
+                            <div className="mt-4 p-2 rounded bg-black/5 text-[10px] font-mono whitespace-pre-wrap break-all border border-dashed text-muted-foreground">
+                                <p className="font-bold mb-1 border-b border-dashed pb-1 uppercase">Trace Logs:</p>
+                                {debugInfo}
+                                <p className="mt-1 border-t border-dashed pt-1">
+                                    Current Time: {new Date().toLocaleTimeString()}
+                                </p>
+                            </div>
+                        )}
                     </div>
                 )}
 
