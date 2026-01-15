@@ -140,14 +140,11 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                     <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full -ml-16 -mb-16 blur-xl" />
 
                     <div className="relative flex items-center justify-between">
-                        <div className="space-y-1">
-                            <div className="flex items-center gap-2 mb-1 px-3 py-1 bg-white/10 w-fit rounded-full backdrop-blur-md">
-                                <StatusIcon className="w-3.5 h-3.5" />
-                                <span className="text-[11px] font-bold uppercase tracking-wider opacity-90">Today's Status</span>
+                        <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 px-0 py-1 bg-transparent w-fit rounded-full">
+                                <StatusIcon className="w-4 h-4" />
+                                <span className="text-xs font-black uppercase tracking-[0.2em] opacity-90">Today's Status</span>
                             </div>
-                            <h2 className="text-2xl font-black tracking-tight leading-tight">
-                                {getStatusText()}
-                            </h2>
                         </div>
 
                         {/* Integrated Calendar UI */}
@@ -155,119 +152,91 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                             <motion.div
                                 initial={{ scale: 0.9 }}
                                 animate={{ scale: 1 }}
-                                className="flex flex-col items-center bg-white rounded-2xl p-2 min-w-[80px] shadow-lg"
+                                className="flex flex-col items-center bg-white rounded-2xl p-2 min-w-[70px] shadow-lg"
                             >
-                                <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest border-b border-rose-100 w-full text-center pb-1 mb-1">
+                                <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest border-b border-rose-100 w-full text-center pb-0.5 mb-1">
                                     {format(now, 'EEE').toUpperCase()}
                                 </span>
-                                <div className="flex items-baseline gap-1">
-                                    <span className="text-2xl font-black text-slate-800 leading-none">
+                                <div className="flex items-baseline gap-0.5">
+                                    <span className="text-xl font-black text-slate-800 leading-none">
                                         {format(now, 'dd')}
                                     </span>
-                                    <span className="text-xs font-black text-slate-600 uppercase">
+                                    <span className="text-[10px] font-black text-slate-600 uppercase">
                                         {format(now, 'MMM').toUpperCase()}
                                     </span>
                                 </div>
-                                <span className="text-[10px] font-bold text-slate-400 mt-0.5 tracking-wider">
-                                    {format(now, 'yyyy')}
-                                </span>
                             </motion.div>
                             <div className="absolute -inset-1 bg-white/20 blur-md -z-10 rounded-2xl" />
                         </div>
                     </div>
 
-                    {/* Time Details */}
-                    {(hasCheckedIn || hasCheckedOut) && (
-                        <div className="relative mt-6 grid grid-cols-2 gap-4 bg-white/10 rounded-[2rem] p-3.5 backdrop-blur-md border border-white/10">
-                            <div className="flex flex-col items-center text-center space-y-1">
-                                <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center mb-1">
-                                    <IconLogin className="w-4 h-4 text-white" />
-                                </div>
-                                <p className="text-[8px] uppercase tracking-widest font-black opacity-70">Clock In</p>
-                                <p className="text-base font-black leading-none">
-                                    {todayAttendance?.check_in
-                                        ? format(new Date(todayAttendance.check_in), 'hh:mm')
-                                        : '--:--'
-                                    }
-                                    <span className="text-[9px] ml-0.5 opacity-80 uppercase font-bold">
-                                        {todayAttendance?.check_in ? format(new Date(todayAttendance.check_in), 'a') : ''}
-                                    </span>
-                                </p>
-                            </div>
-                            <div className="flex flex-col items-center text-center space-y-1">
-                                <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center mb-1">
-                                    <IconLogout className="w-4 h-4 text-white" />
-                                </div>
-                                <p className="text-[8px] uppercase tracking-widest font-black opacity-70">Clock Out</p>
-                                <p className="text-base font-black leading-none">
-                                    {todayAttendance?.check_out
-                                        ? format(new Date(todayAttendance.check_out), 'hh:mm')
-                                        : '--:--'
-                                    }
-                                    <span className="text-[9px] ml-0.5 opacity-80 uppercase font-bold">
-                                        {todayAttendance?.check_out ? format(new Date(todayAttendance.check_out), 'a') : ''}
-                                    </span>
-                                </p>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Integrated Action Button or Geofence Error */}
-                    {!isComplete && (
-                        <div className="mt-6 flex flex-col items-center gap-4">
-                            {/* Relocated Location Badge */}
-                            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/10">
-                                <div className={`w-2 h-2 rounded-full ${geofenceResult?.isAllowed ? 'bg-green-400' : 'bg-rose-400'} animate-pulse`} />
-                                <span className="text-[10px] font-black uppercase tracking-wider text-white">
+                    {/* Integrated Action Row */}
+                    <div className="mt-8 space-y-4">
+                        {/* Geofence/Location Status */}
+                        <div className="flex justify-center">
+                            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/10">
+                                <div className={`w-1.5 h-1.5 rounded-full ${geofenceResult?.isAllowed ? 'bg-green-400' : 'bg-rose-400'} animate-pulse`} />
+                                <span className="text-[9px] font-black uppercase tracking-wider text-white">
                                     {isLocChecking ? "Detecting Location..." :
                                         geofenceResult?.isAllowed ? `At ${geofenceResult.withinOffice?.name}` :
                                             "Location Restricted"}
                                 </span>
                             </div>
+                        </div>
 
-                            {isLocChecking ? (
-                                <div className="flex items-center gap-2 px-6 py-3 bg-white/20 rounded-full backdrop-blur-md border border-white/20 w-full justify-center">
-                                    <IconLoader2 className="w-4 h-4 animate-spin" />
-                                    <span className="text-xs font-black uppercase tracking-wider">Verifying...</span>
+                        {/* IN/OUT Controls */}
+                        <div className="grid grid-cols-2 gap-4">
+                            {/* IN Icon */}
+                            <Link
+                                href="/mobile/attendance"
+                                className={`flex flex-col items-center gap-2 p-4 rounded-[2rem] bg-white/10 backdrop-blur-md border border-white/20 transition-all active:scale-95 group ${!geofenceResult?.isAllowed && !isLocChecking ? 'opacity-50 pointer-events-none' : ''}`}
+                            >
+                                <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 flex items-center justify-center group-hover:bg-emerald-500/30 transition-colors">
+                                    <IconLogin className="w-6 h-6 text-white" />
                                 </div>
-                            ) : geofenceResult?.isAllowed ? (
-                                <Link href="/mobile/attendance" className="w-full">
-                                    <Button
-                                        className="w-full h-14 px-8 rounded-[1.5rem] bg-white text-slate-900 hover:bg-white/90 font-black text-sm shadow-xl border-none group transition-all flex items-center justify-between overflow-hidden"
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <div className={`p-2 rounded-xl flex items-center justify-center ${hasCheckedIn ? 'bg-orange-500/10 text-orange-600' : 'bg-emerald-500/10 text-emerald-600'}`}>
-                                                {hasCheckedIn ? (
-                                                    <IconLogout className="w-5 h-5 stroke-[2.5]" />
-                                                ) : (
-                                                    <IconLogin className="w-5 h-5 stroke-[2.5]" />
-                                                )}
-                                            </div>
-                                            <span>
-                                                {hasCheckedIn ? 'Clock Out' : 'Clock In'}
-                                            </span>
-                                        </div>
-                                        <IconArrowRight className="w-4 h-4 opacity-50 group-hover:translate-x-1 transition-transform" />
-                                    </Button>
-                                </Link>
-                            ) : (
-                                <div className="flex flex-col items-center gap-2 p-4 bg-rose-500/20 rounded-[2rem] border border-white/20 backdrop-blur-md w-full">
-                                    <div className="flex items-center gap-2 text-rose-100">
-                                        <IconMapPinOff className="w-5 h-5" />
-                                        <span className="text-sm font-black uppercase tracking-wider">Restricted Area</span>
-                                    </div>
-                                    <p className="text-[10px] font-bold opacity-80 text-center">
-                                        Please move into office area to {hasCheckedIn ? 'clock out' : 'clock in'}.
+                                <div className="text-center">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-emerald-100/70">IN</p>
+                                    <p className="text-sm font-black text-white">
+                                        {todayAttendance?.check_in
+                                            ? format(new Date(todayAttendance.check_in), 'hh:mm a')
+                                            : '--:--'}
                                     </p>
                                 </div>
-                            )}
+                            </Link>
+
+                            {/* OUT Icon */}
+                            <Link
+                                href="/mobile/attendance"
+                                className={`flex flex-col items-center gap-2 p-4 rounded-[2rem] bg-white/10 backdrop-blur-md border border-white/20 transition-all active:scale-95 group 
+                                    ${(!hasCheckedIn || isLocChecking || !geofenceResult?.isAllowed) ? 'opacity-30 pointer-events-none grayscale' : ''}`}
+                            >
+                                <div className="w-12 h-12 rounded-2xl bg-orange-500/20 flex items-center justify-center group-hover:bg-orange-500/30 transition-colors">
+                                    <IconLogout className="w-6 h-6 text-white" />
+                                </div>
+                                <div className="text-center">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-orange-100/70">OUT</p>
+                                    <p className="text-sm font-black text-white">
+                                        {todayAttendance?.check_out
+                                            ? format(new Date(todayAttendance.check_out), 'hh:mm a')
+                                            : '--:--'}
+                                    </p>
+                                </div>
+                            </Link>
                         </div>
-                    )}
+
+                        {!geofenceResult?.isAllowed && !isLocChecking && (
+                            <p className="text-[9px] font-bold text-rose-100 text-center uppercase tracking-wider bg-rose-500/20 py-2 rounded-xl border border-white/10">
+                                Outside Office Area
+                            </p>
+                        )}
+                    </div>
                 </div>
             </motion.div>
+        </div>
+            </motion.div >
 
-            {/* Quick Actions Grid */}
-            <motion.div variants={itemVars} className="space-y-4 pt-2">
+        {/* Quick Actions Grid */ }
+        < motion.div variants = { itemVars } className = "space-y-4 pt-2" >
                 <div className="flex items-center justify-between px-2">
                     <h3 className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">Quick Access</h3>
                     <div className="h-px bg-slate-200 dark:bg-slate-800 flex-1 ml-4" />
@@ -290,33 +259,35 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                         </Link>
                     ))}
                 </div>
-            </motion.div>
+            </motion.div >
 
-            {/* Profile Photo Warning */}
-            {!profile.avatar_url && (
-                <motion.div variants={itemVars}>
-                    <Card className="rounded-[2rem] border-amber-500/20 bg-amber-50/50 dark:bg-amber-950/10 shadow-none border-dashed border-2 overflow-hidden">
-                        <CardContent className="p-5">
-                            <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
-                                    <IconAlertTriangle className="w-6 h-6 text-amber-600" />
-                                </div>
-                                <div className="flex-1">
-                                    <p className="font-black text-sm text-amber-900 dark:text-amber-200 uppercase tracking-tight">Missing Profile Photo</p>
-                                    <p className="text-xs text-amber-700/80 dark:text-amber-500/80 mb-3 font-medium">
-                                        Required for face verification.
-                                    </p>
-                                    <Link href="/mobile/profile">
-                                        <Button size="sm" variant="outline" className="h-9 px-4 rounded-xl text-[11px] font-black border-amber-200 dark:border-amber-800/50 hover:bg-amber-500 hover:text-white transition-all uppercase tracking-wider">
-                                            Setup Now
-                                        </Button>
-                                    </Link>
-                                </div>
+        {/* Profile Photo Warning */ }
+    {
+        !profile.avatar_url && (
+            <motion.div variants={itemVars}>
+                <Card className="rounded-[2rem] border-amber-500/20 bg-amber-50/50 dark:bg-amber-950/10 shadow-none border-dashed border-2 overflow-hidden">
+                    <CardContent className="p-5">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+                                <IconAlertTriangle className="w-6 h-6 text-amber-600" />
                             </div>
-                        </CardContent>
-                    </Card>
-                </motion.div>
-            )}
-        </motion.div>
+                            <div className="flex-1">
+                                <p className="font-black text-sm text-amber-900 dark:text-amber-200 uppercase tracking-tight">Missing Profile Photo</p>
+                                <p className="text-xs text-amber-700/80 dark:text-amber-500/80 mb-3 font-medium">
+                                    Required for face verification.
+                                </p>
+                                <Link href="/mobile/profile">
+                                    <Button size="sm" variant="outline" className="h-9 px-4 rounded-xl text-[11px] font-black border-amber-200 dark:border-amber-800/50 hover:bg-amber-500 hover:text-white transition-all uppercase tracking-wider">
+                                        Setup Now
+                                    </Button>
+                                </Link>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </motion.div>
+        )
+    }
+        </motion.div >
     )
 }

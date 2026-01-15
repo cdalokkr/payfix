@@ -138,56 +138,13 @@ export function MobileAttendanceWizard({
                         exit={{ opacity: 0, y: -20 }}
                         className="space-y-4"
                     >
-                        <div className="flex items-center justify-between">
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={handleBack}
-                                className="h-10 px-4 rounded-2xl gap-2 font-bold hover:bg-white/50 transition-all"
-                            >
-                                <IconArrowLeft className="w-4 h-4" />
-                                <span>Cancel</span>
-                            </Button>
-                            <div className="flex items-center gap-2 px-4 py-1.5 bg-primary/10 rounded-full">
-                                <IconSparkles className="w-3.5 h-3.5 text-primary" />
-                                <span className="text-[11px] font-black uppercase tracking-widest text-primary">
+                        <div className="flex items-center justify-center">
+                            <div className="flex items-center gap-2 px-6 py-2 bg-primary/10 rounded-full border border-primary/20 backdrop-blur-md">
+                                <span className="text-xs font-black uppercase shadow-sm tracking-[0.2em] text-primary">
                                     {action === 'clock_in' ? 'Clocking In' : 'Clocking Out'}
                                 </span>
                             </div>
                         </div>
-
-                        {/* Modern Step Indicators */}
-                        <div className="flex items-center justify-center gap-8 py-2">
-                            {STEPS.map((step, index) => {
-                                const StepIcon = step.icon
-                                const isActive = step.id === currentStep
-                                const isComplete = getCurrentStepIndex() > index
-
-                                return (
-                                    <div key={step.id} className="flex flex-col items-center gap-2 relative">
-                                        <motion.div
-                                            animate={{
-                                                scale: isActive ? 1.1 : 1,
-                                                backgroundColor: isActive ? 'var(--primary)' : isComplete ? '#22c55e' : 'var(--muted)'
-                                            }}
-                                            className={`w-14 h-14 rounded-3xl flex items-center justify-center shadow-lg transition-colors
-                                                ${isActive ? 'text-primary-foreground' : isComplete ? 'text-white' : 'text-muted-foreground'}
-                                            `}
-                                        >
-                                            {isComplete ? (
-                                                <IconCheck className="w-7 h-7 stroke-[3]" />
-                                            ) : (
-                                                <StepIcon className="w-7 h-7 stroke-[2.5]" />
-                                            )}
-                                        </motion.div>
-                                        <span className={`text-[10px] font-black uppercase tracking-[0.15em] ${isActive ? 'text-primary' : 'text-muted-foreground opacity-60'}`}>
-                                            {step.label}
-                                        </span>
-                                    </div>
-                                )
-                            })}
-                        </div>
-                        <Progress value={getProgress()} className="h-1.5 rounded-full bg-slate-100 shadow-inner" />
                     </motion.div>
                 )}
             </AnimatePresence>

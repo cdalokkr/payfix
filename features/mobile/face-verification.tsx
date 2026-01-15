@@ -121,72 +121,63 @@ export function FaceVerification({
 
     return (
         <Card className="w-full max-w-md mx-auto">
-            <CardHeader className="text-center">
-                <div className={`mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4 ${status === 'success' ? 'bg-green-500/10' :
-                    status === 'error' ? 'bg-destructive/10' :
-                        'bg-primary/10'
-                    }`}>
-                    {status === 'loading-models' || status === 'comparing' ? (
-                        <IconLoader2 className="w-8 h-8 text-primary animate-spin" />
-                    ) : status === 'success' ? (
-                        <IconCheck className="w-8 h-8 text-green-500" />
-                    ) : (
-                        <IconX className="w-8 h-8 text-destructive" />
-                    )}
-                </div>
-                <CardTitle>
-                    {status === 'loading-models' ? 'Loading...' :
-                        status === 'comparing' ? 'Verifying Face' :
-                            status === 'success' ? 'Face Verified!' :
+            <CardHeader className="text-center pb-2">
+                <CardTitle className="text-xl font-black tracking-tight">
+                    {status === 'loading-models' ? 'Initializing AI' :
+                        status === 'comparing' ? 'Matching Face' :
+                            status === 'success' ? 'Face Verified' :
                                 'Verification Failed'}
                 </CardTitle>
-                <CardDescription>
-                    {status === 'loading-models' ? 'Preparing face detection...' :
-                        status === 'comparing' ? 'Comparing your selfie with profile photo...' :
-                            status === 'success' ? 'Your identity has been confirmed' :
+                <CardDescription className="text-[11px] font-bold uppercase tracking-wider opacity-60">
+                    {status === 'loading-models' ? 'Preparing verification models...' :
+                        status === 'comparing' ? 'Comparing facial features...' :
+                            status === 'success' ? 'Your identity is confirmed' :
                                 errorMessage}
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
                 {/* Face comparison preview */}
-                <div className="flex items-center justify-center gap-4">
-                    <div className="relative">
-                        <img
-                            src={selfieDataUrl}
-                            alt="Your selfie"
-                            className="w-24 h-24 rounded-full object-cover border-2 border-muted"
-                        />
-                        <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-xs bg-background px-2 py-0.5 rounded border">
-                            {isTestMode ? 'Skipped' : 'Selfie'}
+                <div className="flex items-center justify-center gap-6">
+                    <div className="relative group">
+                        <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-xl ring-2 ring-emerald-500/20">
+                            <img
+                                src={selfieDataUrl}
+                                alt="Your selfie"
+                                className="w-full h-full object-cover"
+                            />
+                        </div>
+                        <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[8px] font-black uppercase tracking-widest bg-white px-2 py-0.5 rounded-full border shadow-sm">
+                            Selfie
                         </span>
                     </div>
 
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${status === 'success' ? 'bg-green-500' :
-                        status === 'error' ? 'bg-destructive' :
-                            'bg-muted'
-                        }`}>
-                        {status === 'success' ? (
-                            <IconCheck className="w-4 h-4 text-white" />
-                        ) : status === 'error' ? (
-                            <IconX className="w-4 h-4 text-white" />
+                    <div className="flex flex-col items-center gap-1">
+                        <div className="w-8 h-px bg-slate-200" />
+                        {status === 'comparing' ? (
+                            <IconLoader2 className="w-4 h-4 text-primary animate-spin" />
+                        ) : status === 'success' ? (
+                            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                         ) : (
-                            <IconLoader2 className="w-4 h-4 text-muted-foreground animate-spin" />
+                            <div className="w-2 h-2 rounded-full bg-slate-200" />
                         )}
+                        <div className="w-8 h-px bg-slate-200" />
                     </div>
 
                     <div className="relative">
-                        {profileImageUrl ? (
-                            <img
-                                src={profileImageUrl}
-                                alt="Profile photo"
-                                className="w-24 h-24 rounded-full object-cover border-2 border-muted"
-                            />
-                        ) : (
-                            <div className="w-24 h-24 rounded-full bg-muted flex items-center justify-center border-2 border-dashed border-muted-foreground/30">
-                                <IconPhoto className="w-8 h-8 text-muted-foreground" />
-                            </div>
-                        )}
-                        <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-xs bg-background px-2 py-0.5 rounded border">
+                        <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-xl ring-2 ring-blue-500/10">
+                            {profileImageUrl ? (
+                                <img
+                                    src={profileImageUrl}
+                                    alt="Profile photo"
+                                    className="w-full h-full object-cover"
+                                />
+                            ) : (
+                                <div className="w-full h-full bg-muted flex items-center justify-center">
+                                    <IconPhoto className="w-8 h-8 text-muted-foreground" />
+                                </div>
+                            )}
+                        </div>
+                        <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[8px] font-black uppercase tracking-widest bg-white px-2 py-0.5 rounded-full border shadow-sm">
                             Profile
                         </span>
                     </div>

@@ -4,6 +4,7 @@ import React, { useState, useRef, useCallback, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
+import { motion } from "framer-motion"
 import {
     IconCamera,
     IconLoader2,
@@ -165,33 +166,21 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
 
     return (
         <Card className="w-full max-w-md mx-auto">
-            <CardHeader className="text-center">
-                <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${status === 'captured' ? 'bg-green-500/10' :
-                    status === 'error' ? 'bg-destructive/10' :
-                        'bg-primary/10'
-                    }`}>
-                    {status === 'captured' ? (
-                        <IconCheck className="w-6 h-6 text-green-500" />
-                    ) : status === 'error' ? (
-                        <IconX className="w-6 h-6 text-destructive" />
-                    ) : (
-                        <IconCamera className="w-6 h-6 text-primary" />
-                    )}
-                </div>
-                <CardTitle>
-                    {status === 'captured' ? 'Photo Captured!' :
+            <CardHeader className="text-center pb-2">
+                <CardTitle className="text-xl font-black tracking-tight">
+                    {status === 'captured' ? 'Perfect' :
                         status === 'error' ? 'Camera Error' :
-                            'Take a Selfie'}
+                            'Face Verification'}
                 </CardTitle>
-                <CardDescription>
-                    {status === 'captured' ? 'Review your photo and continue' :
+                <CardDescription className="text-[11px] font-bold uppercase tracking-wider opacity-60">
+                    {status === 'captured' ? 'Photo ready for verification' :
                         status === 'error' ? errorMessage :
-                            'Position your face in the frame and take a photo'}
+                            'Position your face clearly'}
                 </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
                 {/* Camera preview / Captured image */}
-                <div className="relative aspect-[4/3] bg-black rounded-lg overflow-hidden">
+                <div className="relative aspect-[3/4] bg-slate-900 rounded-[2.5rem] overflow-hidden shadow-2xl border-4 border-white dark:border-slate-800">
                     {status === 'captured' && capturedImage ? (
                         <img
                             src={capturedImage}
@@ -200,8 +189,8 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
                         />
                     ) : status === 'error' ? (
                         <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground gap-2">
-                            <IconCamera className="w-12 h-12 opacity-50" />
-                            <p className="text-xs text-center px-4">Camera access blocked by ngrok</p>
+                            <IconCamera className="w-12 h-12 opacity-30" />
+                            <p className="text-[10px] uppercase font-black tracking-widest text-center px-4">Access Restricted</p>
                         </div>
                     ) : (
                         <>
@@ -213,14 +202,25 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
                                 muted
                             />
                             {status === 'idle' && (
-                                <div className="absolute inset-0 flex items-center justify-center">
-                                    <IconLoader2 className="w-8 h-8 text-white animate-spin" />
+                                <div className="absolute inset-0 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
+                                    <IconLoader2 className="w-10 h-10 text-white animate-spin" />
                                 </div>
                             )}
                             {/* Face guide oval */}
                             {status === 'streaming' && (
                                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                    <div className="w-48 h-64 border-2 border-white/50 rounded-full" />
+                                    <motion.div
+                                        initial={{ opacity: 0, scale: 0.8 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        className="w-56 h-80 border-2 border-white/30 rounded-[3rem] relative"
+                                    >
+                                        <div className="absolute inset-x-0 -top-12 flex justify-center">
+                                            <div className="px-3 py-1 bg-white/20 backdrop-blur-md rounded-full border border-white/20">
+                                                <span className="text-[8px] font-black text-white uppercase tracking-widest">Center Face</span>
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                    <div className="absolute inset-0 bg-black/10" />
                                 </div>
                             )}
                         </>
