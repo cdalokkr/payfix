@@ -107,7 +107,7 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
     const getStatusColor = () => {
         if (isComplete) return 'from-emerald-500 to-teal-600'
         if (hasCheckedIn) return 'from-sky-500 to-blue-600'
-        return 'from-orange-500 to-rose-600'
+        return 'from-purple-500 to-indigo-600'
     }
 
     const getStatusIcon = () => {
@@ -143,14 +143,14 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                         <div className="flex flex-col justify-between py-1.5">
                             <div className="flex items-center gap-2">
                                 <StatusIcon className="w-4 h-4 opacity-90" />
-                                <span className="text-xs font-black uppercase tracking-[0.2em] opacity-90">Today's Status</span>
+                                <span className="text-xs font-black uppercase tracking-[0.2em] opacity-90">Today's Attendance</span>
                             </div>
 
                             {/* Geofence/Location Status aligned with Date row */}
                             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/10 w-fit">
                                 <div className={`w-1.5 h-1.5 rounded-full ${geofenceResult?.isAllowed ? 'bg-green-400' : 'bg-rose-400'} animate-pulse`} />
                                 <span className="text-[9px] font-black uppercase tracking-wider text-white">
-                                    {isLocChecking ? "Detecting..." :
+                                    {isLocChecking ? "Checking Location..." :
                                         geofenceResult?.isAllowed ? `${geofenceResult.withinOffice?.name}` :
                                             "Restricted"}
                                 </span>
