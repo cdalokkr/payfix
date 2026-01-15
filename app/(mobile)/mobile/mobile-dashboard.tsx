@@ -139,30 +139,40 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                     <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full -mr-24 -mt-24 blur-2xl" />
                     <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full -ml-16 -mb-16 blur-xl" />
 
-                    <div className="relative flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <div className="flex items-center gap-2 px-0 py-1 bg-transparent w-fit rounded-full">
-                                <StatusIcon className="w-4 h-4" />
+                    <div className="relative flex items-stretch justify-between gap-4">
+                        <div className="flex flex-col justify-between py-1.5">
+                            <div className="flex items-center gap-2">
+                                <StatusIcon className="w-4 h-4 opacity-90" />
                                 <span className="text-xs font-black uppercase tracking-[0.2em] opacity-90">Today's Status</span>
+                            </div>
+
+                            {/* Geofence/Location Status aligned with Date row */}
+                            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/10 w-fit">
+                                <div className={`w-1.5 h-1.5 rounded-full ${geofenceResult?.isAllowed ? 'bg-green-400' : 'bg-rose-400'} animate-pulse`} />
+                                <span className="text-[9px] font-black uppercase tracking-wider text-white">
+                                    {isLocChecking ? "Detecting..." :
+                                        geofenceResult?.isAllowed ? `${geofenceResult.withinOffice?.name}` :
+                                            "Restricted"}
+                                </span>
                             </div>
                         </div>
 
-                        {/* Integrated Calendar UI */}
-                        <div className="relative group">
+                        {/* Integrated Calendar UI - Month on Top for alignment */}
+                        <div className="relative group shrink-0">
                             <motion.div
                                 initial={{ scale: 0.9 }}
                                 animate={{ scale: 1 }}
                                 className="flex flex-col items-center bg-white rounded-2xl p-2 min-w-[70px] shadow-lg"
                             >
                                 <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest border-b border-rose-100 w-full text-center pb-0.5 mb-1">
-                                    {format(now, 'EEE').toUpperCase()}
+                                    {format(now, 'MMM').toUpperCase()}
                                 </span>
-                                <div className="flex items-baseline gap-0.5">
+                                <div className="flex items-center justify-center gap-1">
                                     <span className="text-xl font-black text-slate-800 leading-none">
                                         {format(now, 'dd')}
                                     </span>
-                                    <span className="text-[10px] font-black text-slate-600 uppercase">
-                                        {format(now, 'MMM').toUpperCase()}
+                                    <span className="text-[9px] font-black text-slate-500 uppercase">
+                                        {format(now, 'EEE').toUpperCase()}
                                     </span>
                                 </div>
                             </motion.div>
@@ -172,31 +182,19 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
 
                     {/* Integrated Action Row */}
                     <div className="mt-8 space-y-4">
-                        {/* Geofence/Location Status */}
-                        <div className="flex justify-center">
-                            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/10">
-                                <div className={`w-1.5 h-1.5 rounded-full ${geofenceResult?.isAllowed ? 'bg-green-400' : 'bg-rose-400'} animate-pulse`} />
-                                <span className="text-[9px] font-black uppercase tracking-wider text-white">
-                                    {isLocChecking ? "Detecting Location..." :
-                                        geofenceResult?.isAllowed ? `At ${geofenceResult.withinOffice?.name}` :
-                                            "Location Restricted"}
-                                </span>
-                            </div>
-                        </div>
-
-                        {/* IN/OUT Controls */}
-                        <div className="grid grid-cols-2 gap-4">
+                        {/* IN/OUT Controls - Horizontal Layout */}
+                        <div className="grid grid-cols-2 gap-3">
                             {/* IN Icon */}
                             <Link
                                 href="/mobile/attendance"
-                                className={`flex flex-col items-center gap-2 p-4 rounded-[2rem] bg-white/10 backdrop-blur-md border border-white/20 transition-all active:scale-95 group ${!geofenceResult?.isAllowed && !isLocChecking ? 'opacity-50 pointer-events-none' : ''}`}
+                                className={`flex items-center gap-3 p-3.5 rounded-[1.5rem] bg-white/10 backdrop-blur-md border border-white/20 transition-all active:scale-95 group ${!geofenceResult?.isAllowed && !isLocChecking ? 'opacity-50 pointer-events-none' : ''}`}
                             >
-                                <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 flex items-center justify-center group-hover:bg-emerald-500/30 transition-colors">
-                                    <IconLogin className="w-6 h-6 text-white" />
+                                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center shrink-0">
+                                    <IconLogin className="w-5 h-5 text-emerald-500" />
                                 </div>
-                                <div className="text-center">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-emerald-100/70">IN</p>
-                                    <p className="text-sm font-black text-white">
+                                <div className="flex flex-col">
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-emerald-100/70 leading-none mb-1">IN</p>
+                                    <p className="text-xs font-black text-white leading-none">
                                         {todayAttendance?.check_in
                                             ? format(new Date(todayAttendance.check_in), 'hh:mm a')
                                             : '--:--'}
@@ -207,15 +205,15 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                             {/* OUT Icon */}
                             <Link
                                 href="/mobile/attendance"
-                                className={`flex flex-col items-center gap-2 p-4 rounded-[2rem] bg-white/10 backdrop-blur-md border border-white/20 transition-all active:scale-95 group 
+                                className={`flex items-center gap-3 p-3.5 rounded-[1.5rem] bg-white/10 backdrop-blur-md border border-white/20 transition-all active:scale-95 group 
                                     ${(!hasCheckedIn || isLocChecking || !geofenceResult?.isAllowed) ? 'opacity-30 pointer-events-none grayscale' : ''}`}
                             >
-                                <div className="w-12 h-12 rounded-2xl bg-orange-500/20 flex items-center justify-center group-hover:bg-orange-500/30 transition-colors">
-                                    <IconLogout className="w-6 h-6 text-white" />
+                                <div className="w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center shrink-0">
+                                    <IconLogout className="w-5 h-5 text-orange-500" />
                                 </div>
-                                <div className="text-center">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-orange-100/70">OUT</p>
-                                    <p className="text-sm font-black text-white">
+                                <div className="flex flex-col">
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-orange-100/70 leading-none mb-1">OUT</p>
+                                    <p className="text-xs font-black text-white leading-none">
                                         {todayAttendance?.check_out
                                             ? format(new Date(todayAttendance.check_out), 'hh:mm a')
                                             : '--:--'}
