@@ -1,9 +1,0 @@
-lib/trpc/routers/admin-reports.ts(7,69): error TS2307: Cannot find module '@/lib/db/schema' or its corresponding type declarations.
-lib/trpc/routers/admin-users.ts(8,57): error TS2307: Cannot find module '@/lib/utils/activity-logger' or its corresponding type declarations.
-lib/trpc/routers/admin-users.ts(9,54): error TS2307: Cannot find module '@/lib/utils/avatar-helper' or its corresponding type declarations.
-lib/trpc/routers/admin-users.ts(10,39): error TS2307: Cannot find module '@/lib/auth/optimized-context' or its corresponding type declarations.
-lib/trpc/routers/admin-users.ts(11,71): error TS2307: Cannot find module '@/lib/db/schema' or its corresponding type declarations.
-lib/trpc/server.ts(6,40): error TS2307: Cannot find module '@/lib/auth/optimized-context' or its corresponding type declarations.
-lib/trpc/server.ts(7,41): error TS2307: Cannot find module '@/lib/auth/optimized-context' or its corresponding type declarations.
-lib/trpc/server.ts(8,20): error TS2307: Cannot find module '@/lib/db' or its corresponding type declarations.
-lib/trpc/server.ts(9,30): error TS2307: Cannot find module '@/types' or its corresponding type declarations.

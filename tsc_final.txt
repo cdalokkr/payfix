@@ -1,6 +1,0 @@
-lib/auth/optimized-context.ts(1,70): error TS2307: Cannot find module '@/lib/supabase/server' or its corresponding type declarations.
-lib/auth/optimized-context.ts(2,30): error TS2307: Cannot find module '@/types' or its corresponding type declarations.
-lib/auth/optimized-context.ts(6,20): error TS2307: Cannot find module '@/lib/db' or its corresponding type declarations.
-lib/auth/optimized-context.ts(7,40): error TS2307: Cannot find module '@/lib/db/schema' or its corresponding type declarations.
-lib/db/optimized-query-manager.ts(6,20): error TS2307: Cannot find module '@/lib/db' or its corresponding type declarations.
-lib/db/optimized-query-manager.ts(7,70): error TS2307: Cannot find module '@/lib/db/schema' or its corresponding type declarations.
