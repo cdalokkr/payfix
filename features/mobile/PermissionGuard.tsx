@@ -37,8 +37,23 @@ export function PermissionGuard({ children, showOnlyIfDenied = false }: Permissi
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto"
+                    className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-md flex flex-col items-center justify-center p-4 overflow-y-auto"
                 >
+                    {/* App Branding */}
+                    <motion.div
+                        initial={{ y: -20, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        className="mb-8 flex flex-col items-center gap-3"
+                    >
+                        <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-[1.5rem] flex items-center justify-center shadow-2xl border-4 border-white">
+                            <span className="text-white font-black text-2xl tracking-tighter">PF</span>
+                        </div>
+                        <div className="text-center">
+                            <h1 className="text-2xl font-black tracking-tight leading-none text-gray-900">PayFix</h1>
+                            <p className="text-[10px] text-blue-600 font-bold uppercase tracking-[0.2em] mt-2">Mobile Attendance</p>
+                        </div>
+                    </motion.div>
+
                     <motion.div
                         initial={{ scale: 0.9, opacity: 0 }}
                         animate={{ scale: 1, opacity: 1 }}
@@ -110,13 +125,6 @@ export function PermissionGuard({ children, showOnlyIfDenied = false }: Permissi
                                         ) : (
                                             "Grant Access Now"
                                         )}
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        onClick={() => window.location.reload()}
-                                        className="w-full h-12 font-bold text-muted-foreground hover:text-primary transition-colors"
-                                    >
-                                        I've Enabled Them
                                     </Button>
                                 </div>
                             </CardContent>
