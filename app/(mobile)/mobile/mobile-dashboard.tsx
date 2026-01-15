@@ -147,9 +147,9 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                             </div>
 
                             {/* Geofence/Location Status aligned with Date row */}
-                            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/10 w-fit">
+                            <div className="inline-flex items-center gap-2 px-3 py-1.5 mt-2 rounded-full bg-white/10 backdrop-blur-md border border-white/10 w-fit">
                                 <div className={`w-1.5 h-1.5 rounded-full ${geofenceResult?.isAllowed ? 'bg-green-400' : 'bg-rose-400'} animate-pulse`} />
-                                <span className="text-[9px] font-black uppercase tracking-wider text-white">
+                                <span className="text-[11px] font-black uppercase tracking-wider text-white">
                                     {isLocChecking ? "Checking Location..." :
                                         geofenceResult?.isAllowed ? `${geofenceResult.withinOffice?.name}` :
                                             "Restricted"}
