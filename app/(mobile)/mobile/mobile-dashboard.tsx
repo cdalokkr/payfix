@@ -5,19 +5,22 @@ import { Button } from "@/components/ui/button"
 import { format } from "date-fns"
 import Link from "next/link"
 import { motion } from "framer-motion"
+import { useState, useEffect } from "react"
+import { trpc } from "@/lib/trpc/client"
 import {
     IconClock,
     IconLogin,
     IconLogout,
     IconCheck,
     IconMapPin,
-    IconCalendar,
     IconAlertTriangle,
     IconArrowRight,
     IconHistory,
     IconCalendarEvent,
     IconSettings,
     IconQuestionMark,
+    IconLoader2,
+    IconMapPinOff,
 } from "@tabler/icons-react"
 
 interface MobileDashboardProps {
@@ -58,6 +61,41 @@ const quickActions = [
 ]
 
 export function MobileDashboard({ profile, todayAttendance }: MobileDashboardProps) {
+    const [geofenceResult, setGeofenceResult] = useState<{ isWithinGeofence: boolean; nearestOffice: { name: string; distance: number } | null } | null>(null)
+    const [isLocChecking, setIsLocChecking] = useState(true)
+
+    const utils = trpc.useUtils()
+
+    useEffect(() => {
+        const fetchLocation = async () => {
+            setIsLocChecking(true)
+            if (!navigator.geolocation) {
+                setIsLocChecking(false)
+                return
+            }
+
+            navigator.geolocation.getCurrentPosition(
+                async (pos) => {
+                    try {
+                        const result = await utils.officeLocations.checkGeofence.fetch({
+                            latitude: pos.coords.latitude,
+                            longitude: pos.coords.longitude
+                        })
+                        setGeofenceResult(result)
+                    } catch (err) {
+                        console.error('Geofence check failed:', err)
+                    } finally {
+                        setIsLocChecking(false)
+                    }
+                },
+                () => setIsLocChecking(false),
+                { enableHighAccuracy: true, timeout: 10000 }
+            )
+        }
+
+        fetchLocation()
+    }, [utils])
+
     const hasCheckedIn = !!todayAttendance?.check_in
     const hasCheckedOut = !!todayAttendance?.check_out
     const isComplete = hasCheckedIn && hasCheckedOut
@@ -90,7 +128,7 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
             animate="show"
             className="space-y-6 pb-4"
         >
-            {/* Today's Status Card - Reimagined */}
+            {/* Today's Status Card */}
             <motion.div variants={itemVars} whileTap={{ scale: 0.98 }}>
                 <div className={`relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br ${getStatusColor()} p-5 text-white shadow-2xl shadow-primary/10`}>
                     {/* Glass Decorations */}
@@ -113,7 +151,7 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                             <motion.div
                                 initial={{ scale: 0.9 }}
                                 animate={{ scale: 1 }}
-                                className="flex flex-col items-center bg-white rounded-2xl p-2 min-w-[80px] shadow-lg transition-transform duration-300"
+                                className="flex flex-col items-center bg-white rounded-2xl p-2 min-w-[80px] shadow-lg"
                             >
                                 <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest border-b border-rose-100 w-full text-center pb-1 mb-1">
                                     {format(now, 'EEE').toUpperCase()}
@@ -170,27 +208,44 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                         </div>
                     )}
 
-                    {/* Integrated Action Button */}
+                    {/* Integrated Action Button or Geofence Error */}
                     {!isComplete && (
                         <div className="mt-6 flex justify-center">
-                            <Link href="/mobile/attendance">
-                                <Button
-                                    className="h-12 px-8 rounded-full bg-white text-slate-900 hover:bg-white/90 font-black text-sm shadow-xl border-none group transition-all"
-                                >
-                                    {hasCheckedIn ? (
-                                        <>
-                                            <IconLogout className="w-4 h-4 mr-2 stroke-[3]" />
-                                            <span>Clock Out Now</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <IconLogin className="w-4 h-4 mr-2 stroke-[3]" />
-                                            <span>Clock In Now</span>
-                                        </>
-                                    )}
-                                    <IconArrowRight className="w-3.5 h-3.5 ml-4 opacity-50 group-hover:translate-x-1 transition-transform" />
-                                </Button>
-                            </Link>
+                            {isLocChecking ? (
+                                <div className="flex items-center gap-2 px-6 py-3 bg-white/20 rounded-full backdrop-blur-md border border-white/20">
+                                    <IconLoader2 className="w-4 h-4 animate-spin" />
+                                    <span className="text-xs font-black uppercase tracking-wider">Verifying Location...</span>
+                                </div>
+                            ) : geofenceResult?.isWithinGeofence ? (
+                                <Link href="/mobile/attendance">
+                                    <Button
+                                        className="h-12 px-8 rounded-full bg-white text-slate-900 hover:bg-white/90 font-black text-sm shadow-xl border-none group transition-all"
+                                    >
+                                        {hasCheckedIn ? (
+                                            <>
+                                                <IconLogout className="w-4 h-4 mr-2 stroke-[3]" />
+                                                <span>Clock Out Now</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <IconLogin className="w-4 h-4 mr-2 stroke-[3]" />
+                                                <span>Clock In Now</span>
+                                            </>
+                                        )}
+                                        <IconArrowRight className="w-3.5 h-3.5 ml-4 opacity-50 group-hover:translate-x-1 transition-transform" />
+                                    </Button>
+                                </Link>
+                            ) : (
+                                <div className="flex flex-col items-center gap-2 p-4 bg-rose-500/20 rounded-[2rem] border border-white/20 backdrop-blur-md w-full">
+                                    <div className="flex items-center gap-2 text-rose-100">
+                                        <IconMapPinOff className="w-5 h-5" />
+                                        <span className="text-sm font-black uppercase tracking-wider">Not In Office</span>
+                                    </div>
+                                    <p className="text-[10px] font-bold opacity-80 text-center">
+                                        You are outside the required area. Please move back to office.
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
@@ -251,8 +306,12 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
             {/* Location Badge */}
             <motion.div variants={itemVars} className="flex items-center justify-center pt-2">
                 <div className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-slate-100/80 dark:bg-slate-900/80 backdrop-blur-sm border border-slate-200/50 dark:border-slate-800/50 shadow-sm">
-                    <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                    <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 opacity-80 uppercase tracking-[0.15em]">Secure Location Enabled</span>
+                    <div className={`w-2 h-2 rounded-full ${geofenceResult?.isWithinGeofence ? 'bg-green-500' : 'bg-rose-500'} animate-pulse`} />
+                    <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 opacity-80 uppercase tracking-[0.15em]">
+                        {isLocChecking ? "Detecting Location..." :
+                            geofenceResult?.isWithinGeofence ? `At ${geofenceResult.nearestOffice?.name}` :
+                                "Location Restricted"}
+                    </span>
                 </div>
             </motion.div>
 
