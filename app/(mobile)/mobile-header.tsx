@@ -1,0 +1,134 @@
+"use client"
+
+import { useState } from "react"
+import Link from "next/link"
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
+import { Button } from "@/components/ui/button"
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog"
+import { LogoutModal } from "@/components/ui/logout-modal"
+import { IconBell, IconPower } from "@tabler/icons-react"
+
+interface MobileHeaderProps {
+    profile: {
+        id: string
+        full_name: string | null
+        avatar_url: string | null
+        email: string
+    }
+}
+
+export function MobileHeader({ profile }: MobileHeaderProps) {
+    const [isConfirmOpen, setIsConfirmOpen] = useState(false)
+    const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false)
+
+    const getInitials = () => {
+        if (profile.full_name) {
+            return profile.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+        }
+        return profile.email[0].toUpperCase()
+    }
+
+    const firstName = profile.full_name?.split(' ')[0] || 'User'
+
+    return (
+        <>
+            {/* Glass-morphism sticky header */}
+            <header className="fixed top-0 left-0 right-0 z-50">
+                {/* Blur background */}
+                <div className="absolute inset-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-700/50" />
+
+                {/* Status bar spacer for PWA */}
+                <div className="h-[env(safe-area-inset-top)] bg-transparent" />
+
+                {/* Header content */}
+                <div className="relative max-w-md mx-auto px-4 h-14 flex items-center justify-between">
+                    {/* Left: Avatar & Greeting */}
+                    <Link href="/mobile/profile" className="flex items-center gap-3 group">
+                        <div className="relative">
+                            <Avatar className="h-9 w-9 ring-2 ring-primary/20 group-hover:ring-primary/40 transition-all">
+                                <AvatarImage src={profile.avatar_url || ''} alt={profile.full_name || ''} />
+                                <AvatarFallback className="text-sm font-medium bg-gradient-to-br from-primary/20 to-primary/10 text-primary">
+                                    {getInitials()}
+                                </AvatarFallback>
+                            </Avatar>
+                            {/* Online indicator */}
+                            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full ring-2 ring-white dark:ring-slate-900" />
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-xs text-muted-foreground leading-none">Welcome back</span>
+                            <span className="text-sm font-semibold text-foreground leading-tight">{firstName}</span>
+                        </div>
+                    </Link>
+
+                    {/* Right: Actions */}
+                    <div className="flex items-center gap-1">
+                        {/* Notifications */}
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="relative h-9 w-9 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
+                        >
+                            <IconBell className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+                            {/* Notification badge */}
+                            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+                        </Button>
+
+                        {/* Sign out */}
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setIsConfirmOpen(true)}
+                            className="h-9 w-9 rounded-full hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-600"
+                        >
+                            <IconPower className="w-5 h-5" />
+                        </Button>
+                    </div>
+                </div>
+            </header>
+
+            {/* Confirmation Dialog */}
+            <Dialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
+                <DialogContent className="max-w-xs mx-auto rounded-3xl">
+                    <DialogHeader>
+                        <DialogTitle>Sign Out?</DialogTitle>
+                        <DialogDescription>
+                            You will need to sign in again to access your account.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="flex-row gap-3 sm:gap-3">
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsConfirmOpen(false)}
+                            className="flex-1 rounded-xl"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={() => {
+                                setIsConfirmOpen(false)
+                                setIsLogoutModalOpen(true)
+                            }}
+                            className="flex-1 rounded-xl"
+                        >
+                            Sign Out
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Logout Progress Modal */}
+            <LogoutModal
+                isOpen={isLogoutModalOpen}
+                onOpenChange={setIsLogoutModalOpen}
+            />
+        </>
+    )
+}

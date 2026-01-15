@@ -1,0 +1,49 @@
+import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { MobileDashboard } from './mobile-dashboard'
+
+export const metadata = {
+    title: 'Mobile Dashboard',
+}
+
+// Force dynamic rendering - no caching
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
+// Get today's date in IST (Asia/Kolkata timezone)
+function getLocalDateIST(): string {
+    // Use toLocaleDateString with 'sv-SE' locale which gives YYYY-MM-DD format
+    const dateStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Kolkata' })
+    console.log('[MOBILE-PAGE] IST date calculated:', dateStr)
+    return dateStr
+}
+
+export default async function MobilePage() {
+    const supabase = await createServerSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('id, full_name, avatar_url, email')
+        .eq('id', user!.id)
+        .single()
+
+    // Get today's attendance status using IST date
+    const today = getLocalDateIST()
+    console.log('[MOBILE-PAGE] Querying attendance for user:', user!.id, 'date:', today)
+
+    const { data: todayAttendance, error } = await supabase
+        .from('attendance')
+        .select('id, check_in, check_out, status, date')
+        .eq('profile_id', user!.id)
+        .eq('date', today)
+        .single()
+
+    console.log('[MOBILE-PAGE] Attendance result:', todayAttendance ? `found for ${todayAttendance.date}` : 'none', 'error:', error?.message)
+
+    return (
+        <MobileDashboard
+            profile={profile!}
+            todayAttendance={todayAttendance}
+        />
+    )
+}

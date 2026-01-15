@@ -2,50 +2,47 @@
 
 import { useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { MetricCard } from "@/components/dashboard/metric-card"
 import { Button } from "@/components/ui/button"
 import { trpc } from "@/lib/trpc/client"
-import { Users, CalendarCheck, CalendarOff, Clock, Settings, ArrowRight } from "lucide-react"
+import { Settings, ArrowRight, Plane as PlaneIcon } from "lucide-react"
+import { Clock as ClockIcon, CalendarCheck as CalendarCheckIcon, CalendarMinus as CalendarMinusIcon, Users as UsersIcon } from "@phosphor-icons/react"
 import Link from "next/link"
 import { useProfile } from '@/lib/context/profile-context'
 import { useSharedManagementChannel } from "@/hooks/use-shared-management-channel"
+import { CompactMetricCard } from "@/components/dashboard/compact-metric-card"
+import { CardShell } from "./CardShell"
+import { format, parseISO, isWithinInterval } from "date-fns"
 
 export function AdminPayrollDashboard() {
     const { profile } = useProfile()
     const { subscribe } = useSharedManagementChannel()
 
-    // Queries with real-time friendly settings - no staleTime to ensure immediate refetch on invalidation
+    // Queries with real-time friendly settings
     const { data: attendance, isLoading: attendanceLoading, isFetching: attendanceFetching, refetch: refetchAttendance } = trpc.attendance.getAttendance.useQuery(
         {},
         {
-            staleTime: 0, // Always consider stale so invalidation triggers immediate refetch
-            refetchOnWindowFocus: false, // Rely on real-time instead
+            staleTime: 0,
+            refetchOnWindowFocus: false,
         }
     )
     const { data: leaves, isLoading: leavesLoading, isFetching: leavesFetching, refetch: refetchLeaves } = trpc.attendance.getLeaves.useQuery(
-        { status: 'pending' },
+        { status: 'all' }, // Get all to filter locally
         {
-            staleTime: 0, // Always consider stale so invalidation triggers immediate refetch
-            refetchOnWindowFocus: false, // Rely on real-time instead
+            staleTime: 0,
+            refetchOnWindowFocus: false,
         }
     )
 
     // Subscribe to shared management channel for real-time updates
-    // Only refetch on clock-in (new records) - clock-out doesn't affect pending counts
     useEffect(() => {
         if (!profile?.id) return
 
         const unsubscribe = subscribe((category, payload) => {
-            if (category === 'attendance_update' || category === 'dashboard_sync') {
+            if (category === 'attendance_update' || category === 'dashboard_sync' || category === 'leave_update') {
                 const action = payload?.action
-                // Only refetch for clock-in (creates new pending record) or verification actions
-                // Clock-out just updates existing record's checkout time - no new pending records
-                if (action === 'clock-in' || action === 'verified' || action === 'rejected') {
-                    console.log(`[PAYROLL-DASHBOARD] Received ${action} via shared channel, refetching...`)
+                if (action === 'clock-in' || action === 'clock-out' || action === 'verified' || action === 'rejected' || action === 'leave-apply' || action === 'leave-approve') {
                     refetchAttendance()
                     refetchLeaves()
-                } else {
-                    console.log(`[PAYROLL-DASHBOARD] Ignoring ${action} action (doesn't affect card counts)`)
                 }
             }
         })
@@ -53,49 +50,72 @@ export function AdminPayrollDashboard() {
         return unsubscribe
     }, [profile?.id, subscribe, refetchAttendance, refetchLeaves])
 
+    const todayStr = format(new Date(), 'yyyy-MM-dd')
+
     const pendingVerification = attendance?.filter(a => a.status === 'pending').length || 0
-    const pendingLeaves = leaves?.length || 0
+    const pendingLeaves = leaves?.filter(l => l.status === 'pending').length || 0
+
+    const clockedInToday = attendance?.filter(a => a.date === todayStr && a.check_in).length || 0
+    const onLeaveToday = leaves?.filter(l => {
+        if (l.status !== 'approved') return false
+        const start = parseISO(l.start_date)
+        const end = parseISO(l.end_date)
+        return isWithinInterval(new Date(todayStr), { start, end })
+    }).length || 0
 
     return (
-        <div className="space-y-6">
-            {/* Stats summary */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <MetricCard
-                    title="Pending Verification"
-                    value={pendingVerification.toString()}
-                    icon={<Clock />}
-                    description="Attendance records awaiting review"
-                    iconBgColor="bg-amber-500/20"
-                    iconColor="text-amber-700 dark:text-amber-400"
-                    borderColor="border-amber-200/50 dark:border-amber-900/50"
-                    cardBgColor="bg-amber-50/50 dark:bg-amber-900/5"
-                    delay={0.1}
-                    loading={attendanceLoading || attendanceFetching}
-                />
-                <MetricCard
-                    title="Pending Leave Approvals"
-                    value={pendingLeaves.toString()}
-                    icon={<CalendarOff />}
-                    description="Leave requests needing approval"
-                    iconBgColor="bg-rose-500/20"
-                    iconColor="text-rose-700 dark:text-rose-400"
-                    borderColor="border-rose-200/50 dark:border-rose-900/50"
-                    cardBgColor="bg-rose-50/50 dark:bg-rose-900/5"
-                    delay={0.2}
-                    loading={leavesLoading || leavesFetching}
-                />
-                <MetricCard
-                    title="Total Attendance Records"
-                    value={attendance?.length.toString() || "0"}
-                    icon={<Users />}
-                    description="All time attendance entries"
-                    iconBgColor="bg-indigo-500/20"
-                    iconColor="text-indigo-700 dark:text-indigo-400"
-                    borderColor="border-indigo-200/50 dark:border-indigo-900/50"
-                    cardBgColor="bg-indigo-50/50 dark:bg-indigo-900/5"
-                    delay={0.3}
-                    loading={attendanceLoading || attendanceFetching}
-                />
+        <div className="space-y-8">
+            {/* Stats summary sectioned into Shells */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <CardShell
+                    title="Pending Approval"
+                    icon={ClockIcon}
+                    className="xl:col-span-1"
+                    description="Actions requiring administrative attention"
+                    contentClassName="min-h-0 p-4 pt-2"
+                >
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+                        <CompactMetricCard
+                            label="Attendance"
+                            value={pendingVerification}
+                            icon={ClockIcon}
+                            theme="emerald"
+                            loading={attendanceLoading || attendanceFetching}
+                        />
+                        <CompactMetricCard
+                            label="Leave"
+                            value={pendingLeaves}
+                            icon={CalendarMinusIcon}
+                            theme="amber"
+                            loading={leavesLoading || leavesFetching}
+                        />
+                    </div>
+                </CardShell>
+
+                <CardShell
+                    title="Today's Attendance"
+                    icon={CalendarCheckIcon}
+                    className="xl:col-span-1"
+                    description={`Overview for ${format(new Date(), 'MMM dd, yyyy')}`}
+                    contentClassName="min-h-0 p-4 pt-2"
+                >
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+                        <CompactMetricCard
+                            label="Clock In"
+                            value={clockedInToday}
+                            icon={UsersIcon}
+                            theme="blue"
+                            loading={attendanceLoading || attendanceFetching}
+                        />
+                        <CompactMetricCard
+                            label="Leave"
+                            value={onLeaveToday}
+                            icon={CalendarMinusIcon}
+                            theme="rose"
+                            loading={leavesLoading || leavesFetching}
+                        />
+                    </div>
+                </CardShell>
             </div>
 
             {/* Admin Quick Actions */}
@@ -109,7 +129,7 @@ export function AdminPayrollDashboard() {
                     <Card className="group hover:border-primary/50 transition-all duration-300 shadow-sm hover:shadow-md">
                         <CardHeader>
                             <div className="p-2 w-fit rounded-lg bg-primary/10 mb-2">
-                                <CalendarCheck className="h-5 w-5 text-primary" />
+                                <CalendarCheckIcon size={20} weight="duotone" className="text-primary" />
                             </div>
                             <CardTitle>Verify Attendance</CardTitle>
                             <CardDescription>Review and approve employee daily check-ins</CardDescription>
@@ -126,7 +146,9 @@ export function AdminPayrollDashboard() {
                     <Card className="group hover:border-primary/50 transition-all duration-300 shadow-sm hover:shadow-md">
                         <CardHeader>
                             <div className="p-2 w-fit rounded-lg bg-primary/10 mb-2">
-                                <PlaneIcon className="h-5 w-5 text-primary rotate-45" />
+                                <div className="h-5 w-5 flex items-center justify-center">
+                                    <PlaneIcon className="h-5 w-5 text-primary rotate-45" />
+                                </div>
                             </div>
                             <CardTitle>Leave Requests</CardTitle>
                             <CardDescription>Manage employee leave applications</CardDescription>
@@ -159,24 +181,5 @@ export function AdminPayrollDashboard() {
                 </div>
             </div>
         </div>
-    )
-}
-
-function PlaneIcon(props: any) {
-    return (
-        <svg
-            {...props}
-            xmlns="http://www.w3.org/2000/svg"
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-        >
-            <path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z" />
-        </svg>
     )
 }

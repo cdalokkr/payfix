@@ -9,6 +9,7 @@ import { eq, and, gte, lte, desc, sql, inArray, or } from 'drizzle-orm'
 import { AttendanceService } from '@/lib/services/attendance.service'
 import { invalidateDashboardCache } from './admin-dashboard-optimized'
 import { broadcastServerEvent } from '@/lib/events/server-broadcaster'
+import { getLocalDateIST } from '@/lib/utils/date-utils'
 
 export const attendanceRouter = router({
     // --- ATTENDANCE ---
@@ -35,6 +36,7 @@ export const attendanceRouter = router({
             profileId: z.string().uuid().optional(),
             startDate: z.string().optional(),
             endDate: z.string().optional(),
+            mode: z.enum(['default', 'all']).optional(),
         }))
         .query(async ({ ctx, input }) => {
             const isEmployee = ctx.profile.role === 'employee'
@@ -45,7 +47,8 @@ export const attendanceRouter = router({
                 profileId: isEmployee ? ctx.profile.id : input.profileId,
                 role: ctx.profile.role,
                 startDate: input.startDate,
-                endDate: input.endDate
+                endDate: input.endDate,
+                mode: input.mode
             })
         }),
 
@@ -76,7 +79,7 @@ export const attendanceRouter = router({
                 action: 'clock-in',
                 employeeId: ctx.profile.id,
                 employeeName: ctx.profile.full_name,
-                date: input?.localDate || new Date().toISOString().split('T')[0],
+                date: input?.localDate || getLocalDateIST(),
                 recordId: result.id
             }, ctx.profile.id)
 
@@ -140,7 +143,7 @@ export const attendanceRouter = router({
                 action: 'clock-out',
                 employeeId: ctx.profile.id,
                 employeeName: ctx.profile.full_name,
-                date: input?.localDate || new Date().toISOString().split('T')[0],
+                date: input?.localDate || getLocalDateIST(),
                 recordId: result.id
             }, ctx.profile.id)
 
@@ -341,7 +344,7 @@ export const attendanceRouter = router({
                 profile_id: ctx.profile.id,
                 leave_type: input.leaveType,
                 start_date: input.startDate,
-                endDate: input.endDate,
+                end_date: input.endDate,
                 is_half_day: input.isHalfDay ?? false,
                 half_day_period: input.halfDayPeriod,
                 reason: input.reason,

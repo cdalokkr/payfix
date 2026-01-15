@@ -26,16 +26,16 @@ export default function LoginPage() {
 
       {/* Top Bar */}
       <header className="relative z-10 border-b border-gray-100 bg-white/60 backdrop-blur-xl">
-        <div className="container mx-auto px-6 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform duration-300">
-              <span className="text-white font-bold text-xl tracking-tighter">FS</span>
+        <div className="container mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2 sm:gap-3 group">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform duration-300">
+              <span className="text-white font-bold text-lg sm:text-xl tracking-tighter">FS</span>
             </div>
             <div className="flex flex-col">
-              <h1 className="text-xl font-bold text-gray-900 tracking-tight leading-none">
+              <h1 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight leading-none">
                 FullStack App
               </h1>
-              <span className="text-[10px] text-blue-600 font-bold uppercase tracking-[0.2em] mt-1">Enterprise Edition</span>
+              <span className="text-[9px] sm:text-[10px] text-blue-600 font-bold uppercase tracking-[0.2em] mt-0.5 sm:mt-1">Enterprise Edition</span>
             </div>
           </Link>
           <div className="flex items-center gap-4">
@@ -45,39 +45,39 @@ export default function LoginPage() {
       </header>
 
       {/* Login Form Section */}
-      <main className="relative z-10 flex-1 flex items-center justify-center p-6">
+      <main className="relative z-10 flex-1 flex items-center justify-center p-4 sm:p-6">
         <div className="w-full max-w-[440px] animate-in fade-in zoom-in duration-700">
           <div className="relative group">
             {/* Glow Effect */}
-            <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-[2rem] border-2 border-blue-100 shadow-lg hover:shadow-xl transform-gpu group-hover:scale-[1.02]  blur opacity-20 group-hover:opacity-30 transition duration-1000 group-hover:duration-200"></div>
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-[1.5rem] sm:rounded-[2rem] border-2 border-blue-100 shadow-lg hover:shadow-xl transform-gpu group-hover:scale-[1.02]  blur opacity-20 group-hover:opacity-30 transition duration-1000 group-hover:duration-200"></div>
 
-            <Card className="relative bg-white/80 border-primary/20 backdrop-blur-2xl  rounded-[2rem] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.05)] border">
+            <Card className="relative bg-white/80 border-primary/20 backdrop-blur-2xl rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.05)] border">
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-30" />
 
-              <CardHeader className="pt-4 pb-2  justify-center border-b border-gray-200">
-                <div className="flex items-center gap-3 ">
-                  <div className="flex-shrink-0 p-2 rounded-2xl bg-blue-50 border border-blue-100 shadow-sm hover:shadow-md transition duration-300">
-                    <ShieldUser className="h-8 w-8 text-blue-600" />
+              <CardHeader className="pt-4 pb-2 justify-center border-b border-gray-200 px-4 sm:px-6">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="flex-shrink-0 p-2 rounded-xl sm:rounded-2xl bg-blue-50 border border-blue-100 shadow-sm">
+                    <ShieldUser className="h-6 w-6 sm:h-8 sm:h-8 text-blue-600" />
                   </div>
                   <div className="flex flex-col min-w-0">
-                    <CardTitle className="text-2xl font-bold tracking-tight text-gray-900 text-center">
-                      Welcome to Access
+                    <CardTitle className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900 truncate">
+                      Welcome Back
                     </CardTitle>
-                    <CardDescription className="text-gray-500 text-sm leading-relaxed truncate">
-                      Enter your credentials to access system
+                    <CardDescription className="text-gray-500 text-xs sm:text-sm leading-relaxed truncate">
+                      Enter credentials to access
                     </CardDescription>
                   </div>
                 </div>
               </CardHeader>
 
-              <CardContent className="px-8 pb-6">
+              <CardContent className="px-5 sm:px-8 pb-6">
                 <LoginForm />
               </CardContent>
             </Card>
           </div>
 
           {/* Footer Info */}
-          <p className="mt-8 text-center text-gray-500 text-sm">
+          <p className="mt-6 sm:mt-8 text-center text-gray-500 text-xs sm:text-sm px-4">
             &copy; {new Date().getFullYear()} FullStack App Pro. All rights reserved.
           </p>
         </div>

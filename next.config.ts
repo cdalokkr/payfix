@@ -22,9 +22,9 @@ const nextConfig: NextConfig = {
       "object-src 'none'",
       "base-uri 'self'",
       "form-action 'self'",
-      "upgrade-insecure-requests", // Force HTTPS for all resources
-      "block-all-mixed-content", // Block HTTP resources on HTTPS pages
-    ].join('; ');
+      !isDev ? "upgrade-insecure-requests" : "", // Force HTTPS only in production
+      !isDev ? "block-all-mixed-content" : "", // Block mixed content only in production
+    ].filter(Boolean).join('; ');
 
     return [
       {
@@ -81,11 +81,11 @@ const nextConfig: NextConfig = {
             key: 'Content-Security-Policy',
             value: cspDirectives,
           },
-          // HTTP Strict Transport Security (HSTS)
-          {
+          // HTTP Strict Transport Security (HSTS) - Only in production
+          ...(isDev ? [] : [{
             key: 'Strict-Transport-Security',
             value: 'max-age=31536000; includeSubDomains; preload',
-          },
+          }]),
           // Cross-Origin policies for enhanced isolation
           {
             key: 'Cross-Origin-Opener-Policy',

@@ -59,6 +59,12 @@ export const attendance = pgTable('attendance', {
     verified_by: uuid('verified_by').references(() => profiles.id, { onDelete: 'set null' }),
     is_extra_day: boolean('is_extra_day').default(false),
     is_half_day: boolean('is_half_day').default(false),
+    // Mobile attendance fields
+    selfie_url: text('selfie_url'),
+    checkin_latitude: numeric('checkin_latitude', { precision: 10, scale: 7 }),
+    checkin_longitude: numeric('checkin_longitude', { precision: 10, scale: 7 }),
+    checkin_location_name: text('checkin_location_name'),
+    face_match_score: numeric('face_match_score', { precision: 5, scale: 4 }),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
@@ -140,6 +146,44 @@ export const employeeSettings = pgTable('employee_settings', {
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 
+// Office Locations (for geofencing)
+export const officeLocations = pgTable('office_locations', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    address: text('address'),
+    latitude: numeric('latitude', { precision: 10, scale: 7 }).notNull(),
+    longitude: numeric('longitude', { precision: 10, scale: 7 }).notNull(),
+    radius_meters: integer('radius_meters').notNull().default(200),
+    is_active: boolean('is_active').default(true),
+    created_by: uuid('created_by').references(() => profiles.id, { onDelete: 'set null' }),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+// User MPIN (6-digit mobile PIN)
+export const userMpin = pgTable('user_mpin', {
+    profile_id: uuid('profile_id').primaryKey().references(() => profiles.id, { onDelete: 'cascade' }),
+    mpin_hash: text('mpin_hash').notNull(),
+    biometric_enabled: boolean('biometric_enabled').default(false),
+    biometric_credential_id: text('biometric_credential_id'),
+    failed_attempts: integer('failed_attempts').default(0),
+    locked_until: timestamp('locked_until', { withTimezone: true }),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+// Push Subscriptions (for web push notifications)
+export const pushSubscriptions = pgTable('push_subscriptions', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    profile_id: uuid('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+    endpoint: text('endpoint').notNull(),
+    p256dh_key: text('p256dh_key').notNull(),
+    auth_key: text('auth_key').notNull(),
+    user_agent: text('user_agent'),
+    is_active: boolean('is_active').default(true),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
 // Relations
 export const profilesRelations = relations(profiles, ({ one, many }) => ({
     designation: one(designations, {
@@ -195,3 +239,25 @@ export const userStatusHistoryRelations = relations(userStatusHistory, ({ one })
         references: [profiles.id],
     }),
 }));
+
+export const officeLocationsRelations = relations(officeLocations, ({ one }) => ({
+    creator: one(profiles, {
+        fields: [officeLocations.created_by],
+        references: [profiles.id],
+    }),
+}));
+
+export const userMpinRelations = relations(userMpin, ({ one }) => ({
+    profile: one(profiles, {
+        fields: [userMpin.profile_id],
+        references: [profiles.id],
+    }),
+}));
+
+export const pushSubscriptionsRelations = relations(pushSubscriptions, ({ one }) => ({
+    profile: one(profiles, {
+        fields: [pushSubscriptions.profile_id],
+        references: [profiles.id],
+    }),
+}));
+

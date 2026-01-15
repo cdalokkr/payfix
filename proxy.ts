@@ -160,6 +160,32 @@ export async function proxy(request: NextRequest) {
         return NextResponse.redirect(new URL('/', request.url))
     }
 
+    // ============================================
+    // Mobile Device Detection for Employee Route
+    // ============================================
+    if (user && isEmployeeRoute) {
+        // Check if user wants to stay on desktop version
+        const wantsDesktop = request.nextUrl.searchParams.get('desktop') === 'true'
+
+        if (!wantsDesktop) {
+            // Detect mobile devices via User-Agent
+            const userAgent = request.headers.get('user-agent') || ''
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile/i.test(userAgent)
+
+            // Redirect mobile users to /mobile
+            if (isMobile && !pathname.startsWith('/mobile')) {
+                const mobileUrl = new URL('/mobile', request.url)
+                return NextResponse.redirect(mobileUrl)
+            }
+        }
+    }
+
+    // Also handle /mobile route auth (uses employee check)
+    const isMobileRoute = pathname.startsWith('/mobile')
+    if (!user && isMobileRoute) {
+        return NextResponse.redirect(new URL('/login', request.url))
+    }
+
     // Status and Role-based access control for authenticated users
     if (user && (isProtectedRoute || isDeactiveAccountRoute)) {
         const { data: profile } = await supabase

@@ -4,13 +4,13 @@ import { trpc } from "@/lib/trpc/client"
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, parseISO, isWithinInterval } from "date-fns"
 import { useMemo, useState } from "react"
 import { motion } from "framer-motion"
-import { ClockUser as ClockUserIcon, CalendarDots as CalendarDotsIcon, CalendarCheck as CalendarCheckIcon, CalendarX as CalendarXIcon, CalendarMinus as CalendarMinusIcon, CalendarSlash as CalendarSlashIcon } from "@phosphor-icons/react"
+import { ClockUser as ClockUserIcon, CalendarDots as CalendarDotsIcon, CalendarCheck as CalendarCheckIcon, CalendarX as CalendarXIcon, CalendarMinus as CalendarMinusIcon, CalendarSlash as CalendarSlashIcon, Calendar as CalendarIcon, Briefcase as BriefcaseIcon } from "@phosphor-icons/react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 import { CardShell } from "./CardShell"
 import { AttendanceCalendarContent } from "./AttendanceCalendarContent"
 import { AttendanceSummaryContent } from "./AttendanceSummaryContent"
-import { Calendar as CalendarIcon, Briefcase as BriefcaseIcon } from "@phosphor-icons/react"
+import { CompactMetricCard } from "@/components/dashboard/compact-metric-card"
 import { useUserRealtimeDashboard } from "@/hooks/use-realtime-dashboard-data"
 import { getDay } from "date-fns"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -138,92 +138,42 @@ export function AttendanceDashboard() {
             {/* Monthly Statistics Overview - Row 1: Base Metrics */}
             <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
                 {[
-                    { label: "Marked Days", value: stats.marked, icon: CalendarDotsIcon, color: "text-primary", bg: "bg-primary/10", border: "border-primary/20" },
-                    { label: "Present Days", value: stats.present, icon: CalendarCheckIcon, color: "text-green-600", bg: "bg-green-500/10", border: "border-green-500/20" },
-                    { label: "Absent Days", value: stats.absent, icon: CalendarXIcon, color: "text-red-600", bg: "bg-red-500/10", border: "border-red-500/20" },
-                    { label: "Leave Days", value: stats.leave, icon: CalendarMinusIcon, color: "text-orange-600", bg: "bg-orange-500/10", border: "border-orange-500/20" },
-                    { label: "Office In", value: stats.noOfficeOut, icon: ClockUserIcon, color: "text-purple-600", bg: "bg-purple-500/10", border: "border-purple-500/20" },
-                    { label: "Holidays", value: stats.holiday, icon: CalendarSlashIcon, color: "text-blue-600", bg: "bg-blue-500/10", border: "border-blue-500/20" }
-                ].map((stat, i) => {
-                    const Icon = stat.icon;
-                    return (
-                        <motion.div
-                            key={i}
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            whileHover={{ y: -2, transition: { duration: 0.2 } }}
-                            transition={{ delay: 0.1 + i * 0.05 }}
-                            className={cn(
-                                "flex flex-col p-3 rounded-xl border transition-all duration-300",
-                                "bg-background/40 hover:bg-background/80",
-                                "group cursor-default shadow-sm",
-                                stat.border
-                            )}
-                        >
-                            <div className="flex items-center justify-between mb-2">
-                                <div className={cn(
-                                    "p-1.5 rounded-lg transition-transform duration-300 group-hover:scale-110",
-                                    stat.bg,
-                                    stat.color
-                                )}>
-                                    <Icon size={28} weight="duotone" />
-                                </div>
-                                {isAttendanceLoading || isAttendanceFetching ? (
-                                    <div className="h-8 w-12 bg-muted/30 rounded-md animate-pulse self-center" />
-                                ) : (
-                                    <span className={cn("text-2xl font-black tabular-nums tracking-tight", stat.color)}>{stat.value}</span>
-                                )}
-                            </div>
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground truncate">
-                                {stat.label}
-                            </p>
-                        </motion.div>
-                    )
-                })}
+                    { label: "Marked Days", value: stats.marked, icon: CalendarDotsIcon, theme: "primary" as const },
+                    { label: "Present Days", value: stats.present, icon: CalendarCheckIcon, theme: "green" as const },
+                    { label: "Absent Days", value: stats.absent, icon: CalendarXIcon, theme: "red" as const },
+                    { label: "Leave Days", value: stats.leave, icon: CalendarMinusIcon, theme: "orange" as const },
+                    { label: "Office In", value: stats.noOfficeOut, icon: ClockUserIcon, theme: "purple" as const },
+                    { label: "Holidays", value: stats.holiday, icon: CalendarSlashIcon, theme: "blue" as const }
+                ].map((stat, i) => (
+                    <CompactMetricCard
+                        key={i}
+                        label={stat.label}
+                        value={stat.value}
+                        icon={stat.icon}
+                        theme={stat.theme}
+                        delay={0.1 + i * 0.05}
+                        loading={isAttendanceLoading || isAttendanceFetching}
+                    />
+                ))}
             </div>
 
             {/* Monthly Statistics Overview - Row 2: Detailed Metrics */}
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                 {[
-                    { label: "Total Full Day", value: stats.fullDay, icon: CalendarCheckIcon, color: "text-emerald-600", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
-                    { label: "Total Half Day", value: stats.halfDay, icon: CalendarMinusIcon, color: "text-orange-600", bg: "bg-orange-500/10", border: "border-orange-500/20" },
-                    { label: "Total Extra Hrs", value: `${stats.totalExtraHours.toFixed(1)}h`, icon: ClockUserIcon, color: "text-amber-600", bg: "bg-amber-500/10", border: "border-amber-500/20" },
-                ].map((stat, i) => {
-                    const Icon = stat.icon;
-                    return (
-                        <motion.div
-                            key={i}
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            whileHover={{ y: -2, transition: { duration: 0.2 } }}
-                            transition={{ delay: 0.4 + i * 0.1 }}
-                            className={cn(
-                                "flex flex-col p-3 rounded-xl border transition-all duration-300",
-                                "bg-background/40 hover:bg-background/80",
-                                "group cursor-default shadow-sm",
-                                stat.border
-                            )}
-                        >
-                            <div className="flex items-center justify-between mb-2">
-                                <div className={cn(
-                                    "p-1.5 rounded-lg transition-transform duration-300 group-hover:scale-110",
-                                    stat.bg,
-                                    stat.color
-                                )}>
-                                    <Icon size={28} weight="duotone" />
-                                </div>
-                                {isAttendanceLoading || isAttendanceFetching ? (
-                                    <div className="h-8 w-12 bg-muted/30 rounded-md animate-pulse self-center" />
-                                ) : (
-                                    <span className={cn("text-2xl font-black tabular-nums tracking-tight", stat.color)}>{stat.value}</span>
-                                )}
-                            </div>
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground truncate">
-                                {stat.label}
-                            </p>
-                        </motion.div>
-                    )
-                })}
+                    { label: "Total Full Day", value: stats.fullDay, icon: CalendarCheckIcon, theme: "emerald" as const },
+                    { label: "Total Half Day", value: stats.halfDay, icon: CalendarMinusIcon, theme: "orange" as const },
+                    { label: "Total Extra Hrs", value: `${stats.totalExtraHours.toFixed(1)}h`, icon: ClockUserIcon, theme: "amber" as const },
+                ].map((stat, i) => (
+                    <CompactMetricCard
+                        key={i}
+                        label={stat.label}
+                        value={stat.value}
+                        icon={stat.icon}
+                        theme={stat.theme}
+                        delay={0.4 + i * 0.1}
+                        loading={isAttendanceLoading || isAttendanceFetching}
+                    />
+                ))}
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
@@ -231,6 +181,7 @@ export function AttendanceDashboard() {
                     title="Monthly Calendar"
                     description={`Visual report for ${format(currentMonth, 'MMMM yyyy')}`}
                     icon={CalendarIcon}
+                    className="xl:col-span-6"
                     isInnerCard={true}
                 >
                     <AttendanceCalendarContent
@@ -252,6 +203,7 @@ export function AttendanceDashboard() {
                     title="Attendance Summary"
                     description={`Detailed logs for ${format(currentMonth, 'MMMM yyyy')}`}
                     icon={BriefcaseIcon}
+                    className="xl:col-span-6"
                     contentClassName="p-0 flex-1 overflow-auto max-h-[750px] scrollbar-thin scrollbar-thumb-primary/20"
                 >
                     <div className="px-4 py-2">

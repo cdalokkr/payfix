@@ -2,6 +2,7 @@ import { db } from '@/lib/db'
 import { attendance, activities, officeSettings, officeClosures } from '@/lib/db/schema'
 import { eq, and, gte, lte, desc, sql, inArray } from 'drizzle-orm'
 import { throwAppError } from '@/lib/errors/app-errors'
+import { getLocalDateIST } from '@/lib/utils/date-utils'
 
 export class AttendanceService {
     /**
@@ -11,12 +12,14 @@ export class AttendanceService {
         profileId,
         role,
         startDate,
-        endDate
+        endDate,
+        mode = 'all'
     }: {
         profileId?: string
         role: string
         startDate?: string
         endDate?: string
+        mode?: 'default' | 'all'
     }) {
         let whereClause = []
 
@@ -30,8 +33,16 @@ export class AttendanceService {
             whereClause.push(eq(attendance.profile_id, profileId))
         }
 
-        if (startDate) whereClause.push(gte(attendance.date, startDate))
-        if (endDate) whereClause.push(lte(attendance.date, endDate))
+        // Mode logic
+        if (mode === 'default' && !startDate && !endDate) {
+            const today = getLocalDateIST()
+            whereClause.push(
+                sql`(${attendance.date} = ${today} OR (${attendance.date} < ${today} AND ${attendance.status} = 'pending'))`
+            )
+        } else {
+            if (startDate) whereClause.push(gte(attendance.date, startDate))
+            if (endDate) whereClause.push(lte(attendance.date, endDate))
+        }
 
         const data = await db.query.attendance.findMany({
             where: and(...whereClause),
@@ -78,7 +89,7 @@ export class AttendanceService {
         localDate?: string
         isExtraDay?: boolean
     }) {
-        const today = localDate || new Date().toISOString().split('T')[0]
+        const today = localDate || getLocalDateIST()
         const dayOfWeek = new Date(today).getDay()
 
         const settings = await db.query.officeSettings.findFirst()
@@ -142,7 +153,7 @@ export class AttendanceService {
         email: string
         localDate?: string
     }) {
-        const today = localDate || new Date().toISOString().split('T')[0]
+        const today = localDate || getLocalDateIST()
 
         let record = await db.query.attendance.findFirst({
             where: and(

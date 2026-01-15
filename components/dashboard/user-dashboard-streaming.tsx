@@ -9,7 +9,7 @@ import { useProfile } from '@/lib/context/profile-context'
 import { Skeleton } from '@/components/ui/skeleton'
 
 // Streaming wrapper component for user dashboard
-export function UserDashboardStreaming() {
+export function UserDashboardStreaming({ initialData }: { initialData?: any }) {
     const { profile, isLoading } = useProfile()
 
     if (isLoading) {
@@ -43,6 +43,7 @@ export function UserDashboardStreaming() {
                                 // For now just log it or ignore if handled locally
                                 // console.log('User dashboard loading:', loading)
                             }}
+                            initialData={initialData}
                         />
                     </ErrorBoundary>
                 </DashboardPageLayout>
@@ -52,3 +53,4 @@ export function UserDashboardStreaming() {
 }
 
 export default UserDashboardStreaming
+

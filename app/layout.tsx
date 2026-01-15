@@ -5,6 +5,7 @@ import { TRPCProvider } from '@/lib/trpc/provider'
 import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster as SonnerToaster } from "@/components/ui/sonner"
 import { WebVitalsReporter } from '@/components/monitoring/web-vitals-reporter'
+import { PWARegister } from '@/components/pwa/pwa-register'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -25,28 +26,35 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: {
-    default: 'Full-Stack App - Next.js 16',
-    template: '%s | Full-Stack App'
+    default: 'PayFix Attendance',
+    template: '%s | PayFix'
   },
-  description: 'Complete authentication system with Supabase and tRPC',
-  keywords: ['Next.js', 'Supabase', 'tRPC', 'React', 'Tailwind CSS'],
-  authors: [{ name: 'Antigravity' }],
-  creator: 'Antigravity',
+  description: 'Employee attendance tracking with location verification',
+  keywords: ['Next.js', 'Supabase', 'tRPC', 'React', 'Tailwind CSS', 'Attendance', 'PWA'],
+  authors: [{ name: 'PayFix' }],
+  creator: 'PayFix',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'PayFix',
+  },
   openGraph: {
     type: 'website',
     locale: 'en_US',
-    url: 'https://myfullstackapp.com',
-    title: 'Full-Stack App - Next.js 16',
-    description: 'Complete authentication system with Supabase and tRPC',
-    siteName: 'Full-Stack App',
+    url: 'https://payfix.com',
+    title: 'PayFix Attendance',
+    description: 'Employee attendance tracking with location verification',
+    siteName: 'PayFix',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Full-Stack App - Next.js 16',
-    description: 'Complete authentication system with Supabase and tRPC',
+    title: 'PayFix Attendance',
+    description: 'Employee attendance tracking with location verification',
   },
   icons: {
     icon: '/favicon.ico',
+    apple: '/icons/icon-192x192.png',
   },
 }
 
@@ -68,6 +76,7 @@ export default function RootLayout({
             {children}
             <SonnerToaster richColors position="top-center" />
             <WebVitalsReporter debug={process.env.NODE_ENV === 'development'} />
+            <PWARegister />
           </TRPCProvider>
         </ThemeProvider>
       </body>

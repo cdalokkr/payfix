@@ -39,6 +39,7 @@ interface AttendanceTableToolbarProps<TData> {
         verified: number
         halfDay: number
         rejected: number
+        noOfficeOut: number
     }
     dateFilter?: string
     onDateFilterChange?: (value: string) => void
@@ -127,6 +128,12 @@ export function AttendanceTableToolbar<TData>({
                                 <div className="flex items-center justify-between gap-2 w-full">
                                     <span>Rejected</span>
                                     <span className="text-[10px] bg-rose-100 text-rose-600 px-1.5 rounded-full">{stats.rejected}</span>
+                                </div>
+                            </SelectItem>
+                            <SelectItem value="noOfficeOut">
+                                <div className="flex items-center justify-between gap-2 w-full">
+                                    <span>No Office Out</span>
+                                    <span className="text-[10px] bg-amber-100 text-amber-600 px-1.5 rounded-full">{stats.noOfficeOut}</span>
                                 </div>
                             </SelectItem>
                         </SelectContent>

@@ -28,18 +28,18 @@ export function CardShell({
 }: CardShellProps) {
     return (
         <Card className={cn(
-            "xl:col-span-6 shadow-xl border-primary/10 overflow-hidden flex flex-col h-full bg-background/50 backdrop-blur-sm pt-0 hover:bg-background/80 transition-colors group cursor-default hover:border-primary/20",
+            "shadow-xl border-primary/10 overflow-hidden flex flex-col h-full bg-background/50 backdrop-blur-sm pt-0 transition-all duration-300 group/shell cursor-default hover:border-primary/20",
             className
         )}>
-            <CardHeader className="border-b border-muted/20 bg-muted/50 transition-colors p-0 overflow-hidden group-hover:bg-muted/80">
-                <div className="px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 group/header cursor-default">
+            <CardHeader className="border-b border-muted/20 bg-muted/50 transition-colors p-0 py-4 overflow-hidden group-hover/shell:bg-muted/80">
+                <div className="px-6 flex flex-col md:flex-row md:items-center justify-between gap-2 cursor-default">
                     <div className="flex items-center gap-3">
-                        <div className="p-2.5 rounded-xl bg-primary/10 text-primary shadow-sm">
+                        <div className="p-2 rounded-xl bg-primary/10 text-primary shadow-sm transition-transform duration-300 group-hover/shell:scale-110 group-hover/shell:rotate-3">
                             <Icon size={24} weight="duotone" className="h-6 w-6" />
                         </div>
-                        <div>
-                            <CardTitle className="text-lg font-bold">{title}</CardTitle>
-                            {description && <CardDescription>{description}</CardDescription>}
+                        <div className="flex flex-col justify-center space-y-1">
+                            <CardTitle className="text-lg font-bold leading-none">{title}</CardTitle>
+                            {description && <CardDescription className="line-clamp-1 leading-none mb-0">{description}</CardDescription>}
                         </div>
                     </div>
                     {headerActions && (
@@ -49,13 +49,13 @@ export function CardShell({
                     )}
                 </div>
             </CardHeader>
-            <CardContent className={cn("p-4 flex flex-1 justify-center min-h-[500px]", contentClassName)}>
+            <CardContent className={cn("p-4 flex flex-1 flex-col", contentClassName)}>
                 {isInnerCard ? (
-                    <Card className="w-full p-4 md:p-6 bg-background/40 backdrop-blur-md border border-primary/5 shadow-inner rounded-3xl flex flex-col items-center justify-center overflow-hidden transition-all duration-500 hover:bg-background/60 group/innercard">
+                    <Card className="w-full p-4 md:p-6 bg-background/40 backdrop-blur-md border border-primary/5 hover:border-primary/10 shadow-inner rounded-3xl flex flex-col items-center justify-center overflow-hidden transition-all duration-500 hover:bg-background/60 h-full">
                         {children}
                     </Card>
                 ) : (
-                    <div className="w-full">
+                    <div className="w-full h-full">
                         {children}
                     </div>
                 )}

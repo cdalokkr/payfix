@@ -5,11 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { trpc } from "@/lib/trpc/client"
-import { Search, Loader2, Clock, CheckCircle2, XCircle, FileText, Save } from "lucide-react"
+import { Search, Loader2, FileText, Save } from "lucide-react"
+import { Clock as ClockIcon, CheckCircle as CheckCircleIcon, XCircle as XCircleIcon, CalendarMinus as CalendarMinusIcon } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { getEventBroadcaster } from "@/lib/events/event-broadcaster"
 import { Label } from "@/components/ui/label"
-import { MetricCard } from "@/components/dashboard/metric-card"
+import { CompactMetricCard } from "@/components/dashboard/compact-metric-card"
 import { cn } from "@/lib/utils"
 import { useSharedManagementChannel } from "@/hooks/use-shared-management-channel"
 import { useProfile } from "@/lib/context/profile-context"
@@ -35,8 +36,12 @@ export function AdminAttendanceVerification() {
     const [isEditOpen, setIsEditOpen] = useState(false)
     const [selectedRecord, setSelectedRecord] = useState<any>(null)
     const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({})
-    const [statusFilter, setStatusFilter] = useState('all')
-    const [dateFilter, setDateFilter] = useState('all')
+    // Default to current date (IST) and pending status for faster, relevant loading
+    const getLocalDateIST = () => {
+        return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Kolkata' })
+    }
+    const [statusFilter, setStatusFilter] = useState('pending')
+    const [dateFilter, setDateFilter] = useState(getLocalDateIST())
     const [mounted, setMounted] = useState(false)
 
     useEffect(() => {
@@ -56,8 +61,12 @@ export function AdminAttendanceVerification() {
         onError: (error) => toast.error(error.message)
     })
     // Queries with real-time friendly settings - staleTime: 0 ensures immediate refetch on invalidation
-    const { data: attendance, isLoading, refetch: refetchAttendance } = trpc.attendance.getAttendance.useQuery(
-        {},
+    const { data: attendance, isLoading, isFetching, refetch: refetchAttendance } = trpc.attendance.getAttendance.useQuery(
+        {
+            mode: dateFilter === 'all' ? 'default' : 'all',
+            startDate: dateFilter !== 'all' ? dateFilter : undefined,
+            endDate: dateFilter !== 'all' ? dateFilter : undefined,
+        },
         {
             staleTime: 0, // Always consider stale so invalidation triggers immediate refetch
             refetchOnWindowFocus: false, // Rely on real-time instead
@@ -138,7 +147,9 @@ export function AdminAttendanceVerification() {
                 record.profile?.designation?.name?.toLowerCase().includes(searchTerm.toLowerCase())
 
             const matchesStatus = statusFilter === 'all' ||
-                (statusFilter === 'halfDay' ? record.is_half_day : record.status === statusFilter)
+                (statusFilter === 'halfDay' ? record.is_half_day :
+                    statusFilter === 'noOfficeOut' ? (record.check_in && !record.check_out) :
+                        record.status === statusFilter)
 
             const matchesDate = dateFilter === 'all' || record.date === dateFilter
 
@@ -177,13 +188,14 @@ export function AdminAttendanceVerification() {
 
     const getRowId = useCallback((row: any) => row.id, [])
 
-    const stats = {
-        pending: attendance?.filter(a => a.status === 'pending').length || 0,
-        verified: attendance?.filter(a => a.status === 'verified').length || 0,
-        halfDay: attendance?.filter(a => a.is_half_day).length || 0,
-        rejected: attendance?.filter(a => a.status === 'rejected').length || 0,
-        all: attendance?.length || 0,
-    }
+    const stats = useMemo(() => ({
+        pending: filteredAttendance?.filter(a => a.status === 'pending').length || 0,
+        verified: filteredAttendance?.filter(a => a.status === 'verified').length || 0,
+        halfDay: filteredAttendance?.filter(a => a.is_half_day).length || 0,
+        rejected: filteredAttendance?.filter(a => a.status === 'rejected').length || 0,
+        noOfficeOut: filteredAttendance?.filter(a => a.check_in && !a.check_out).length || 0,
+        all: filteredAttendance?.length || 0,
+    }), [filteredAttendance])
 
     if (!mounted) {
         return (
@@ -195,46 +207,46 @@ export function AdminAttendanceVerification() {
 
     return (
         <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <MetricCard
-                    title="Pending"
-                    value={stats.pending.toString()}
-                    icon={<Clock />}
-                    iconBgColor="bg-amber-500/20"
-                    iconColor="text-amber-700 dark:text-amber-400"
-                    borderColor="border-amber-200/50 dark:border-amber-900/50"
-                    cardBgColor="bg-amber-50/50 dark:bg-amber-900/5"
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                <CompactMetricCard
+                    label="Pending"
+                    value={stats.pending}
+                    icon={ClockIcon}
+                    theme="blue"
                     delay={0.1}
+                    loading={isLoading || isFetching}
                 />
-                <MetricCard
-                    title="Verified"
-                    value={stats.verified.toString()}
-                    icon={<CheckCircle2 />}
-                    iconBgColor="bg-emerald-500/20"
-                    iconColor="text-emerald-700 dark:text-emerald-400"
-                    borderColor="border-emerald-200/50 dark:border-emerald-900/50"
-                    cardBgColor="bg-emerald-50/50 dark:bg-emerald-900/5"
+                <CompactMetricCard
+                    label="Verified"
+                    value={stats.verified}
+                    icon={CheckCircleIcon}
+                    theme="green"
                     delay={0.2}
+                    loading={isLoading || isFetching}
                 />
-                <MetricCard
-                    title="Half Day"
-                    value={stats.halfDay.toString()}
-                    icon={<Clock className="rotate-180" />}
-                    iconBgColor="bg-indigo-500/20"
-                    iconColor="text-indigo-700 dark:text-indigo-400"
-                    borderColor="border-indigo-200/50 dark:border-indigo-900/50"
-                    cardBgColor="bg-indigo-50/50 dark:bg-indigo-900/5"
+                <CompactMetricCard
+                    label="No Office Out"
+                    value={stats.noOfficeOut}
+                    icon={ClockIcon}
+                    theme="amber"
                     delay={0.3}
+                    loading={isLoading || isFetching}
                 />
-                <MetricCard
-                    title="Rejected"
-                    value={stats.rejected.toString()}
-                    icon={<XCircle />}
-                    iconBgColor="bg-rose-500/20"
-                    iconColor="text-rose-700 dark:text-rose-400"
-                    borderColor="border-rose-200/50 dark:border-rose-900/50"
-                    cardBgColor="bg-rose-50/50 dark:bg-rose-900/5"
+                <CompactMetricCard
+                    label="Half Day"
+                    value={stats.halfDay}
+                    icon={CalendarMinusIcon}
+                    theme="indigo"
                     delay={0.4}
+                    loading={isLoading || isFetching}
+                />
+                <CompactMetricCard
+                    label="Rejected"
+                    value={stats.rejected}
+                    icon={XCircleIcon}
+                    theme="red"
+                    delay={0.5}
+                    loading={isLoading || isFetching}
                 />
             </div>
 
