@@ -232,11 +232,9 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                     </div>
                 </div>
             </motion.div>
-        </div>
-            </motion.div >
 
-        {/* Quick Actions Grid */ }
-        < motion.div variants = { itemVars } className = "space-y-4 pt-2" >
+            {/* Quick Actions Grid */}
+            <motion.div variants={itemVars} className="space-y-4 pt-2">
                 <div className="flex items-center justify-between px-2">
                     <h3 className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">Quick Access</h3>
                     <div className="h-px bg-slate-200 dark:bg-slate-800 flex-1 ml-4" />
@@ -259,35 +257,33 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                         </Link>
                     ))}
                 </div>
-            </motion.div >
-
-        {/* Profile Photo Warning */ }
-    {
-        !profile.avatar_url && (
-            <motion.div variants={itemVars}>
-                <Card className="rounded-[2rem] border-amber-500/20 bg-amber-50/50 dark:bg-amber-950/10 shadow-none border-dashed border-2 overflow-hidden">
-                    <CardContent className="p-5">
-                        <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
-                                <IconAlertTriangle className="w-6 h-6 text-amber-600" />
-                            </div>
-                            <div className="flex-1">
-                                <p className="font-black text-sm text-amber-900 dark:text-amber-200 uppercase tracking-tight">Missing Profile Photo</p>
-                                <p className="text-xs text-amber-700/80 dark:text-amber-500/80 mb-3 font-medium">
-                                    Required for face verification.
-                                </p>
-                                <Link href="/mobile/profile">
-                                    <Button size="sm" variant="outline" className="h-9 px-4 rounded-xl text-[11px] font-black border-amber-200 dark:border-amber-800/50 hover:bg-amber-500 hover:text-white transition-all uppercase tracking-wider">
-                                        Setup Now
-                                    </Button>
-                                </Link>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
             </motion.div>
-        )
-    }
-        </motion.div >
+
+            {/* Profile Photo Warning */}
+            {!profile.avatar_url && (
+                <motion.div variants={itemVars}>
+                    <Card className="rounded-[2rem] border-amber-500/20 bg-amber-50/50 dark:bg-amber-950/10 shadow-none border-dashed border-2 overflow-hidden">
+                        <CardContent className="p-5">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+                                    <IconAlertTriangle className="w-6 h-6 text-amber-600" />
+                                </div>
+                                <div className="flex-1">
+                                    <p className="font-black text-sm text-amber-900 dark:text-amber-200 uppercase tracking-tight">Missing Profile Photo</p>
+                                    <p className="text-xs text-amber-700/80 dark:text-amber-500/80 mb-3 font-medium">
+                                        Required for face verification.
+                                    </p>
+                                    <Link href="/mobile/profile">
+                                        <Button size="sm" variant="outline" className="h-9 px-4 rounded-xl text-[11px] font-black border-amber-200 dark:border-amber-800/50 hover:bg-amber-500 hover:text-white transition-all uppercase tracking-wider">
+                                            Setup Now
+                                        </Button>
+                                    </Link>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </motion.div>
+            )}
+        </motion.div>
     )
 }
