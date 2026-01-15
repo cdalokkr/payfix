@@ -43,6 +43,7 @@ export function LocationVerification({ onVerified, onSkip }: LocationVerificatio
     const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
     const [nearestOffice, setNearestOffice] = useState<{ name: string; distance: number } | null>(null)
     const [showManualEntry, setShowManualEntry] = useState(false)
+    const [manualLat, setManualLat] = useState('')
     const [manualLng, setManualLng] = useState('')
     const [debugInfo, setDebugInfo] = useState<string>('')
 
