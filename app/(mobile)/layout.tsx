@@ -5,6 +5,7 @@ import { TRPCProvider } from '@/lib/trpc/provider'
 import '@/app/globals.css'
 import { MobileHeader } from './mobile-header'
 import { MobileBottomNav } from './mobile-bottom-nav'
+import { PermissionGuard } from '@/features/mobile/PermissionGuard'
 
 export default async function MobileLayout({
     children,
@@ -47,7 +48,9 @@ export default async function MobileLayout({
 
                 {/* Main Content with padding for header and bottom nav */}
                 <main className="max-w-md mx-auto px-4 pt-20 pb-24 min-h-screen">
-                    {children}
+                    <PermissionGuard>
+                        {children}
+                    </PermissionGuard>
                 </main>
 
                 {/* Bottom Navigation */}
