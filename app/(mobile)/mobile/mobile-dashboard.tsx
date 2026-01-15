@@ -61,7 +61,11 @@ const quickActions = [
 ]
 
 export function MobileDashboard({ profile, todayAttendance }: MobileDashboardProps) {
-    const [geofenceResult, setGeofenceResult] = useState<{ isWithinGeofence: boolean; nearestOffice: { name: string; distance: number } | null } | null>(null)
+    const [geofenceResult, setGeofenceResult] = useState<{
+        isAllowed: boolean
+        nearestOffice?: { id: string; name: string; distance: number }
+        withinOffice?: { id: string; name: string; distance: number }
+    } | null>(null)
     const [isLocChecking, setIsLocChecking] = useState(true)
 
     const utils = trpc.useUtils()
@@ -216,7 +220,7 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                                     <IconLoader2 className="w-4 h-4 animate-spin" />
                                     <span className="text-xs font-black uppercase tracking-wider">Verifying Location...</span>
                                 </div>
-                            ) : geofenceResult?.isWithinGeofence ? (
+                            ) : geofenceResult?.isAllowed ? (
                                 <Link href="/mobile/attendance">
                                     <Button
                                         className="h-12 px-8 rounded-full bg-white text-slate-900 hover:bg-white/90 font-black text-sm shadow-xl border-none group transition-all"
@@ -306,10 +310,10 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
             {/* Location Badge */}
             <motion.div variants={itemVars} className="flex items-center justify-center pt-2">
                 <div className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-slate-100/80 dark:bg-slate-900/80 backdrop-blur-sm border border-slate-200/50 dark:border-slate-800/50 shadow-sm">
-                    <div className={`w-2 h-2 rounded-full ${geofenceResult?.isWithinGeofence ? 'bg-green-500' : 'bg-rose-500'} animate-pulse`} />
+                    <div className={`w-2 h-2 rounded-full ${geofenceResult?.isAllowed ? 'bg-green-500' : 'bg-rose-500'} animate-pulse`} />
                     <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 opacity-80 uppercase tracking-[0.15em]">
                         {isLocChecking ? "Detecting Location..." :
-                            geofenceResult?.isWithinGeofence ? `At ${geofenceResult.nearestOffice?.name}` :
+                            geofenceResult?.isAllowed ? `At ${geofenceResult.withinOffice?.name}` :
                                 "Location Restricted"}
                     </span>
                 </div>
