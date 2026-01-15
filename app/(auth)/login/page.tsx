@@ -30,14 +30,14 @@ export default function LoginPage() {
         <header className="relative z-10 border-b border-gray-100 bg-white/60 backdrop-blur-xl">
           <div className="container mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2 sm:gap-3 group">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform duration-300">
-                <span className="text-white font-bold text-lg sm:text-xl tracking-tighter">FS</span>
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform duration-300 overflow-hidden border border-gray-100">
+                <img src="/icons/icon-192x192.png" alt="PayFix" className="w-full h-full object-cover" />
               </div>
               <div className="flex flex-col">
                 <h1 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight leading-none">
-                  FullStack App
+                  PayFix
                 </h1>
-                <span className="text-[9px] sm:text-[10px] text-blue-600 font-bold uppercase tracking-[0.2em] mt-0.5 sm:mt-1">Enterprise Edition</span>
+                <span className="text-[9px] sm:text-[10px] text-blue-600 font-bold uppercase tracking-[0.2em] mt-0.5 sm:mt-1">Mobile Attendance</span>
               </div>
             </Link>
             <div className="flex items-center gap-4">
@@ -80,7 +80,7 @@ export default function LoginPage() {
 
             {/* Footer Info */}
             <p className="mt-6 sm:mt-8 text-center text-gray-500 text-xs sm:text-sm px-4">
-              &copy; {new Date().getFullYear()} FullStack App Pro. All rights reserved.
+              &copy; {new Date().getFullYear()} PayFix Mobile. All rights reserved.
             </p>
           </div>
         </main>

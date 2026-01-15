@@ -45,8 +45,12 @@ export function PermissionGuard({ children, showOnlyIfDenied = false }: Permissi
                         animate={{ y: 0, opacity: 1 }}
                         className="mb-8 flex flex-col items-center gap-3"
                     >
-                        <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-[1.5rem] flex items-center justify-center shadow-2xl border-4 border-white">
-                            <span className="text-white font-black text-2xl tracking-tighter">PF</span>
+                        <div className="w-20 h-20 bg-white rounded-[1.5rem] flex items-center justify-center shadow-2xl border-4 border-white overflow-hidden">
+                            <img
+                                src="/icons/icon-192x192.png"
+                                alt="PayFix Logo"
+                                className="w-full h-full object-cover"
+                            />
                         </div>
                         <div className="text-center">
                             <h1 className="text-2xl font-black tracking-tight leading-none text-gray-900">PayFix</h1>
