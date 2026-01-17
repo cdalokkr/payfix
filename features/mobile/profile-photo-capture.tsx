@@ -43,7 +43,13 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
     const [errorMessage, setErrorMessage] = useState<string>('')
     const [capturedImage, setCapturedImage] = useState<string | null>(null)
     const [isUploading, setIsUploading] = useState(false)
+    const [debugLogs, setDebugLogs] = useState<string[]>([])
     const statusRef = useRef(status)
+
+    // Debug logger
+    const addLog = useCallback((msg: string) => {
+        setDebugLogs(prev => [...prev.slice(-10), `${new Date().toLocaleTimeString()}: ${msg}`])
+    }, [])
 
     // Keep statusRef in sync
     useEffect(() => {
@@ -226,11 +232,12 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
     const handleUpload = useCallback(async () => {
         if (!capturedImage) return
 
+        setDebugLogs([]) // Clear previous logs
         setIsUploading(true)
         setStatus('uploading')
 
         try {
-            console.log('[UPLOAD] Starting upload...')
+            addLog('Starting upload...')
 
             // Convert data URL to blob directly (mobile compatible)
             const base64Data = capturedImage.split(',')[1]
@@ -241,10 +248,10 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
             }
             const byteArray = new Uint8Array(byteNumbers)
             const blob = new Blob([byteArray], { type: 'image/jpeg' })
-            console.log('[UPLOAD] Blob created, size:', blob.size)
+            addLog(`Blob created: ${Math.round(blob.size / 1024)}KB`)
 
             const fileName = `profile-${profileId}-${Date.now()}.jpg`
-            console.log('[UPLOAD] Uploading to storage:', fileName)
+            addLog(`Uploading: ${fileName}`)
 
             const { error: uploadError } = await supabase.storage
                 .from('avatars')
@@ -254,23 +261,23 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                 })
 
             if (uploadError) {
-                console.error('[UPLOAD] Storage upload error:', uploadError.message, uploadError)
+                addLog(`STORAGE ERROR: ${uploadError.message}`)
                 throw uploadError
             }
-            console.log('[UPLOAD] Storage upload success')
+            addLog('Storage upload OK')
 
             const { data: { publicUrl } } = supabase.storage
                 .from('avatars')
                 .getPublicUrl(fileName)
-            console.log('[UPLOAD] Public URL:', publicUrl)
+            addLog('Got public URL')
 
-            console.log('[UPLOAD] Updating profile via tRPC...')
+            addLog('Calling tRPC...')
             await updateProfilePicture.mutateAsync({
                 userId: profileId,
                 avatarUrl: publicUrl,
                 avatarStatus: 'custom'
             })
-            console.log('[UPLOAD] Profile updated successfully')
+            addLog('tRPC update OK')
 
             setStatus('success')
             toast.success('Profile photo updated successfully!')
@@ -281,14 +288,15 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                 router.refresh()
             }, 1500)
         } catch (error: any) {
-            console.error('[UPLOAD] Error:', error?.message || error)
+            const errMsg = error?.message || 'Unknown error'
+            addLog(`ERROR: ${errMsg}`)
             setStatus('error')
-            setErrorMessage(error?.message || 'Failed to upload. Please check your connection.')
-            toast.error('Upload failed: ' + (error?.message || 'Unknown error'))
+            setErrorMessage(errMsg)
+            toast.error('Upload failed: ' + errMsg)
         } finally {
             setIsUploading(false)
         }
-    }, [capturedImage, profileId, supabase, router, onSuccess, updateProfilePicture])
+    }, [capturedImage, profileId, supabase, router, onSuccess, updateProfilePicture, addLog])
 
     // Handle back button
     const handleBack = useCallback(() => {
@@ -505,17 +513,34 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[70] bg-slate-950/90 backdrop-blur-xl flex flex-col items-center justify-center"
+                        className="fixed inset-0 z-[70] bg-slate-950/95 backdrop-blur-xl flex flex-col items-center justify-center p-6"
                     >
                         <motion.div
                             initial={{ scale: 0.8 }}
                             animate={{ scale: 1 }}
-                            className="w-24 h-24 rounded-full bg-primary/20 border-4 border-primary/30 flex items-center justify-center mb-6"
+                            className="w-20 h-20 rounded-full bg-primary/20 border-4 border-primary/30 flex items-center justify-center mb-4"
                         >
-                            <IconLoader2 className="w-12 h-12 animate-spin text-primary" />
+                            <IconLoader2 className="w-10 h-10 animate-spin text-primary" />
                         </motion.div>
-                        <p className="text-white text-xl font-bold">Updating Photo</p>
-                        <p className="text-slate-400 text-sm mt-2">Please wait...</p>
+                        <p className="text-white text-lg font-bold mb-4">Updating Photo</p>
+
+                        {/* Debug Log Display */}
+                        <div className="w-full max-w-sm bg-black/50 rounded-xl p-3 border border-white/10">
+                            <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Upload Progress</p>
+                            <div className="space-y-1 max-h-48 overflow-y-auto">
+                                {debugLogs.map((log, i) => (
+                                    <p key={i} className={`text-xs font-mono ${log.includes('ERROR') ? 'text-red-400' :
+                                            log.includes('OK') ? 'text-green-400' :
+                                                'text-slate-300'
+                                        }`}>
+                                        {log}
+                                    </p>
+                                ))}
+                                {debugLogs.length === 0 && (
+                                    <p className="text-slate-500 text-xs">Initializing...</p>
+                                )}
+                            </div>
+                        </div>
                     </motion.div>
                 )}
                 {status === 'success' && (
