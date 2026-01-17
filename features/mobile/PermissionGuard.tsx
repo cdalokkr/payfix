@@ -23,9 +23,14 @@ export function PermissionGuard({ children, showOnlyIfDenied = false }: Permissi
         requestPermissions
     } = usePermissionCheck()
 
-    // Bypass if not PWA or still checking PWA status
-    // We want PWA status to be 'ready' and we only enforce if it's actually isPwa
-    if (isReady && !isPwa) {
+    // CRITICAL: Don't block during initial render or PWA status check
+    // Show children immediately while we determine if this is a PWA
+    if (!isReady) {
+        return <>{children}</>
+    }
+
+    // Bypass if not PWA - only enforce permissions in installed PWA mode
+    if (!isPwa) {
         return <>{children}</>
     }
 
