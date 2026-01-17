@@ -228,10 +228,14 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         setStatus('uploading')
 
         try {
+            console.log('[UPLOAD] Starting upload...')
             const response = await fetch(capturedImage)
             const blob = await response.blob()
+            console.log('[UPLOAD] Blob created, size:', blob.size)
 
             const fileName = `profile-${profileId}-${Date.now()}.jpg`
+            console.log('[UPLOAD] Uploading to storage:', fileName)
+
             const { error: uploadError } = await supabase.storage
                 .from('avatars')
                 .upload(fileName, blob, {
@@ -239,12 +243,18 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                     upsert: true,
                 })
 
-            if (uploadError) throw uploadError
+            if (uploadError) {
+                console.error('[UPLOAD] Storage upload error:', uploadError.message, uploadError)
+                throw uploadError
+            }
+            console.log('[UPLOAD] Storage upload success')
 
             const { data: { publicUrl } } = supabase.storage
                 .from('avatars')
                 .getPublicUrl(fileName)
+            console.log('[UPLOAD] Public URL:', publicUrl)
 
+            console.log('[UPLOAD] Updating profile...')
             const { error: updateError } = await supabase
                 .from('profiles')
                 .update({
@@ -253,7 +263,11 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                 })
                 .eq('id', profileId)
 
-            if (updateError) throw updateError
+            if (updateError) {
+                console.error('[UPLOAD] Profile update error:', updateError.message, updateError)
+                throw updateError
+            }
+            console.log('[UPLOAD] Profile updated successfully')
 
             setStatus('success')
             toast.success('Profile photo updated successfully!')
@@ -263,11 +277,11 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                 router.push('/mobile')
                 router.refresh()
             }, 1500)
-        } catch (error) {
-            console.error('Upload error:', error)
+        } catch (error: any) {
+            console.error('[UPLOAD] Error:', error?.message || error)
             setStatus('error')
-            setErrorMessage('Failed to upload. Please check your connection.')
-            toast.error('Upload failed')
+            setErrorMessage(error?.message || 'Failed to upload. Please check your connection.')
+            toast.error('Upload failed: ' + (error?.message || 'Unknown error'))
         } finally {
             setIsUploading(false)
         }
