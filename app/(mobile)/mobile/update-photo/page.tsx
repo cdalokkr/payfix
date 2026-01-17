@@ -14,7 +14,27 @@ export default async function UpdatePhotoPage() {
         redirect('/login')
     }
 
+    // Fetch profile data
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, role, avatar_url, employee_id')
+        .eq('id', user.id)
+        .single()
+
+    if (!profile) {
+        redirect('/login')
+    }
+
     return (
-        <ProfilePhotoCapture profileId={user.id} />
+        <ProfilePhotoCapture
+            profileId={user.id}
+            profileData={{
+                fullName: profile.full_name,
+                email: profile.email,
+                role: profile.role,
+                avatarUrl: profile.avatar_url,
+                employeeId: profile.employee_id
+            }}
+        />
     )
 }

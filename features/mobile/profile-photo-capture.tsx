@@ -2,9 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Slider } from "@/components/ui/slider"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import {
@@ -13,32 +11,36 @@ import {
     IconRefresh,
     IconCheck,
     IconX,
-    IconZoomIn,
     IconArrowLeft,
+    IconUser,
+    IconMail,
+    IconId,
 } from "@tabler/icons-react"
 import { createClient } from "@/lib/supabase/client"
 
+interface ProfileData {
+    fullName: string
+    email: string
+    role: string
+    avatarUrl: string | null
+    employeeId: string | null
+}
+
 interface ProfilePhotoCaptureProps {
     profileId: string
+    profileData: ProfileData
     onSuccess?: () => void
 }
 
-export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptureProps) {
+export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: ProfilePhotoCaptureProps) {
     const router = useRouter()
     const supabase = createClient()
 
     const [status, setStatus] = useState<'idle' | 'streaming' | 'captured' | 'uploading' | 'success' | 'error'>('idle')
     const [errorMessage, setErrorMessage] = useState<string>('')
     const [capturedImage, setCapturedImage] = useState<string | null>(null)
-    const [zoom, setZoom] = useState<number>(1)
     const [isUploading, setIsUploading] = useState(false)
-    const [hasZoomSupport, setHasZoomSupport] = useState(false)
 
-    const [debugLogs, setDebugLogs] = useState<string[]>([])
-    const addLog = (msg: string) => {
-        console.log(`[CameraDebug] ${msg}`)
-        setDebugLogs(prev => [msg, ...prev].slice(0, 5))
-    }
 
     const videoRef = useRef<HTMLVideoElement>(null)
     const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -61,16 +63,14 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
         return () => { isMounted.current = false }
     }, [])
 
-    // Start camera stream with zoom capability
+    // Start camera stream
     const startCamera = useCallback(async (retryCount = 0) => {
         // Prevent multiple simultaneous calls
         if (isInitializing.current && retryCount === 0) {
-            addLog("Already initializing, skipping")
             return
         }
         isInitializing.current = true
 
-        addLog(`startCamera attempt ${retryCount}`)
         // Stop any existing stream first
         stopCamera()
 
@@ -82,7 +82,6 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
 
         // Delay for hardware release (350ms)
         if (retryCount === 0) {
-            addLog("350ms lock delay")
             await new Promise(resolve => setTimeout(resolve, 350))
         }
 
@@ -100,8 +99,6 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
                 audio: false
             }
 
-            addLog("GUM request...")
-
             // 10s timeout for GUM
             const gumPromise = navigator.mediaDevices.getUserMedia(constraints)
             const timeoutPromise = new Promise((_, reject) =>
@@ -109,27 +106,13 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
             )
 
             const stream = await Promise.race([gumPromise, timeoutPromise]) as MediaStream
-            addLog("GUM success")
 
             if (!isMounted.current) {
-                addLog("unmounted during GUM")
                 stream.getTracks().forEach(track => track.stop())
                 return
             }
 
             streamRef.current = stream
-
-            // Capability check
-            try {
-                const videoTrack = stream.getVideoTracks()[0]
-                const capabilities = videoTrack.getCapabilities() as any
-                addLog(`Zoom support: ${!!capabilities?.zoom}`)
-                if (capabilities?.zoom) {
-                    setHasZoomSupport(true)
-                }
-            } catch (e) {
-                addLog("CapCheck fail")
-            }
 
             if (videoRef.current) {
                 const video = videoRef.current
@@ -142,42 +125,32 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
                 const handlePlay = async () => {
                     if (!isMounted.current) return
                     try {
-                        addLog("play()...")
                         await video.play()
-                        addLog("playing")
                         setStatus('streaming')
                         isInitializing.current = false
                     } catch (err: any) {
-                        addLog(`play err: ${err.message}`)
+                        console.warn("Autoplay blocked:", err)
                         setStatus('streaming')
                         isInitializing.current = false
                     }
                 }
 
                 if (video.readyState >= 2) {
-                    addLog("ready, playing")
                     handlePlay()
                 } else {
-                    addLog("wait metadata")
-                    video.onloadedmetadata = () => {
-                        addLog("metadata event")
-                        handlePlay()
-                    }
-                    // Spinner safety timeout
+                    video.onloadedmetadata = handlePlay
+                    // Safety timeout
                     setTimeout(() => {
                         if (isMounted.current && status === 'idle') {
-                            addLog("safety timeout")
                             handlePlay()
                         }
                     }, 2000)
                 }
-            } else {
-                addLog("videoRef NULL")
             }
         } catch (error: unknown) {
             console.error('Camera error:', error)
 
-            // Auto-retry once with elementary constraints
+            // Auto-retry once with basic constraints
             if (retryCount === 0 && isMounted.current) {
                 return startCamera(1)
             }
@@ -198,23 +171,6 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
             }
         }
     }, [stopCamera])
-
-    // Apply zoom to video stream
-    useEffect(() => {
-        if (streamRef.current && status === 'streaming') {
-            const videoTrack = streamRef.current.getVideoTracks()[0]
-            const capabilities = videoTrack.getCapabilities() as any
-
-            if (capabilities.zoom) {
-                const min = capabilities.zoom.min || 1
-                const max = capabilities.zoom.max || 1
-                const zoomVal = min + (max - min) * (zoom - 1) / 2
-                videoTrack.applyConstraints({
-                    advanced: [{ zoom: zoomVal }] as any
-                }).catch(err => console.warn("Zoom apply failed:", err))
-            }
-        }
-    }, [zoom, status])
 
     // Capture photo
     const capturePhoto = useCallback(() => {
@@ -414,22 +370,6 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
                     )}
                 </AnimatePresence>
 
-                {/* Debug Logs Overlay - Visible in all envs for now */}
-                {debugLogs.length > 0 && (
-                    <div className="absolute top-20 left-4 right-4 z-50 pointer-events-none">
-                        <div className="bg-black/80 backdrop-blur-md rounded-xl p-3 border border-white/10">
-                            <p className="text-[8px] font-black text-white/40 uppercase tracking-widest mb-2">Internal Diagnostics</p>
-                            <div className="space-y-1">
-                                {debugLogs.map((log, i) => (
-                                    <p key={i} className="text-[10px] font-medium text-primary/80 truncate">
-                                        {`> ${log}`}
-                                    </p>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                )}
-
                 {/* Top Controls Overlay */}
                 <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-start z-30">
                     <motion.button
@@ -439,53 +379,61 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
                     >
                         <IconArrowLeft className="w-6 h-6" />
                     </motion.button>
-                    {status === 'streaming' && hasZoomSupport && (
-                        <div className="p-3 rounded-2xl bg-black/20 backdrop-blur-xl border border-white/10 text-white font-black text-[10px] tracking-widest uppercase">
-                            HD Active
-                        </div>
-                    )}
                 </div>
             </div>
 
             {/* Bottom Controls Section */}
-            <div className="flex-1 bg-slate-950 p-8 flex flex-col justify-between overflow-y-auto">
-                <div className="space-y-8">
+            <div className="flex-1 bg-slate-950 p-6 flex flex-col justify-between overflow-y-auto">
+                <div className="space-y-6">
                     {/* Instructions / Status */}
                     <div className="text-center space-y-2">
                         <h2 className="text-2xl font-black text-white tracking-tight">
-                            {status === 'captured' ? "Looking Good!" : "Selfie Time"}
+                            {status === 'captured' ? "Looking Good!" : status === 'uploading' ? "Updating..." : "Selfie Time"}
                         </h2>
                         <p className="text-slate-400 text-sm font-medium">
                             {status === 'captured'
                                 ? "Update your profile with this photo or retake it."
-                                : "Ensure your face is within the circle and well-lit."}
+                                : status === 'uploading'
+                                    ? "Please wait while we update your photo..."
+                                    : "Ensure your face is within the circle and well-lit."}
                         </p>
                     </div>
 
-                    {/* Zoom Slider - Modern Styled */}
-                    {status === 'streaming' && hasZoomSupport && (
-                        <motion.div
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="bg-white/5 border border-white/10 rounded-3xl p-6 px-8 backdrop-blur-lg"
-                        >
-                            <div className="flex items-center gap-6">
-                                <IconZoomIn className="w-5 h-5 text-primary" />
-                                <Slider
-                                    value={[zoom]}
-                                    onValueChange={(v) => setZoom(v[0])}
-                                    min={1}
-                                    max={3}
-                                    step={0.1}
-                                    className="flex-1 py-4"
-                                />
-                                <span className="text-xs font-black text-white w-8">{zoom.toFixed(1)}x</span>
+                    {/* Employee Profile Card */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-lg"
+                    >
+                        <div className="flex items-center gap-4">
+                            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 border-2 border-primary/30 flex items-center justify-center overflow-hidden">
+                                {profileData.avatarUrl ? (
+                                    <img src={profileData.avatarUrl} alt="Current" className="w-full h-full object-cover" />
+                                ) : (
+                                    <IconUser className="w-7 h-7 text-primary" />
+                                )}
                             </div>
-                        </motion.div>
-                    )}
+                            <div className="flex-1 min-w-0">
+                                <p className="text-white font-bold text-base truncate">{profileData.fullName}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <IconMail className="w-3.5 h-3.5 text-slate-500" />
+                                    <p className="text-slate-400 text-xs truncate">{profileData.email}</p>
+                                </div>
+                                {profileData.employeeId && (
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                        <IconId className="w-3.5 h-3.5 text-slate-500" />
+                                        <p className="text-slate-500 text-xs">ID: {profileData.employeeId}</p>
+                                    </div>
+                                )}
+                            </div>
+                            <span className="px-3 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wider">
+                                {profileData.role}
+                            </span>
+                        </div>
+                    </motion.div>
                 </div>
 
-                <div className="space-y-4 pt-8">
+                <div className="space-y-4 pt-6">
                     {status === 'streaming' && (
                         <Button
                             onClick={capturePhoto}
@@ -523,29 +471,52 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
                             UPLOADING...
                         </Button>
                     )}
-                    {status === 'streaming' && process.env.NODE_ENV === 'development' && (
-                        <Button
-                            variant="ghost"
-                            onClick={() => {
-                                const canvas = canvasRef.current;
-                                if (canvas) {
-                                    canvas.width = 100;
-                                    canvas.height = 100;
-                                    setCapturedImage(canvas.toDataURL());
-                                    setStatus('captured');
-                                }
-                            }}
-                            className="w-full text-[10px] text-white/20 font-bold tracking-widest hover:bg-transparent hover:text-white/40"
-                        >
-                            DEBUG: SKIP CAMERA
-                        </Button>
-                    )}
                 </div>
             </div>
+
+            {/* Full-screen Upload Overlay */}
+            <AnimatePresence>
+                {status === 'uploading' && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[70] bg-slate-950/90 backdrop-blur-xl flex flex-col items-center justify-center"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.8 }}
+                            animate={{ scale: 1 }}
+                            className="w-24 h-24 rounded-full bg-primary/20 border-4 border-primary/30 flex items-center justify-center mb-6"
+                        >
+                            <IconLoader2 className="w-12 h-12 animate-spin text-primary" />
+                        </motion.div>
+                        <p className="text-white text-xl font-bold">Updating Photo</p>
+                        <p className="text-slate-400 text-sm mt-2">Please wait...</p>
+                    </motion.div>
+                )}
+                {status === 'success' && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[70] bg-slate-950/90 backdrop-blur-xl flex flex-col items-center justify-center"
+                    >
+                        <motion.div
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            transition={{ type: "spring", stiffness: 200, damping: 15 }}
+                            className="w-24 h-24 rounded-full bg-green-500/20 border-4 border-green-500/30 flex items-center justify-center mb-6"
+                        >
+                            <IconCheck className="w-12 h-12 text-green-500" />
+                        </motion.div>
+                        <p className="text-white text-xl font-bold">Photo Updated!</p>
+                        <p className="text-slate-400 text-sm mt-2">Redirecting to dashboard...</p>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Hidden canvas for capture */}
             <canvas ref={canvasRef} className="hidden" />
         </div>
     )
 }
-
