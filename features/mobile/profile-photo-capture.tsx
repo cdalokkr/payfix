@@ -40,6 +40,12 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
     const [errorMessage, setErrorMessage] = useState<string>('')
     const [capturedImage, setCapturedImage] = useState<string | null>(null)
     const [isUploading, setIsUploading] = useState(false)
+    const statusRef = useRef(status)
+
+    // Keep statusRef in sync
+    useEffect(() => {
+        statusRef.current = status
+    }, [status])
 
 
     const videoRef = useRef<HTMLVideoElement>(null)
@@ -141,7 +147,7 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                     video.onloadedmetadata = handlePlay
                     // Safety timeout
                     setTimeout(() => {
-                        if (isMounted.current && status === 'idle') {
+                        if (isMounted.current && statusRef.current === 'idle') {
                             handlePlay()
                         }
                     }, 2000)
