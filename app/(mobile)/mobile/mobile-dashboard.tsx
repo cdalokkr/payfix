@@ -230,7 +230,7 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                                 <IconCamera className="w-10 h-10 mx-auto mb-3 text-rose-100" />
                                 <h4 className="text-sm font-black uppercase tracking-widest mb-2 text-rose-50">Update Photo</h4>
                                 <p className="text-[11px] font-medium text-rose-100/80 mb-4">You must upload a custom profile photo to proceed.</p>
-                                <Link href="/mobile/profile">
+                                <Link href="/mobile/update-photo">
                                     <Button className="w-full rounded-xl bg-white text-rose-600 font-bold hover:bg-white/90">
                                         Update Now
                                     </Button>

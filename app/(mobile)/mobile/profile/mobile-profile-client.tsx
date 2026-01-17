@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef } from 'react'
+import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
@@ -106,32 +107,20 @@ export function MobileProfileClient({ profile }: MobileProfileClientProps) {
             <Card>
                 <CardContent className="pt-6">
                     <div className="flex flex-col items-center">
-                        {/* Avatar with Upload */}
+                        {/* Avatar with Camera Link */}
                         <div className="relative mb-4">
                             <Avatar className="h-24 w-24 border-4 border-background shadow-lg">
-                                <AvatarImage src={avatarUrl || ''} alt={profile.full_name || ''} />
+                                <AvatarImage src={avatarUrl || ''} alt={profile.full_name || ''} key={avatarUrl} />
                                 <AvatarFallback className="text-2xl">
                                     {profile.full_name?.charAt(0) || profile.email.charAt(0).toUpperCase()}
                                 </AvatarFallback>
                             </Avatar>
-                            <button
-                                onClick={() => fileInputRef.current?.click()}
-                                disabled={isUploading}
+                            <Link
+                                href="/mobile/update-photo"
                                 className="absolute bottom-0 right-0 p-2 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
                             >
-                                {isUploading ? (
-                                    <IconLoader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                    <IconCamera className="w-4 h-4" />
-                                )}
-                            </button>
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                onChange={handlePhotoUpload}
-                            />
+                                <IconCamera className="w-4 h-4" />
+                            </Link>
                         </div>
 
                         <h2 className="text-xl font-semibold">
@@ -147,10 +136,12 @@ export function MobileProfileClient({ profile }: MobileProfileClientProps) {
                                 Photo Verified - Ready for Attendance
                             </div>
                         ) : (
-                            <div className="mt-3 px-3 py-2 rounded-lg bg-amber-500/10 text-amber-600 text-sm text-center">
-                                <IconCamera className="w-4 h-4 inline mr-1" />
-                                Tap the camera icon to add a custom photo
-                            </div>
+                            <Link href="/mobile/update-photo" className="block mt-3">
+                                <div className="px-3 py-2 rounded-lg bg-amber-500/10 text-amber-600 text-sm text-center hover:bg-amber-500/20 transition-colors cursor-pointer">
+                                    <IconCamera className="w-4 h-4 inline mr-1" />
+                                    Tap here to take a selfie
+                                </div>
+                            </Link>
                         )}
                     </div>
                 </CardContent>
