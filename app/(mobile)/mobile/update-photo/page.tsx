@@ -7,23 +7,36 @@ export const metadata = {
 }
 
 export default async function UpdatePhotoPage() {
+    console.log('[UPDATE-PHOTO] Page started')
     const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 
+    console.log('[UPDATE-PHOTO] User:', user?.id ? 'Found' : 'Not found')
     if (!user) {
+        console.log('[UPDATE-PHOTO] Redirecting to /login (no user)')
         redirect('/login')
     }
 
-    // Fetch profile data
-    const { data: profile } = await supabase
+    // Fetch profile data with designation
+    const { data: profile, error } = await supabase
         .from('profiles')
-        .select('id, full_name, email, role, avatar_url, employee_id')
+        .select('id, full_name, email, role, avatar_url, designation:designations(name)')
         .eq('id', user.id)
         .single()
 
+    console.log('[UPDATE-PHOTO] Profile:', profile ? 'Found' : 'Not found', 'Error:', error?.message || 'None')
     if (!profile) {
+        console.log('[UPDATE-PHOTO] Redirecting to /login (no profile)')
         redirect('/login')
     }
+
+    // Extract designation name from relation
+    const designation = profile.designation as { name: string } | { name: string }[] | null
+    const designationName = Array.isArray(designation)
+        ? designation[0]?.name
+        : designation?.name
+
+    console.log('[UPDATE-PHOTO] Rendering component for:', profile.full_name)
 
     return (
         <ProfilePhotoCapture
@@ -33,7 +46,7 @@ export default async function UpdatePhotoPage() {
                 email: profile.email,
                 role: profile.role,
                 avatarUrl: profile.avatar_url,
-                employeeId: profile.employee_id
+                designation: designationName || null
             }}
         />
     )

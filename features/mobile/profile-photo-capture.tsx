@@ -23,7 +23,8 @@ interface ProfileData {
     email: string
     role: string
     avatarUrl: string | null
-    employeeId: string | null
+    employeeId?: string
+    designation?: string | null
 }
 
 interface ProfilePhotoCaptureProps {
@@ -425,10 +426,10 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                                     <IconMail className="w-3.5 h-3.5 text-slate-500" />
                                     <p className="text-slate-400 text-xs truncate">{profileData.email}</p>
                                 </div>
-                                {profileData.employeeId && (
+                                {profileData.designation && (
                                     <div className="flex items-center gap-2 mt-0.5">
                                         <IconId className="w-3.5 h-3.5 text-slate-500" />
-                                        <p className="text-slate-500 text-xs">ID: {profileData.employeeId}</p>
+                                        <p className="text-slate-500 text-xs">{profileData.designation}</p>
                                     </div>
                                 )}
                             </div>
