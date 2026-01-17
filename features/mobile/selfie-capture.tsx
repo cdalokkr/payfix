@@ -44,12 +44,19 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
     }, [])
 
     const isMounted = useRef(true)
+    const isInitializing = useRef(false)
     useEffect(() => {
         return () => { isMounted.current = false }
     }, [])
 
     // Start camera stream
     const startCamera = useCallback(async (retryCount = 0) => {
+        // Prevent multiple simultaneous calls
+        if (isInitializing.current && retryCount === 0) {
+            return
+        }
+        isInitializing.current = true
+
         stopCamera()
         if (isMounted.current) {
             setStatus('idle')
@@ -103,9 +110,11 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
                     try {
                         await video.play()
                         setStatus('streaming')
+                        isInitializing.current = false
                     } catch (err) {
                         console.warn("Autoplay block, but status set to streaming:", err)
                         setStatus('streaming')
+                        isInitializing.current = false
                     }
                 }
 
@@ -130,9 +139,10 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
             if (!isMounted.current) return
 
             setStatus('error')
+            isInitializing.current = false
             setErrorMessage('Camera access failed. Check site settings.')
         }
-    }, [stopCamera, status])
+    }, [stopCamera])
 
     // Apply zoom
     useEffect(() => {

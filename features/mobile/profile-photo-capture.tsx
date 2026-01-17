@@ -56,12 +56,20 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
     }, [])
 
     const isMounted = useRef(true)
+    const isInitializing = useRef(false)
     useEffect(() => {
         return () => { isMounted.current = false }
     }, [])
 
     // Start camera stream with zoom capability
     const startCamera = useCallback(async (retryCount = 0) => {
+        // Prevent multiple simultaneous calls
+        if (isInitializing.current && retryCount === 0) {
+            addLog("Already initializing, skipping")
+            return
+        }
+        isInitializing.current = true
+
         addLog(`startCamera attempt ${retryCount}`)
         // Stop any existing stream first
         stopCamera()
@@ -138,9 +146,11 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
                         await video.play()
                         addLog("playing")
                         setStatus('streaming')
+                        isInitializing.current = false
                     } catch (err: any) {
                         addLog(`play err: ${err.message}`)
                         setStatus('streaming')
+                        isInitializing.current = false
                     }
                 }
 
@@ -175,6 +185,7 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
             if (!isMounted.current) return
 
             setStatus('error')
+            isInitializing.current = false
             const err = error as DOMException
             const name = err.name || ''
 
@@ -186,7 +197,7 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
                 setErrorMessage('Hardware Error. Please refresh.')
             }
         }
-    }, [stopCamera, status])
+    }, [stopCamera])
 
     // Apply zoom to video stream
     useEffect(() => {
