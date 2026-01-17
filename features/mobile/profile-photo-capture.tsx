@@ -49,25 +49,38 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
         }
     }, [])
 
+    const isMounted = useRef(true)
+    useEffect(() => {
+        return () => { isMounted.current = false }
+    }, [])
+
     // Start camera stream with zoom capability
     const startCamera = useCallback(async () => {
         // Stop any existing stream first
         stopCamera()
 
-        setStatus('idle')
-        setErrorMessage('')
-        setCapturedImage(null)
+        if (isMounted.current) {
+            setStatus('idle')
+            setErrorMessage('')
+            setCapturedImage(null)
+        }
 
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({
+            const constraints = {
                 video: {
                     facingMode: 'user',
-                    width: { ideal: 1280 }, // Higher quality
-                    height: { ideal: 1280 },
-                    aspectRatio: 1
+                    width: { ideal: 1080 },
+                    height: { ideal: 1080 }
                 },
                 audio: false,
-            })
+            }
+
+            const stream = await navigator.mediaDevices.getUserMedia(constraints)
+
+            if (!isMounted.current) {
+                stream.getTracks().forEach(track => track.stop())
+                return
+            }
 
             streamRef.current = stream
 
@@ -79,32 +92,40 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
             }
 
             if (videoRef.current) {
-                videoRef.current.srcObject = stream
-                // Use onLoadedMetadata to ensure video is ready before playing
-                videoRef.current.onloadedmetadata = () => {
-                    videoRef.current?.play().then(() => {
-                        setStatus('streaming')
-                    }).catch(err => {
-                        console.error("Video play failed:", err)
-                        setStatus('error')
-                        setErrorMessage("Failed to start video preview.")
-                    })
+                const video = videoRef.current
+                video.srcObject = stream
+
+                // Crucial attributes for mobile
+                video.setAttribute('playsinline', 'true')
+                video.muted = true
+
+                const handlePlay = () => {
+                    video.play()
+                        .then(() => {
+                            if (isMounted.current) setStatus('streaming')
+                        })
+                        .catch(err => {
+                            console.warn("Autoplay failed, status still streaming:", err)
+                            if (isMounted.current) setStatus('streaming')
+                        })
                 }
-            } else {
-                // If ref is not yet available, we might need a small delay or effect
-                setTimeout(startCamera, 100)
+
+                video.addEventListener('loadedmetadata', handlePlay, { once: true })
             }
         } catch (error: unknown) {
             console.error('Camera error:', error)
-            setStatus('error')
+            if (!isMounted.current) return
 
+            setStatus('error')
             const err = error as DOMException
-            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-                setErrorMessage('Camera access was denied. Please check your browser settings.')
-            } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-                setErrorMessage('No camera was found on this device.')
+            const name = err.name || ''
+
+            if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+                setErrorMessage('Camera access denied. Please allow it in settings.')
+            } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+                setErrorMessage('No camera found on this device.')
             } else {
-                setErrorMessage('Unable to access camera. Please refresh and try again.')
+                setErrorMessage('Failed to start camera. Please refresh.')
             }
         }
     }, [stopCamera])

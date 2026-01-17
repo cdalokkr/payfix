@@ -43,22 +43,33 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
         }
     }, [])
 
+    const isMounted = useRef(true)
+    useEffect(() => {
+        return () => { isMounted.current = false }
+    }, [])
+
     // Start camera stream
     const startCamera = useCallback(async () => {
         stopCamera()
-        setStatus('idle')
-        setErrorMessage('')
+        if (isMounted.current) {
+            setStatus('idle')
+            setErrorMessage('')
+        }
 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: {
                     facingMode: 'user',
                     width: { ideal: 1080 },
-                    height: { ideal: 1080 },
-                    aspectRatio: 1
+                    height: { ideal: 1080 }
                 },
                 audio: false,
             })
+
+            if (!isMounted.current) {
+                stream.getTracks().forEach(track => track.stop())
+                return
+            }
 
             streamRef.current = stream
 
@@ -69,15 +80,30 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
             }
 
             if (videoRef.current) {
-                videoRef.current.srcObject = stream
-                videoRef.current.onloadedmetadata = () => {
-                    videoRef.current?.play().then(() => {
-                        setStatus('streaming')
-                    }).catch(() => setStatus('error'))
+                const video = videoRef.current
+                video.srcObject = stream
+
+                // For mobile compatibility
+                video.setAttribute('playsinline', 'true')
+                video.muted = true
+
+                const handlePlay = () => {
+                    video.play()
+                        .then(() => {
+                            if (isMounted.current) setStatus('streaming')
+                        })
+                        .catch(err => {
+                            console.warn("Autoplay failed:", err)
+                            if (isMounted.current) setStatus('streaming')
+                        })
                 }
+
+                video.addEventListener('loadedmetadata', handlePlay, { once: true })
             }
         } catch (error: unknown) {
             console.error('Camera error:', error)
+            if (!isMounted.current) return
+
             setStatus('error')
             setErrorMessage('Camera access failed. Please grant permission.')
         }
