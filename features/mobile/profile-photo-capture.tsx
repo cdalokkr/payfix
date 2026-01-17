@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
+import { trpc } from "@/lib/trpc/client"
 import {
     IconCamera,
     IconLoader2,
@@ -36,6 +37,7 @@ interface ProfilePhotoCaptureProps {
 export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: ProfilePhotoCaptureProps) {
     const router = useRouter()
     const supabase = createClient()
+    const updateProfilePicture = trpc.profile.updateProfilePicture.useMutation()
 
     const [status, setStatus] = useState<'idle' | 'streaming' | 'captured' | 'uploading' | 'success' | 'error'>('idle')
     const [errorMessage, setErrorMessage] = useState<string>('')
@@ -262,19 +264,12 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                 .getPublicUrl(fileName)
             console.log('[UPLOAD] Public URL:', publicUrl)
 
-            console.log('[UPLOAD] Updating profile...')
-            const { error: updateError } = await supabase
-                .from('profiles')
-                .update({
-                    avatar_url: publicUrl,
-                    avatar_status: 'custom'
-                })
-                .eq('id', profileId)
-
-            if (updateError) {
-                console.error('[UPLOAD] Profile update error:', updateError.message, updateError)
-                throw updateError
-            }
+            console.log('[UPLOAD] Updating profile via tRPC...')
+            await updateProfilePicture.mutateAsync({
+                userId: profileId,
+                avatarUrl: publicUrl,
+                avatarStatus: 'custom'
+            })
             console.log('[UPLOAD] Profile updated successfully')
 
             setStatus('success')
@@ -293,7 +288,7 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         } finally {
             setIsUploading(false)
         }
-    }, [capturedImage, profileId, supabase, router, onSuccess])
+    }, [capturedImage, profileId, supabase, router, onSuccess, updateProfilePicture])
 
     // Handle back button
     const handleBack = useCallback(() => {

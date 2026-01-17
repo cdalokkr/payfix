@@ -87,6 +87,7 @@ export const profileRouter = router({
     .input(z.object({
       userId: z.string().uuid(),
       avatarUrl: z.string().min(1, 'Avatar URL is required'),
+      avatarStatus: z.enum(['default', 'custom']).optional().default('custom'),
     }))
     .mutation(async ({ ctx, input }) => {
       // Security check: only allow updating own profile picture
@@ -97,6 +98,7 @@ export const profileRouter = router({
       const [updatedProfile] = await ctx.db.update(profiles)
         .set({
           avatar_url: input.avatarUrl,
+          avatar_status: input.avatarStatus,
           updated_at: new Date(),
         })
         .where(eq(profiles.id, input.userId))
@@ -112,6 +114,7 @@ export const profileRouter = router({
         description: 'User updated profile picture',
         metadata: {
           updated_field: 'avatar_url',
+          avatar_status: input.avatarStatus,
           timestamp: new Date().toISOString()
         }
       })
