@@ -34,6 +34,7 @@ interface MobileDashboardProps {
         avatar_url: string | null
         email: string
         sex: string | null
+        avatar_status: string | null
     }
     todayAttendance: {
         id: string
@@ -89,7 +90,7 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
     const todayClosure = closures?.find((c: any) => c.date === todayStr)
     const isTodayHoliday = !!todayClosure
 
-    const hasNoPhoto = !profile.avatar_url || isDefaultAvatar(profile.avatar_url)
+    const hasNoPhoto = profile.avatar_status !== 'custom' && (!profile.avatar_url || isDefaultAvatar(profile.avatar_url))
 
     useEffect(() => {
         const fetchLocation = async () => {
@@ -224,6 +225,17 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                                     Install from browser menu
                                 </div>
                             </div>
+                        ) : hasNoPhoto ? (
+                            <div className="p-6 rounded-[2rem] bg-rose-500/20 backdrop-blur-md border border-rose-500/30 text-center">
+                                <IconCamera className="w-10 h-10 mx-auto mb-3 text-rose-100" />
+                                <h4 className="text-sm font-black uppercase tracking-widest mb-2 text-rose-50">Update Photo</h4>
+                                <p className="text-[11px] font-medium text-rose-100/80 mb-4">You must upload a custom profile photo to proceed.</p>
+                                <Link href="/mobile/profile">
+                                    <Button className="w-full rounded-xl bg-white text-rose-600 font-bold hover:bg-white/90">
+                                        Update Now
+                                    </Button>
+                                </Link>
+                            </div>
                         ) : isTodayHoliday ? (
                             <div className="p-6 rounded-[2rem] bg-amber-500/20 backdrop-blur-md border border-amber-500/30 text-center">
                                 <IconCalendarEvent className="w-10 h-10 mx-auto mb-3 text-amber-100" />
@@ -235,17 +247,6 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                                 <IconCalendarEvent className="w-10 h-10 mx-auto mb-3 text-indigo-100" />
                                 <h4 className="text-sm font-black uppercase tracking-widest mb-1 text-indigo-50">Weekly Off</h4>
                                 <p className="text-[11px] font-medium text-indigo-100/80">Scheduled Weekly Off</p>
-                            </div>
-                        ) : hasNoPhoto ? (
-                            <div className="p-6 rounded-[2rem] bg-rose-500/20 backdrop-blur-md border border-rose-500/30 text-center">
-                                <IconCamera className="w-10 h-10 mx-auto mb-3 text-rose-100" />
-                                <h4 className="text-sm font-black uppercase tracking-widest mb-2 text-rose-50">Update Photo</h4>
-                                <p className="text-[11px] font-medium text-rose-100/80 mb-4">Required for Face Verification</p>
-                                <Link href="/mobile/profile">
-                                    <Button className="w-full rounded-xl bg-white text-rose-600 font-bold hover:bg-white/90">
-                                        Update Now
-                                    </Button>
-                                </Link>
                             </div>
                         ) : (
                             /* IN/OUT Controls - Horizontal Layout */

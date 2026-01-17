@@ -1,5 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { MobileAttendanceClient } from './mobile-attendance-client'
+import { redirect } from 'next/navigation'
+import { isDefaultAvatar } from '@/lib/utils/avatar-helper'
 
 export const metadata = {
     title: 'Mark Attendance',
@@ -20,9 +22,15 @@ export default async function MobileAttendancePage() {
 
     const { data: profile } = await supabase
         .from('profiles')
-        .select('id, full_name, avatar_url')
+        .select('id, full_name, avatar_url, avatar_status')
         .eq('id', user!.id)
         .single()
+
+    const hasNoPhoto = profile?.avatar_status !== 'custom' && (!profile?.avatar_url || isDefaultAvatar(profile.avatar_url))
+
+    if (hasNoPhoto) {
+        redirect('/mobile')
+    }
 
     // Get today's attendance to determine action using IST date
     const today = getLocalDateIST()

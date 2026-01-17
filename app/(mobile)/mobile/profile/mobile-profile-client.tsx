@@ -28,12 +28,14 @@ interface MobileProfileClientProps {
         avatar_url: string | null
         phone: string | null
         designation: { name: string } | null
+        avatar_status: string | null
     }
 }
 
 export function MobileProfileClient({ profile }: MobileProfileClientProps) {
     const [isUploading, setIsUploading] = useState(false)
     const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url)
+    const [avatarStatus, setAvatarStatus] = useState(profile.avatar_status)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const supabase = createClient()
 
@@ -74,12 +76,16 @@ export function MobileProfileClient({ profile }: MobileProfileClientProps) {
             // Update profile
             const { error: updateError } = await supabase
                 .from('profiles')
-                .update({ avatar_url: publicUrl })
+                .update({
+                    avatar_url: publicUrl,
+                    avatar_status: 'custom'
+                })
                 .eq('id', profile.id)
 
             if (updateError) throw updateError
 
             setAvatarUrl(publicUrl)
+            setAvatarStatus('custom')
             toast.success('Profile photo updated!')
         } catch (error) {
             console.error('Upload error:', error)
@@ -135,17 +141,15 @@ export function MobileProfileClient({ profile }: MobileProfileClientProps) {
                             {profile.designation?.name || 'Team Member'}
                         </p>
 
-                        {!avatarUrl && (
-                            <div className="mt-3 px-3 py-2 rounded-lg bg-amber-500/10 text-amber-600 text-sm text-center">
-                                <IconCamera className="w-4 h-4 inline mr-1" />
-                                Tap the camera icon to add a profile photo
-                            </div>
-                        )}
-
-                        {avatarUrl && (
+                        {avatarStatus === 'custom' ? (
                             <div className="mt-3 px-3 py-2 rounded-lg bg-green-500/10 text-green-600 text-sm text-center">
                                 <IconCheck className="w-4 h-4 inline mr-1" />
-                                Profile photo set - Ready for face verification
+                                Photo Verified - Ready for Attendance
+                            </div>
+                        ) : (
+                            <div className="mt-3 px-3 py-2 rounded-lg bg-amber-500/10 text-amber-600 text-sm text-center">
+                                <IconCamera className="w-4 h-4 inline mr-1" />
+                                Tap the camera icon to add a custom photo
                             </div>
                         )}
                     </div>

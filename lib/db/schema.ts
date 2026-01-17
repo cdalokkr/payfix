@@ -30,6 +30,7 @@ export const profiles = pgTable('profiles', {
     date_of_birth: date('date_of_birth'),
     sex: text('sex'),
     status: text('status').default('active'),
+    avatar_status: text('avatar_status').default('default'), // 'default' or 'custom'
     allowed_modules: text('allowed_modules').array(),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
