@@ -352,7 +352,7 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
                                 >
                                     <IconX className="w-12 h-12 text-red-500 mx-auto mb-4" />
                                     <p className="text-sm font-bold text-red-200 uppercase tracking-widest">{errorMessage}</p>
-                                    <Button onClick={startCamera} className="mt-6 bg-red-500 hover:bg-red-600 rounded-xl">
+                                    <Button onClick={() => startCamera()} className="mt-6 bg-red-500 hover:bg-red-600 rounded-xl">
                                         Grant Permissions
                                     </Button>
                                 </motion.div>

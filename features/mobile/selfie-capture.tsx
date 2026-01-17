@@ -309,7 +309,7 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
                                 <div className="text-center p-8">
                                     <IconX className="w-12 h-12 text-red-500 mx-auto mb-4" />
                                     <p className="text-xs font-black text-red-200 uppercase tracking-widest">{errorMessage}</p>
-                                    <Button onClick={startCamera} className="mt-4">Reset Camera</Button>
+                                    <Button onClick={() => startCamera()} className="mt-4">Reset Camera</Button>
                                 </div>
                             ) : (
                                 <div className="flex flex-col items-center gap-4">
