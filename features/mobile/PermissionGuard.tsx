@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { IconMapPin, IconCamera, IconAlertTriangle, IconRefresh, IconLock } from "@tabler/icons-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { usePermissionCheck, type PermissionStatus } from "@/hooks/use-permission-check"
+import { usePwaCheck } from "@/hooks/use-pwa-check"
 
 interface PermissionGuardProps {
     children: React.ReactNode
@@ -13,6 +14,7 @@ interface PermissionGuardProps {
 }
 
 export function PermissionGuard({ children, showOnlyIfDenied = false }: PermissionGuardProps) {
+    const { isPwa, isReady } = usePwaCheck()
     const {
         locationStatus,
         cameraStatus,
@@ -20,6 +22,12 @@ export function PermissionGuard({ children, showOnlyIfDenied = false }: Permissi
         allGranted,
         requestPermissions
     } = usePermissionCheck()
+
+    // Bypass if not PWA or still checking PWA status
+    // We want PWA status to be 'ready' and we only enforce if it's actually isPwa
+    if (isReady && !isPwa) {
+        return <>{children}</>
+    }
 
     if (allGranted) {
         return <>{children}</>
