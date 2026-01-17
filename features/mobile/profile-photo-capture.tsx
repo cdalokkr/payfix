@@ -79,7 +79,7 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
         }
 
         try {
-            // Use standard HD (720p) first, fallback to basic video on second try
+            // Standard HD first, basic on retry
             const constraints: MediaStreamConstraints = retryCount === 0 ? {
                 video: {
                     facingMode: 'user',
@@ -93,7 +93,14 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
             }
 
             addLog("GUM request...")
-            const stream = await navigator.mediaDevices.getUserMedia(constraints)
+
+            // 10s timeout for GUM
+            const gumPromise = navigator.mediaDevices.getUserMedia(constraints)
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('GUM_TIMEOUT')), 10000)
+            )
+
+            const stream = await Promise.race([gumPromise, timeoutPromise]) as MediaStream
             addLog("GUM success")
 
             if (!isMounted.current) {
@@ -390,8 +397,8 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
                     )}
                 </AnimatePresence>
 
-                {/* Debug Logs Overlay */}
-                {debugLogs.length > 0 && process.env.NODE_ENV === 'development' && (
+                {/* Debug Logs Overlay - Visible in all envs for now */}
+                {debugLogs.length > 0 && (
                     <div className="absolute top-20 left-4 right-4 z-50 pointer-events-none">
                         <div className="bg-black/80 backdrop-blur-md rounded-xl p-3 border border-white/10">
                             <p className="text-[8px] font-black text-white/40 uppercase tracking-widest mb-2">Internal Diagnostics</p>
