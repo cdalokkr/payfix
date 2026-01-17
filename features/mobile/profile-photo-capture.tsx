@@ -34,6 +34,12 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
     const [isUploading, setIsUploading] = useState(false)
     const [hasZoomSupport, setHasZoomSupport] = useState(false)
 
+    const [debugLogs, setDebugLogs] = useState<string[]>([])
+    const addLog = (msg: string) => {
+        console.log(`[CameraDebug] ${msg}`)
+        setDebugLogs(prev => [msg, ...prev].slice(0, 5))
+    }
+
     const videoRef = useRef<HTMLVideoElement>(null)
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const streamRef = useRef<MediaStream | null>(null)
@@ -56,6 +62,7 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
 
     // Start camera stream with zoom capability
     const startCamera = useCallback(async (retryCount = 0) => {
+        addLog(`startCamera attempt ${retryCount}`)
         // Stop any existing stream first
         stopCamera()
 
@@ -67,6 +74,7 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
 
         // Delay for hardware release (350ms)
         if (retryCount === 0) {
+            addLog("350ms lock delay")
             await new Promise(resolve => setTimeout(resolve, 350))
         }
 
@@ -84,9 +92,12 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
                 audio: false
             }
 
+            addLog("GUM request...")
             const stream = await navigator.mediaDevices.getUserMedia(constraints)
+            addLog("GUM success")
 
             if (!isMounted.current) {
+                addLog("unmounted during GUM")
                 stream.getTracks().forEach(track => track.stop())
                 return
             }
@@ -97,11 +108,12 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
             try {
                 const videoTrack = stream.getVideoTracks()[0]
                 const capabilities = videoTrack.getCapabilities() as any
+                addLog(`Zoom support: ${!!capabilities?.zoom}`)
                 if (capabilities?.zoom) {
                     setHasZoomSupport(true)
                 }
             } catch (e) {
-                console.warn("Capability check failed:", e)
+                addLog("CapCheck fail")
             }
 
             if (videoRef.current) {
@@ -115,23 +127,35 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
                 const handlePlay = async () => {
                     if (!isMounted.current) return
                     try {
+                        addLog("play()...")
                         await video.play()
+                        addLog("playing")
                         setStatus('streaming')
-                    } catch (err) {
-                        console.warn("Play promise rejected (autoplay policy):", err)
+                    } catch (err: any) {
+                        addLog(`play err: ${err.message}`)
                         setStatus('streaming')
                     }
                 }
 
                 if (video.readyState >= 2) {
+                    addLog("ready, playing")
                     handlePlay()
                 } else {
-                    video.onloadedmetadata = handlePlay
+                    addLog("wait metadata")
+                    video.onloadedmetadata = () => {
+                        addLog("metadata event")
+                        handlePlay()
+                    }
                     // Spinner safety timeout
                     setTimeout(() => {
-                        if (isMounted.current && status === 'idle') handlePlay()
-                    }, 1500)
+                        if (isMounted.current && status === 'idle') {
+                            addLog("safety timeout")
+                            handlePlay()
+                        }
+                    }, 2000)
                 }
+            } else {
+                addLog("videoRef NULL")
             }
         } catch (error: unknown) {
             console.error('Camera error:', error)
@@ -365,6 +389,22 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
                         </div>
                     )}
                 </AnimatePresence>
+
+                {/* Debug Logs Overlay */}
+                {debugLogs.length > 0 && process.env.NODE_ENV === 'development' && (
+                    <div className="absolute top-20 left-4 right-4 z-50 pointer-events-none">
+                        <div className="bg-black/80 backdrop-blur-md rounded-xl p-3 border border-white/10">
+                            <p className="text-[8px] font-black text-white/40 uppercase tracking-widest mb-2">Internal Diagnostics</p>
+                            <div className="space-y-1">
+                                {debugLogs.map((log, i) => (
+                                    <p key={i} className="text-[10px] font-medium text-primary/80 truncate">
+                                        {`> ${log}`}
+                                    </p>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Top Controls Overlay */}
                 <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-start z-30">
