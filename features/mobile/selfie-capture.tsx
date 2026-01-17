@@ -49,22 +49,33 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
     }, [])
 
     // Start camera stream
-    const startCamera = useCallback(async () => {
+    const startCamera = useCallback(async (retryCount = 0) => {
         stopCamera()
         if (isMounted.current) {
             setStatus('idle')
             setErrorMessage('')
         }
 
+        // Delay for hardware release (350ms)
+        if (retryCount === 0) {
+            await new Promise(resolve => setTimeout(resolve, 350))
+        }
+
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({
+            // Use standard HD (720p) first, fallback to basic video on retry
+            const constraints: MediaStreamConstraints = retryCount === 0 ? {
                 video: {
                     facingMode: 'user',
-                    width: { ideal: 1080 },
-                    height: { ideal: 1080 }
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
                 },
                 audio: false,
-            })
+            } : {
+                video: { facingMode: 'user' },
+                audio: false
+            }
+
+            const stream = await navigator.mediaDevices.getUserMedia(constraints)
 
             if (!isMounted.current) {
                 stream.getTracks().forEach(track => track.stop())
@@ -75,7 +86,7 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
 
             const videoTrack = stream.getVideoTracks()[0]
             const capabilities = videoTrack.getCapabilities() as any
-            if (capabilities.zoom) {
+            if (capabilities?.zoom) {
                 setHasZoomSupport(true)
             }
 
@@ -87,27 +98,41 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
                 video.setAttribute('playsinline', 'true')
                 video.muted = true
 
-                const handlePlay = () => {
-                    video.play()
-                        .then(() => {
-                            if (isMounted.current) setStatus('streaming')
-                        })
-                        .catch(err => {
-                            console.warn("Autoplay failed:", err)
-                            if (isMounted.current) setStatus('streaming')
-                        })
+                const handlePlay = async () => {
+                    if (!isMounted.current) return
+                    try {
+                        await video.play()
+                        setStatus('streaming')
+                    } catch (err) {
+                        console.warn("Autoplay block, but status set to streaming:", err)
+                        setStatus('streaming')
+                    }
                 }
 
-                video.addEventListener('loadedmetadata', handlePlay, { once: true })
+                if (video.readyState >= 2) {
+                    handlePlay()
+                } else {
+                    video.onloadedmetadata = handlePlay
+                    // Safety timeout for the spinner
+                    setTimeout(() => {
+                        if (isMounted.current && status === 'idle') handlePlay()
+                    }, 1500)
+                }
             }
         } catch (error: unknown) {
             console.error('Camera error:', error)
+
+            // Auto-retry once with basic video
+            if (retryCount === 0 && isMounted.current) {
+                return startCamera(1)
+            }
+
             if (!isMounted.current) return
 
             setStatus('error')
-            setErrorMessage('Camera access failed. Please grant permission.')
+            setErrorMessage('Camera access failed. Check site settings.')
         }
-    }, [stopCamera])
+    }, [stopCamera, status])
 
     // Apply zoom
     useEffect(() => {

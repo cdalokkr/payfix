@@ -55,7 +55,7 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
     }, [])
 
     // Start camera stream with zoom capability
-    const startCamera = useCallback(async () => {
+    const startCamera = useCallback(async (retryCount = 0) => {
         // Stop any existing stream first
         stopCamera()
 
@@ -65,14 +65,23 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
             setCapturedImage(null)
         }
 
+        // Delay for hardware release (350ms)
+        if (retryCount === 0) {
+            await new Promise(resolve => setTimeout(resolve, 350))
+        }
+
         try {
-            const constraints = {
+            // Use standard HD (720p) first, fallback to basic video on second try
+            const constraints: MediaStreamConstraints = retryCount === 0 ? {
                 video: {
                     facingMode: 'user',
-                    width: { ideal: 1080 },
-                    height: { ideal: 1080 }
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
                 },
                 audio: false,
+            } : {
+                video: { facingMode: 'user' },
+                audio: false
             }
 
             const stream = await navigator.mediaDevices.getUserMedia(constraints)
@@ -84,51 +93,69 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
 
             streamRef.current = stream
 
-            // Check for zoom support
-            const videoTrack = stream.getVideoTracks()[0]
-            const capabilities = videoTrack.getCapabilities() as any
-            if (capabilities.zoom) {
-                setHasZoomSupport(true)
+            // Capability check
+            try {
+                const videoTrack = stream.getVideoTracks()[0]
+                const capabilities = videoTrack.getCapabilities() as any
+                if (capabilities?.zoom) {
+                    setHasZoomSupport(true)
+                }
+            } catch (e) {
+                console.warn("Capability check failed:", e)
             }
 
             if (videoRef.current) {
                 const video = videoRef.current
                 video.srcObject = stream
 
-                // Crucial attributes for mobile
+                // Mobile attributes
                 video.setAttribute('playsinline', 'true')
                 video.muted = true
 
-                const handlePlay = () => {
-                    video.play()
-                        .then(() => {
-                            if (isMounted.current) setStatus('streaming')
-                        })
-                        .catch(err => {
-                            console.warn("Autoplay failed, status still streaming:", err)
-                            if (isMounted.current) setStatus('streaming')
-                        })
+                const handlePlay = async () => {
+                    if (!isMounted.current) return
+                    try {
+                        await video.play()
+                        setStatus('streaming')
+                    } catch (err) {
+                        console.warn("Play promise rejected (autoplay policy):", err)
+                        setStatus('streaming')
+                    }
                 }
 
-                video.addEventListener('loadedmetadata', handlePlay, { once: true })
+                if (video.readyState >= 2) {
+                    handlePlay()
+                } else {
+                    video.onloadedmetadata = handlePlay
+                    // Spinner safety timeout
+                    setTimeout(() => {
+                        if (isMounted.current && status === 'idle') handlePlay()
+                    }, 1500)
+                }
             }
         } catch (error: unknown) {
             console.error('Camera error:', error)
+
+            // Auto-retry once with elementary constraints
+            if (retryCount === 0 && isMounted.current) {
+                return startCamera(1)
+            }
+
             if (!isMounted.current) return
 
             setStatus('error')
             const err = error as DOMException
             const name = err.name || ''
 
-            if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-                setErrorMessage('Camera access denied. Please allow it in settings.')
+            if (name === 'NotAllowedError' || name === 'PermissionDeniedError' || name === 'SecurityError') {
+                setErrorMessage('Permission Blocked. Check site settings.')
             } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
-                setErrorMessage('No camera found on this device.')
+                setErrorMessage('No camera found.')
             } else {
-                setErrorMessage('Failed to start camera. Please refresh.')
+                setErrorMessage('Hardware Error. Please refresh.')
             }
         }
-    }, [stopCamera])
+    }, [stopCamera, status])
 
     // Apply zoom to video stream
     useEffect(() => {
@@ -253,7 +280,7 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
     }, [startCamera, stopCamera])
 
     return (
-        <div className="fixed inset-0 bg-slate-950 flex flex-col overflow-hidden">
+        <div className="fixed inset-0 bg-slate-950 flex flex-col z-[60] overflow-hidden">
             {/* Immersive Camera Section at TOP */}
             <div className="relative w-full aspect-square sm:max-w-md sm:mx-auto bg-slate-900 shadow-2xl overflow-hidden">
                 <AnimatePresence mode="wait">
