@@ -32,48 +32,11 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
     const [capturedImage, setCapturedImage] = useState<string | null>(null)
     const [zoom, setZoom] = useState<number>(1)
     const [isUploading, setIsUploading] = useState(false)
+    const [hasZoomSupport, setHasZoomSupport] = useState(false)
 
     const videoRef = useRef<HTMLVideoElement>(null)
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const streamRef = useRef<MediaStream | null>(null)
-
-    // Start camera stream with zoom capability
-    const startCamera = useCallback(async () => {
-        setStatus('idle')
-        setErrorMessage('')
-        setCapturedImage(null)
-
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    facingMode: 'user',
-                    width: { ideal: 720 },
-                    height: { ideal: 720 },
-                },
-                audio: false,
-            })
-
-            streamRef.current = stream
-
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream
-                await videoRef.current.play()
-                setStatus('streaming')
-            }
-        } catch (error: unknown) {
-            console.error('Camera error:', error)
-            setStatus('error')
-
-            const err = error as DOMException
-            if (err.name === 'NotAllowedError') {
-                setErrorMessage('Camera permission denied. Please allow camera access.')
-            } else if (err.name === 'NotFoundError') {
-                setErrorMessage('No camera found on this device.')
-            } else {
-                setErrorMessage('Unable to access camera.')
-            }
-        }
-    }, [])
 
     // Stop camera stream
     const stopCamera = useCallback(() => {
@@ -86,6 +49,66 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
         }
     }, [])
 
+    // Start camera stream with zoom capability
+    const startCamera = useCallback(async () => {
+        // Stop any existing stream first
+        stopCamera()
+
+        setStatus('idle')
+        setErrorMessage('')
+        setCapturedImage(null)
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: 'user',
+                    width: { ideal: 1280 }, // Higher quality
+                    height: { ideal: 1280 },
+                    aspectRatio: 1
+                },
+                audio: false,
+            })
+
+            streamRef.current = stream
+
+            // Check for zoom support
+            const videoTrack = stream.getVideoTracks()[0]
+            const capabilities = videoTrack.getCapabilities() as any
+            if (capabilities.zoom) {
+                setHasZoomSupport(true)
+            }
+
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream
+                // Use onLoadedMetadata to ensure video is ready before playing
+                videoRef.current.onloadedmetadata = () => {
+                    videoRef.current?.play().then(() => {
+                        setStatus('streaming')
+                    }).catch(err => {
+                        console.error("Video play failed:", err)
+                        setStatus('error')
+                        setErrorMessage("Failed to start video preview.")
+                    })
+                }
+            } else {
+                // If ref is not yet available, we might need a small delay or effect
+                setTimeout(startCamera, 100)
+            }
+        } catch (error: unknown) {
+            console.error('Camera error:', error)
+            setStatus('error')
+
+            const err = error as DOMException
+            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                setErrorMessage('Camera access was denied. Please check your browser settings.')
+            } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                setErrorMessage('No camera was found on this device.')
+            } else {
+                setErrorMessage('Unable to access camera. Please refresh and try again.')
+            }
+        }
+    }, [stopCamera])
+
     // Apply zoom to video stream
     useEffect(() => {
         if (streamRef.current && status === 'streaming') {
@@ -93,38 +116,47 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
             const capabilities = videoTrack.getCapabilities() as any
 
             if (capabilities.zoom) {
-                const settings = {
-                    zoom: capabilities.zoom.min + (capabilities.zoom.max - capabilities.zoom.min) * ((zoom - 1) / 2)
-                }
-                videoTrack.applyConstraints({ advanced: [settings] as any }).catch(() => { })
+                const min = capabilities.zoom.min || 1
+                const max = capabilities.zoom.max || 1
+                const zoomVal = min + (max - min) * (zoom - 1) / 2
+                videoTrack.applyConstraints({
+                    advanced: [{ zoom: zoomVal }] as any
+                }).catch(err => console.warn("Zoom apply failed:", err))
             }
         }
     }, [zoom, status])
 
     // Capture photo
     const capturePhoto = useCallback(() => {
-        if (!videoRef.current || !canvasRef.current || status === 'captured') return
+        if (!videoRef.current || !canvasRef.current || status !== 'streaming') return
 
         const video = videoRef.current
         const canvas = canvasRef.current
         const ctx = canvas.getContext('2d')
         if (!ctx) return
 
-        // Set canvas to square for profile photo
-        const size = Math.min(video.videoWidth, video.videoHeight)
-        canvas.width = 400
-        canvas.height = 400
+        // Set canvas to high quality square
+        canvas.width = 1000
+        canvas.height = 1000
+
+        // Source dimensions
+        const vw = video.videoWidth
+        const vh = video.videoHeight
+        const size = Math.min(vw, vh)
 
         // Calculate crop for center square
-        const sx = (video.videoWidth - size) / 2
-        const sy = (video.videoHeight - size) / 2
+        const sx = (vw - size) / 2
+        const sy = (vh - size) / 2
 
         // Draw cropped square video frame
-        ctx.drawImage(video, sx, sy, size, size, 0, 0, 400, 400)
+        ctx.save()
+        // Mirror if it's the user camera
+        ctx.translate(canvas.width, 0)
+        ctx.scale(-1, 1)
+        ctx.drawImage(video, sx, sy, size, size, 0, 0, canvas.width, canvas.height)
+        ctx.restore()
 
-        // Get image data URL
-        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.9)
-
+        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.95)
         setCapturedImage(imageDataUrl)
         setStatus('captured')
         stopCamera()
@@ -132,8 +164,6 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
 
     // Retake photo
     const handleRetake = useCallback(() => {
-        setCapturedImage(null)
-        setStatus('idle')
         startCamera()
     }, [startCamera])
 
@@ -145,13 +175,11 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
         setStatus('uploading')
 
         try {
-            // Convert data URL to blob
             const response = await fetch(capturedImage)
             const blob = await response.blob()
 
-            // Upload to Supabase Storage
-            const fileName = `${profileId}-${Date.now()}.jpg`
-            const { error: uploadError, data } = await supabase.storage
+            const fileName = `profile-${profileId}-${Date.now()}.jpg`
+            const { error: uploadError } = await supabase.storage
                 .from('avatars')
                 .upload(fileName, blob, {
                     contentType: 'image/jpeg',
@@ -160,12 +188,10 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
 
             if (uploadError) throw uploadError
 
-            // Get public URL
             const { data: { publicUrl } } = supabase.storage
                 .from('avatars')
                 .getPublicUrl(fileName)
 
-            // Update profile with new avatar and status
             const { error: updateError } = await supabase
                 .from('profiles')
                 .update({
@@ -177,19 +203,18 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
             if (updateError) throw updateError
 
             setStatus('success')
-            toast.success('Profile photo updated!')
+            toast.success('Profile photo updated successfully!')
 
-            // Navigate back after success
             setTimeout(() => {
                 onSuccess?.()
                 router.push('/mobile')
                 router.refresh()
-            }, 1000)
+            }, 1500)
         } catch (error) {
             console.error('Upload error:', error)
             setStatus('error')
-            setErrorMessage('Failed to upload photo. Please try again.')
-            toast.error('Failed to upload photo')
+            setErrorMessage('Failed to upload. Please check your connection.')
+            toast.error('Upload failed')
         } finally {
             setIsUploading(false)
         }
@@ -201,181 +226,214 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
         router.back()
     }, [stopCamera, router])
 
-    // Auto-start camera on mount
     useEffect(() => {
         startCamera()
         return () => stopCamera()
     }, [startCamera, stopCamera])
 
     return (
-        <div className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-800 flex flex-col">
-            {/* Header */}
-            <div className="flex items-center justify-between p-4 text-white">
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleBack}
-                    className="text-white hover:bg-white/10"
-                >
-                    <IconArrowLeft className="w-6 h-6" />
-                </Button>
-                <h1 className="text-lg font-bold">Update Photo</h1>
-                <div className="w-10" /> {/* Spacer */}
-            </div>
-
-            {/* Camera View */}
-            <div className="flex-1 flex flex-col items-center justify-center px-4 pb-4">
-                <div className="relative w-full max-w-[320px] aspect-square rounded-full overflow-hidden border-4 border-white/30 shadow-2xl">
-                    {/* Video Preview */}
-                    <AnimatePresence mode="wait">
-                        {status === 'streaming' && (
-                            <motion.video
-                                key="video"
+        <div className="fixed inset-0 bg-slate-950 flex flex-col overflow-hidden">
+            {/* Immersive Camera Section at TOP */}
+            <div className="relative w-full aspect-square sm:max-w-md sm:mx-auto bg-slate-900 shadow-2xl overflow-hidden">
+                <AnimatePresence mode="wait">
+                    {status === 'streaming' ? (
+                        <motion.div
+                            key="camera"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0"
+                        >
+                            <video
                                 ref={videoRef}
                                 autoPlay
                                 playsInline
                                 muted
-                                className="w-full h-full object-cover scale-x-[-1]"
-                                style={{ transform: `scale(${zoom}) scaleX(-1)` }}
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
+                                className="w-full h-full object-cover mirror"
+                                style={{ transform: 'scaleX(-1)' }}
                             />
-                        )}
+                            {/* Modern Overlay Gradient */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-slate-950/20 pointer-events-none" />
 
-                        {status === 'captured' && capturedImage && (
-                            <motion.img
-                                key="captured"
-                                src={capturedImage}
-                                alt="Captured"
-                                className="w-full h-full object-cover"
-                                initial={{ scale: 1.1, opacity: 0 }}
-                                animate={{ scale: 1, opacity: 1 }}
-                                exit={{ opacity: 0 }}
+                            {/* Scanning Animation */}
+                            <motion.div
+                                className="absolute inset-x-0 h-32 bg-gradient-to-b from-primary/0 via-primary/20 to-primary/0 z-10 pointer-events-none"
+                                animate={{ top: ['0%', '80%', '0%'] }}
+                                transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
                             />
-                        )}
 
-                        {status === 'success' && (
                             <motion.div
-                                key="success"
-                                className="absolute inset-0 bg-green-500/90 flex items-center justify-center"
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                            >
-                                <IconCheck className="w-20 h-20 text-white" />
-                            </motion.div>
-                        )}
+                                className="absolute inset-x-0 h-px bg-primary z-10 shadow-[0_0_15px_rgba(var(--primary),0.5)] pointer-events-none"
+                                animate={{ top: ['0%', '100%', '0%'] }}
+                                transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
+                            />
 
-                        {(status === 'idle' || status === 'error') && (
-                            <motion.div
-                                key="placeholder"
-                                className="w-full h-full bg-slate-700 flex items-center justify-center"
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                            >
-                                {status === 'error' ? (
-                                    <div className="text-center p-4">
-                                        <IconX className="w-12 h-12 text-red-400 mx-auto mb-2" />
-                                        <p className="text-sm text-red-300">{errorMessage}</p>
-                                    </div>
-                                ) : (
-                                    <IconLoader2 className="w-12 h-12 text-white/50 animate-spin" />
-                                )}
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
+                            {/* Circular Guide */}
+                            <div className="absolute inset-0 flex items-center justify-center">
+                                <div className="w-3/4 aspect-square rounded-full border-2 border-white/20 border-dashed animate-[spin_20s_linear_infinite]" />
+                                <div className="absolute w-3/4 aspect-square rounded-full border border-white/40" />
+                            </div>
+                        </motion.div>
+                    ) : capturedImage ? (
+                        <motion.div
+                            key="captured"
+                            initial={{ scale: 1.1, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            className="absolute inset-0"
+                        >
+                            <img src={capturedImage} alt="Captured" className="w-full h-full object-cover" />
+                            {status === 'success' && (
+                                <div className="absolute inset-0 bg-green-500/40 backdrop-blur-sm flex items-center justify-center">
+                                    <motion.div
+                                        initial={{ scale: 0 }}
+                                        animate={{ scale: 1 }}
+                                        className="bg-white rounded-full p-6 shadow-2xl"
+                                    >
+                                        <IconCheck className="w-16 h-16 text-green-500" />
+                                    </motion.div>
+                                </div>
+                            )}
+                        </motion.div>
+                    ) : (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-white/50">
+                            {status === 'error' ? (
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.9 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    className="text-center p-8 bg-red-500/10 backdrop-blur-md rounded-3xl border border-red-500/20"
+                                >
+                                    <IconX className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                                    <p className="text-sm font-bold text-red-200 uppercase tracking-widest">{errorMessage}</p>
+                                    <Button onClick={startCamera} className="mt-6 bg-red-500 hover:bg-red-600 rounded-xl">
+                                        Grant Permissions
+                                    </Button>
+                                </motion.div>
+                            ) : (
+                                <div className="flex flex-col items-center gap-4">
+                                    <IconLoader2 className="w-12 h-12 animate-spin text-primary" />
+                                    <p className="text-[10px] uppercase font-black tracking-[0.3em] animate-pulse">Initializing Camera</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </AnimatePresence>
 
-                    {/* Face Guide Overlay */}
-                    {status === 'streaming' && (
-                        <div className="absolute inset-0 pointer-events-none">
-                            <div className="absolute inset-8 rounded-full border-2 border-dashed border-white/40" />
+                {/* Top Controls Overlay */}
+                <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-start z-30">
+                    <motion.button
+                        whileTap={{ scale: 0.9 }}
+                        onClick={handleBack}
+                        className="p-3 rounded-2xl bg-black/20 backdrop-blur-xl border border-white/10 text-white"
+                    >
+                        <IconArrowLeft className="w-6 h-6" />
+                    </motion.button>
+                    {status === 'streaming' && hasZoomSupport && (
+                        <div className="p-3 rounded-2xl bg-black/20 backdrop-blur-xl border border-white/10 text-white font-black text-[10px] tracking-widest uppercase">
+                            HD Active
                         </div>
                     )}
                 </div>
-
-                {/* Zoom Control */}
-                {status === 'streaming' && (
-                    <motion.div
-                        className="w-full max-w-[280px] mt-6 px-4"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                    >
-                        <div className="flex items-center gap-3 text-white/70">
-                            <IconZoomIn className="w-5 h-5" />
-                            <Slider
-                                value={[zoom]}
-                                onValueChange={(v) => setZoom(v[0])}
-                                min={1}
-                                max={3}
-                                step={0.1}
-                                className="flex-1"
-                            />
-                            <span className="text-sm font-medium w-10">{zoom.toFixed(1)}x</span>
-                        </div>
-                    </motion.div>
-                )}
-
-                {/* Hidden Canvas */}
-                <canvas ref={canvasRef} className="hidden" />
             </div>
 
-            {/* Action Buttons */}
-            <div className="p-6 space-y-3">
-                {status === 'streaming' && (
-                    <Button
-                        onClick={capturePhoto}
-                        size="lg"
-                        className="w-full h-14 rounded-2xl bg-white text-slate-900 font-bold text-lg hover:bg-white/90 shadow-lg"
-                    >
-                        <IconCamera className="w-6 h-6 mr-2" />
-                        Take Photo
-                    </Button>
-                )}
-
-                {status === 'captured' && !isUploading && (
-                    <div className="grid grid-cols-2 gap-3">
-                        <Button
-                            onClick={handleRetake}
-                            variant="outline"
-                            size="lg"
-                            className="h-14 rounded-2xl border-white/30 text-white bg-white/10 hover:bg-white/20"
-                        >
-                            <IconRefresh className="w-5 h-5 mr-2" />
-                            Retake
-                        </Button>
-                        <Button
-                            onClick={handleUpload}
-                            size="lg"
-                            className="h-14 rounded-2xl bg-green-500 text-white font-bold hover:bg-green-600"
-                        >
-                            <IconCheck className="w-5 h-5 mr-2" />
-                            Use Photo
-                        </Button>
+            {/* Bottom Controls Section */}
+            <div className="flex-1 bg-slate-950 p-8 flex flex-col justify-between overflow-y-auto">
+                <div className="space-y-8">
+                    {/* Instructions / Status */}
+                    <div className="text-center space-y-2">
+                        <h2 className="text-2xl font-black text-white tracking-tight">
+                            {status === 'captured' ? "Looking Good!" : "Selfie Time"}
+                        </h2>
+                        <p className="text-slate-400 text-sm font-medium">
+                            {status === 'captured'
+                                ? "Update your profile with this photo or retake it."
+                                : "Ensure your face is within the circle and well-lit."}
+                        </p>
                     </div>
-                )}
 
-                {status === 'uploading' && (
-                    <Button
-                        disabled
-                        size="lg"
-                        className="w-full h-14 rounded-2xl bg-white/20 text-white"
-                    >
-                        <IconLoader2 className="w-5 h-5 mr-2 animate-spin" />
-                        Uploading...
-                    </Button>
-                )}
+                    {/* Zoom Slider - Modern Styled */}
+                    {status === 'streaming' && hasZoomSupport && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="bg-white/5 border border-white/10 rounded-3xl p-6 px-8 backdrop-blur-lg"
+                        >
+                            <div className="flex items-center gap-6">
+                                <IconZoomIn className="w-5 h-5 text-primary" />
+                                <Slider
+                                    value={[zoom]}
+                                    onValueChange={(v) => setZoom(v[0])}
+                                    min={1}
+                                    max={3}
+                                    step={0.1}
+                                    className="flex-1 py-4"
+                                />
+                                <span className="text-xs font-black text-white w-8">{zoom.toFixed(1)}x</span>
+                            </div>
+                        </motion.div>
+                    )}
+                </div>
 
-                {status === 'error' && (
-                    <Button
-                        onClick={startCamera}
-                        size="lg"
-                        className="w-full h-14 rounded-2xl bg-white text-slate-900 font-bold"
-                    >
-                        <IconRefresh className="w-5 h-5 mr-2" />
-                        Try Again
-                    </Button>
-                )}
+                <div className="space-y-4 pt-8">
+                    {status === 'streaming' && (
+                        <Button
+                            onClick={capturePhoto}
+                            size="lg"
+                            className="w-full h-16 rounded-[2rem] bg-white text-slate-950 font-black text-lg hover:bg-slate-100 shadow-[0_20px_40px_rgba(255,255,255,0.1)] transition-all active:scale-95"
+                        >
+                            <IconCamera className="w-6 h-6 mr-3" />
+                            CAPTURE NOW
+                        </Button>
+                    )}
+
+                    {status === 'captured' && !isUploading && (
+                        <div className="grid grid-cols-2 gap-4">
+                            <Button
+                                onClick={handleRetake}
+                                variant="outline"
+                                className="h-16 rounded-[2rem] border-white/10 text-white bg-white/5 hover:bg-white/10 font-bold"
+                            >
+                                <IconRefresh className="w-5 h-5 mr-3" />
+                                RETAKE
+                            </Button>
+                            <Button
+                                onClick={handleUpload}
+                                className="h-16 rounded-[2rem] bg-primary hover:bg-primary/90 text-white font-black shadow-xl shadow-primary/20 transition-all active:scale-95"
+                            >
+                                <IconCheck className="w-5 h-5 mr-3" />
+                                UPDATE
+                            </Button>
+                        </div>
+                    )}
+
+                    {status === 'uploading' && (
+                        <Button disabled className="w-full h-16 rounded-[2rem] bg-white/10 text-white font-bold opacity-80 cursor-not-allowed">
+                            <IconLoader2 className="w-5 h-5 mr-3 animate-spin" />
+                            UPLOADING...
+                        </Button>
+                    )}
+                    {status === 'streaming' && process.env.NODE_ENV === 'development' && (
+                        <Button
+                            variant="ghost"
+                            onClick={() => {
+                                const canvas = canvasRef.current;
+                                if (canvas) {
+                                    canvas.width = 100;
+                                    canvas.height = 100;
+                                    setCapturedImage(canvas.toDataURL());
+                                    setStatus('captured');
+                                }
+                            }}
+                            className="w-full text-[10px] text-white/20 font-bold tracking-widest hover:bg-transparent hover:text-white/40"
+                        >
+                            DEBUG: SKIP CAMERA
+                        </Button>
+                    )}
+                </div>
             </div>
+
+            {/* Hidden canvas for capture */}
+            <canvas ref={canvasRef} className="hidden" />
         </div>
     )
 }
+

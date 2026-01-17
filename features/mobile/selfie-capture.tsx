@@ -5,15 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { motion } from "framer-motion"
-import {
-    IconCamera,
-    IconLoader2,
-    IconRefresh,
-    IconCheck,
-    IconX,
-    IconPlayerSkipForward,
-} from "@tabler/icons-react"
+import { IconCamera, IconLoader2, IconRefresh, IconCheck, IconX, IconArrowLeft, IconZoomIn } from "@tabler/icons-react"
 import { format } from "date-fns"
+import { Slider } from "@/components/ui/slider"
 
 interface SelfieCaptureProps {
     onCaptured: (result: SelfieResult) => void
@@ -31,49 +25,12 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
     const [capturedImage, setCapturedImage] = useState<string | null>(null)
     const [capturedAt, setCapturedAt] = useState<Date | null>(null)
     const [countdown, setCountdown] = useState<number | null>(null)
+    const [zoom, setZoom] = useState<number>(1)
+    const [hasZoomSupport, setHasZoomSupport] = useState(false)
 
     const videoRef = useRef<HTMLVideoElement>(null)
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const streamRef = useRef<MediaStream | null>(null)
-
-    // Start camera stream
-    const startCamera = useCallback(async () => {
-        setStatus('idle')
-        setErrorMessage('')
-
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    facingMode: 'user', // Front camera
-                    width: { ideal: 640 },
-                    height: { ideal: 480 },
-                },
-                audio: false,
-            })
-
-            streamRef.current = stream
-
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream
-                await videoRef.current.play()
-                setStatus('streaming')
-            }
-        } catch (error: unknown) {
-            console.error('Camera error:', error)
-            setStatus('error')
-
-            const err = error as DOMException
-            if (err.name === 'NotAllowedError') {
-                setErrorMessage('Camera permission denied. You can skip selfie for testing.')
-            } else if (err.name === 'NotFoundError') {
-                setErrorMessage('No camera found. You can skip selfie for testing.')
-            } else if (err.message?.includes('permissions policy')) {
-                setErrorMessage('Camera blocked by ngrok policy. You can skip selfie for testing.')
-            } else {
-                setErrorMessage('Unable to access camera. You can skip selfie for testing.')
-            }
-        }
-    }, [])
 
     // Stop camera stream
     const stopCamera = useCallback(() => {
@@ -86,76 +43,120 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
         }
     }, [])
 
+    // Start camera stream
+    const startCamera = useCallback(async () => {
+        stopCamera()
+        setStatus('idle')
+        setErrorMessage('')
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: 'user',
+                    width: { ideal: 1080 },
+                    height: { ideal: 1080 },
+                    aspectRatio: 1
+                },
+                audio: false,
+            })
+
+            streamRef.current = stream
+
+            const videoTrack = stream.getVideoTracks()[0]
+            const capabilities = videoTrack.getCapabilities() as any
+            if (capabilities.zoom) {
+                setHasZoomSupport(true)
+            }
+
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream
+                videoRef.current.onloadedmetadata = () => {
+                    videoRef.current?.play().then(() => {
+                        setStatus('streaming')
+                    }).catch(() => setStatus('error'))
+                }
+            }
+        } catch (error: unknown) {
+            console.error('Camera error:', error)
+            setStatus('error')
+            setErrorMessage('Camera access failed. Please grant permission.')
+        }
+    }, [stopCamera])
+
+    // Apply zoom
+    useEffect(() => {
+        if (streamRef.current && status === 'streaming') {
+            const videoTrack = streamRef.current.getVideoTracks()[0]
+            const capabilities = videoTrack.getCapabilities() as any
+
+            if (capabilities.zoom) {
+                const min = capabilities.zoom.min || 1
+                const max = capabilities.zoom.max || 1
+                const zoomVal = min + (max - min) * (zoom - 1) / 2
+                videoTrack.applyConstraints({
+                    advanced: [{ zoom: zoomVal }] as any
+                }).catch(() => { })
+            }
+        }
+    }, [zoom, status])
+
     // Capture photo
     const capturePhoto = useCallback(() => {
-        if (!videoRef.current || !canvasRef.current || status === 'captured') return
+        if (!videoRef.current || !canvasRef.current || status !== 'streaming') return
 
         const video = videoRef.current
         const canvas = canvasRef.current
         const ctx = canvas.getContext('2d')
         if (!ctx) return
 
-        // Set canvas size to match video
-        canvas.width = video.videoWidth
-        canvas.height = video.videoHeight
+        canvas.width = 1000
+        canvas.height = 1000
 
-        // Draw video frame
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+        const vw = video.videoWidth
+        const vh = video.videoHeight
+        const size = Math.min(vw, vh)
+        const sx = (vw - size) / 2
+        const sy = (vh - size) / 2
 
-        // Add timestamp overlay
+        ctx.save()
+        ctx.translate(canvas.width, 0)
+        ctx.scale(-1, 1)
+        ctx.drawImage(video, sx, sy, size, size, 0, 0, canvas.width, canvas.height)
+        ctx.restore()
+
         const now = new Date()
         const timestamp = format(now, "dd MMM yyyy, hh:mm:ss a")
 
-        // Draw timestamp background
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'
-        ctx.fillRect(0, canvas.height - 60, canvas.width, 60)
+        // Draw modern timestamp pill
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
+        const pillWidth = 350
+        const pillHeight = 50
+        const pillX = (canvas.width - pillWidth) / 2
+        const pillY = canvas.height - 80
 
-        // Draw timestamp text
+        // Rounded rect for pill
+        ctx.beginPath()
+        ctx.roundRect(pillX, pillY, pillWidth, pillHeight, 25)
+        ctx.fill()
+
         ctx.fillStyle = '#ffffff'
-        ctx.font = 'bold 22px Arial'
+        ctx.font = 'bold 22px Inter, system-ui'
         ctx.textAlign = 'center'
-        ctx.fillText(timestamp, canvas.width / 2, canvas.height - 25)
+        ctx.fillText(timestamp, canvas.width / 2, pillY + 33)
 
-        // Get image data URL
-        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.85)
-
+        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.9)
         setCapturedImage(imageDataUrl)
         setCapturedAt(now)
         setStatus('captured')
-
-        // Stop camera after capture
         stopCamera()
+    }, [stopCamera, status])
 
-        // Auto proceed to verification after 1 second
-        setTimeout(() => {
-            onCaptured({
-                imageDataUrl: imageDataUrl,
-                capturedAt: now,
-            })
-        }, 1000)
-    }, [stopCamera, onCaptured, status])
-
-    // Skip selfie (for testing when camera is blocked)
-    const handleSkipSelfie = useCallback(() => {
-        // Create a placeholder image and proceed
-        const now = new Date()
-        const placeholder = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iIzFlMjkzYiIvPjx0ZXh0IHg9IjEwMCIgeT0iMTAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiM5NGE3YjciIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPlNraXBwZWQgKFRlc3QpPC90ZXh0Pjwvc3ZnPg=='
-
-        toast.info('Selfie skipped (testing mode)')
-        onCaptured({
-            imageDataUrl: placeholder,
-            capturedAt: now,
-        })
-    }, [onCaptured])
-
-    // Retake photo
     const retakePhoto = useCallback(() => {
         setCapturedImage(null)
         setCapturedAt(null)
         startCamera()
     }, [startCamera])
 
-    // Proceed with captured photo
     const handleProceed = useCallback(() => {
         if (capturedImage && capturedAt) {
             onCaptured({
@@ -165,10 +166,10 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
         }
     }, [capturedImage, capturedAt, onCaptured])
 
-    // Start countdown when streaming starts
+    // Auto-capture countdown
     useEffect(() => {
-        if (status === 'streaming' && capturedImage === null) {
-            setCountdown(10)
+        if (status === 'streaming' && !capturedImage) {
+            setCountdown(7)
             const timer = setInterval(() => {
                 setCountdown(prev => {
                     if (prev === null) return null
@@ -181,143 +182,203 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
                 })
             }, 1000)
             return () => clearInterval(timer)
-        } else {
-            setCountdown(null)
         }
     }, [status, capturedImage, capturePhoto])
 
-    // Start camera on mount
     useEffect(() => {
         startCamera()
-        return () => {
-            stopCamera()
-        }
+        return () => stopCamera()
     }, [startCamera, stopCamera])
 
     return (
-        <Card className="w-full max-w-md mx-auto">
-            <CardHeader className="text-center pb-2">
-                <CardTitle className="text-xl font-black tracking-tight">
-                    {status === 'captured' ? 'Perfect' :
-                        status === 'error' ? 'Camera Error' :
-                            'Face Verification'}
-                </CardTitle>
-                <CardDescription className="text-[11px] font-bold uppercase tracking-wider opacity-60">
-                    {status === 'captured' ? 'Photo ready for verification' :
-                        status === 'error' ? errorMessage :
-                            'Position your face clearly'}
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-                {/* Camera preview / Captured image */}
-                <div className="relative aspect-[3/4] bg-slate-900 rounded-[2.5rem] overflow-hidden shadow-2xl border-4 border-white dark:border-slate-800">
-                    {status === 'captured' && capturedImage ? (
-                        <img
-                            src={capturedImage}
-                            alt="Captured selfie"
-                            className="w-full h-full object-cover"
-                        />
-                    ) : status === 'error' ? (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground gap-2">
-                            <IconCamera className="w-12 h-12 opacity-30" />
-                            <p className="text-[10px] uppercase font-black tracking-widest text-center px-4">Access Restricted</p>
-                        </div>
-                    ) : (
-                        <>
+        <div className="fixed inset-0 bg-slate-950 flex flex-col z-[60] overflow-hidden">
+            {/* Immersive Camera View at TOP */}
+            <div className="relative w-full aspect-square bg-slate-900 shadow-2xl overflow-hidden sm:max-w-md sm:mx-auto">
+                <AnimatePresence mode="wait">
+                    {status === 'streaming' ? (
+                        <motion.div
+                            key="streaming"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="absolute inset-0"
+                        >
                             <video
                                 ref={videoRef}
                                 className="w-full h-full object-cover mirror"
-                                style={{ transform: 'scaleX(-1)' }} // Mirror for selfie
+                                style={{ transform: 'scaleX(-1)' }}
                                 playsInline
                                 muted
                             />
-                            {status === 'idle' && (
-                                <div className="absolute inset-0 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
-                                    <IconLoader2 className="w-10 h-10 text-white animate-spin" />
-                                </div>
-                            )}
-                            {/* Face guide oval */}
-                            {status === 'streaming' && (
-                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            {/* Face guide */}
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                <div className="w-3/4 h-3/4 border-2 border-white/30 rounded-[3rem] border-dashed animate-pulse" />
+                                <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-slate-950 via-transparent to-transparent pointer-events-none" />
+                            </div>
+
+                            {/* Scanning Animation */}
+                            <motion.div
+                                className="absolute inset-x-0 h-32 bg-gradient-to-b from-primary/0 via-primary/10 to-primary/0 z-10 pointer-events-none"
+                                animate={{ top: ['0%', '80%', '0%'] }}
+                                transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
+                            />
+
+                            <motion.div
+                                className="absolute inset-x-0 h-px bg-primary/40 z-10 shadow-[0_0_10px_rgba(var(--primary),0.3)] pointer-events-none"
+                                animate={{ top: ['0%', '100%', '0%'] }}
+                                transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
+                            />
+
+                            {/* Countdown UI */}
+                            {countdown !== null && countdown > 0 && (
+                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
                                     <motion.div
-                                        initial={{ opacity: 0, scale: 0.8 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        className="w-56 h-80 border-2 border-white/30 rounded-[3rem] relative"
+                                        key={countdown}
+                                        initial={{ scale: 1.5, opacity: 0 }}
+                                        animate={{ scale: 1, opacity: 1 }}
+                                        className="w-24 h-24 rounded-full bg-primary/40 backdrop-blur-xl border-4 border-white/20 flex items-center justify-center"
                                     >
-                                        <div className="absolute inset-x-0 -top-12 flex flex-col items-center gap-2">
-                                            <div className="px-3 py-1 bg-white/20 backdrop-blur-md rounded-full border border-white/20">
-                                                <span className="text-[8px] font-black text-white uppercase tracking-widest">Center Face</span>
-                                            </div>
-                                            {countdown !== null && (
-                                                <motion.div
-                                                    key={countdown}
-                                                    initial={{ scale: 1.5, opacity: 0 }}
-                                                    animate={{ scale: 1, opacity: 1 }}
-                                                    className="w-12 h-12 rounded-full bg-primary/40 backdrop-blur-lg flex items-center justify-center border-2 border-primary"
-                                                >
-                                                    <span className="text-xl font-black text-white">{countdown}</span>
-                                                </motion.div>
-                                            )}
-                                        </div>
+                                        <span className="text-4xl font-black text-white">{countdown}</span>
                                     </motion.div>
-                                    <div className="absolute inset-0 bg-black/10" />
+                                    <p className="text-white/70 text-[10px] uppercase font-black tracking-widest text-center mt-4">Auto-Capture</p>
                                 </div>
                             )}
-                        </>
+                        </motion.div>
+                    ) : capturedImage ? (
+                        <motion.div
+                            key="captured"
+                            initial={{ scale: 1.1, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            className="absolute inset-0"
+                        >
+                            <img src={capturedImage} alt="Selfie" className="w-full h-full object-cover" />
+                        </motion.div>
+                    ) : (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                            {status === 'error' ? (
+                                <div className="text-center p-8">
+                                    <IconX className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                                    <p className="text-xs font-black text-red-200 uppercase tracking-widest">{errorMessage}</p>
+                                    <Button onClick={startCamera} className="mt-4">Reset Camera</Button>
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center gap-4">
+                                    <IconLoader2 className="w-12 h-12 animate-spin text-primary" />
+                                    <p className="text-[10px] font-black text-white/50 uppercase tracking-[0.3em]">Calibrating</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </AnimatePresence>
+
+                {/* Navbar Overlay */}
+                <div className="absolute top-0 inset-x-0 p-6 flex justify-between items-center z-30">
+                    <motion.button
+                        whileTap={{ scale: 0.9 }}
+                        onClick={onBack}
+                        className="p-3 rounded-2xl bg-black/20 backdrop-blur-xl border border-white/10 text-white"
+                    >
+                        <IconArrowLeft className="w-6 h-6" />
+                    </motion.button>
+                    <div className="px-4 py-2 rounded-full bg-primary/20 backdrop-blur-xl border border-primary/30">
+                        <span className="text-[10px] font-black text-primary uppercase tracking-widest">Attendance Mode</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Controls Area */}
+            <div className="flex-1 bg-slate-950 p-8 flex flex-col justify-between overflow-y-auto">
+                <div className="space-y-8">
+                    <div className="text-center space-y-2">
+                        <h2 className="text-2xl font-black text-white tracking-tight">
+                            {status === 'captured' ? "Verify & Proceed" : "Identify Yourself"}
+                        </h2>
+                        <p className="text-slate-400 text-sm font-medium">
+                            {status === 'captured'
+                                ? "Ensure your face and background are clear."
+                                : "Face verification is required for security."}
+                        </p>
+                    </div>
+
+                    {status === 'streaming' && hasZoomSupport && (
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            className="bg-white/5 border border-white/10 rounded-3xl p-6 px-8 backdrop-blur-lg"
+                        >
+                            <div className="flex items-center gap-6">
+                                <IconZoomIn className="w-5 h-5 text-primary" />
+                                <Slider
+                                    value={[zoom]}
+                                    onValueChange={(v) => setZoom(v[0])}
+                                    min={1}
+                                    max={3}
+                                    step={0.1}
+                                    className="flex-1 py-4"
+                                />
+                                <span className="text-xs font-black text-white w-8">{zoom.toFixed(1)}x</span>
+                            </div>
+                        </motion.div>
                     )}
                 </div>
 
-                {/* Hidden canvas for capture */}
-                <canvas ref={canvasRef} className="hidden" />
+                <div className="space-y-4 pt-8">
+                    {status === 'streaming' && (
+                        <Button
+                            onClick={capturePhoto}
+                            size="lg"
+                            className="w-full h-16 rounded-[2rem] bg-white text-slate-950 font-black text-lg hover:bg-slate-100 shadow-xl transition-all active:scale-95"
+                        >
+                            <IconCamera className="w-6 h-6 mr-3" />
+                            IDENTIFY NOW
+                        </Button>
+                    )}
 
-                {/* Actions */}
-                {status === 'streaming' && (
-                    <Button onClick={capturePhoto} className="w-full gap-2" size="lg">
-                        <IconCamera className="w-5 h-5" />
-                        Capture Photo
-                    </Button>
-                )}
-
-                {status === 'captured' && (
-                    <div className="flex gap-3">
-                        <Button variant="outline" onClick={retakePhoto} className="flex-1 gap-2">
-                            <IconRefresh className="w-4 h-4" />
-                            Retake
-                        </Button>
-                        <Button onClick={handleProceed} className="flex-1 gap-2">
-                            <IconCheck className="w-4 h-4" />
-                            Continue
-                        </Button>
-                    </div>
-                )}
-
-                {status === 'error' && (
-                    <div className="space-y-3">
-                        <Button onClick={startCamera} variant="outline" className="w-full gap-2">
-                            <IconRefresh className="w-4 h-4" />
-                            Try Again
-                        </Button>
-                        <Button onClick={handleSkipSelfie} className="w-full gap-2" variant="secondary">
-                            <IconPlayerSkipForward className="w-4 h-4" />
-                            Skip Selfie (Testing Only)
-                        </Button>
-                        {onBack && (
-                            <Button variant="ghost" onClick={onBack} className="w-full text-xs">
-                                Go Back
+                    {status === 'captured' && (
+                        <div className="grid grid-cols-2 gap-4">
+                            <Button
+                                onClick={retakePhoto}
+                                variant="outline"
+                                className="h-16 rounded-[2rem] border-white/10 text-white bg-white/5 hover:bg-white/10 font-bold"
+                            >
+                                <IconRefresh className="w-5 h-5 mr-3" />
+                                RETAKE
                             </Button>
-                        )}
-                    </div>
-                )}
+                            <Button
+                                onClick={handleProceed}
+                                className="h-16 rounded-[2rem] bg-primary hover:bg-primary/90 text-white font-black shadow-xl shadow-primary/20 transition-all active:scale-95"
+                            >
+                                <IconCheck className="w-5 h-5 mr-3" />
+                                CONFIRM
+                            </Button>
+                        </div>
+                    )}
 
-                {/* Timestamp info */}
-                {status === 'captured' && capturedAt && (
-                    <p className="text-xs text-center text-muted-foreground">
-                        Captured at {format(capturedAt, "dd MMM yyyy, hh:mm:ss a")}
-                    </p>
-                )}
-            </CardContent>
-        </Card>
+                    {status === 'streaming' && process.env.NODE_ENV === 'development' && (
+                        <Button
+                            variant="ghost"
+                            onClick={() => {
+                                const canvas = canvasRef.current;
+                                if (canvas) {
+                                    canvas.width = 100;
+                                    canvas.height = 100;
+                                    const now = new Date();
+                                    setCapturedImage(canvas.toDataURL());
+                                    setCapturedAt(now);
+                                    setStatus('captured');
+                                }
+                            }}
+                            className="w-full text-[10px] text-white/20 font-bold tracking-widest hover:bg-transparent hover:text-white/40"
+                        >
+                            DEBUG: SKIP FOR TESTING
+                        </Button>
+                    )}
+                </div>
+            </div>
+
+            <canvas ref={canvasRef} className="hidden" />
+        </div>
     )
 }
 
 export default SelfieCapture
+
