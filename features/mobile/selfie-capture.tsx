@@ -246,55 +246,7 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
             {/* Immersive Camera View at TOP */}
             <div className="relative w-full aspect-square bg-slate-900 shadow-2xl overflow-hidden sm:max-w-md sm:mx-auto">
                 <AnimatePresence mode="wait">
-                    {status === 'streaming' ? (
-                        <motion.div
-                            key="streaming"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            className="absolute inset-0"
-                        >
-                            <video
-                                ref={videoRef}
-                                className="w-full h-full object-cover mirror"
-                                style={{ transform: 'scaleX(-1)' }}
-                                playsInline
-                                muted
-                            />
-                            {/* Face guide */}
-                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                <div className="w-3/4 h-3/4 border-2 border-white/30 rounded-[3rem] border-dashed animate-pulse" />
-                                <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-slate-950 via-transparent to-transparent pointer-events-none" />
-                            </div>
-
-                            {/* Scanning Animation */}
-                            <motion.div
-                                className="absolute inset-x-0 h-32 bg-gradient-to-b from-primary/0 via-primary/10 to-primary/0 z-10 pointer-events-none"
-                                animate={{ top: ['0%', '80%', '0%'] }}
-                                transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
-                            />
-
-                            <motion.div
-                                className="absolute inset-x-0 h-px bg-primary/40 z-10 shadow-[0_0_10px_rgba(var(--primary),0.3)] pointer-events-none"
-                                animate={{ top: ['0%', '100%', '0%'] }}
-                                transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
-                            />
-
-                            {/* Countdown UI */}
-                            {countdown !== null && countdown > 0 && (
-                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
-                                    <motion.div
-                                        key={countdown}
-                                        initial={{ scale: 1.5, opacity: 0 }}
-                                        animate={{ scale: 1, opacity: 1 }}
-                                        className="w-24 h-24 rounded-full bg-primary/40 backdrop-blur-xl border-4 border-white/20 flex items-center justify-center"
-                                    >
-                                        <span className="text-4xl font-black text-white">{countdown}</span>
-                                    </motion.div>
-                                    <p className="text-white/70 text-[10px] uppercase font-black tracking-widest text-center mt-4">Auto-Capture</p>
-                                </div>
-                            )}
-                        </motion.div>
-                    ) : capturedImage ? (
+                    {capturedImage ? (
                         <motion.div
                             key="captured"
                             initial={{ scale: 1.1, opacity: 0 }}
@@ -304,20 +256,74 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
                             <img src={capturedImage} alt="Selfie" className="w-full h-full object-cover" />
                         </motion.div>
                     ) : (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            {status === 'error' ? (
-                                <div className="text-center p-8">
-                                    <IconX className="w-12 h-12 text-red-500 mx-auto mb-4" />
-                                    <p className="text-xs font-black text-red-200 uppercase tracking-widest">{errorMessage}</p>
-                                    <Button onClick={() => startCamera()} className="mt-4">Reset Camera</Button>
-                                </div>
+                        <motion.div
+                            key="camera-container"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="absolute inset-0 bg-slate-900"
+                        >
+                            <video
+                                ref={videoRef}
+                                autoPlay
+                                playsInline
+                                muted
+                                className={`w-full h-full object-cover mirror transition-opacity duration-500 ${status === 'streaming' ? 'opacity-100' : 'opacity-0'}`}
+                                style={{ transform: 'scaleX(-1)' }}
+                            />
+
+                            {status === 'streaming' ? (
+                                <>
+                                    {/* Face guide */}
+                                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                        <div className="w-3/4 h-3/4 border-2 border-white/30 rounded-[3rem] border-dashed animate-pulse" />
+                                        <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-slate-950 via-transparent to-transparent pointer-events-none" />
+                                    </div>
+
+                                    {/* Scanning Animation */}
+                                    <motion.div
+                                        className="absolute inset-x-0 h-32 bg-gradient-to-b from-primary/0 via-primary/10 to-primary/0 z-10 pointer-events-none"
+                                        animate={{ top: ['0%', '80%', '0%'] }}
+                                        transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
+                                    />
+
+                                    <motion.div
+                                        className="absolute inset-x-0 h-px bg-primary/40 z-10 shadow-[0_0_10px_rgba(var(--primary),0.3)] pointer-events-none"
+                                        animate={{ top: ['0%', '100%', '0%'] }}
+                                        transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
+                                    />
+
+                                    {/* Countdown UI */}
+                                    {countdown !== null && countdown > 0 && (
+                                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+                                            <motion.div
+                                                key={countdown}
+                                                initial={{ scale: 1.5, opacity: 0 }}
+                                                animate={{ scale: 1, opacity: 1 }}
+                                                className="w-24 h-24 rounded-full bg-primary/40 backdrop-blur-xl border-4 border-white/20 flex items-center justify-center"
+                                            >
+                                                <span className="text-4xl font-black text-white">{countdown}</span>
+                                            </motion.div>
+                                            <p className="text-white/70 text-[10px] uppercase font-black tracking-widest text-center mt-4">Auto-Capture</p>
+                                        </div>
+                                    )}
+                                </>
                             ) : (
-                                <div className="flex flex-col items-center gap-4">
-                                    <IconLoader2 className="w-12 h-12 animate-spin text-primary" />
-                                    <p className="text-[10px] font-black text-white/50 uppercase tracking-[0.3em]">Calibrating</p>
+                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/40 backdrop-blur-sm">
+                                    {status === 'error' ? (
+                                        <div className="text-center p-8 bg-red-500/10 backdrop-blur-md rounded-3xl border border-red-500/20">
+                                            <IconX className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                                            <p className="text-xs font-black text-red-200 uppercase tracking-widest">{errorMessage}</p>
+                                            <Button onClick={() => startCamera()} className="mt-4 bg-red-500 hover:bg-red-600 rounded-xl">Retry Camera</Button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col items-center gap-4 text-white/50">
+                                            <IconLoader2 className="w-12 h-12 animate-spin text-primary" />
+                                            <p className="text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Initializing Camera</p>
+                                        </div>
+                                    )}
                                 </div>
                             )}
-                        </div>
+                        </motion.div>
                     )}
                 </AnimatePresence>
 

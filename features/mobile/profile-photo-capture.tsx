@@ -315,45 +315,7 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
             {/* Immersive Camera Section at TOP */}
             <div className="relative w-full aspect-square sm:max-w-md sm:mx-auto bg-slate-900 shadow-2xl overflow-hidden">
                 <AnimatePresence mode="wait">
-                    {status === 'streaming' ? (
-                        <motion.div
-                            key="camera"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="absolute inset-0"
-                        >
-                            <video
-                                ref={videoRef}
-                                autoPlay
-                                playsInline
-                                muted
-                                className="w-full h-full object-cover mirror"
-                                style={{ transform: 'scaleX(-1)' }}
-                            />
-                            {/* Modern Overlay Gradient */}
-                            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-slate-950/20 pointer-events-none" />
-
-                            {/* Scanning Animation */}
-                            <motion.div
-                                className="absolute inset-x-0 h-32 bg-gradient-to-b from-primary/0 via-primary/20 to-primary/0 z-10 pointer-events-none"
-                                animate={{ top: ['0%', '80%', '0%'] }}
-                                transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
-                            />
-
-                            <motion.div
-                                className="absolute inset-x-0 h-px bg-primary z-10 shadow-[0_0_15px_rgba(var(--primary),0.5)] pointer-events-none"
-                                animate={{ top: ['0%', '100%', '0%'] }}
-                                transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
-                            />
-
-                            {/* Circular Guide */}
-                            <div className="absolute inset-0 flex items-center justify-center">
-                                <div className="w-3/4 aspect-square rounded-full border-2 border-white/20 border-dashed animate-[spin_20s_linear_infinite]" />
-                                <div className="absolute w-3/4 aspect-square rounded-full border border-white/40" />
-                            </div>
-                        </motion.div>
-                    ) : capturedImage ? (
+                    {capturedImage ? (
                         <motion.div
                             key="captured"
                             initial={{ scale: 1.1, opacity: 0 }}
@@ -374,26 +336,70 @@ export function ProfilePhotoCapture({ profileId, onSuccess }: ProfilePhotoCaptur
                             )}
                         </motion.div>
                     ) : (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center text-white/50">
-                            {status === 'error' ? (
-                                <motion.div
-                                    initial={{ opacity: 0, scale: 0.9 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    className="text-center p-8 bg-red-500/10 backdrop-blur-md rounded-3xl border border-red-500/20"
-                                >
-                                    <IconX className="w-12 h-12 text-red-500 mx-auto mb-4" />
-                                    <p className="text-sm font-bold text-red-200 uppercase tracking-widest">{errorMessage}</p>
-                                    <Button onClick={() => startCamera()} className="mt-6 bg-red-500 hover:bg-red-600 rounded-xl">
-                                        Grant Permissions
-                                    </Button>
-                                </motion.div>
-                            ) : (
-                                <div className="flex flex-col items-center gap-4">
-                                    <IconLoader2 className="w-12 h-12 animate-spin text-primary" />
-                                    <p className="text-[10px] uppercase font-black tracking-[0.3em] animate-pulse">Initializing Camera</p>
+                        <motion.div
+                            key="camera-container"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="absolute inset-0 bg-slate-900"
+                        >
+                            {/* Video is always rendered so videoRef is never null */}
+                            <video
+                                ref={videoRef}
+                                autoPlay
+                                playsInline
+                                muted
+                                className={`w-full h-full object-cover mirror transition-opacity duration-500 ${status === 'streaming' ? 'opacity-100' : 'opacity-0'}`}
+                                style={{ transform: 'scaleX(-1)' }}
+                            />
+
+                            {status === 'streaming' && (
+                                <>
+                                    {/* Modern Overlay Gradient */}
+                                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-slate-950/20 pointer-events-none" />
+
+                                    {/* Scanning Animation */}
+                                    <motion.div
+                                        className="absolute inset-x-0 h-32 bg-gradient-to-b from-primary/0 via-primary/20 to-primary/0 z-10 pointer-events-none"
+                                        animate={{ top: ['0%', '80%', '0%'] }}
+                                        transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
+                                    />
+                                    <motion.div
+                                        className="absolute inset-x-0 h-px bg-primary z-10 shadow-[0_0_15px_rgba(var(--primary),0.5)] pointer-events-none"
+                                        animate={{ top: ['0%', '100%', '0%'] }}
+                                        transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
+                                    />
+
+                                    {/* Circular Guide */}
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <div className="w-3/4 aspect-square rounded-full border-2 border-white/20 border-dashed animate-[spin_20s_linear_infinite]" />
+                                        <div className="absolute w-3/4 aspect-square rounded-full border border-white/40" />
+                                    </div>
+                                </>
+                            )}
+
+                            {status !== 'streaming' && (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/40 backdrop-blur-sm text-white/50">
+                                    {status === 'error' ? (
+                                        <motion.div
+                                            initial={{ opacity: 0, scale: 0.9 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            className="text-center p-8 bg-red-500/10 backdrop-blur-md rounded-3xl border border-red-500/20"
+                                        >
+                                            <IconX className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                                            <p className="text-sm font-bold text-red-200 uppercase tracking-widest">{errorMessage}</p>
+                                            <Button onClick={() => startCamera()} className="mt-6 bg-red-500 hover:bg-red-600 rounded-xl">
+                                                Retry Camera
+                                            </Button>
+                                        </motion.div>
+                                    ) : (
+                                        <div className="flex flex-col items-center gap-4">
+                                            <IconLoader2 className="w-12 h-12 animate-spin text-primary" />
+                                            <p className="text-[10px] uppercase font-black tracking-[0.3em] animate-pulse">Initializing Camera</p>
+                                        </div>
+                                    )}
                                 </div>
                             )}
-                        </div>
+                        </motion.div>
                     )}
                 </AnimatePresence>
 
