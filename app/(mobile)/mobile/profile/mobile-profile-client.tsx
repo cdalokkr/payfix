@@ -26,7 +26,7 @@ interface MobileProfileClientProps {
         full_name: string | null
         email: string
         avatar_url: string | null
-        phone: string | null
+        mobile_no: string | null
         designation: { name: string } | null
         avatar_status: string | null
     }
@@ -182,14 +182,14 @@ export function MobileProfileClient({ profile }: MobileProfileClientProps) {
                         </div>
                     </div>
 
-                    {profile.phone && (
+                    {profile.mobile_no && (
                         <div className="flex items-center gap-3">
                             <div className="p-2 rounded-lg bg-muted">
                                 <IconPhone className="w-5 h-5 text-muted-foreground" />
                             </div>
                             <div>
                                 <p className="text-xs text-muted-foreground">Phone</p>
-                                <p className="font-medium">{profile.phone}</p>
+                                <p className="font-medium">{profile.mobile_no}</p>
                             </div>
                         </div>
                     )}
