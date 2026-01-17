@@ -18,6 +18,8 @@ import {
 import { trpc } from "@/lib/trpc/client"
 import { SelfieCapture, type SelfieResult } from "./selfie-capture"
 import { FaceVerification, type FaceVerificationResult } from "./face-verification"
+import { format } from "date-fns"
+import { usePwaCheck } from "@/hooks/use-pwa-check"
 
 type WizardStep = 'selfie' | 'face' | 'submitting' | 'complete' | 'error'
 
@@ -39,6 +41,7 @@ export function MobileAttendanceWizard({
     onComplete,
     onCancel,
 }: MobileAttendanceWizardProps) {
+    const { isPwa, isReady } = usePwaCheck()
     const [currentStep, setCurrentStep] = useState<WizardStep>('selfie')
     const [selfieResult, setSelfieResult] = useState<SelfieResult | null>(null)
     const [faceResult, setFaceResult] = useState<FaceVerificationResult | null>(null)
@@ -127,6 +130,17 @@ export function MobileAttendanceWizard({
         return STEPS.findIndex(s => s.id === currentStep)
     }
 
+    if (isReady && !isPwa) {
+        return (
+            <Card className="rounded-[2.5rem] border-none shadow-2xl overflow-hidden bg-white/80 backdrop-blur-xl p-8 text-center">
+                <IconX className="w-12 h-12 text-destructive mx-auto mb-4" />
+                <h3 className="text-xl font-bold mb-2">PWA Required</h3>
+                <p className="text-sm text-muted-foreground mb-6">Attendance marking is restricted to the installed Mobile App.</p>
+                <Button onClick={onCancel} className="w-full rounded-2xl">Return to Dashboard</Button>
+            </Card>
+        )
+    }
+
     return (
         <div className="w-full max-w-md mx-auto space-y-6">
             <AnimatePresence mode="wait">
@@ -163,13 +177,21 @@ export function MobileAttendanceWizard({
                 )}
 
                 {currentStep === 'face' && selfieResult && (
-                    <FaceVerification
-                        selfieDataUrl={selfieResult.imageDataUrl}
-                        profileImageUrl={profileImageUrl}
-                        onVerified={handleFaceVerified}
-                        onRetakeSelfie={handleRetakeSelfie}
-                        onBack={handleBack}
-                    />
+                    <div className="relative">
+                        {/* Selfie Preview as background */}
+                        <div className="absolute inset-0 aspect-[3/4] rounded-[2.5rem] overflow-hidden blur-sm opacity-50">
+                            <img src={selfieResult.imageDataUrl} alt="Preview" className="w-full h-full object-cover" />
+                        </div>
+                        <div className="relative z-10 bg-white/40 backdrop-blur-xl rounded-[2.5rem] p-6 shadow-2xl border border-white/40">
+                            <FaceVerification
+                                selfieDataUrl={selfieResult.imageDataUrl}
+                                profileImageUrl={profileImageUrl}
+                                onVerified={handleFaceVerified}
+                                onRetakeSelfie={handleRetakeSelfie}
+                                onBack={handleBack}
+                            />
+                        </div>
+                    </div>
                 )}
 
                 {currentStep === 'submitting' && (
@@ -212,9 +234,14 @@ export function MobileAttendanceWizard({
                             <h3 className="text-3xl font-black tracking-tighter mb-2">
                                 {action === 'clock_in' ? 'Clocked In!' : 'Clocked Out!'}
                             </h3>
-                            <p className="text-sm text-muted-foreground mb-10 font-medium">
-                                Your attendance has been securely recorded.
-                            </p>
+                            <div className="space-y-1 mb-10">
+                                <p className="text-sm text-muted-foreground font-semibold">
+                                    Attendance Verified Securely
+                                </p>
+                                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-emerald-600 bg-emerald-500/10 py-2 rounded-full border border-emerald-500/20 px-4 inline-block">
+                                    {format(new Date(), "dd MMM yyyy • hh:mm:ss a")}
+                                </p>
+                            </div>
                             <Button
                                 onClick={onComplete}
                                 className="w-full h-16 rounded-[2rem] bg-slate-900 hover:bg-slate-800 text-lg font-black shadow-xl"

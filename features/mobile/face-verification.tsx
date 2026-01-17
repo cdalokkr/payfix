@@ -84,6 +84,14 @@ export function FaceVerification({
             if (result.matched) {
                 setStatus('success')
                 toast.success(`Face verified! Match: ${FaceVerificationService.formatSimilarity(result.similarity)}`)
+
+                // Auto proceed after success
+                setTimeout(() => {
+                    onVerified({
+                        matched: true,
+                        similarity: result.similarity,
+                    })
+                }, 1500)
             } else {
                 setStatus('error')
                 setErrorMessage(result.error || 'Face verification failed')
@@ -93,7 +101,7 @@ export function FaceVerification({
             setStatus('error')
             setErrorMessage('Face verification service error. Use skip for testing.')
         }
-    }, [selfieDataUrl, profileImageUrl, isTestMode])
+    }, [selfieDataUrl, profileImageUrl, isTestMode, onVerified])
 
     useEffect(() => {
         verifyFace()
@@ -120,18 +128,18 @@ export function FaceVerification({
     const threshold = FaceVerificationService.getThreshold()
 
     return (
-        <Card className="w-full max-w-md mx-auto">
+        <Card className="w-full max-w-md mx-auto border-none shadow-none bg-transparent">
             <CardHeader className="text-center pb-2">
-                <CardTitle className="text-xl font-black tracking-tight">
+                <CardTitle className="text-2xl font-black tracking-tighter">
                     {status === 'loading-models' ? 'Initializing AI' :
-                        status === 'comparing' ? 'Matching Face' :
-                            status === 'success' ? 'Face Verified' :
+                        status === 'comparing' ? 'Verifying Identity' :
+                            status === 'success' ? 'Identity Confirmed' :
                                 'Verification Failed'}
                 </CardTitle>
                 <CardDescription className="text-[11px] font-bold uppercase tracking-wider opacity-60">
                     {status === 'loading-models' ? 'Preparing verification models...' :
                         status === 'comparing' ? 'Comparing facial features...' :
-                            status === 'success' ? 'Your identity is confirmed' :
+                            status === 'success' ? 'Face matches profile photo' :
                                 errorMessage}
                 </CardDescription>
             </CardHeader>

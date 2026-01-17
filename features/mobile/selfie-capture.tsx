@@ -30,6 +30,7 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
     const [errorMessage, setErrorMessage] = useState<string>('')
     const [capturedImage, setCapturedImage] = useState<string | null>(null)
     const [capturedAt, setCapturedAt] = useState<Date | null>(null)
+    const [countdown, setCountdown] = useState<number | null>(null)
 
     const videoRef = useRef<HTMLVideoElement>(null)
     const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -87,7 +88,7 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
 
     // Capture photo
     const capturePhoto = useCallback(() => {
-        if (!videoRef.current || !canvasRef.current) return
+        if (!videoRef.current || !canvasRef.current || status === 'captured') return
 
         const video = videoRef.current
         const canvas = canvasRef.current
@@ -107,13 +108,13 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
 
         // Draw timestamp background
         ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'
-        ctx.fillRect(0, canvas.height - 50, canvas.width, 50)
+        ctx.fillRect(0, canvas.height - 60, canvas.width, 60)
 
         // Draw timestamp text
         ctx.fillStyle = '#ffffff'
-        ctx.font = 'bold 18px Arial'
+        ctx.font = 'bold 22px Arial'
         ctx.textAlign = 'center'
-        ctx.fillText(timestamp, canvas.width / 2, canvas.height - 18)
+        ctx.fillText(timestamp, canvas.width / 2, canvas.height - 25)
 
         // Get image data URL
         const imageDataUrl = canvas.toDataURL('image/jpeg', 0.85)
@@ -124,7 +125,15 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
 
         // Stop camera after capture
         stopCamera()
-    }, [stopCamera])
+
+        // Auto proceed to verification after 1 second
+        setTimeout(() => {
+            onCaptured({
+                imageDataUrl: imageDataUrl,
+                capturedAt: now,
+            })
+        }, 1000)
+    }, [stopCamera, onCaptured, status])
 
     // Skip selfie (for testing when camera is blocked)
     const handleSkipSelfie = useCallback(() => {
@@ -155,6 +164,27 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
             })
         }
     }, [capturedImage, capturedAt, onCaptured])
+
+    // Start countdown when streaming starts
+    useEffect(() => {
+        if (status === 'streaming' && capturedImage === null) {
+            setCountdown(10)
+            const timer = setInterval(() => {
+                setCountdown(prev => {
+                    if (prev === null) return null
+                    if (prev <= 1) {
+                        clearInterval(timer)
+                        capturePhoto()
+                        return 0
+                    }
+                    return prev - 1
+                })
+            }, 1000)
+            return () => clearInterval(timer)
+        } else {
+            setCountdown(null)
+        }
+    }, [status, capturedImage, capturePhoto])
 
     // Start camera on mount
     useEffect(() => {
@@ -214,10 +244,20 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
                                         animate={{ opacity: 1, scale: 1 }}
                                         className="w-56 h-80 border-2 border-white/30 rounded-[3rem] relative"
                                     >
-                                        <div className="absolute inset-x-0 -top-12 flex justify-center">
+                                        <div className="absolute inset-x-0 -top-12 flex flex-col items-center gap-2">
                                             <div className="px-3 py-1 bg-white/20 backdrop-blur-md rounded-full border border-white/20">
                                                 <span className="text-[8px] font-black text-white uppercase tracking-widest">Center Face</span>
                                             </div>
+                                            {countdown !== null && (
+                                                <motion.div
+                                                    key={countdown}
+                                                    initial={{ scale: 1.5, opacity: 0 }}
+                                                    animate={{ scale: 1, opacity: 1 }}
+                                                    className="w-12 h-12 rounded-full bg-primary/40 backdrop-blur-lg flex items-center justify-center border-2 border-primary"
+                                                >
+                                                    <span className="text-xl font-black text-white">{countdown}</span>
+                                                </motion.div>
+                                            )}
                                         </div>
                                     </motion.div>
                                     <div className="absolute inset-0 bg-black/10" />
