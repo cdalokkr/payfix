@@ -229,8 +229,16 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
 
         try {
             console.log('[UPLOAD] Starting upload...')
-            const response = await fetch(capturedImage)
-            const blob = await response.blob()
+
+            // Convert data URL to blob directly (mobile compatible)
+            const base64Data = capturedImage.split(',')[1]
+            const byteCharacters = atob(base64Data)
+            const byteNumbers = new Array(byteCharacters.length)
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i)
+            }
+            const byteArray = new Uint8Array(byteNumbers)
+            const blob = new Blob([byteArray], { type: 'image/jpeg' })
             console.log('[UPLOAD] Blob created, size:', blob.size)
 
             const fileName = `profile-${profileId}-${Date.now()}.jpg`
