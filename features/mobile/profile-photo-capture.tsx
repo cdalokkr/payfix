@@ -228,7 +228,7 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         startCamera()
     }, [startCamera])
 
-    // Upload photo
+    // Upload photo via server API (bypasses client-side RLS)
     const handleUpload = useCallback(async () => {
         if (!capturedImage) return
 
@@ -248,36 +248,28 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
             }
             const byteArray = new Uint8Array(byteNumbers)
             const blob = new Blob([byteArray], { type: 'image/jpeg' })
-            addLog(`Blob created: ${Math.round(blob.size / 1024)}KB`)
+            addLog(`Blob: ${Math.round(blob.size / 1024)}KB`)
 
-            const fileName = `profile-${profileId}-${Date.now()}.jpg`
-            addLog(`Uploading: ${fileName}`)
+            // Send to server API route (uses service role, bypasses RLS)
+            addLog('Sending to server...')
+            const formData = new FormData()
+            formData.append('file', blob, 'avatar.jpg')
+            formData.append('profileId', profileId)
 
-            const { error: uploadError } = await supabase.storage
-                .from('avatars')
-                .upload(fileName, blob, {
-                    contentType: 'image/jpeg',
-                    upsert: true,
-                })
-
-            if (uploadError) {
-                addLog(`STORAGE ERROR: ${uploadError.message}`)
-                throw uploadError
-            }
-            addLog('Storage upload OK')
-
-            const { data: { publicUrl } } = supabase.storage
-                .from('avatars')
-                .getPublicUrl(fileName)
-            addLog('Got public URL')
-
-            addLog('Calling tRPC...')
-            await updateProfilePicture.mutateAsync({
-                userId: profileId,
-                avatarUrl: publicUrl,
-                avatarStatus: 'custom'
+            const response = await fetch('/api/upload-avatar', {
+                method: 'POST',
+                body: formData,
             })
-            addLog('tRPC update OK')
+
+            const result = await response.json()
+            
+            if (!response.ok) {
+                addLog(`SERVER ERROR: ${result.error}`)
+                throw new Error(result.error || 'Upload failed')
+            }
+            
+            addLog('Upload complete!')
+            addLog(`URL: ${result.path?.slice(0, 40)}...`)
 
             setStatus('success')
             toast.success('Profile photo updated successfully!')
@@ -296,7 +288,7 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         } finally {
             setIsUploading(false)
         }
-    }, [capturedImage, profileId, supabase, router, onSuccess, updateProfilePicture, addLog])
+    }, [capturedImage, profileId, router, onSuccess, addLog])
 
     // Handle back button
     const handleBack = useCallback(() => {
