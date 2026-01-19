@@ -419,26 +419,6 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
                             </Button>
                         </div>
                     )}
-
-                    {status === 'streaming' && process.env.NODE_ENV === 'development' && (
-                        <Button
-                            variant="ghost"
-                            onClick={() => {
-                                const canvas = canvasRef.current;
-                                if (canvas) {
-                                    canvas.width = 100;
-                                    canvas.height = 100;
-                                    const now = new Date();
-                                    setCapturedImage(canvas.toDataURL());
-                                    setCapturedAt(now);
-                                    setStatus('captured');
-                                }
-                            }}
-                            className="w-full text-[10px] text-white/20 font-bold tracking-widest hover:bg-transparent hover:text-white/40"
-                        >
-                            DEBUG: SKIP FOR TESTING
-                        </Button>
-                    )}
                 </div>
             </div>
 
@@ -448,4 +428,3 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
 }
 
 export default SelfieCapture
-

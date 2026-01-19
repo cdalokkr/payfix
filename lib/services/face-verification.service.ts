@@ -23,17 +23,23 @@ let modelsLoaded = false
 let faceApi: typeof import('face-api.js') | null = null
 
 /**
- * Load face detection models
+ * Load face detection models with retry logic for mobile browsers
  */
-async function loadModels(): Promise<boolean> {
+async function loadModels(retryCount = 0): Promise<boolean> {
+    const MAX_RETRIES = 3
+
     if (modelsLoaded && faceApi) return true
 
     try {
         // Dynamic import to avoid SSR issues
-        faceApi = await import('face-api.js')
+        if (!faceApi) {
+            faceApi = await import('face-api.js')
+        }
 
         // Load models from public directory
         const MODEL_URL = '/models'
+
+        console.log(`Attempting to load face detection models (attempt ${retryCount + 1}/${MAX_RETRIES + 1})...`)
 
         await Promise.all([
             faceApi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
@@ -42,10 +48,19 @@ async function loadModels(): Promise<boolean> {
         ])
 
         modelsLoaded = true
-        console.log('Face detection models loaded')
+        console.log('Face detection models loaded successfully')
         return true
     } catch (error) {
-        console.error('Failed to load face detection models:', error)
+        console.error(`Failed to load face detection models (attempt ${retryCount + 1}):`, error)
+
+        // Retry with exponential backoff for mobile network issues
+        if (retryCount < MAX_RETRIES) {
+            const delay = Math.pow(2, retryCount) * 1000 // 1s, 2s, 4s
+            console.log(`Retrying in ${delay}ms...`)
+            await new Promise(resolve => setTimeout(resolve, delay))
+            return loadModels(retryCount + 1)
+        }
+
         return false
     }
 }

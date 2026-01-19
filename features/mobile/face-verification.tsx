@@ -12,7 +12,6 @@ import {
     IconX,
     IconRefresh,
     IconPhoto,
-    IconPlayerSkipForward,
 } from "@tabler/icons-react"
 import { FaceVerificationService } from "@/lib/services/face-verification.service"
 
@@ -41,15 +40,12 @@ export function FaceVerification({
     const [similarity, setSimilarity] = useState<number | null>(null)
     const [errorMessage, setErrorMessage] = useState<string>('')
 
-    // Check if selfie was skipped (placeholder image)
-    const isTestMode = selfieDataUrl.includes('data:image/svg+xml')
-
     // Verify face on mount
     const verifyFace = useCallback(async () => {
-        // If in test mode (selfie was skipped), auto-skip verification
-        if (isTestMode) {
+        // Check if selfie was skipped (placeholder image)
+        if (selfieDataUrl.includes('data:image/svg+xml')) {
             setStatus('error')
-            setErrorMessage('Selfie was skipped. Click "Skip Verification" to continue testing.')
+            setErrorMessage('Please capture a valid selfie to verify your identity.')
             return
         }
 
@@ -99,9 +95,9 @@ export function FaceVerification({
         } catch (error) {
             console.error('Face verification error:', error)
             setStatus('error')
-            setErrorMessage('Face verification service error. Use skip for testing.')
+            setErrorMessage('Face verification service error. Please try again or contact support.')
         }
-    }, [selfieDataUrl, profileImageUrl, isTestMode, onVerified])
+    }, [selfieDataUrl, profileImageUrl, onVerified])
 
     useEffect(() => {
         verifyFace()
@@ -115,15 +111,6 @@ export function FaceVerification({
             })
         }
     }, [similarity, onVerified])
-
-    // Skip verification (for testing)
-    const handleSkipVerification = useCallback(() => {
-        toast.info('Face verification skipped (testing mode)')
-        onVerified({
-            matched: true,
-            similarity: 0.99, // Fake high similarity for testing
-        })
-    }, [onVerified])
 
     const threshold = FaceVerificationService.getThreshold()
 
@@ -225,11 +212,6 @@ export function FaceVerification({
 
                 {status === 'error' && (
                     <div className="space-y-3">
-                        {/* Skip button for testing */}
-                        <Button onClick={handleSkipVerification} className="w-full gap-2">
-                            <IconPlayerSkipForward className="w-4 h-4" />
-                            Skip Verification (Testing Only)
-                        </Button>
 
                         <Button onClick={onRetakeSelfie} variant="outline" className="w-full gap-2">
                             <IconRefresh className="w-4 h-4" />
