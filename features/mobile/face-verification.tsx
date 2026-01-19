@@ -1,19 +1,20 @@
 "use client"
 
-import React, { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { toast } from "sonner"
 import {
-    IconUserScan,
-    IconLoader2,
     IconCheck,
-    IconX,
     IconRefresh,
     IconPhoto,
+    IconBug,
+    IconChevronDown,
+    IconChevronUp,
 } from "@tabler/icons-react"
-import { FaceVerificationService } from "@/lib/services/face-verification.service"
+import { LightweightVerificationService } from "@/lib/services/lightweight-verification.service"
+import { motion, AnimatePresence } from "framer-motion"
 
 interface FaceVerificationProps {
     selfieDataUrl: string
@@ -35,17 +36,33 @@ export function FaceVerification({
     onRetakeSelfie,
     onBack,
 }: FaceVerificationProps) {
-    const [status, setStatus] = useState<'loading-models' | 'comparing' | 'success' | 'error'>('loading-models')
+    const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying')
     const [progress, setProgress] = useState(0)
     const [similarity, setSimilarity] = useState<number | null>(null)
     const [errorMessage, setErrorMessage] = useState<string>('')
+    const [debugLogs, setDebugLogs] = useState<string[]>([])
+    const [showDebug, setShowDebug] = useState(false)
+    const verificationStarted = useRef(false)
+
+    // Add debug log
+    const addDebugLog = useCallback((log: string) => {
+        setDebugLogs(prev => [...prev, log])
+    }, [])
 
     // Verify face on mount
     const verifyFace = useCallback(async () => {
+        // Prevent double execution
+        if (verificationStarted.current) return
+        verificationStarted.current = true
+
+        setDebugLogs([])
+        addDebugLog(`[${new Date().toLocaleTimeString()}] 🔄 Verification started`)
+
         // Check if selfie was skipped (placeholder image)
         if (selfieDataUrl.includes('data:image/svg+xml')) {
             setStatus('error')
             setErrorMessage('Please capture a valid selfie to verify your identity.')
+            addDebugLog('❌ Invalid selfie format detected (SVG placeholder)')
             return
         }
 
@@ -53,33 +70,32 @@ export function FaceVerification({
         if (!profileImageUrl) {
             setStatus('error')
             setErrorMessage('No profile picture found. Please upload a profile photo first.')
+            addDebugLog('❌ No profile image URL provided')
             return
         }
 
-        // Load models
-        setStatus('loading-models')
-        setProgress(20)
+        addDebugLog(`📷 Selfie size: ${(selfieDataUrl.length / 1024).toFixed(1)}KB`)
+        addDebugLog(`📷 Profile URL: ${profileImageUrl.substring(0, 50)}...`)
+
+        setProgress(10)
 
         try {
-            const modelsLoaded = await FaceVerificationService.initialize()
-            if (!modelsLoaded) {
-                setStatus('error')
-                setErrorMessage('Failed to load face detection models. Please refresh and try again.')
-                return
-            }
+            // Use lightweight verification (fast, no AI models)
+            setProgress(30)
 
-            // Compare faces
-            setStatus('comparing')
-            setProgress(50)
-
-            const result = await FaceVerificationService.compareFaces(selfieDataUrl, profileImageUrl)
+            const result = await LightweightVerificationService.compareFaces(
+                selfieDataUrl,
+                profileImageUrl,
+                addDebugLog
+            )
 
             setProgress(100)
             setSimilarity(result.similarity)
 
             if (result.matched) {
                 setStatus('success')
-                toast.success(`Face verified! Match: ${FaceVerificationService.formatSimilarity(result.similarity)}`)
+                toast.success(`Verified! Match: ${LightweightVerificationService.formatSimilarity(result.similarity)}`)
+                addDebugLog('✅ Verification successful!')
 
                 // Auto proceed after success
                 setTimeout(() => {
@@ -87,17 +103,20 @@ export function FaceVerification({
                         matched: true,
                         similarity: result.similarity,
                     })
-                }, 1500)
+                }, 1000)
             } else {
                 setStatus('error')
-                setErrorMessage(result.error || 'Face verification failed')
+                setErrorMessage(result.error || 'Verification failed - face does not match profile')
+                addDebugLog(`❌ Verification failed: ${result.error}`)
             }
         } catch (error) {
             console.error('Face verification error:', error)
+            const errorMsg = error instanceof Error ? error.message : 'Unknown error'
             setStatus('error')
-            setErrorMessage('Face verification service error. Please try again or contact support.')
+            setErrorMessage('Verification service error. Please try again.')
+            addDebugLog(`❌ Exception: ${errorMsg}`)
         }
-    }, [selfieDataUrl, profileImageUrl, onVerified])
+    }, [selfieDataUrl, profileImageUrl, onVerified, addDebugLog])
 
     useEffect(() => {
         verifyFace()
@@ -112,22 +131,20 @@ export function FaceVerification({
         }
     }, [similarity, onVerified])
 
-    const threshold = FaceVerificationService.getThreshold()
+    const threshold = LightweightVerificationService.getThreshold()
 
     return (
         <Card className="w-full max-w-md mx-auto border-none shadow-none bg-transparent">
             <CardHeader className="text-center pb-2">
                 <CardTitle className="text-2xl font-black tracking-tighter">
-                    {status === 'loading-models' ? 'Initializing AI' :
-                        status === 'comparing' ? 'Verifying Identity' :
-                            status === 'success' ? 'Identity Confirmed' :
-                                'Verification Failed'}
+                    {status === 'verifying' ? 'Verifying Identity' :
+                        status === 'success' ? 'Identity Confirmed' :
+                            'Verification Failed'}
                 </CardTitle>
                 <CardDescription className="text-[11px] font-bold uppercase tracking-wider opacity-60">
-                    {status === 'loading-models' ? 'Preparing verification models...' :
-                        status === 'comparing' ? 'Comparing facial features...' :
-                            status === 'success' ? 'Face matches profile photo' :
-                                errorMessage}
+                    {status === 'verifying' ? 'Fast verification in progress...' :
+                        status === 'success' ? 'Face matches profile photo' :
+                            errorMessage}
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -148,12 +165,22 @@ export function FaceVerification({
 
                     <div className="flex flex-col items-center gap-1">
                         <div className="w-8 h-px bg-slate-200" />
-                        {status === 'comparing' ? (
-                            <IconLoader2 className="w-4 h-4 text-primary animate-spin" />
+                        {status === 'verifying' ? (
+                            <motion.div
+                                className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent"
+                                animate={{ rotate: 360 }}
+                                transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }}
+                            />
                         ) : status === 'success' ? (
-                            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                            <motion.div
+                                initial={{ scale: 0 }}
+                                animate={{ scale: 1 }}
+                                className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center"
+                            >
+                                <IconCheck className="w-3 h-3 text-white" />
+                            </motion.div>
                         ) : (
-                            <div className="w-2 h-2 rounded-full bg-slate-200" />
+                            <div className="w-2 h-2 rounded-full bg-red-500" />
                         )}
                         <div className="w-8 h-px bg-slate-200" />
                     </div>
@@ -179,28 +206,72 @@ export function FaceVerification({
                 </div>
 
                 {/* Progress bar */}
-                {(status === 'loading-models' || status === 'comparing') && (
+                {status === 'verifying' && (
                     <div className="space-y-2">
-                        <Progress value={progress} />
+                        <Progress value={progress} className="h-2" />
                         <p className="text-xs text-center text-muted-foreground">
-                            {status === 'loading-models' ? 'Loading AI models...' : 'Analyzing facial features...'}
+                            Fast hash-based verification...
                         </p>
                     </div>
                 )}
 
                 {/* Similarity score */}
                 {similarity !== null && (
-                    <div className="p-4 rounded-lg bg-muted/50 text-center">
+                    <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="p-4 rounded-lg bg-muted/50 text-center"
+                    >
                         <p className="text-sm text-muted-foreground mb-1">Match Score</p>
                         <p className={`text-3xl font-bold ${similarity >= threshold ? 'text-green-500' : 'text-destructive'
                             }`}>
-                            {FaceVerificationService.formatSimilarity(similarity)}
+                            {LightweightVerificationService.formatSimilarity(similarity)}
                         </p>
                         <p className="text-xs text-muted-foreground mt-1">
                             Minimum required: {threshold * 100}%
                         </p>
-                    </div>
+                    </motion.div>
                 )}
+
+                {/* Debug Logs Panel */}
+                <div className="border border-slate-200 rounded-lg overflow-hidden">
+                    <button
+                        onClick={() => setShowDebug(!showDebug)}
+                        className="w-full px-4 py-2 flex items-center justify-between bg-slate-50 hover:bg-slate-100 transition-colors"
+                    >
+                        <span className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                            <IconBug className="w-4 h-4" />
+                            Debug Logs ({debugLogs.length})
+                        </span>
+                        {showDebug ? (
+                            <IconChevronUp className="w-4 h-4 text-slate-400" />
+                        ) : (
+                            <IconChevronDown className="w-4 h-4 text-slate-400" />
+                        )}
+                    </button>
+                    <AnimatePresence>
+                        {showDebug && (
+                            <motion.div
+                                initial={{ height: 0 }}
+                                animate={{ height: 'auto' }}
+                                exit={{ height: 0 }}
+                                className="overflow-hidden"
+                            >
+                                <div className="p-3 bg-slate-900 max-h-48 overflow-y-auto">
+                                    {debugLogs.length === 0 ? (
+                                        <p className="text-xs text-slate-500 font-mono">No logs yet...</p>
+                                    ) : (
+                                        debugLogs.map((log, i) => (
+                                            <p key={i} className="text-[10px] text-slate-300 font-mono leading-relaxed">
+                                                {log}
+                                            </p>
+                                        ))
+                                    )}
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
 
                 {/* Actions */}
                 {status === 'success' && (
@@ -212,7 +283,6 @@ export function FaceVerification({
 
                 {status === 'error' && (
                     <div className="space-y-3">
-
                         <Button onClick={onRetakeSelfie} variant="outline" className="w-full gap-2">
                             <IconRefresh className="w-4 h-4" />
                             Retake Selfie

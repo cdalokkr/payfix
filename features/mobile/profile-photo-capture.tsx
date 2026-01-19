@@ -196,9 +196,9 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         const ctx = canvas.getContext('2d')
         if (!ctx) return
 
-        // Set canvas to high quality square
-        canvas.width = 1000
-        canvas.height = 1000
+        // Set canvas to optimized square (500x500 is great for avatars, saves bandwidth)
+        canvas.width = 500
+        canvas.height = 500
 
         // Source dimensions
         const vw = video.videoWidth
@@ -216,8 +216,8 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         ctx.scale(-1, 1)
         ctx.drawImage(video, sx, sy, size, size, 0, 0, canvas.width, canvas.height)
         ctx.restore()
-
-        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.95)
+        // Use 0.85 quality for good compression with minimal visual difference
+        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.85)
         setCapturedImage(imageDataUrl)
         setStatus('captured')
         stopCamera()
@@ -262,12 +262,12 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
             })
 
             const result = await response.json()
-            
+
             if (!response.ok) {
                 addLog(`SERVER ERROR: ${result.error}`)
                 throw new Error(result.error || 'Upload failed')
             }
-            
+
             addLog('Upload complete!')
             addLog(`URL: ${result.path?.slice(0, 40)}...`)
 
@@ -522,8 +522,8 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                             <div className="space-y-1 max-h-48 overflow-y-auto">
                                 {debugLogs.map((log, i) => (
                                     <p key={i} className={`text-xs font-mono ${log.includes('ERROR') ? 'text-red-400' :
-                                            log.includes('OK') ? 'text-green-400' :
-                                                'text-slate-300'
+                                        log.includes('OK') ? 'text-green-400' :
+                                            'text-slate-300'
                                         }`}>
                                         {log}
                                     </p>
