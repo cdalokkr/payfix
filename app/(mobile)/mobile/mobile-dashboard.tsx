@@ -183,13 +183,34 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                             </div>
 
                             {/* Geofence/Location Status aligned with Date row */}
-                            <div className="inline-flex items-center gap-2 px-3 py-1.5 mt-2 rounded-full bg-white/10 backdrop-blur-md border border-white/10 w-fit">
-                                <div className={`w-1.5 h-1.5 rounded-full ${geofenceResult?.isAllowed ? 'bg-green-400' : 'bg-rose-400'} animate-pulse`} />
-                                <span className="text-[11px] font-black uppercase tracking-wider text-white">
-                                    {isLocChecking ? "Checking Location..." :
-                                        geofenceResult?.isAllowed ? `${geofenceResult.withinOffice?.name}` :
-                                            "Restricted"}
-                                </span>
+                            <div className="flex flex-col gap-2 mt-2">
+                                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/10 w-fit">
+                                    <div className={`w-1.5 h-1.5 rounded-full ${geofenceResult?.isAllowed ? 'bg-green-400' : 'bg-rose-400'} animate-pulse`} />
+                                    <span className="text-[11px] font-black uppercase tracking-wider text-white">
+                                        {isLocChecking ? "Checking Location..." :
+                                            geofenceResult?.isAllowed ? `${geofenceResult.withinOffice?.name}` :
+                                                "Restricted"}
+                                    </span>
+                                </div>
+
+                                {/* Live GPS & Distance Details */}
+                                {!isLocChecking && userCoords && (
+                                    <motion.div
+                                        initial={{ opacity: 0, x: -10 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        className="flex flex-col gap-1 px-1"
+                                    >
+                                        <div className="flex items-center gap-1.5 text-[9px] font-bold text-white/60 tracking-tight uppercase">
+                                            <IconMapPin className="w-3 h-3 opacity-70" />
+                                            <span>{userCoords.lat.toFixed(6)}, {userCoords.lng.toFixed(6)}</span>
+                                        </div>
+                                        {!geofenceResult?.isAllowed && geofenceResult?.nearestOffice && (
+                                            <div className="text-[9px] font-black text-rose-200/90 uppercase tracking-widest bg-rose-500/20 px-2 py-0.5 rounded-md w-fit border border-rose-500/30">
+                                                {geofenceResult.nearestOffice.name} • {(geofenceResult.nearestOffice.distance / 1000).toFixed(1)}KM
+                                            </div>
+                                        )}
+                                    </motion.div>
+                                )}
                             </div>
                         </div>
 
@@ -256,77 +277,53 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                             </div>
                         ) : (
                             /* IN/OUT Controls - Horizontal Layout */
-                            <div className="grid grid-cols-2 gap-3">
-                                {/* IN Icon */}
-                                <Link
-                                    href="/mobile/attendance?action=clock_in"
-                                    className={`flex items-center gap-3 p-3.5 rounded-[1.5rem] bg-white/10 backdrop-blur-md border border-white/20 transition-all active:scale-95 group ${!geofenceResult?.isAllowed && !isLocChecking ? 'opacity-50 pointer-events-none' : ''}`}
-                                >
-                                    <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center shrink-0">
-                                        <IconLogin className="w-5 h-5 text-emerald-500" />
-                                    </div>
-                                    <div className="flex flex-col">
-                                        <p className="text-[9px] font-black uppercase tracking-widest text-emerald-100/70 leading-none mb-1.5">IN</p>
-                                        <p className="text-xs font-black text-white leading-none">
-                                            {todayAttendance?.check_in
-                                                ? format(new Date(todayAttendance.check_in), 'hh:mm a')
-                                                : '--:--'}
-                                        </p>
-                                    </div>
-                                </Link>
-
-                                {/* OUT Icon */}
-                                <Link
-                                    href="/mobile/attendance?action=clock_out"
-                                    className={`flex items-center gap-3 p-3.5 rounded-[1.5rem] bg-white/10 backdrop-blur-md border border-white/20 transition-all active:scale-95 group 
-                                    ${(!todayAttendance?.check_in || isLocChecking || !geofenceResult?.isAllowed || todayAttendance?.check_out) ? 'opacity-30 pointer-events-none grayscale' : ''}`}
-                                >
-                                    <div className="w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center shrink-0">
-                                        <IconLogout className="w-5 h-5 text-orange-500" />
-                                    </div>
-                                    <div className="flex flex-col">
-                                        <p className="text-[9px] font-black uppercase tracking-widest text-orange-100/70 leading-none mb-1.5">OUT</p>
-                                        <p className="text-xs font-black text-white leading-none">
-                                            {todayAttendance?.check_out
-                                                ? format(new Date(todayAttendance.check_out), 'hh:mm a')
-                                                : '--:--'}
-                                        </p>
-                                    </div>
-                                </Link>
-                            </div>
-                        )}
-
-                        {isPwa && !hasNoPhoto && !geofenceResult?.isAllowed && !isLocChecking && !isTodayHoliday && !isTodayOffDay && (
-                            <motion.div
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="p-4 rounded-[1.5rem] bg-rose-500/20 backdrop-blur-md border border-rose-400/30 space-y-3"
-                            >
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-xl bg-rose-500 flex items-center justify-center">
-                                        <IconMapPinOff className="w-5 h-5 text-white" />
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-rose-100">Outside Office Area</p>
-                                        <p className="text-[11px] text-rose-200/80 font-medium">Attendance restricted in this location</p>
-                                    </div>
-                                </div>
-                                {userCoords && (
-                                    <div className="flex items-center gap-2 bg-black/20 rounded-xl p-2.5">
-                                        <IconMapPin className="w-4 h-4 text-rose-300 shrink-0" />
-                                        <div className="font-mono text-[10px] text-rose-100/90 tracking-tight">
-                                            <span>{userCoords.lat.toFixed(6)}</span>
-                                            <span className="mx-1 text-rose-300/50">,</span>
-                                            <span>{userCoords.lng.toFixed(6)}</span>
-                                        </div>
-                                    </div>
-                                )}
-                                {geofenceResult?.nearestOffice && (
-                                    <p className="text-[10px] text-rose-200/60 font-medium text-center">
-                                        Nearest: {geofenceResult.nearestOffice.name} ({(geofenceResult.nearestOffice.distance / 1000).toFixed(1)}km away)
+                            /* Hidden if restricted to prevent confusion */
+                            (!geofenceResult?.isAllowed && !isLocChecking) ? (
+                                <div className="flex items-center justify-center p-8 bg-rose-500/10 rounded-[2rem] border border-rose-500/20 backdrop-blur-sm">
+                                    <p className="text-[10px] font-black text-rose-200 uppercase tracking-[0.2em] text-center">
+                                        Clocking Restricted Outside Office
                                     </p>
-                                )}
-                            </motion.div>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-2 gap-3">
+                                    {/* IN Icon */}
+                                    <Link
+                                        href="/mobile/attendance?action=clock_in"
+                                        className={`flex items-center gap-3 p-3.5 rounded-[1.5rem] bg-white/10 backdrop-blur-md border border-white/20 transition-all active:scale-95 group ${!geofenceResult?.isAllowed && !isLocChecking ? 'opacity-50 pointer-events-none' : ''}`}
+                                    >
+                                        <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center shrink-0">
+                                            <IconLogin className="w-5 h-5 text-emerald-500" />
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <p className="text-[9px] font-black uppercase tracking-widest text-emerald-100/70 leading-none mb-1.5">IN</p>
+                                            <p className="text-xs font-black text-white leading-none">
+                                                {todayAttendance?.check_in
+                                                    ? format(new Date(todayAttendance.check_in), 'hh:mm a')
+                                                    : '--:--'}
+                                            </p>
+                                        </div>
+                                    </Link>
+
+                                    {/* OUT Icon */}
+                                    <Link
+                                        href="/mobile/attendance?action=clock_out"
+                                        className={`flex items-center gap-3 p-3.5 rounded-[1.5rem] bg-white/10 backdrop-blur-md border border-white/20 transition-all active:scale-95 group 
+                                        ${(!todayAttendance?.check_in || isLocChecking || !geofenceResult?.isAllowed || todayAttendance?.check_out) ? 'opacity-30 pointer-events-none grayscale' : ''}`}
+                                    >
+                                        <div className="w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center shrink-0">
+                                            <IconLogout className="w-5 h-5 text-orange-500" />
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <p className="text-[9px] font-black uppercase tracking-widest text-orange-100/70 leading-none mb-1.5">OUT</p>
+                                            <p className="text-xs font-black text-white leading-none">
+                                                {todayAttendance?.check_out
+                                                    ? format(new Date(todayAttendance.check_out), 'hh:mm a')
+                                                    : '--:--'}
+                                            </p>
+                                        </div>
+                                    </Link>
+                                </div>
+                            )
                         )}
                     </div>
                 </div>

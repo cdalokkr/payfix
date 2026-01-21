@@ -499,14 +499,14 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                                         <p className="text-slate-400 text-xs">{profileData.mobileNo}</p>
                                     </div>
                                 )}
-                                {/* Designation and Role Badges */}
-                                <div className="flex items-center gap-2 flex-wrap pt-1">
+                                {/* Designation and Role Badges - Separate Rows */}
+                                <div className="flex flex-col gap-1.5 pt-1.5">
                                     {profileData.designation && (
-                                        <span className="px-2.5 py-1 rounded-full bg-slate-700/50 text-slate-300 text-[10px] font-bold uppercase tracking-wider border border-slate-600/30">
+                                        <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-slate-700/60 text-slate-200 text-xs font-bold border border-white/10 w-fit shadow-lg backdrop-blur-md">
                                             {profileData.designation}
                                         </span>
                                     )}
-                                    <span className="px-2.5 py-1 rounded-full bg-primary/20 text-primary text-[10px] font-bold uppercase tracking-wider border border-primary/30">
+                                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-primary/20 text-primary text-[10px] font-bold uppercase tracking-wider border border-primary/30 w-fit">
                                         {profileData.role}
                                     </span>
                                 </div>
