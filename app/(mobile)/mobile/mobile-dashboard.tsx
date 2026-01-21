@@ -74,6 +74,7 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
         withinOffice?: { id: string; name: string; distance: number }
     } | null>(null)
     const [isLocChecking, setIsLocChecking] = useState(true)
+    const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null)
 
     const utils = trpc.useUtils()
 
@@ -108,6 +109,11 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
 
             navigator.geolocation.getCurrentPosition(
                 async (pos) => {
+                    // Store user coordinates
+                    setUserCoords({
+                        lat: pos.coords.latitude,
+                        lng: pos.coords.longitude
+                    })
                     try {
                         const result = await utils.officeLocations.checkGeofence.fetch({
                             latitude: pos.coords.latitude,
@@ -291,9 +297,36 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                         )}
 
                         {isPwa && !hasNoPhoto && !geofenceResult?.isAllowed && !isLocChecking && !isTodayHoliday && !isTodayOffDay && (
-                            <p className="text-[9px] font-bold text-rose-100 text-center uppercase tracking-wider bg-rose-500/20 py-2 rounded-xl border border-white/10">
-                                Outside Office Area
-                            </p>
+                            <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="p-4 rounded-[1.5rem] bg-rose-500/20 backdrop-blur-md border border-rose-400/30 space-y-3"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-xl bg-rose-500 flex items-center justify-center">
+                                        <IconMapPinOff className="w-5 h-5 text-white" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-rose-100">Outside Office Area</p>
+                                        <p className="text-[11px] text-rose-200/80 font-medium">Attendance restricted in this location</p>
+                                    </div>
+                                </div>
+                                {userCoords && (
+                                    <div className="flex items-center gap-2 bg-black/20 rounded-xl p-2.5">
+                                        <IconMapPin className="w-4 h-4 text-rose-300 shrink-0" />
+                                        <div className="font-mono text-[10px] text-rose-100/90 tracking-tight">
+                                            <span>{userCoords.lat.toFixed(6)}</span>
+                                            <span className="mx-1 text-rose-300/50">,</span>
+                                            <span>{userCoords.lng.toFixed(6)}</span>
+                                        </div>
+                                    </div>
+                                )}
+                                {geofenceResult?.nearestOffice && (
+                                    <p className="text-[10px] text-rose-200/60 font-medium text-center">
+                                        Nearest: {geofenceResult.nearestOffice.name} ({(geofenceResult.nearestOffice.distance / 1000).toFixed(1)}km away)
+                                    </p>
+                                )}
+                            </motion.div>
                         )}
                     </div>
                 </div>
