@@ -1,20 +1,12 @@
 "use client"
 
 import { MetricCard } from "@/components/dashboard/metric-card"
-import { ActionButton } from "@/components/ui/action-button"
-import { PageHeading } from "@/components/ui/page-heading"
-import { Settings, Bell, User, Activity, LogIn, LogOut, Calendar, History, BarChart3, UserCheck, Loader2 } from "lucide-react"
+import { User, Activity, BarChart3, Smartphone } from "lucide-react"
 import Link from "next/link"
 import { trpc } from "@/lib/trpc/client"
-import { Activity as ActivityType } from "@/types"
-import { Skeleton } from "@/components/ui/skeleton"
 import { ActivityLogFeed, type UserActivity } from "@/components/dashboard/activity-log-feed"
-import { motion } from "framer-motion"
 import { format } from "date-fns"
-import { Badge } from "@/components/ui/badge"
-import { useEffect, useState, useMemo, useRef } from "react"
-import { cn } from "@/lib/utils"
-import { getEventBroadcaster } from "@/lib/events/event-broadcaster"
+import { useEffect, useState } from "react"
 import { useProfile } from "@/lib/context/profile-context"
 import { createClient } from "@/lib/supabase/client"
 
@@ -56,16 +48,6 @@ function ActivitiesCard({ activities, loading }: ActivitiesCardProps) {
 
 
 export default function EmployeeDashboard({ initialData }: { initialData?: any }) {
-    const utils = trpc.useUtils()
-    const todayStr = useMemo(() => {
-        const now = new Date();
-        const istOffset = 5.5 * 60 * 60 * 1000;
-        const istDate = new Date(now.getTime() + istOffset);
-        const year = istDate.getUTCFullYear();
-        const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
-        const day = String(istDate.getUTCDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    }, []);
     const [currentTime, setCurrentTime] = useState(new Date())
 
     useEffect(() => {
@@ -121,151 +103,9 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
         }
     }, [profile?.id, refetchActivities])
 
-    // =====================================================
-    // ATTENDANCE BUTTON STATE - Simple, Fast, Fresh
-    // =====================================================
-    // Uses dedicated endpoint that returns: 'not_clocked_in' | 'clocked_in' | 'marked'
-    const { data: attendanceStatus, refetch: refetchStatus, isLoading: statusLoading } = trpc.attendance.getTodayStatus.useQuery(
-        { localDate: todayStr },
-        {
-            staleTime: 0,  // Always fetch fresh data
-            refetchOnMount: 'always',  // Fresh on every dashboard visit
-            refetchOnWindowFocus: false, // Don't spam on tab switch
-            initialData: initialData?.attendanceStatus,
-            placeholderData: (prev: any) => prev || initialData?.attendanceStatus
-        }
-    )
-
-    // Get office settings for off-day/holiday checks
-    const { data: settings } = trpc.attendance.getOfficeSettings.useQuery()
-    const { data: closures } = trpc.attendance.getOfficeClosures.useQuery()
-
-    const isTodayOffDay = settings?.off_days?.includes(new Date().getDay())
-    const todayClosure = closures?.find((c: any) => c.date === todayStr)
-    const isTodayHoliday = !!todayClosure
-
-
-    // --- Logout Stability Fix ---
-    // Prevent button flicker during signout by freezing the state
-    const [isLoggingOut, setIsLoggingOut] = useState(false)
-    const frozenStatusRef = useRef<string | null>(null)
-
-    useEffect(() => {
-        const handleLoggingOut = () => {
-            setIsLoggingOut(true)
-            frozenStatusRef.current = attendanceStatus?.status ?? 'not_clocked_in'
-        }
-        window.addEventListener('loggingOut', handleLoggingOut)
-        return () => window.removeEventListener('loggingOut', handleLoggingOut)
-    }, [attendanceStatus?.status])
-
-    // Track mutation loading state - THIS prevents flickering
-    const [isMutating, setIsMutating] = useState(false)
-
-    const clockInMutation = trpc.attendance.clockIn.useMutation({
-        onMutate: () => {
-            setIsMutating(true)
-        },
-        onSuccess: async () => {
-            // Dispatch notification event for bell-style toast
-            window.dispatchEvent(new CustomEvent('new-notification', {
-                detail: {
-                    title: 'Clocked In Successfully',
-                    message: 'Your attendance has been marked. Have a productive day!',
-                    type: 'success'
-                }
-            }))
-
-            // Invalidate caches
-            utils.attendance.invalidate()
-            utils.admin.dashboard.getRecentActivities.invalidate()
-
-            // Wait for fresh data before hiding loading
-            await refetchStatus()
-
-            // Extra delay to ensure real-time updates have settled
-            await new Promise(resolve => setTimeout(resolve, 300))
-            setIsMutating(false)
-        },
-        onError: (error) => {
-            setIsMutating(false)
-            // Dispatch error notification
-            window.dispatchEvent(new CustomEvent('new-notification', {
-                detail: {
-                    title: 'Clock In Failed',
-                    message: error.message,
-                    type: 'error'
-                }
-            }))
-        }
-    })
-
-    const clockOutMutation = trpc.attendance.clockOut.useMutation({
-        onMutate: () => {
-            setIsMutating(true)
-        },
-        onSuccess: async () => {
-            // Dispatch notification event for bell-style toast
-            window.dispatchEvent(new CustomEvent('new-notification', {
-                detail: {
-                    title: 'Clocked Out Successfully',
-                    message: 'Your work hours have been logged. Great job today!',
-                    type: 'success'
-                }
-            }))
-
-            // Invalidate caches
-            utils.attendance.invalidate()
-            utils.admin.dashboard.getRecentActivities.invalidate()
-
-            // Wait for fresh data before hiding loading
-            await refetchStatus()
-
-            // Extra delay to ensure real-time updates have settled
-            await new Promise(resolve => setTimeout(resolve, 300))
-            setIsMutating(false)
-        },
-        onError: (error) => {
-            setIsMutating(false)
-            // Dispatch error notification
-            window.dispatchEvent(new CustomEvent('new-notification', {
-                detail: {
-                    title: 'Clock Out Failed',
-                    message: error.message,
-                    type: 'error'
-                }
-            }))
-        }
-    })
-
-    // =====================================================
-    // BUTTON STATE LOGIC - Loading-based (no flickering)
-    // =====================================================
-    const serverStatus = attendanceStatus?.status ?? 'not_clocked_in'
-
-    // During mutation, show loading state
-    // Otherwise show server status or frozen status if logging out
-    const buttonStatus = isMutating
-        ? serverStatus // Keep current status while loading
-        : (isLoggingOut ? (frozenStatusRef.current || 'not_clocked_in') : serverStatus)
-
-    const attendanceLoading = statusLoading && !isLoggingOut
-
-    const handleClockIn = async (isExtra: boolean = false) => {
-        try {
-            await clockInMutation.mutateAsync({ localDate: todayStr, isExtraDay: isExtra })
-        } catch (error: any) { }
-    }
-
-    const handleClockOut = async () => {
-        try {
-            await clockOutMutation.mutateAsync({ localDate: todayStr })
-        } catch (error: any) { }
-    }
-
     return (
 
-        <div className={cn("space-y-6 gesture-friendly", isMutating && "cursor-wait")}>
+        <div className="space-y-6 gesture-friendly">
             {/* Quick Actions Row */}
             <div className="grid grid-cols-1 gap-6">
                 <MetricCard
@@ -289,75 +129,16 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 py-2">
-                            {/* Attendance Button - Status-based rendering */}
-                            {attendanceLoading ? (
-                                <div className="flex items-center justify-center p-4 rounded-2xl border border-muted-foreground/10 bg-muted/5 animate-pulse min-h-[82px]">
-                                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                            {/* PWA Attendance Reminder */}
+                            <div className="flex items-center gap-3 p-4 rounded-2xl border border-primary/20 bg-primary/[0.05] dark:bg-primary/[0.08] cursor-default group sm:col-span-2">
+                                <div className="p-2.5 rounded-xl bg-primary/10 text-primary group-hover:scale-110 transition-transform">
+                                    <Smartphone className="h-5 w-5" />
                                 </div>
-                            ) : buttonStatus === 'clocked_in' ? (
-                                // STATUS: clocked_in → Show "Office - Out" button
-                                <button
-                                    onClick={handleClockOut}
-                                    disabled={isMutating}
-                                    className="flex items-center gap-3 p-4 rounded-2xl border border-orange-100/50 bg-orange-500/[0.08] dark:bg-orange-500/[0.08] hover:bg-orange-500/15 hover:border-orange-500/30 hover:shadow-lg hover:shadow-orange-500/10 transition-all duration-300 group/action cursor-pointer disabled:opacity-50"
-                                >
-                                    <div className="p-2.5 rounded-xl bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400 group-hover/action:scale-110 group-hover/action:rotate-3 transition-transform">
-                                        {isMutating ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogOut className="h-5 w-5" />}
-                                    </div>
-                                    <div className="flex flex-col text-left">
-                                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5 font-bold">Action</p>
-                                        <p className="text-sm font-bold group-hover/action:text-orange-600 transition-colors">Office - Out</p>
-                                    </div>
-                                </button>
-                            ) : buttonStatus === 'marked' ? (
-                                // STATUS: marked → Show "Marked Today's" badge
-                                <div className="flex items-center gap-3 p-4 rounded-2xl border border-green-200/50 bg-green-50/30 dark:bg-green-500/5 cursor-default relative overflow-hidden group">
-                                    <div className="p-2.5 rounded-xl bg-green-500/10 text-green-700 dark:text-green-400">
-                                        <UserCheck className="h-5 w-5" />
-                                    </div>
-                                    <div className="flex flex-col">
-                                        <p className="text-[10px] font-bold uppercase tracking-widest text-green-600/60 leading-none mb-1.5">Attendance</p>
-                                        <p className="text-sm font-bold text-green-700 dark:text-green-400">Marked Today's</p>
-                                    </div>
+                                <div className="flex flex-col">
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-primary/60 leading-none mb-1.5">Attendance</p>
+                                    <p className="text-sm font-bold text-primary">Use Mobile PWA App</p>
                                 </div>
-                            ) : isTodayHoliday ? (
-                                // Holiday check
-                                <div className="flex items-center gap-3 p-4 rounded-2xl border border-amber-200/50 bg-amber-50/30 dark:bg-amber-500/5 cursor-default group">
-                                    <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-400">
-                                        <Calendar className="h-5 w-5" />
-                                    </div>
-                                    <div className="flex flex-col">
-                                        <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600/60 leading-none mb-1.5">Holiday</p>
-                                        <p className="text-sm font-bold text-amber-700 dark:text-amber-400">Office Closed</p>
-                                    </div>
-                                </div>
-                            ) : isTodayOffDay ? (
-                                // Week off check
-                                <div className="flex items-center gap-3 p-4 rounded-2xl border border-muted-foreground/10 bg-muted/5 cursor-default group">
-                                    <div className="p-2.5 rounded-xl bg-muted/10 text-muted-foreground">
-                                        <Calendar className="h-5 w-5" />
-                                    </div>
-                                    <div className="flex flex-col">
-                                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Week off Day</p>
-                                        <p className="text-sm font-bold text-muted-foreground">Scheduled Off</p>
-                                    </div>
-                                </div>
-                            ) : (
-                                // STATUS: not_clocked_in → Show "Office - In" button
-                                <button
-                                    onClick={() => handleClockIn(false)}
-                                    disabled={isMutating}
-                                    className="flex items-center gap-3 p-4 rounded-2xl border border-emerald-100/50 bg-emerald-500/[0.08] dark:bg-emerald-500/[0.08] hover:bg-emerald-500/15 hover:border-emerald-500/30 hover:shadow-lg hover:shadow-emerald-500/10 transition-all duration-300 group/action cursor-pointer disabled:opacity-50"
-                                >
-                                    <div className="p-2.5 rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 group-hover/action:scale-110 group-hover/action:-rotate-3 transition-transform">
-                                        {isMutating ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogIn className="h-5 w-5" />}
-                                    </div>
-                                    <div className="flex flex-col text-left">
-                                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5 font-bold">Action</p>
-                                        <p className="text-sm font-bold group-hover/action:text-emerald-600 transition-colors">Office - In</p>
-                                    </div>
-                                </button>
-                            )}
+                            </div>
 
                             {/* Profile Item */}
                             <Link

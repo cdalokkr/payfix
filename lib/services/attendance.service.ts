@@ -2,7 +2,7 @@ import { db } from '@/lib/db'
 import { attendance, activities, officeSettings, officeClosures } from '@/lib/db/schema'
 import { eq, and, gte, lte, desc, sql, inArray } from 'drizzle-orm'
 import { throwAppError } from '@/lib/errors/app-errors'
-import { getLocalDateIST } from '@/lib/utils/date-utils'
+import { getLocalDateIST, getLocalTimeIST12Hour } from '@/lib/utils/date-utils'
 
 export class AttendanceService {
     /**
@@ -133,7 +133,7 @@ export class AttendanceService {
             user_id: profileId,
             activity_type: 'data_create',
             module: 'attendance',
-            description: `Clocked in at ${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}${isExtraDay ? ' (Extra Work)' : ''}`,
+            description: `Clocked in at ${getLocalTimeIST12Hour()}${isExtraDay ? ' (Extra Work)' : ''}`,
         })
 
         return data
@@ -192,7 +192,7 @@ export class AttendanceService {
             user_id: profileId,
             activity_type: 'data_edit',
             module: 'attendance',
-            description: `Clocked out at ${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}`,
+            description: `Clocked out at ${getLocalTimeIST12Hour()}`,
         })
 
         return data

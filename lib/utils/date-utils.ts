@@ -25,6 +25,20 @@ export function getLocalTimeIST(): string {
 }
 
 /**
+ * Get current time in IST timezone in 12-hour format
+ * Returns time like "06:59:08 PM"
+ */
+export function getLocalTimeIST12Hour(): string {
+    return new Date().toLocaleTimeString('en-US', {
+        timeZone: 'Asia/Kolkata',
+        hour12: true,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    })
+}
+
+/**
  * Get current datetime in IST timezone
  * Returns ISO-like string with IST offset
  */
