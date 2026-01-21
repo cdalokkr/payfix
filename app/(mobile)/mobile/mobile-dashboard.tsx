@@ -170,7 +170,7 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
         >
             {/* Today's Status Card - Fresh Modern UI */}
             <motion.div variants={itemVars} whileTap={{ scale: 0.98 }}>
-                <div className={`relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br ${getStatusColor()} p-6 text-white shadow-2xl shadow-primary/20 min-h-[300px] flex flex-col justify-between`}>
+                <div className={`relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br ${getStatusColor()} p-4 text-white shadow-2xl shadow-primary/20 min-h-[290px] flex flex-col justify-between`}>
                     {/* Glass Decorations */}
                     <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full -mr-24 -mt-24 blur-2xl" />
                     <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full -ml-16 -mb-16 blur-xl" />
@@ -184,12 +184,12 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
 
                             {/* Geofence/Location Status aligned with Date row */}
                             <div className="flex flex-col gap-2 mt-2">
-                                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/20 backdrop-blur-md border border-white/20 w-fit">
-                                    <div className={`w-1.5 h-1.5 rounded-full ${isLocChecking ? 'bg-amber-400 animate-pulse' : geofenceResult?.isAllowed ? 'bg-green-400' : 'bg-rose-400'} animate-pulse`} />
-                                    <span className="text-[10px] font-black uppercase tracking-wider text-white/90">
+                                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full backdrop-blur-md border w-fit ${!geofenceResult?.isAllowed && !isLocChecking ? 'bg-rose-500 border-rose-400' : 'bg-white/20 border-white/20'}`}>
+                                    <div className={`w-1.5 h-1.5 rounded-full ${isLocChecking ? 'bg-amber-400 animate-pulse' : geofenceResult?.isAllowed ? 'bg-green-400' : 'bg-white'} animate-pulse`} />
+                                    <span className="text-[10px] font-black uppercase tracking-wider text-white">
                                         {isLocChecking ? "Syncing Location" :
                                             geofenceResult?.isAllowed ? `${geofenceResult.withinOffice?.name}` :
-                                                "Access Restricted"}
+                                                "Outside office perimeter"}
                                     </span>
                                 </div>
 
@@ -198,15 +198,16 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                                     <motion.div
                                         initial={{ opacity: 0, y: 5 }}
                                         animate={{ opacity: 1, y: 0 }}
-                                        className="flex flex-col gap-1.5 px-1"
+                                        className="flex flex-col gap-1.5 w-full"
                                     >
                                         <div className="flex items-center gap-2 text-[9px] font-bold text-white/70 tracking-tight uppercase bg-black/10 w-fit px-2 py-1 rounded-lg backdrop-blur-sm">
                                             <IconMapPin className="w-3 h-3 text-white/60" />
                                             <span>{userCoords.lat.toFixed(6)}, {userCoords.lng.toFixed(6)}</span>
                                         </div>
                                         {!geofenceResult?.isAllowed && geofenceResult?.nearestOffice && (
-                                            <div className="text-[9px] font-black text-rose-100 uppercase tracking-widest bg-rose-500/40 px-2.5 py-1 rounded-lg w-fit border border-white/10 shadow-lg">
-                                                {geofenceResult.nearestOffice.name} • {(geofenceResult.nearestOffice.distance / 1000).toFixed(1)}KM
+                                            <div className="text-[10px] font-black text-white uppercase tracking-widest bg-rose-600/60 px-4 py-2 rounded-xl w-full border border-white/10 shadow-lg backdrop-blur-sm flex items-center justify-between">
+                                                <span className="opacity-70">Nearest: {geofenceResult.nearestOffice.name}</span>
+                                                <span className="bg-white/20 px-2 py-0.5 rounded-lg">{(geofenceResult.nearestOffice.distance / 1000).toFixed(1)}KM</span>
                                             </div>
                                         )}
                                     </motion.div>
@@ -288,13 +289,10 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                                     </div>
                                 ) : !geofenceResult?.isAllowed ? (
                                     /* Restricted State - Same place as buttons */
-                                    <div className="flex flex-col items-center justify-center p-6 bg-rose-500/30 rounded-[2.5rem] border border-white/20 backdrop-blur-md shadow-xl min-h-[110px]">
-                                        <IconMapPinOff className="w-8 h-8 text-rose-100 mb-2 opacity-80" />
-                                        <p className="text-[10px] font-black text-rose-100 uppercase tracking-[0.2em] text-center">
+                                    <div className="flex items-center justify-center gap-3 p-6 bg-rose-600/40 rounded-[2.5rem] border border-white/20 backdrop-blur-md shadow-xl min-h-[100px]">
+                                        <IconMapPinOff className="w-6 h-6 text-white animate-pulse" />
+                                        <p className="text-[11px] font-black text-white uppercase tracking-[0.2em]">
                                             Clocking Restricted
-                                        </p>
-                                        <p className="text-[9px] font-medium text-rose-100/60 uppercase mt-1">
-                                            Outside Office Perimeter
                                         </p>
                                     </div>
                                 ) : (
