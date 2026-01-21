@@ -3,7 +3,7 @@
 // ============================================
 import { z } from 'zod'
 import { router, protectedProcedure } from '../server'
-import { profiles, activities, designations } from '@/lib/db/schema'
+import { profiles, activities, designations, profilePhotoRequests } from '@/lib/db/schema'
 import { eq, and, desc, count } from 'drizzle-orm'
 import { profileUpdateSchema } from '@/lib/validations/auth'
 import { invalidateUserSession } from '@/lib/auth/optimized-context'
@@ -183,4 +183,172 @@ export const profileRouter = router({
       totalActivities: totalResult[0].value || 0,
     }
   }),
+
+  // =====================================================
+  // PROFILE PHOTO REQUESTS (Approval Workflow)
+  // =====================================================
+
+  // Get employee's pending photo request (if any)
+  getMyPendingPhotoRequest: protectedProcedure.query(async ({ ctx }) => {
+    const request = await ctx.db.query.profilePhotoRequests.findFirst({
+      where: and(
+        eq(profilePhotoRequests.profile_id, ctx.profile.id),
+        eq(profilePhotoRequests.status, 'pending')
+      ),
+      orderBy: [desc(profilePhotoRequests.created_at)]
+    })
+    return request || null
+  }),
+
+  // Get employee's last rejected request (to show retry option)
+  getMyLastRejectedRequest: protectedProcedure.query(async ({ ctx }) => {
+    const request = await ctx.db.query.profilePhotoRequests.findFirst({
+      where: and(
+        eq(profilePhotoRequests.profile_id, ctx.profile.id),
+        eq(profilePhotoRequests.status, 'rejected')
+      ),
+      orderBy: [desc(profilePhotoRequests.created_at)]
+    })
+    return request || null
+  }),
+
+  // Create photo update request (employee)
+  createPhotoUpdateRequest: protectedProcedure
+    .input(z.object({
+      pendingPhotoUrl: z.string().min(1)
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Check if there's already a pending request
+      const existingPending = await ctx.db.query.profilePhotoRequests.findFirst({
+        where: and(
+          eq(profilePhotoRequests.profile_id, ctx.profile.id),
+          eq(profilePhotoRequests.status, 'pending')
+        )
+      })
+
+      if (existingPending) {
+        throw new Error('You already have a pending photo update request. Please wait for admin approval.')
+      }
+
+      // Create new request
+      const [request] = await ctx.db.insert(profilePhotoRequests).values({
+        profile_id: ctx.profile.id,
+        pending_photo_url: input.pendingPhotoUrl,
+        status: 'pending'
+      }).returning()
+
+      // Log activity
+      await ctx.db.insert(activities).values({
+        user_id: ctx.profile.id,
+        activity_type: 'profile_update',
+        module: 'profile',
+        description: 'Requested profile photo update (pending approval)'
+      })
+
+      return request
+    }),
+
+  // Get all pending photo requests (admin/moderator)
+  getPendingPhotoRequests: protectedProcedure.query(async ({ ctx }) => {
+    // Only admin/moderator can access
+    if (ctx.profile.role !== 'admin' && ctx.profile.role !== 'moderator') {
+      throw new Error('Unauthorized')
+    }
+
+    const requests = await ctx.db.query.profilePhotoRequests.findMany({
+      where: eq(profilePhotoRequests.status, 'pending'),
+      with: {
+        profile: {
+          columns: {
+            id: true,
+            full_name: true,
+            email: true,
+            avatar_url: true
+          }
+        }
+      },
+      orderBy: [desc(profilePhotoRequests.created_at)]
+    })
+
+    return requests
+  }),
+
+  // Approve or reject photo request (admin/moderator)
+  reviewPhotoRequest: protectedProcedure
+    .input(z.object({
+      requestId: z.string().uuid(),
+      action: z.enum(['approve', 'reject']),
+      rejectionReason: z.string().optional()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Only admin/moderator can review
+      if (ctx.profile.role !== 'admin' && ctx.profile.role !== 'moderator') {
+        throw new Error('Unauthorized')
+      }
+
+      // Get the request
+      const request = await ctx.db.query.profilePhotoRequests.findFirst({
+        where: eq(profilePhotoRequests.id, input.requestId)
+      })
+
+      if (!request) {
+        throw new Error('Photo request not found')
+      }
+
+      if (request.status !== 'pending') {
+        throw new Error('This request has already been reviewed')
+      }
+
+      if (input.action === 'approve') {
+        // Update profile with new photo
+        await ctx.db.update(profiles)
+          .set({
+            avatar_url: request.pending_photo_url,
+            avatar_status: 'custom',
+            updated_at: new Date()
+          })
+          .where(eq(profiles.id, request.profile_id))
+
+        // Update request status
+        await ctx.db.update(profilePhotoRequests)
+          .set({
+            status: 'approved',
+            reviewed_by: ctx.profile.id,
+            reviewed_at: new Date()
+          })
+          .where(eq(profilePhotoRequests.id, input.requestId))
+
+        // Log activity for employee
+        await ctx.db.insert(activities).values({
+          user_id: request.profile_id,
+          activity_type: 'profile_update',
+          module: 'profile',
+          description: 'Profile photo update approved'
+        })
+
+        // Invalidate user session
+        invalidateUserSession(request.profile_id)
+
+      } else {
+        // Reject request
+        await ctx.db.update(profilePhotoRequests)
+          .set({
+            status: 'rejected',
+            reviewed_by: ctx.profile.id,
+            reviewed_at: new Date(),
+            rejection_reason: input.rejectionReason || 'Photo rejected by admin'
+          })
+          .where(eq(profilePhotoRequests.id, input.requestId))
+
+        // Log activity for employee
+        await ctx.db.insert(activities).values({
+          user_id: request.profile_id,
+          activity_type: 'profile_update',
+          module: 'profile',
+          description: `Profile photo update rejected: ${input.rejectionReason || 'No reason provided'}`
+        })
+      }
+
+      return { success: true, action: input.action }
+    }),
 })

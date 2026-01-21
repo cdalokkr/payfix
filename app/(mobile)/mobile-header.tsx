@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {
@@ -12,8 +13,21 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { LogoutModal } from "@/components/ui/logout-modal"
-import { IconBell, IconPower } from "@tabler/icons-react"
+import {
+    IconBell,
+    IconDotsVertical,
+    IconUser,
+    IconLock,
+    IconLogout
+} from "@tabler/icons-react"
 
 interface MobileHeaderProps {
     profile: {
@@ -25,6 +39,7 @@ interface MobileHeaderProps {
 }
 
 export function MobileHeader({ profile }: MobileHeaderProps) {
+    const router = useRouter()
     const [isConfirmOpen, setIsConfirmOpen] = useState(false)
     const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false)
 
@@ -49,8 +64,8 @@ export function MobileHeader({ profile }: MobileHeaderProps) {
 
                 {/* Header content */}
                 <div className="relative max-w-md mx-auto px-4 h-14 flex items-center justify-between">
-                    {/* Left: Avatar & Greeting */}
-                    <Link href="/mobile/profile" className="flex items-center gap-3 group">
+                    {/* Left: Avatar & Greeting - links to photo update */}
+                    <Link href="/mobile/update-photo" className="flex items-center gap-3 group">
                         <div className="relative">
                             <Avatar className="h-9 w-9 ring-2 ring-primary/20 group-hover:ring-primary/40 transition-all">
                                 <AvatarImage src={profile.avatar_url || ''} alt={profile.full_name || ''} />
@@ -80,15 +95,42 @@ export function MobileHeader({ profile }: MobileHeaderProps) {
                             <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
                         </Button>
 
-                        {/* Sign out */}
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setIsConfirmOpen(true)}
-                            className="h-9 w-9 rounded-full hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-600"
-                        >
-                            <IconPower className="w-5 h-5" />
-                        </Button>
+                        {/* Menu Popover */}
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-9 w-9 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
+                                >
+                                    <IconDotsVertical className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48 rounded-xl">
+                                <DropdownMenuItem
+                                    onClick={() => router.push('/mobile/profile')}
+                                    className="cursor-pointer"
+                                >
+                                    <IconUser className="w-4 h-4 mr-2" />
+                                    Update Profile
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    onClick={() => router.push('/mobile/change-password')}
+                                    className="cursor-pointer"
+                                >
+                                    <IconLock className="w-4 h-4 mr-2" />
+                                    Change Password
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                    onClick={() => setIsConfirmOpen(true)}
+                                    className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/30"
+                                >
+                                    <IconLogout className="w-4 h-4 mr-2" />
+                                    Sign Out
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
                 </div>
             </header>

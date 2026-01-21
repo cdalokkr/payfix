@@ -1,7 +1,7 @@
 "use client"
 
 import { MetricCard } from "@/components/dashboard/metric-card"
-import { User, Activity, BarChart3, Smartphone } from "lucide-react"
+import { Activity, BarChart3 } from "lucide-react"
 import Link from "next/link"
 import { trpc } from "@/lib/trpc/client"
 import { ActivityLogFeed, type UserActivity } from "@/components/dashboard/activity-log-feed"
@@ -129,31 +129,6 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 py-2">
-                            {/* PWA Attendance Reminder */}
-                            <div className="flex items-center gap-3 p-4 rounded-2xl border border-primary/20 bg-primary/[0.05] dark:bg-primary/[0.08] cursor-default group sm:col-span-2">
-                                <div className="p-2.5 rounded-xl bg-primary/10 text-primary group-hover:scale-110 transition-transform">
-                                    <Smartphone className="h-5 w-5" />
-                                </div>
-                                <div className="flex flex-col">
-                                    <p className="text-[10px] font-bold uppercase tracking-widest text-primary/60 leading-none mb-1.5">Attendance</p>
-                                    <p className="text-sm font-bold text-primary">Use Mobile PWA App</p>
-                                </div>
-                            </div>
-
-                            {/* Profile Item */}
-                            <Link
-                                href="/employee/profile"
-                                className="flex items-center gap-3 p-4 rounded-2xl border border-blue-100/50 bg-blue-500/[0.08] dark:bg-blue-500/[0.08] hover:bg-blue-500/15 hover:border-blue-500/30 hover:shadow-lg hover:shadow-blue-500/10 transition-all duration-300 group/action cursor-pointer"
-                            >
-                                <div className="p-2.5 rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 group-hover/action:scale-110 group-hover/action:rotate-3 transition-transform">
-                                    <User className="h-5 w-5" />
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5 font-bold">Settings</p>
-                                    <p className="text-sm font-bold group-hover/action:text-blue-600 transition-colors">Profile</p>
-                                </div>
-                            </Link>
-
                             {/* Reports Item */}
                             <Link
                                 href="/employee/reports"

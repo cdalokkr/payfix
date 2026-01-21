@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation"
 import Link from "next/link"
-import { IconHome, IconChecklist, IconUser } from "@tabler/icons-react"
+import { IconHome, IconChecklist } from "@tabler/icons-react"
 import { cn } from "@/lib/utils"
 import { motion } from "framer-motion"
 
@@ -17,11 +17,6 @@ const navItems = [
         icon: IconChecklist,
         label: "Attendance",
         isPrimary: true,
-    },
-    {
-        href: "/mobile/profile",
-        icon: IconUser,
-        label: "Profile",
     },
 ]
 

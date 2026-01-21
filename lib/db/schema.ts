@@ -185,6 +185,19 @@ export const pushSubscriptions = pgTable('push_subscriptions', {
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 
+// Profile Photo Requests (for approval workflow)
+export const profilePhotoRequests = pgTable('profile_photo_requests', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    profile_id: uuid('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+    pending_photo_url: text('pending_photo_url').notNull(),
+    status: text('status').notNull().default('pending'), // 'pending', 'approved', 'rejected'
+    reviewed_by: uuid('reviewed_by').references(() => profiles.id, { onDelete: 'set null' }),
+    reviewed_at: timestamp('reviewed_at', { withTimezone: true }),
+    rejection_reason: text('rejection_reason'),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
+
 // Relations
 export const profilesRelations = relations(profiles, ({ one, many }) => ({
     designation: one(designations, {
@@ -262,3 +275,13 @@ export const pushSubscriptionsRelations = relations(pushSubscriptions, ({ one })
     }),
 }));
 
+export const profilePhotoRequestsRelations = relations(profilePhotoRequests, ({ one }) => ({
+    profile: one(profiles, {
+        fields: [profilePhotoRequests.profile_id],
+        references: [profiles.id],
+    }),
+    reviewer: one(profiles, {
+        fields: [profilePhotoRequests.reviewed_by],
+        references: [profiles.id],
+    }),
+}));

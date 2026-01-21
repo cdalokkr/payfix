@@ -16,6 +16,7 @@ import {
     IconUser,
     IconMail,
     IconId,
+    IconClock,
 } from "@tabler/icons-react"
 import { createClient } from "@/lib/supabase/client"
 
@@ -24,6 +25,7 @@ interface ProfileData {
     email: string
     role: string
     avatarUrl: string | null
+    avatarStatus?: string | null  // 'default' or 'custom'
     employeeId?: string
     designation?: string | null
 }
@@ -38,6 +40,14 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
     const router = useRouter()
     const supabase = createClient()
     const updateProfilePicture = trpc.profile.updateProfilePicture.useMutation()
+    const createPhotoRequest = trpc.profile.createPhotoUpdateRequest.useMutation()
+
+    // Check if there's a pending photo request
+    const { data: pendingRequest, isLoading: pendingLoading } = trpc.profile.getMyPendingPhotoRequest.useQuery()
+
+    // Check if this is first-time upload or update request
+    const isFirstTimeUpload = profileData.avatarStatus !== 'custom'
+    const hasPendingRequest = !!pendingRequest
 
     const [status, setStatus] = useState<'idle' | 'streaming' | 'captured' | 'uploading' | 'success' | 'error'>('idle')
     const [errorMessage, setErrorMessage] = useState<string>('')
@@ -255,6 +265,10 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
             const formData = new FormData()
             formData.append('file', blob, 'avatar.jpg')
             formData.append('profileId', profileId)
+            // Use different path for pending photos
+            if (!isFirstTimeUpload) {
+                formData.append('isPending', 'true')
+            }
 
             const response = await fetch('/api/upload-avatar', {
                 method: 'POST',
@@ -271,14 +285,33 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
             addLog('Upload complete!')
             addLog(`URL: ${result.path?.slice(0, 40)}...`)
 
-            setStatus('success')
-            toast.success('Profile photo updated successfully!')
+            // Handle differently based on first-time vs update
+            if (isFirstTimeUpload) {
+                // First-time: Direct update (current behavior)
+                setStatus('success')
+                toast.success('Profile photo updated successfully!')
 
-            setTimeout(() => {
-                onSuccess?.()
-                router.push('/mobile')
-                router.refresh()
-            }, 1500)
+                setTimeout(() => {
+                    onSuccess?.()
+                    router.push('/mobile')
+                    router.refresh()
+                }, 1500)
+            } else {
+                // Subsequent update: Create pending request
+                addLog('Creating approval request...')
+                await createPhotoRequest.mutateAsync({
+                    pendingPhotoUrl: result.path
+                })
+
+                setStatus('success')
+                toast.success('Photo submitted for admin approval!')
+
+                setTimeout(() => {
+                    onSuccess?.()
+                    router.push('/mobile')
+                    router.refresh()
+                }, 1500)
+            }
         } catch (error: any) {
             const errMsg = error?.message || 'Unknown error'
             addLog(`ERROR: ${errMsg}`)
@@ -288,7 +321,7 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         } finally {
             setIsUploading(false)
         }
-    }, [capturedImage, profileId, router, onSuccess, addLog])
+    }, [capturedImage, profileId, router, onSuccess, addLog, isFirstTimeUpload, createPhotoRequest])
 
     // Handle back button
     const handleBack = useCallback(() => {
@@ -297,9 +330,11 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
     }, [stopCamera, router])
 
     useEffect(() => {
+        // Don't start camera if there's a pending request
+        if (hasPendingRequest) return
         startCamera()
         return () => stopCamera()
-    }, [startCamera, stopCamera])
+    }, [startCamera, stopCamera, hasPendingRequest])
 
     return (
         <div className="fixed inset-0 bg-slate-950 flex flex-col z-[60] overflow-hidden">
@@ -370,7 +405,20 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
 
                             {status !== 'streaming' && (
                                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/40 backdrop-blur-sm text-white/50">
-                                    {status === 'error' ? (
+                                    {hasPendingRequest ? (
+                                        <motion.div
+                                            initial={{ opacity: 0, scale: 0.9 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            className="text-center p-8 bg-amber-500/10 backdrop-blur-md rounded-3xl border border-amber-500/20 mx-6"
+                                        >
+                                            <IconClock className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+                                            <p className="text-base font-bold text-amber-200 mb-2">Photo Update Pending</p>
+                                            <p className="text-sm text-amber-100/70">Your photo update request is awaiting admin approval.</p>
+                                            <Button onClick={handleBack} variant="outline" className="mt-6 border-amber-500/30 text-amber-100 hover:bg-amber-500/20 rounded-xl">
+                                                Go Back
+                                            </Button>
+                                        </motion.div>
+                                    ) : status === 'error' ? (
                                         <motion.div
                                             initial={{ opacity: 0, scale: 0.9 }}
                                             animate={{ opacity: 1, scale: 1 }}
