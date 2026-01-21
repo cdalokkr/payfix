@@ -546,60 +546,152 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                 </div>
             </div>
 
-            {/* Full-screen Upload Overlay */}
+            {/* Bottom Slide-up Overlay for Progress/Success/Error */}
             <AnimatePresence>
-                {status === 'uploading' && (
+                {(status === 'uploading' || status === 'success' || status === 'error') && (
                     <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[70] bg-slate-950/95 backdrop-blur-xl flex flex-col items-center justify-center p-6"
+                        initial={{ y: '100%' }}
+                        animate={{ y: 0 }}
+                        exit={{ y: '100%' }}
+                        transition={{ type: 'spring', stiffness: 400, damping: 40 }}
+                        className="fixed bottom-0 left-0 right-0 z-[70] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]"
                     >
-                        <motion.div
-                            initial={{ scale: 0.8 }}
-                            animate={{ scale: 1 }}
-                            className="w-20 h-20 rounded-full bg-primary/20 border-4 border-primary/30 flex items-center justify-center mb-4"
-                        >
-                            <IconLoader2 className="w-10 h-10 animate-spin text-primary" />
-                        </motion.div>
-                        <p className="text-white text-lg font-bold mb-4">Updating Photo</p>
+                        <div className="max-w-md mx-auto bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden shadow-2xl">
+                            {status === 'uploading' && (
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    className="p-5"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className="relative w-14 h-14 flex-shrink-0">
+                                            <motion.div
+                                                animate={{ rotate: 360 }}
+                                                transition={{ repeat: Infinity, duration: 1.5, ease: 'linear' }}
+                                                className="absolute inset-0 rounded-full border-3 border-t-primary border-r-primary/30 border-b-primary/10 border-l-primary/30"
+                                            />
+                                            <div className="absolute inset-0 flex items-center justify-center">
+                                                <IconCamera className="w-6 h-6 text-primary" />
+                                            </div>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-white font-bold text-base">Uploading Photo...</p>
+                                            <div className="mt-2 space-y-0.5 max-h-16 overflow-y-auto">
+                                                {debugLogs.slice(-3).map((log, i) => (
+                                                    <p key={i} className={`text-xs truncate ${log.includes('ERROR') ? 'text-red-400' : 'text-slate-400'}`}>
+                                                        {log}
+                                                    </p>
+                                                ))}
+                                                {debugLogs.length === 0 && (
+                                                    <p className="text-slate-500 text-xs">Initializing...</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {/* Progress bar */}
+                                    <motion.div
+                                        initial={{ scaleX: 0 }}
+                                        animate={{ scaleX: 1 }}
+                                        transition={{ duration: 3, ease: 'easeOut' }}
+                                        className="mt-4 h-1 bg-gradient-to-r from-primary via-primary/80 to-primary rounded-full origin-left"
+                                    />
+                                </motion.div>
+                            )}
 
-                        {/* Debug Log Display */}
-                        <div className="w-full max-w-sm bg-black/50 rounded-xl p-3 border border-white/10">
-                            <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Upload Progress</p>
-                            <div className="space-y-1 max-h-48 overflow-y-auto">
-                                {debugLogs.map((log, i) => (
-                                    <p key={i} className={`text-xs font-mono ${log.includes('ERROR') ? 'text-red-400' :
-                                        log.includes('OK') ? 'text-green-400' :
-                                            'text-slate-300'
-                                        }`}>
-                                        {log}
-                                    </p>
-                                ))}
-                                {debugLogs.length === 0 && (
-                                    <p className="text-slate-500 text-xs">Initializing...</p>
-                                )}
-                            </div>
+                            {status === 'success' && (
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    className="p-5"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <motion.div
+                                            initial={{ scale: 0 }}
+                                            animate={{ scale: 1 }}
+                                            transition={{ type: 'spring', stiffness: 300, damping: 15 }}
+                                            className="w-14 h-14 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0"
+                                        >
+                                            <motion.div
+                                                initial={{ scale: 0 }}
+                                                animate={{ scale: 1 }}
+                                                transition={{ type: 'spring', delay: 0.15, stiffness: 400, damping: 10 }}
+                                            >
+                                                <IconCheck className="w-7 h-7 text-green-500" />
+                                            </motion.div>
+                                        </motion.div>
+                                        <div className="flex-1">
+                                            <motion.p
+                                                initial={{ opacity: 0, x: -10 }}
+                                                animate={{ opacity: 1, x: 0 }}
+                                                transition={{ delay: 0.1 }}
+                                                className="text-white font-bold text-base"
+                                            >
+                                                {isFirstTimeUpload ? 'Photo Updated!' : 'Photo Submitted for Approval!'}
+                                            </motion.p>
+                                            <motion.p
+                                                initial={{ opacity: 0, x: -10 }}
+                                                animate={{ opacity: 1, x: 0 }}
+                                                transition={{ delay: 0.2 }}
+                                                className="text-slate-400 text-sm mt-0.5"
+                                            >
+                                                {isFirstTimeUpload
+                                                    ? 'Redirecting to dashboard...'
+                                                    : 'An admin will review your request soon.'}
+                                            </motion.p>
+                                        </div>
+                                        <motion.div
+                                            initial={{ scale: 0, rotate: -180 }}
+                                            animate={{ scale: 1, rotate: 0 }}
+                                            transition={{ type: 'spring', delay: 0.25, stiffness: 300, damping: 15 }}
+                                            className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center"
+                                        >
+                                            <IconCheck className="w-5 h-5 text-white" />
+                                        </motion.div>
+                                    </div>
+                                </motion.div>
+                            )}
+
+                            {status === 'error' && (
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    className="p-5"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <motion.div
+                                            initial={{ scale: 0 }}
+                                            animate={{ scale: 1 }}
+                                            transition={{ type: 'spring', stiffness: 300, damping: 15 }}
+                                            className="w-14 h-14 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0"
+                                        >
+                                            <IconX className="w-7 h-7 text-red-500" />
+                                        </motion.div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-white font-bold text-base">Upload Failed</p>
+                                            <p className="text-red-400 text-sm mt-0.5 truncate">
+                                                {errorMessage || 'Something went wrong'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="mt-4 flex gap-3">
+                                        <Button
+                                            onClick={handleRetake}
+                                            variant="outline"
+                                            className="flex-1 h-11 rounded-xl border-white/10 bg-white/5 text-white hover:bg-white/10"
+                                        >
+                                            <IconRefresh className="w-4 h-4 mr-2" />
+                                            Retake
+                                        </Button>
+                                        <Button
+                                            onClick={handleUpload}
+                                            className="flex-1 h-11 rounded-xl bg-primary hover:bg-primary/90"
+                                        >
+                                            Try Again
+                                        </Button>
+                                    </div>
+                                </motion.div>
+                            )}
                         </div>
-                    </motion.div>
-                )}
-                {status === 'success' && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[70] bg-slate-950/90 backdrop-blur-xl flex flex-col items-center justify-center"
-                    >
-                        <motion.div
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            transition={{ type: "spring", stiffness: 200, damping: 15 }}
-                            className="w-24 h-24 rounded-full bg-green-500/20 border-4 border-green-500/30 flex items-center justify-center mb-6"
-                        >
-                            <IconCheck className="w-12 h-12 text-green-500" />
-                        </motion.div>
-                        <p className="text-white text-xl font-bold">Photo Updated!</p>
-                        <p className="text-slate-400 text-sm mt-2">Redirecting to dashboard...</p>
                     </motion.div>
                 )}
             </AnimatePresence>

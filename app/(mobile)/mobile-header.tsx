@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -21,12 +20,15 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { LogoutModal } from "@/components/ui/logout-modal"
+import { trpc } from "@/lib/trpc/client"
 import {
     IconBell,
     IconDotsVertical,
     IconUser,
     IconLock,
-    IconLogout
+    IconLogout,
+    IconClock,
+    IconAlertTriangle
 } from "@tabler/icons-react"
 
 interface MobileHeaderProps {
@@ -42,6 +44,10 @@ export function MobileHeader({ profile }: MobileHeaderProps) {
     const router = useRouter()
     const [isConfirmOpen, setIsConfirmOpen] = useState(false)
     const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false)
+    const [isPendingDialogOpen, setIsPendingDialogOpen] = useState(false)
+
+    // Query for pending photo request
+    const { data: pendingRequest } = trpc.profile.getMyPendingPhotoRequest.useQuery()
 
     const getInitials = () => {
         if (profile.full_name) {
@@ -51,6 +57,15 @@ export function MobileHeader({ profile }: MobileHeaderProps) {
     }
 
     const firstName = profile.full_name?.split(' ')[0] || 'User'
+
+    // Handle avatar click - check for pending before navigating
+    const handleAvatarClick = () => {
+        if (pendingRequest) {
+            setIsPendingDialogOpen(true)
+        } else {
+            router.push('/mobile/update-photo')
+        }
+    }
 
     return (
         <>
@@ -64,8 +79,8 @@ export function MobileHeader({ profile }: MobileHeaderProps) {
 
                 {/* Header content */}
                 <div className="relative max-w-md mx-auto px-4 h-14 flex items-center justify-between">
-                    {/* Left: Avatar & Greeting - links to photo update */}
-                    <Link href="/mobile/update-photo" className="flex items-center gap-3 group">
+                    {/* Left: Avatar & Greeting - check pending before photo update */}
+                    <button onClick={handleAvatarClick} className="flex items-center gap-3 group text-left">
                         <div className="relative">
                             <Avatar className="h-9 w-9 ring-2 ring-primary/20 group-hover:ring-primary/40 transition-all">
                                 <AvatarImage src={profile.avatar_url || ''} alt={profile.full_name || ''} />
@@ -73,14 +88,18 @@ export function MobileHeader({ profile }: MobileHeaderProps) {
                                     {getInitials()}
                                 </AvatarFallback>
                             </Avatar>
-                            {/* Online indicator */}
-                            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full ring-2 ring-white dark:ring-slate-900" />
+                            {/* Pending indicator if request exists */}
+                            {pendingRequest ? (
+                                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-amber-500 rounded-full ring-2 ring-white dark:ring-slate-900 animate-pulse" />
+                            ) : (
+                                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full ring-2 ring-white dark:ring-slate-900" />
+                            )}
                         </div>
                         <div className="flex flex-col">
                             <span className="text-xs text-muted-foreground leading-none">Welcome back</span>
                             <span className="text-sm font-semibold text-foreground leading-tight">{firstName}</span>
                         </div>
-                    </Link>
+                    </button>
 
                     {/* Right: Actions */}
                     <div className="flex items-center gap-1">
@@ -134,6 +153,29 @@ export function MobileHeader({ profile }: MobileHeaderProps) {
                     </div>
                 </div>
             </header>
+
+            {/* Pending Photo Warning Dialog */}
+            <Dialog open={isPendingDialogOpen} onOpenChange={setIsPendingDialogOpen}>
+                <DialogContent className="max-w-xs mx-auto rounded-3xl">
+                    <DialogHeader className="text-center">
+                        <div className="mx-auto mb-4 w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                            <IconClock className="w-8 h-8 text-amber-600" />
+                        </div>
+                        <DialogTitle>Photo Update Pending</DialogTitle>
+                        <DialogDescription className="text-center">
+                            Your previous photo update request is still awaiting admin approval. You cannot submit a new photo until it's reviewed.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="sm:justify-center">
+                        <Button
+                            onClick={() => setIsPendingDialogOpen(false)}
+                            className="w-full rounded-xl"
+                        >
+                            Got it
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Confirmation Dialog */}
             <Dialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
