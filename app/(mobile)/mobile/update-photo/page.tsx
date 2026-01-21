@@ -20,7 +20,7 @@ export default async function UpdatePhotoPage() {
     // Fetch profile data with designation
     const { data: profile, error } = await supabase
         .from('profiles')
-        .select('id, full_name, email, role, avatar_url, avatar_status, designation:designations(name)')
+        .select('id, full_name, email, role, avatar_url, avatar_status, mobile_no, designation:designations(name)')
         .eq('id', user.id)
         .single()
 
@@ -47,6 +47,7 @@ export default async function UpdatePhotoPage() {
                 role: profile.role,
                 avatarUrl: profile.avatar_url,
                 avatarStatus: profile.avatar_status,
+                mobileNo: profile.mobile_no || null,
                 designation: designationName || null
             }}
         />

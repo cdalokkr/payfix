@@ -17,6 +17,7 @@ import {
     IconMail,
     IconId,
     IconClock,
+    IconPhone,
 } from "@tabler/icons-react"
 import { createClient } from "@/lib/supabase/client"
 
@@ -27,6 +28,7 @@ interface ProfileData {
     avatarUrl: string | null
     avatarStatus?: string | null  // 'default' or 'custom'
     employeeId?: string
+    mobileNo?: string | null
     designation?: string | null
 }
 
@@ -111,12 +113,12 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         }
 
         try {
-            // Standard HD first, basic on retry
+            // Full HD for clearer selfies with better visibility
             const constraints: MediaStreamConstraints = retryCount === 0 ? {
                 video: {
                     facingMode: 'user',
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 },
+                    width: { ideal: 1920, min: 1280 },
+                    height: { ideal: 1080, min: 720 },
                 },
                 audio: false,
             } : {
@@ -206,9 +208,9 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         const ctx = canvas.getContext('2d')
         if (!ctx) return
 
-        // Set canvas to optimized square (500x500 is great for avatars, saves bandwidth)
-        canvas.width = 500
-        canvas.height = 500
+        // Higher resolution for clearer photos (720x720 for quality)
+        canvas.width = 720
+        canvas.height = 720
 
         // Source dimensions
         const vw = video.videoWidth
@@ -477,30 +479,38 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                         animate={{ opacity: 1, y: 0 }}
                         className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-lg"
                     >
-                        <div className="flex items-center gap-4">
-                            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 border-2 border-primary/30 flex items-center justify-center overflow-hidden">
+                        <div className="flex items-start gap-4">
+                            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 border-2 border-primary/30 flex items-center justify-center overflow-hidden shrink-0">
                                 {profileData.avatarUrl ? (
                                     <img src={profileData.avatarUrl} alt="Current" className="w-full h-full object-cover" />
                                 ) : (
                                     <IconUser className="w-7 h-7 text-primary" />
                                 )}
                             </div>
-                            <div className="flex-1 min-w-0">
+                            <div className="flex-1 min-w-0 space-y-1.5">
                                 <p className="text-white font-bold text-base truncate">{profileData.fullName}</p>
-                                <div className="flex items-center gap-2 mt-1">
-                                    <IconMail className="w-3.5 h-3.5 text-slate-500" />
+                                <div className="flex items-center gap-2">
+                                    <IconMail className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                                     <p className="text-slate-400 text-xs truncate">{profileData.email}</p>
                                 </div>
-                                {profileData.designation && (
-                                    <div className="flex items-center gap-2 mt-0.5">
-                                        <IconId className="w-3.5 h-3.5 text-slate-500" />
-                                        <p className="text-slate-500 text-xs">{profileData.designation}</p>
+                                {profileData.mobileNo && (
+                                    <div className="flex items-center gap-2">
+                                        <IconPhone className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                                        <p className="text-slate-400 text-xs">{profileData.mobileNo}</p>
                                     </div>
                                 )}
+                                {/* Designation and Role Badges */}
+                                <div className="flex items-center gap-2 flex-wrap pt-1">
+                                    {profileData.designation && (
+                                        <span className="px-2.5 py-1 rounded-full bg-slate-700/50 text-slate-300 text-[10px] font-bold uppercase tracking-wider border border-slate-600/30">
+                                            {profileData.designation}
+                                        </span>
+                                    )}
+                                    <span className="px-2.5 py-1 rounded-full bg-primary/20 text-primary text-[10px] font-bold uppercase tracking-wider border border-primary/30">
+                                        {profileData.role}
+                                    </span>
+                                </div>
                             </div>
-                            <span className="px-3 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wider">
-                                {profileData.role}
-                            </span>
                         </div>
                     </motion.div>
                 </div>
