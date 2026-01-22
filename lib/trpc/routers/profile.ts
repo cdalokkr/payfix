@@ -288,7 +288,8 @@ export const profileRouter = router({
 
       // Get the request
       const request = await ctx.db.query.profilePhotoRequests.findFirst({
-        where: eq(profilePhotoRequests.id, input.requestId)
+        where: eq(profilePhotoRequests.id, input.requestId),
+        with: { profile: true }
       })
 
       if (!request) {
@@ -329,6 +330,19 @@ export const profileRouter = router({
         // Invalidate user session
         invalidateUserSession(request.profile_id)
 
+        // Log activity for reviewer
+        await ctx.db.insert(activities).values({
+          user_id: ctx.profile.id,
+          activity_type: 'data_edit',
+          module: 'profile',
+          description: `Approved photo update for ${request.profile?.full_name || request.profile?.email || 'employee'}`,
+          metadata: {
+            request_id: input.requestId,
+            employee_id: request.profile_id,
+            timestamp: new Date().toISOString()
+          }
+        })
+
       } else {
         // Reject request
         await ctx.db.update(profilePhotoRequests)
@@ -346,6 +360,20 @@ export const profileRouter = router({
           activity_type: 'profile_update',
           module: 'profile',
           description: `Profile photo update rejected: ${input.rejectionReason || 'No reason provided'}`
+        })
+
+        // Log activity for reviewer
+        await ctx.db.insert(activities).values({
+          user_id: ctx.profile.id,
+          activity_type: 'data_edit',
+          module: 'profile',
+          description: `Rejected photo update for ${request.profile?.full_name || request.profile?.email || 'employee'}`,
+          metadata: {
+            request_id: input.requestId,
+            employee_id: request.profile_id,
+            reason: input.rejectionReason,
+            timestamp: new Date().toISOString()
+          }
         })
       }
 

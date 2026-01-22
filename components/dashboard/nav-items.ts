@@ -67,6 +67,14 @@ export const adminNavItems: NavGroup[] = [
         requiredRole: "admin",
         description: "System analytics and reports"
       },
+      {
+        title: "Photo Approvals",
+        href: "/admin/photo-approvals",
+        icon: "Camera",
+        moduleId: "profile",
+        requiredRole: "admin",
+        description: "Review employee photo updates"
+      },
     ]
   },
   {
@@ -151,6 +159,13 @@ export const moderatorNavItems: NavGroup[] = [
         icon: "FileChartColumnIncreasing",
         moduleId: "reports",
         description: "View reports"
+      },
+      {
+        title: "Photo Approvals",
+        href: "/moderator/photo-approvals",
+        icon: "Camera",
+        moduleId: "profile",
+        description: "Review employee photo updates"
       },
     ]
   },
