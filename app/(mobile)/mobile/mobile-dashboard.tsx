@@ -296,43 +296,53 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                                         </p>
                                     </div>
                                 ) : (
-                                    /* IN/OUT Buttons */
-                                    <div className="grid grid-cols-2 gap-3 min-h-[110px]">
-                                        {/* IN Icon */}
+                                    <div className="grid grid-cols-2 gap-2.5 min-h-[70px]">
+                                        {/* Clock IN Button */}
                                         <Link
                                             href="/mobile/attendance?action=clock_in"
-                                            className="flex items-center gap-3 p-4 rounded-[1.8rem] bg-white/20 backdrop-blur-md border border-white/30 transition-all active:scale-95 group shadow-lg"
+                                            className={`flex items-center gap-2 px-3 py-2.5 rounded-2xl backdrop-blur-md border transition-all active:scale-95 group shadow-lg
+                                                ${hasCheckedIn
+                                                    ? 'bg-emerald-500/30 border-emerald-400/40'
+                                                    : 'bg-white/15 border-white/25 hover:bg-white/25'}`}
                                         >
-                                            <div className="w-10 h-10 rounded-2xl bg-emerald-500 flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/20">
-                                                <IconLogin className="w-5 h-5 text-white" />
+                                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-md transition-all
+                                                ${hasCheckedIn
+                                                    ? 'bg-emerald-400 shadow-emerald-500/30'
+                                                    : 'bg-white/30 group-hover:bg-white/40'}`}>
+                                                <IconLogin className={`w-4 h-4 ${hasCheckedIn ? 'text-white' : 'text-white/90'}`} />
                                             </div>
-                                            <div className="flex flex-col">
-                                                <p className="text-[9px] font-black uppercase tracking-widest text-white/60 leading-none mb-1.5">IN</p>
-                                                <p className="text-sm font-black text-white leading-none">
-                                                    {todayAttendance?.check_in
-                                                        ? format(new Date(todayAttendance.check_in), 'hh:mm a')
-                                                        : '--:--'}
-                                                </p>
-                                            </div>
+                                            <span className="text-[10px] font-black uppercase tracking-wider text-white/70">IN</span>
+                                            <span className="text-xs font-black text-white ml-auto">
+                                                {todayAttendance?.check_in
+                                                    ? format(new Date(todayAttendance.check_in), 'hh:mm a')
+                                                    : '--:--'}
+                                            </span>
                                         </Link>
 
-                                        {/* OUT Icon */}
+                                        {/* Clock OUT Button */}
                                         <Link
                                             href="/mobile/attendance?action=clock_out"
-                                            className={`flex items-center gap-3 p-4 rounded-[1.8rem] bg-white/20 backdrop-blur-md border border-white/30 transition-all active:scale-95 group shadow-lg
-                                            ${(!todayAttendance?.check_in || todayAttendance?.check_out) ? 'opacity-40 pointer-events-none grayscale' : ''}`}
+                                            className={`flex items-center gap-2 px-3 py-2.5 rounded-2xl backdrop-blur-md border transition-all active:scale-95 group shadow-lg
+                                                ${hasCheckedOut
+                                                    ? 'bg-orange-500/30 border-orange-400/40'
+                                                    : hasCheckedIn
+                                                        ? 'bg-white/15 border-white/25 hover:bg-white/25'
+                                                        : 'opacity-40 pointer-events-none grayscale bg-white/10 border-white/15'}`}
                                         >
-                                            <div className="w-10 h-10 rounded-2xl bg-orange-500 flex items-center justify-center shrink-0 shadow-lg shadow-orange-500/20">
-                                                <IconLogout className="w-5 h-5 text-white" />
+                                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-md transition-all
+                                                ${hasCheckedOut
+                                                    ? 'bg-orange-400 shadow-orange-500/30'
+                                                    : hasCheckedIn
+                                                        ? 'bg-white/30 group-hover:bg-white/40'
+                                                        : 'bg-white/20'}`}>
+                                                <IconLogout className={`w-4 h-4 ${hasCheckedOut ? 'text-white' : hasCheckedIn ? 'text-white/90' : 'text-white/50'}`} />
                                             </div>
-                                            <div className="flex flex-col">
-                                                <p className="text-[9px] font-black uppercase tracking-widest text-white/60 leading-none mb-1.5">OUT</p>
-                                                <p className="text-sm font-black text-white leading-none">
-                                                    {todayAttendance?.check_out
-                                                        ? format(new Date(todayAttendance.check_out), 'hh:mm a')
-                                                        : '--:--'}
-                                                </p>
-                                            </div>
+                                            <span className="text-[10px] font-black uppercase tracking-wider text-white/70">OUT</span>
+                                            <span className="text-xs font-black text-white ml-auto">
+                                                {todayAttendance?.check_out
+                                                    ? format(new Date(todayAttendance.check_out), 'hh:mm a')
+                                                    : '--:--'}
+                                            </span>
                                         </Link>
                                     </div>
                                 )}
@@ -369,30 +379,32 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
             </motion.div>
 
             {/* Profile Photo Warning */}
-            {!profile.avatar_url && (
-                <motion.div variants={itemVars}>
-                    <Card className="rounded-[2rem] border-amber-500/20 bg-amber-50/50 dark:bg-amber-950/10 shadow-none border-dashed border-2 overflow-hidden">
-                        <CardContent className="p-5">
-                            <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
-                                    <IconAlertTriangle className="w-6 h-6 text-amber-600" />
+            {
+                !profile.avatar_url && (
+                    <motion.div variants={itemVars}>
+                        <Card className="rounded-[2rem] border-amber-500/20 bg-amber-50/50 dark:bg-amber-950/10 shadow-none border-dashed border-2 overflow-hidden">
+                            <CardContent className="p-5">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+                                        <IconAlertTriangle className="w-6 h-6 text-amber-600" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <p className="font-black text-sm text-amber-900 dark:text-amber-200 uppercase tracking-tight">Missing Profile Photo</p>
+                                        <p className="text-xs text-amber-700/80 dark:text-amber-500/80 mb-3 font-medium">
+                                            Required for face verification.
+                                        </p>
+                                        <Link href="/mobile/profile">
+                                            <Button size="sm" variant="outline" className="h-9 px-4 rounded-xl text-[11px] font-black border-amber-200 dark:border-amber-800/50 hover:bg-amber-500 hover:text-white transition-all uppercase tracking-wider">
+                                                Setup Now
+                                            </Button>
+                                        </Link>
+                                    </div>
                                 </div>
-                                <div className="flex-1">
-                                    <p className="font-black text-sm text-amber-900 dark:text-amber-200 uppercase tracking-tight">Missing Profile Photo</p>
-                                    <p className="text-xs text-amber-700/80 dark:text-amber-500/80 mb-3 font-medium">
-                                        Required for face verification.
-                                    </p>
-                                    <Link href="/mobile/profile">
-                                        <Button size="sm" variant="outline" className="h-9 px-4 rounded-xl text-[11px] font-black border-amber-200 dark:border-amber-800/50 hover:bg-amber-500 hover:text-white transition-all uppercase tracking-wider">
-                                            Setup Now
-                                        </Button>
-                                    </Link>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </motion.div>
-            )}
-        </motion.div>
+                            </CardContent>
+                        </Card>
+                    </motion.div>
+                )
+            }
+        </motion.div >
     )
 }
