@@ -22,6 +22,12 @@ import {
   SquareUser,
 
   Briefcase,
+  ScanFace,
+  Camera,
+  CheckCircle2,
+  XCircle,
+  History,
+  UserCheck,
 } from 'lucide-react';
 
 export const Icons: Record<string, React.ElementType> = {
@@ -48,4 +54,10 @@ export const Icons: Record<string, React.ElementType> = {
   UserStar,
   SquareUser,
   Briefcase,
+  ScanFace,
+  Camera,
+  CheckCircle2,
+  XCircle,
+  History,
+  UserCheck,
 };

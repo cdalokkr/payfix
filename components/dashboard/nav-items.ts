@@ -70,7 +70,7 @@ export const adminNavItems: NavGroup[] = [
       {
         title: "Photo Approvals",
         href: "/admin/photo-approvals",
-        icon: "Camera",
+        icon: "ScanFace",
         moduleId: "profile",
         requiredRole: "admin",
         description: "Review employee photo updates"
@@ -163,7 +163,7 @@ export const moderatorNavItems: NavGroup[] = [
       {
         title: "Photo Approvals",
         href: "/moderator/photo-approvals",
-        icon: "Camera",
+        icon: "ScanFace",
         moduleId: "profile",
         description: "Review employee photo updates"
       },

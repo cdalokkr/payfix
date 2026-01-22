@@ -273,6 +273,55 @@ export const profileRouter = router({
     return requests
   }),
 
+  // Get photo request stats (admin/moderator)
+  getPhotoRequestStats: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.profile.role !== 'admin' && ctx.profile.role !== 'moderator') {
+      throw new Error('Unauthorized')
+    }
+
+    const [pending, approved, rejected] = await Promise.all([
+      ctx.db.select({ count: count() }).from(profilePhotoRequests).where(eq(profilePhotoRequests.status, 'pending')),
+      ctx.db.select({ count: count() }).from(profilePhotoRequests).where(eq(profilePhotoRequests.status, 'approved')),
+      ctx.db.select({ count: count() }).from(profilePhotoRequests).where(eq(profilePhotoRequests.status, 'rejected')),
+    ])
+
+    return {
+      pending: pending[0].count,
+      approved: approved[0].count,
+      rejected: rejected[0].count,
+      total: pending[0].count + approved[0].count + rejected[0].count
+    }
+  }),
+
+  // Get all photo requests with history (admin/moderator)
+  getAllPhotoRequests: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.profile.role !== 'admin' && ctx.profile.role !== 'moderator') {
+      throw new Error('Unauthorized')
+    }
+
+    return await ctx.db.query.profilePhotoRequests.findMany({
+      with: {
+        profile: {
+          columns: {
+            id: true,
+            full_name: true,
+            email: true,
+            avatar_url: true,
+            sex: true
+          }
+        },
+        reviewer: {
+          columns: {
+            id: true,
+            full_name: true,
+            email: true
+          }
+        }
+      },
+      orderBy: [desc(profilePhotoRequests.created_at)]
+    })
+  }),
+
   // Approve or reject photo request (admin/moderator)
   reviewPhotoRequest: protectedProcedure
     .input(z.object({

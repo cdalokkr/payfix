@@ -1,44 +1,56 @@
 "use client"
 
-import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState, useMemo } from "react"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle
-} from "@/components/ui/dialog"
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetFooter,
+    SheetHeader,
+    SheetTitle,
+} from "@/components/ui/sheet"
 import { trpc } from "@/lib/trpc/client"
 import { toast } from "sonner"
 import {
     IconCheck,
     IconX,
-    IconCamera,
     IconLoader2,
-    IconArrowRight
+    IconArrowRight,
+    IconScan,
+    IconClock,
+    IconCircleCheck,
+    IconCircleX,
+    IconRefresh
 } from "@tabler/icons-react"
 import { formatDistanceToNow } from "date-fns"
 import { DashboardPageLayout } from "@/components/dashboard/dashboard-page-layout"
-import { motion, AnimatePresence } from "framer-motion"
+import { CompactMetricCard } from "@/components/dashboard/compact-metric-card"
+import { DataTable } from "@/components/ui/data-table"
+import { createPhotoRequestColumns, PhotoRequest } from "./photo-requests-columns"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { cn } from "@/lib/utils"
 
 export function PhotoApprovalsView() {
-    const [selectedRequest, setSelectedRequest] = useState<any>(null)
+    const [selectedRequest, setSelectedRequest] = useState<PhotoRequest | null>(null)
     const [rejectionReason, setRejectionReason] = useState("")
-    const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false)
+    const [isSheetOpen, setIsSheetOpen] = useState(false)
 
-    const { data: pendingRequests, isLoading, refetch } = trpc.profile.getPendingPhotoRequests.useQuery()
+    const utils = trpc.useUtils()
+
+    const { data: requests = [], isLoading: isTableLoading } = trpc.profile.getAllPhotoRequests.useQuery()
+    const { data: stats, isLoading: isStatsLoading } = trpc.profile.getPhotoRequestStats.useQuery()
+
     const reviewMutation = trpc.profile.reviewPhotoRequest.useMutation({
         onSuccess: (data) => {
             toast.success(`Photo ${data.action === 'approve' ? 'approved' : 'rejected'} successfully!`)
-            refetch()
+            utils.profile.getAllPhotoRequests.invalidate()
+            utils.profile.getPhotoRequestStats.invalidate()
+            setIsSheetOpen(false)
             setSelectedRequest(null)
-            setIsRejectDialogOpen(false)
             setRejectionReason("")
         },
         onError: (error) => {
@@ -59,216 +71,249 @@ export function PhotoApprovalsView() {
         })
     }
 
-    const openRejectDialog = (request: any) => {
+    const handleReview = (request: PhotoRequest) => {
         setSelectedRequest(request)
-        setIsRejectDialogOpen(true)
+        setIsSheetOpen(true)
     }
 
-    if (isLoading) {
-        return (
-            <DashboardPageLayout
-                heading="Photo Approvals"
-                description="Review and approve employee profile photo updates"
-            >
-                <div className="flex items-center justify-center min-h-[400px]">
-                    <div className="flex flex-col items-center gap-4">
-                        <IconLoader2 className="w-10 h-10 animate-spin text-primary" />
-                        <p className="text-muted-foreground animate-pulse">Loading requests...</p>
-                    </div>
-                </div>
-            </DashboardPageLayout>
-        )
-    }
+    const columns = useMemo(() => createPhotoRequestColumns(handleReview), [])
 
     return (
         <DashboardPageLayout
             heading="Photo Approvals"
-            description="Review and approve employee profile photo updates"
-            headerAction={
-                <Badge variant="outline" className="px-3 py-1 bg-primary/5 text-primary border-primary/20">
-                    {pendingRequests?.length || 0} Pending Requests
-                </Badge>
-            }
+            description="Manage and review employee profile photo update requests"
         >
-            <AnimatePresence mode="wait">
-                {!pendingRequests?.length ? (
-                    <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                    >
-                        <Card className="border-dashed bg-muted/30">
-                            <CardContent className="flex flex-col items-center justify-center py-20">
-                                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-                                    <IconCamera className="w-8 h-8 text-muted-foreground/50" />
-                                </div>
-                                <p className="text-xl font-semibold text-muted-foreground">All caught up!</p>
-                                <p className="text-sm text-muted-foreground/60 max-w-[250px] text-center mt-2">
-                                    There are no pending photo update requests at the moment.
-                                </p>
-                            </CardContent>
-                        </Card>
-                    </motion.div>
-                ) : (
-                    <motion.div
-                        className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-                        initial="hidden"
-                        animate="show"
-                        variants={{
-                            hidden: { opacity: 0 },
-                            show: {
-                                opacity: 1,
-                                transition: {
-                                    staggerChildren: 0.05
-                                }
-                            }
-                        }}
-                    >
-                        {pendingRequests.map((request: any) => (
-                            <motion.div
-                                key={request.id}
-                                variants={{
-                                    hidden: { opacity: 0, y: 20 },
-                                    show: { opacity: 1, y: 0 }
-                                }}
-                            >
-                                <Card className="overflow-hidden h-full flex flex-col hover:shadow-xl transition-all duration-300 border-primary/10 group">
-                                    <CardHeader className="pb-4 border-b bg-muted/20">
-                                        <div className="flex items-center gap-3">
-                                            <Avatar className="h-10 w-10 ring-2 ring-background shadow-sm">
-                                                <AvatarImage src={request.profile?.avatar_url || ''} />
-                                                <AvatarFallback className="bg-primary/10 text-primary font-bold">
-                                                    {request.profile?.full_name?.[0] || '?'}
-                                                </AvatarFallback>
-                                            </Avatar>
-                                            <div className="flex-1 min-w-0">
-                                                <CardTitle className="text-sm font-bold truncate">
-                                                    {request.profile?.full_name || 'Unknown'}
-                                                </CardTitle>
-                                                <p className="text-[11px] text-muted-foreground truncate font-medium">
-                                                    {request.profile?.email}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </CardHeader>
-                                    <CardContent className="p-5 flex-1 flex flex-col space-y-5">
-                                        {/* Photo Comparison */}
-                                        <div className="flex items-center justify-between gap-4">
-                                            <div className="flex-1 text-center">
-                                                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 mb-2">Original</p>
-                                                <div className="aspect-square rounded-2xl overflow-hidden bg-muted border-2 border-muted shadow-inner relative group-hover:scale-[1.02] transition-transform duration-300">
-                                                    {request.profile?.avatar_url ? (
-                                                        <img
-                                                            src={request.profile.avatar_url}
-                                                            alt="Current"
-                                                            className="w-full h-full object-cover"
-                                                        />
-                                                    ) : (
-                                                        <div className="w-full h-full flex items-center justify-center">
-                                                            <span className="text-2xl text-muted-foreground/30 font-bold">N/A</span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
+            <div className="space-y-8">
+                {/* Stats Grid */}
+                <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+                    <CompactMetricCard
+                        label="Pending"
+                        value={stats?.pending || 0}
+                        theme="amber"
+                        icon={IconClock}
+                        loading={isStatsLoading}
+                        delay={0.1}
+                    />
+                    <CompactMetricCard
+                        label="Approved"
+                        value={stats?.approved || 0}
+                        theme="emerald"
+                        icon={IconCircleCheck}
+                        loading={isStatsLoading}
+                        delay={0.2}
+                    />
+                    <CompactMetricCard
+                        label="Rejected"
+                        value={stats?.rejected || 0}
+                        theme="rose"
+                        icon={IconCircleX}
+                        loading={isStatsLoading}
+                        delay={0.3}
+                    />
+                    <CompactMetricCard
+                        label="Total History"
+                        value={stats?.total || 0}
+                        theme="primary"
+                        icon={IconRefresh}
+                        loading={isStatsLoading}
+                        delay={0.4}
+                    />
+                </div>
 
-                                            <div className="flex flex-col items-center justify-center gap-1">
-                                                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                                                    <IconArrowRight className="w-5 h-5 text-primary" />
-                                                </div>
-                                            </div>
-
-                                            <div className="flex-1 text-center">
-                                                <p className="text-[10px] font-bold uppercase tracking-wider text-primary/70 mb-2">Updated</p>
-                                                <div className="aspect-square rounded-2xl overflow-hidden bg-primary/5 border-2 border-primary/30 shadow-md relative group-hover:scale-[1.05] transition-transform duration-300">
-                                                    <img
-                                                        src={request.pending_photo_url}
-                                                        alt="New"
-                                                        className="w-full h-full object-cover"
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="bg-muted/30 rounded-lg p-3 text-center">
-                                            <p className="text-[11px] text-muted-foreground flex items-center justify-center gap-1.5">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                                                Requested {formatDistanceToNow(new Date(request.created_at), { addSuffix: true })}
-                                            </p>
-                                        </div>
-
-                                        {/* Action Buttons */}
-                                        <div className="flex gap-3 pt-2">
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="flex-1 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 hover:border-red-300 font-semibold"
-                                                onClick={() => openRejectDialog(request)}
-                                                disabled={reviewMutation.isPending}
-                                            >
-                                                <IconX className="w-4 h-4 mr-1.5" />
-                                                Reject
-                                            </Button>
-                                            <Button
-                                                size="sm"
-                                                className="flex-1 bg-green-600 hover:bg-green-700 shadow-md shadow-green-600/20 font-semibold"
-                                                onClick={() => handleApprove(request.id)}
-                                                disabled={reviewMutation.isPending}
-                                            >
-                                                {reviewMutation.isPending ? (
-                                                    <IconLoader2 className="w-4 h-4 mr-1.5 animate-spin" />
-                                                ) : (
-                                                    <IconCheck className="w-4 h-4 mr-1.5" />
-                                                )}
-                                                Approve
-                                            </Button>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            </motion.div>
-                        ))}
-                    </motion.div>
-                )}
-            </AnimatePresence>
-
-            {/* Reject Dialog */}
-            <Dialog open={isRejectDialogOpen} onOpenChange={setIsRejectDialogOpen}>
-                <DialogContent className="sm:max-w-[425px]">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2 text-red-600">
-                            <IconX className="w-5 h-5" />
-                            Reject Photo Update
-                        </DialogTitle>
-                        <DialogDescription className="pt-2">
-                            Please provide a reason for rejecting <strong>{selectedRequest?.profile?.full_name}</strong>'s photo update.
-                            The employee will be notified and can submit a new photo.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="py-6">
-                        <Input
-                            placeholder="e.g., Photo is too blurry or not professional"
-                            value={rejectionReason}
-                            onChange={(e) => setRejectionReason(e.target.value)}
-                            className="focus-visible:ring-red-500"
+                {/* Main Table */}
+                <Card className="border-none shadow-xl bg-background/50 backdrop-blur-sm overflow-hidden ring-1 ring-primary/5">
+                    <div className="p-6">
+                        <DataTable
+                            columns={columns}
+                            data={requests}
+                            isLoading={isTableLoading}
+                            emptyMessage="No photo requests found in history"
                         />
                     </div>
-                    <DialogFooter className="gap-2 sm:gap-0">
-                        <Button variant="ghost" onClick={() => setIsRejectDialogOpen(false)}>
-                            Cancel
-                        </Button>
-                        <Button
-                            variant="destructive"
-                            onClick={handleReject}
-                            disabled={reviewMutation.isPending || !rejectionReason.trim()}
-                            className="bg-red-600 hover:bg-red-700"
-                        >
-                            {reviewMutation.isPending ? (
-                                <IconLoader2 className="w-4 h-4 mr-2 animate-spin" />
-                            ) : null}
-                            Reject Photo
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                </Card>
+            </div>
+
+            {/* Review Sheet */}
+            <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+                <SheetContent className="sm:max-w-md flex flex-col h-full bg-background/95 backdrop-blur-xl border-l border-primary/10">
+                    <SheetHeader className="pb-6 border-b border-primary/5">
+                        <SheetTitle className="flex items-center gap-2.5 text-xl font-black tracking-tight">
+                            <IconScan className="w-6 h-6 text-primary" />
+                            Review Photo Update
+                        </SheetTitle>
+                        <SheetDescription className="font-medium text-muted-foreground/80 pt-1">
+                            Review the profile photo update request for <strong>{selectedRequest?.profile?.full_name}</strong>.
+                        </SheetDescription>
+                    </SheetHeader>
+
+                    {selectedRequest && (
+                        <div className="flex-1 overflow-y-auto py-8 space-y-10 custom-scrollbar">
+                            {/* Employee Info Header */}
+                            <div className="flex items-center gap-4 p-4 rounded-2xl bg-primary/5 border border-primary/10 mx-auto w-full max-w-[90%]">
+                                <Avatar className="h-12 w-12 ring-2 ring-white shadow-md">
+                                    <AvatarImage src={selectedRequest.profile.avatar_url || ""} />
+                                    <AvatarFallback className="bg-primary/10 text-primary font-black uppercase">
+                                        {selectedRequest.profile.full_name?.[0]}
+                                    </AvatarFallback>
+                                </Avatar>
+                                <div className="flex flex-col">
+                                    <h4 className="font-black text-sm tracking-tight">{selectedRequest.profile.full_name}</h4>
+                                    <p className="text-[11px] font-bold text-muted-foreground/80 uppercase tracking-widest leading-none mt-0.5">
+                                        {selectedRequest.profile.email}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Comparison View */}
+                            <div className="space-y-8">
+                                <div className="grid grid-cols-1 gap-10">
+                                    {/* Original Photo */}
+                                    <div className="space-y-3 px-6">
+                                        <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">
+                                            <span>Original Photo</span>
+                                            <Badge variant="outline" className="text-[9px] font-black h-4 px-1 border-muted-foreground/20">Current</Badge>
+                                        </div>
+                                        <div className="aspect-square w-full max-w-[200px] mx-auto rounded-[2rem] overflow-hidden bg-muted border-4 border-white shadow-2xl relative ring-1 ring-black/5">
+                                            {selectedRequest.profile.avatar_url ? (
+                                                <img
+                                                    src={selectedRequest.profile.avatar_url}
+                                                    alt="Current"
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center bg-muted/50">
+                                                    <span className="text-3xl font-black text-muted-foreground/20 italic">NULL</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Directional Icon */}
+                                    <div className="flex items-center justify-center p-2 opacity-50">
+                                        <div className="h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent flex-1" />
+                                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mx-4 shadow-inner ring-1 ring-primary/20">
+                                            <IconArrowRight className="w-6 h-6 text-primary animate-pulse-slow" />
+                                        </div>
+                                        <div className="h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent flex-1" />
+                                    </div>
+
+                                    {/* Requested Photo */}
+                                    <div className="space-y-3 px-6">
+                                        <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-[0.2em] text-primary">
+                                            <span>Requested Photo</span>
+                                            <Badge className="text-[9px] font-black h-4 px-1 bg-primary text-primary-foreground shadow-lg shadow-primary/20">Pending</Badge>
+                                        </div>
+                                        <div className="aspect-square w-full max-w-[240px] mx-auto rounded-[2.5rem] overflow-hidden bg-primary/5 border-4 border-white shadow-2xl relative ring-2 ring-primary/20">
+                                            <img
+                                                src={selectedRequest.pending_photo_url}
+                                                alt="New"
+                                                className="w-full h-full object-cover"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Request Metadata */}
+                                <div className="px-6">
+                                    <div className="p-4 rounded-xl bg-muted/30 border border-muted-foreground/5 text-center">
+                                        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest flex items-center justify-center gap-2">
+                                            <IconClock size={12} className="text-amber-500" />
+                                            Requested {selectedRequest.created_at ? formatDistanceToNow(new Date(selectedRequest.created_at), { addSuffix: true }) : 'Unknown'}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Input for Rejection */}
+                            {selectedRequest.status === 'pending' && (
+                                <div className="px-6 space-y-2">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground pl-1">
+                                        Feedback or Rejection Reason
+                                    </label>
+                                    <Input
+                                        placeholder="Add a reason for rejection..."
+                                        value={rejectionReason}
+                                        onChange={(e) => setRejectionReason(e.target.value)}
+                                        className="h-10 text-sm bg-muted/20 border-primary/10 focus-visible:ring-primary/30 rounded-lg font-medium"
+                                    />
+                                </div>
+                            )}
+
+                            {/* Review History Indicator */}
+                            {selectedRequest.status !== 'pending' && (
+                                <div className="px-6">
+                                    <div className={cn(
+                                        "p-5 rounded-2xl border flex flex-col gap-2 items-center text-center shadow-inner",
+                                        selectedRequest.status === 'approved' ? "bg-emerald-50/50 border-emerald-100/50" : "bg-rose-50/50 border-rose-100/50"
+                                    )}>
+                                        <div className={cn(
+                                            "w-10 h-10 rounded-full flex items-center justify-center mb-1",
+                                            selectedRequest.status === 'approved' ? "bg-emerald-500 text-white" : "bg-rose-500 text-white"
+                                        )}>
+                                            {selectedRequest.status === 'approved' ? <IconCheck size={20} /> : <IconX size={20} />}
+                                        </div>
+                                        <h5 className={cn(
+                                            "font-black text-xs uppercase tracking-widest",
+                                            selectedRequest.status === 'approved' ? "text-emerald-700" : "text-rose-700"
+                                        )}>
+                                            Successfully {selectedRequest.status}
+                                        </h5>
+                                        {selectedRequest.rejection_reason && (
+                                            <p className="text-[11px] font-medium text-rose-800/60 max-w-[200px]">
+                                                "{selectedRequest.rejection_reason}"
+                                            </p>
+                                        )}
+                                        <div className="h-px w-full bg-black/5 my-1" />
+                                        <p className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-tighter">
+                                            Reviewed by {selectedRequest.reviewer?.full_name}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    <SheetFooter className="mt-auto pt-6 border-t border-primary/5 px-0 pb-2">
+                        {selectedRequest?.status === 'pending' ? (
+                            <div className="grid grid-cols-2 gap-3 w-full">
+                                <Button
+                                    variant="outline"
+                                    className="h-12 border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 font-bold uppercase tracking-widest text-[10px] rounded-xl transition-all"
+                                    onClick={handleReject}
+                                    disabled={reviewMutation.isPending || !rejectionReason.trim()}
+                                >
+                                    {reviewMutation.isPending && reviewMutation.variables?.action === 'reject' ? (
+                                        <IconLoader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                        <IconX className="w-4 h-4 mr-1.5" />
+                                    )}
+                                    Reject
+                                </Button>
+                                <Button
+                                    className="h-12 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xl shadow-emerald-600/20 font-bold uppercase tracking-widest text-[10px] rounded-xl transition-all"
+                                    onClick={() => handleApprove(selectedRequest.id)}
+                                    disabled={reviewMutation.isPending}
+                                >
+                                    {reviewMutation.isPending && reviewMutation.variables?.action === 'approve' ? (
+                                        <IconLoader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                        <IconCheck className="w-4 h-4 mr-1.5" />
+                                    )}
+                                    Approve
+                                </Button>
+                            </div>
+                        ) : (
+                            <Button
+                                variant="outline"
+                                className="w-full h-12 font-bold uppercase tracking-widest text-[10px] text-muted-foreground hover:text-foreground rounded-xl"
+                                onClick={() => setIsSheetOpen(false)}
+                            >
+                                Close View
+                            </Button>
+                        )}
+                    </SheetFooter>
+                </SheetContent>
+            </Sheet>
         </DashboardPageLayout>
     )
 }
