@@ -12,7 +12,6 @@ import {
     IconLogin,
     IconLogout,
     IconCheck,
-    IconMapPin,
     IconAlertTriangle,
     IconArrowRight,
     IconHistory,
@@ -20,10 +19,16 @@ import {
     IconSettings,
     IconQuestionMark,
     IconLoader2,
-    IconMapPinOff,
     IconDownload,
     IconCamera
 } from "@tabler/icons-react"
+import {
+    CalendarClock,
+    MapPinCheck,
+    MapPinX,
+    MapPinHouse,
+    MapPinOff
+} from "lucide-react"
 import { usePwaCheck } from "@/hooks/use-pwa-check"
 import { isDefaultAvatar } from "@/lib/utils/avatar-helper"
 
@@ -146,13 +151,13 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
         return 'from-purple-500 to-indigo-600'
     }
 
-    const getStatusIcon = () => {
-        if (isComplete) return IconCheck
-        if (hasCheckedIn) return IconClock
-        return IconAlertTriangle
+    // Get icon color based on status
+    const getHeadingIconColor = () => {
+        if (isComplete) return 'text-emerald-200'
+        if (hasCheckedIn) return 'text-sky-200'
+        return 'text-purple-200'
     }
 
-    const StatusIcon = getStatusIcon()
     const now = new Date()
 
     return (
@@ -169,12 +174,31 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                     <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full -mr-24 -mt-24 blur-2xl" />
                     <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full -ml-16 -mb-16 blur-xl" />
 
-                    <div className="relative flex items-stretch justify-between gap-4">
-                        <div className="flex flex-col justify-between py-1.5">
+                    <div className="relative flex items-start justify-between gap-4">
+                        <div className="flex flex-col gap-2 py-1.5">
+                            {/* Today's Attendance Heading with CalendarClock icon */}
                             <div className="flex items-center gap-2">
-                                <StatusIcon className="w-4 h-4 opacity-90" />
+                                <CalendarClock className={`w-4 h-4 ${getHeadingIconColor()}`} />
                                 <span className="text-xs font-black uppercase tracking-[0.2em] opacity-90">Today's Attendance</span>
                             </div>
+
+                            {/* GPS Coordinates - Below heading (only when not loading and has coords) */}
+                            {!isLocChecking && userCoords && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: -5 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="flex items-center gap-1.5 mt-1"
+                                >
+                                    {geofenceResult?.isAllowed ? (
+                                        <MapPinCheck className="w-3.5 h-3.5 text-emerald-300" />
+                                    ) : (
+                                        <MapPinX className="w-3.5 h-3.5 text-orange-300" />
+                                    )}
+                                    <span className="text-[9px] font-bold text-white/60 tracking-tight">
+                                        {userCoords.lat.toFixed(6)}, {userCoords.lng.toFixed(6)}
+                                    </span>
+                                </motion.div>
+                            )}
                         </div>
 
                         {/* Integrated Calendar UI */}
@@ -201,7 +225,7 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                     </div>
 
                     {/* Integrated Action Row */}
-                    <div className="mt-8 space-y-4">
+                    <div className="mt-6 space-y-4">
                         {!isReady ? (
                             <div className="flex items-center justify-center p-8">
                                 <IconLoader2 className="w-8 h-8 animate-spin opacity-20" />
@@ -259,34 +283,29 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                                         transition={{ duration: 0.3, ease: "easeOut" }}
                                         className="space-y-3"
                                     >
-                                        {/* Office Name Badge + GPS Coordinates */}
-                                        <div className={`flex flex-col gap-2 px-4 py-3 rounded-2xl backdrop-blur-md border transition-all
+                                        {/* Office Name Badge */}
+                                        <div className={`flex items-center gap-2 px-4 py-3 rounded-2xl backdrop-blur-md border transition-all
                                             ${geofenceResult?.isAllowed
                                                 ? 'bg-emerald-500/20 border-emerald-400/30'
                                                 : 'bg-gradient-to-r from-orange-500/30 to-rose-500/30 border-orange-400/40'}`}>
-                                            {/* Row 1: Office Name Badge or Warning */}
-                                            <div className="flex items-center gap-2">
-                                                <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 
-                                                    ${geofenceResult?.isAllowed ? 'bg-emerald-400/30' : 'bg-orange-400/30'}`}>
-                                                    <IconMapPin className={`w-4 h-4 ${geofenceResult?.isAllowed ? 'text-emerald-200' : 'text-orange-200'}`} />
-                                                </div>
-                                                {geofenceResult?.isAllowed && geofenceResult.withinOffice ? (
+                                            {geofenceResult?.isAllowed && geofenceResult.withinOffice ? (
+                                                <>
+                                                    <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 bg-emerald-400/30">
+                                                        <MapPinHouse className="w-4 h-4 text-emerald-200" />
+                                                    </div>
                                                     <span className="text-[10px] font-black uppercase tracking-wider text-emerald-100 bg-emerald-500/40 px-3 py-1 rounded-lg">
                                                         {geofenceResult.withinOffice.name}
                                                     </span>
-                                                ) : (
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 bg-orange-400/30">
+                                                        <MapPinOff className="w-4 h-4 text-orange-200" />
+                                                    </div>
                                                     <span className="text-[10px] font-black uppercase tracking-wider text-orange-100">
                                                         Outside Office Area
                                                     </span>
-                                                )}
-                                            </div>
-                                            {/* Row 2: GPS Coordinates */}
-                                            {userCoords && (
-                                                <div className="flex items-center gap-2 pl-8">
-                                                    <span className="text-[9px] font-bold text-white/50 tracking-tight">
-                                                        GPS: {userCoords.lat.toFixed(6)}, {userCoords.lng.toFixed(6)}
-                                                    </span>
-                                                </div>
+                                                </>
                                             )}
                                         </div>
 
