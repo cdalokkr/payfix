@@ -69,12 +69,12 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
         }
 
         try {
-            // Use standard HD (720p) first, fallback to basic video on retry
+            // Request Full HD (1080p) for clearer selfies, fallback to basic video on retry
             const constraints: MediaStreamConstraints = retryCount === 0 ? {
                 video: {
                     facingMode: 'user',
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 },
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 },
                 },
                 audio: false,
             } : {
@@ -170,8 +170,9 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
         const ctx = canvas.getContext('2d')
         if (!ctx) return
 
-        canvas.width = 1000
-        canvas.height = 1000
+        // Higher resolution canvas for better quality selfies
+        canvas.width = 1200
+        canvas.height = 1200
 
         const vw = video.videoWidth
         const vh = video.videoHeight

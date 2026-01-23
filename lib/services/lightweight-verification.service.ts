@@ -14,8 +14,8 @@ interface VerificationResult {
 }
 
 // Threshold for hash-based similarity (lower = more strict)
-// Hash difference of 10 out of 64 bits = ~84% similar
-const HASH_SIMILARITY_THRESHOLD = 0.75
+// Hash difference of 25 out of 64 bits = ~60% similar (more forgiving for real conditions)
+const HASH_SIMILARITY_THRESHOLD = 0.60
 
 /**
  * Create a canvas from image source (data URL or regular URL)
@@ -27,15 +27,15 @@ async function loadImageToCanvas(imageSource: string): Promise<HTMLCanvasElement
 
         img.onload = () => {
             const canvas = document.createElement('canvas')
-            // Use small size for faster processing
-            canvas.width = 32
-            canvas.height = 32
+            // Use larger size (64x64) for better detail in face comparison
+            canvas.width = 64
+            canvas.height = 64
             const ctx = canvas.getContext('2d')
             if (!ctx) {
                 reject(new Error('Could not get canvas context'))
                 return
             }
-            ctx.drawImage(img, 0, 0, 32, 32)
+            ctx.drawImage(img, 0, 0, 64, 64)
             resolve(canvas)
         }
 
@@ -52,7 +52,7 @@ function calculateAverageHash(canvas: HTMLCanvasElement): string {
     const ctx = canvas.getContext('2d')
     if (!ctx) return ''
 
-    const imageData = ctx.getImageData(0, 0, 32, 32)
+    const imageData = ctx.getImageData(0, 0, 64, 64)
     const pixels = imageData.data
 
     // Convert to grayscale and calculate average
@@ -66,10 +66,10 @@ function calculateAverageHash(canvas: HTMLCanvasElement): string {
 
     // Create hash: 1 if pixel > average, 0 otherwise
     let hash = ''
-    // Sample 64 pixels (8x8 grid from 32x32)
+    // Sample 64 pixels (8x8 grid from 64x64 - every 8th pixel)
     for (let y = 0; y < 8; y++) {
         for (let x = 0; x < 8; x++) {
-            const idx = (y * 4) * 32 + (x * 4)
+            const idx = (y * 8) * 64 + (x * 8)
             hash += grayPixels[idx] > average ? '1' : '0'
         }
     }
@@ -84,33 +84,33 @@ function calculatePerceptualHash(canvas: HTMLCanvasElement): string {
     const ctx = canvas.getContext('2d')
     if (!ctx) return ''
 
-    const imageData = ctx.getImageData(0, 0, 32, 32)
+    const imageData = ctx.getImageData(0, 0, 64, 64)
     const pixels = imageData.data
 
     // Convert to grayscale
     const grayPixels: number[][] = []
-    for (let y = 0; y < 32; y++) {
+    for (let y = 0; y < 64; y++) {
         const row: number[] = []
-        for (let x = 0; x < 32; x++) {
-            const i = (y * 32 + x) * 4
+        for (let x = 0; x < 64; x++) {
+            const i = (y * 64 + x) * 4
             const gray = (pixels[i] * 0.299 + pixels[i + 1] * 0.587 + pixels[i + 2] * 0.114)
             row.push(gray)
         }
         grayPixels.push(row)
     }
 
-    // Apply simple DCT-like transformation (simplified)
-    // Just use averages of 4x4 blocks (8x8 = 64 values)
+    // Apply simple DCT-like transformation
+    // Use averages of 8x8 blocks (8x8 = 64 values) from 64x64 image
     const blockValues: number[] = []
     for (let by = 0; by < 8; by++) {
         for (let bx = 0; bx < 8; bx++) {
             let sum = 0
-            for (let y = 0; y < 4; y++) {
-                for (let x = 0; x < 4; x++) {
-                    sum += grayPixels[by * 4 + y][bx * 4 + x]
+            for (let y = 0; y < 8; y++) {
+                for (let x = 0; x < 8; x++) {
+                    sum += grayPixels[by * 8 + y][bx * 8 + x]
                 }
             }
-            blockValues.push(sum / 16)
+            blockValues.push(sum / 64)
         }
     }
 
@@ -152,14 +152,15 @@ function extractDominantColors(canvas: HTMLCanvasElement): number[] {
     const ctx = canvas.getContext('2d')
     if (!ctx) return []
 
-    const imageData = ctx.getImageData(0, 0, 32, 32)
+    const imageData = ctx.getImageData(0, 0, 64, 64)
     const pixels = imageData.data
 
-    // Get average color of center region (face area)
+    // Get average color of center region (face area - center 60%)
+    // For 64x64: center region is from 12 to 52 (40px wide)
     let r = 0, g = 0, b = 0, count = 0
-    for (let y = 8; y < 24; y++) {
-        for (let x = 8; x < 24; x++) {
-            const i = (y * 32 + x) * 4
+    for (let y = 12; y < 52; y++) {
+        for (let x = 12; x < 52; x++) {
+            const i = (y * 64 + x) * 4
             r += pixels[i]
             g += pixels[i + 1]
             b += pixels[i + 2]
