@@ -182,37 +182,10 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                                 <span className="text-xs font-black uppercase tracking-[0.2em] opacity-90">Today's Attendance</span>
                             </div>
 
-                            {/* Geofence/Location Status aligned with Date row */}
-                            <div className="flex flex-col gap-2 mt-2">
-                                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full backdrop-blur-md border w-fit ${!geofenceResult?.isAllowed && !isLocChecking ? 'bg-rose-500 border-rose-400' : 'bg-white/20 border-white/20'}`}>
-                                    <div className={`w-1.5 h-1.5 rounded-full ${isLocChecking ? 'bg-amber-400 animate-pulse' : geofenceResult?.isAllowed ? 'bg-green-400' : 'bg-white'} animate-pulse`} />
-                                    <span className="text-[10px] font-black uppercase tracking-wider text-white">
-                                        {isLocChecking ? "Syncing Location" :
-                                            geofenceResult?.isAllowed ? `${geofenceResult.withinOffice?.name}` :
-                                                "Outside office perimeter"}
-                                    </span>
-                                </div>
-
-                                {/* Live GPS & Distance Details - Only shown if not checking */}
-                                {!isLocChecking && userCoords && (
-                                    <motion.div
-                                        initial={{ opacity: 0, y: 5 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        className="flex flex-col gap-1.5 w-full"
-                                    >
-                                        <div className="flex items-center gap-2 text-[9px] font-bold text-white/70 tracking-tight uppercase bg-black/10 w-fit px-2 py-1 rounded-lg backdrop-blur-sm">
-                                            <IconMapPin className="w-3 h-3 text-white/60" />
-                                            <span>{userCoords.lat.toFixed(6)}, {userCoords.lng.toFixed(6)}</span>
-                                        </div>
-                                        {!geofenceResult?.isAllowed && geofenceResult?.nearestOffice && (
-                                            <div className="text-[10px] font-black text-white uppercase tracking-widest bg-rose-600/60 px-4 py-2 rounded-xl w-full border border-white/10 shadow-lg backdrop-blur-sm flex items-center justify-between">
-                                                <span className="opacity-70">Nearest: {geofenceResult.nearestOffice.name}</span>
-                                                <span className="bg-white/20 px-2 py-0.5 rounded-lg">{(geofenceResult.nearestOffice.distance / 1000).toFixed(1)}KM</span>
-                                            </div>
-                                        )}
-                                    </motion.div>
-                                )}
-                            </div>
+                            {/* Status Text */}
+                            <p className="text-[11px] font-bold text-white/70 mt-2">
+                                {getStatusText()}
+                            </p>
                         </div>
 
                         {/* Integrated Calendar UI - Month on Top for alignment */}
@@ -277,74 +250,146 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                                 <p className="text-[11px] font-medium text-indigo-100/80">Scheduled Weekly Off</p>
                             </div>
                         ) : (
-                            /* Action Grid - Buttons or Restricted Label */
-                            <div className="w-full">
-                                {isLocChecking ? (
-                                    /* Location Checking State - Center Placeholder */
-                                    <div className="flex flex-col items-center justify-center p-8 bg-white/10 rounded-[2rem] border border-white/20 backdrop-blur-sm min-h-[110px]">
-                                        <IconLoader2 className="w-6 h-6 animate-spin text-white/60 mb-3" />
-                                        <p className="text-[10px] font-black text-white/60 uppercase tracking-[0.2em] text-center">
-                                            Locating Office Area...
-                                        </p>
-                                    </div>
-                                ) : !geofenceResult?.isAllowed ? (
-                                    /* Restricted State - Same place as buttons */
-                                    <div className="flex items-center justify-center gap-3 p-6 bg-rose-600/40 rounded-[2.5rem] border border-white/20 backdrop-blur-md shadow-xl min-h-[100px]">
-                                        <IconMapPinOff className="w-6 h-6 text-white animate-pulse" />
-                                        <p className="text-[11px] font-black text-white uppercase tracking-[0.2em]">
-                                            Clocking Restricted
-                                        </p>
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-2 gap-2.5 min-h-[70px]">
-                                        {/* Clock IN Button */}
-                                        <Link
-                                            href="/mobile/attendance?action=clock_in"
-                                            className={`flex items-center gap-2 px-3 py-2.5 rounded-2xl backdrop-blur-md border transition-all active:scale-95 group shadow-lg
-                                                ${hasCheckedIn
-                                                    ? 'bg-emerald-500/30 border-emerald-400/40'
-                                                    : 'bg-white/15 border-white/25 hover:bg-white/25'}`}
-                                        >
-                                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-md transition-all
-                                                ${hasCheckedIn
-                                                    ? 'bg-emerald-400 shadow-emerald-500/30'
-                                                    : 'bg-white/30 group-hover:bg-white/40'}`}>
-                                                <IconLogin className={`w-4 h-4 ${hasCheckedIn ? 'text-white' : 'text-white/90'}`} />
-                                            </div>
-                                            <span className="text-[10px] font-black uppercase tracking-wider text-white/70">IN</span>
-                                            <span className="text-xs font-black text-white ml-auto">
-                                                {todayAttendance?.check_in
-                                                    ? format(new Date(todayAttendance.check_in), 'hh:mm a')
-                                                    : '--:--'}
+                            <div className="w-full space-y-3">
+                                {/* Unified Location Status Button */}
+                                <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl backdrop-blur-md border transition-all
+                                    ${isLocChecking
+                                        ? 'bg-white/15 border-white/25'
+                                        : geofenceResult?.isAllowed
+                                            ? 'bg-emerald-500/20 border-emerald-400/30'
+                                            : 'bg-gradient-to-r from-orange-500/30 to-rose-500/30 border-orange-400/40'}`}>
+                                    {isLocChecking ? (
+                                        <>
+                                            <IconLoader2 className="w-5 h-5 animate-spin text-white/80" />
+                                            <span className="text-[11px] font-black uppercase tracking-widest text-white/80">
+                                                Locating Office Area...
                                             </span>
-                                        </Link>
+                                        </>
+                                    ) : userCoords ? (
+                                        <>
+                                            <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 
+                                                ${geofenceResult?.isAllowed ? 'bg-emerald-400/30' : 'bg-orange-400/30'}`}>
+                                                <IconMapPin className={`w-4 h-4 ${geofenceResult?.isAllowed ? 'text-emerald-200' : 'text-orange-200'}`} />
+                                            </div>
+                                            <span className="text-[10px] font-bold text-white/90 tracking-tight">
+                                                {userCoords.lat.toFixed(6)}, {userCoords.lng.toFixed(6)}
+                                            </span>
+                                            {geofenceResult?.isAllowed && geofenceResult.withinOffice && (
+                                                <span className="ml-auto text-[9px] font-black uppercase tracking-wider text-emerald-200 bg-emerald-500/30 px-2 py-0.5 rounded-lg">
+                                                    {geofenceResult.withinOffice.name}
+                                                </span>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <>
+                                            <IconMapPinOff className="w-5 h-5 text-white/60" />
+                                            <span className="text-[11px] font-bold text-white/60">Location Unavailable</span>
+                                        </>
+                                    )}
+                                </div>
 
-                                        {/* Clock OUT Button */}
-                                        <Link
-                                            href="/mobile/attendance?action=clock_out"
-                                            className={`flex items-center gap-2 px-3 py-2.5 rounded-2xl backdrop-blur-md border transition-all active:scale-95 group shadow-lg
-                                                ${hasCheckedOut
-                                                    ? 'bg-orange-500/30 border-orange-400/40'
-                                                    : hasCheckedIn
-                                                        ? 'bg-white/15 border-white/25 hover:bg-white/25'
-                                                        : 'opacity-40 pointer-events-none grayscale bg-white/10 border-white/15'}`}
-                                        >
-                                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-md transition-all
-                                                ${hasCheckedOut
-                                                    ? 'bg-orange-400 shadow-orange-500/30'
-                                                    : hasCheckedIn
-                                                        ? 'bg-white/30 group-hover:bg-white/40'
-                                                        : 'bg-white/20'}`}>
-                                                <IconLogout className={`w-4 h-4 ${hasCheckedOut ? 'text-white' : hasCheckedIn ? 'text-white/90' : 'text-white/50'}`} />
+                                {/* IN / OUT Time Display or Out-of-Office Warning */}
+                                {!isLocChecking && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 5 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        className="space-y-3"
+                                    >
+                                        {!geofenceResult?.isAllowed ? (
+                                            <div className="p-4 rounded-2xl bg-gradient-to-r from-orange-600/40 to-rose-600/40 border border-orange-400/30 backdrop-blur-md">
+                                                <div className="flex items-center gap-3 mb-2">
+                                                    <div className="w-8 h-8 rounded-xl bg-orange-500/30 flex items-center justify-center">
+                                                        <IconAlertTriangle className="w-5 h-5 text-orange-200 animate-pulse" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[11px] font-black uppercase tracking-widest text-white">
+                                                            Outside Office Perimeter
+                                                        </p>
+                                                        <p className="text-[9px] font-medium text-white/60">
+                                                            Attendance marking is restricted
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                {geofenceResult?.nearestOffice && (
+                                                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/10">
+                                                        <span className="text-[9px] font-bold text-white/50 uppercase tracking-wider">
+                                                            Nearest: {geofenceResult.nearestOffice.name}
+                                                        </span>
+                                                        <span className="text-[10px] font-black text-orange-200 bg-orange-500/30 px-2.5 py-1 rounded-lg">
+                                                            {(geofenceResult.nearestOffice.distance / 1000).toFixed(1)} KM Away
+                                                        </span>
+                                                    </div>
+                                                )}
                                             </div>
-                                            <span className="text-[10px] font-black uppercase tracking-wider text-white/70">OUT</span>
-                                            <span className="text-xs font-black text-white ml-auto">
-                                                {todayAttendance?.check_out
-                                                    ? format(new Date(todayAttendance.check_out), 'hh:mm a')
-                                                    : '--:--'}
-                                            </span>
-                                        </Link>
-                                    </div>
+                                        ) : (
+                                            <>
+                                                {/* IN / OUT Time Labels */}
+                                                <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-sm">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className={`w-6 h-6 rounded-lg flex items-center justify-center
+                                                            ${hasCheckedIn ? 'bg-emerald-400/40' : 'bg-white/20'}`}>
+                                                            <IconLogin className={`w-3.5 h-3.5 ${hasCheckedIn ? 'text-emerald-200' : 'text-white/50'}`} />
+                                                        </div>
+                                                        <span className="text-[10px] font-black uppercase tracking-wider text-white/60">IN:</span>
+                                                        <span className={`text-sm font-black ${hasCheckedIn ? 'text-white' : 'text-white/40'}`}>
+                                                            {todayAttendance?.check_in
+                                                                ? format(new Date(todayAttendance.check_in), 'hh:mm a')
+                                                                : '--:-- --'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="w-px h-6 bg-white/20" />
+                                                    <div className="flex items-center gap-2">
+                                                        <div className={`w-6 h-6 rounded-lg flex items-center justify-center
+                                                            ${hasCheckedOut ? 'bg-orange-400/40' : 'bg-white/20'}`}>
+                                                            <IconLogout className={`w-3.5 h-3.5 ${hasCheckedOut ? 'text-orange-200' : 'text-white/50'}`} />
+                                                        </div>
+                                                        <span className="text-[10px] font-black uppercase tracking-wider text-white/60">OUT:</span>
+                                                        <span className={`text-sm font-black ${hasCheckedOut ? 'text-white' : 'text-white/40'}`}>
+                                                            {todayAttendance?.check_out
+                                                                ? format(new Date(todayAttendance.check_out), 'hh:mm a')
+                                                                : '--:-- --'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Single Dynamic Clock Button */}
+                                                {!isComplete && (
+                                                    <Link
+                                                        href={`/mobile/attendance?action=${hasCheckedIn ? 'clock_out' : 'clock_in'}`}
+                                                        className={`flex items-center justify-center gap-3 w-full px-5 py-4 rounded-2xl border transition-all active:scale-95 shadow-lg
+                                                            ${hasCheckedIn
+                                                                ? 'bg-gradient-to-r from-orange-500/40 to-rose-500/40 border-orange-400/40 hover:from-orange-500/50 hover:to-rose-500/50'
+                                                                : 'bg-gradient-to-r from-emerald-500/40 to-teal-500/40 border-emerald-400/40 hover:from-emerald-500/50 hover:to-teal-500/50'}`}
+                                                    >
+                                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-lg
+                                                            ${hasCheckedIn
+                                                                ? 'bg-orange-500 shadow-orange-600/30'
+                                                                : 'bg-emerald-500 shadow-emerald-600/30'}`}>
+                                                            {hasCheckedIn
+                                                                ? <IconLogout className="w-5 h-5 text-white" />
+                                                                : <IconLogin className="w-5 h-5 text-white" />}
+                                                        </div>
+                                                        <span className="text-sm font-black uppercase tracking-widest text-white">
+                                                            {hasCheckedIn ? 'Mark Office Out' : 'Mark Office In'}
+                                                        </span>
+                                                        <IconArrowRight className="w-5 h-5 text-white/60 ml-auto" />
+                                                    </Link>
+                                                )}
+
+                                                {/* Attendance Complete Badge */}
+                                                {isComplete && (
+                                                    <div className="flex items-center justify-center gap-3 px-5 py-4 rounded-2xl bg-emerald-500/20 border border-emerald-400/30">
+                                                        <div className="w-8 h-8 rounded-xl bg-emerald-500/40 flex items-center justify-center">
+                                                            <IconCheck className="w-5 h-5 text-emerald-200" />
+                                                        </div>
+                                                        <span className="text-sm font-black uppercase tracking-widest text-emerald-100">
+                                                            Attendance Complete
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </>
+                                        )}
+                                    </motion.div>
                                 )}
                             </div>
                         )}
@@ -379,32 +424,30 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
             </motion.div>
 
             {/* Profile Photo Warning */}
-            {
-                !profile.avatar_url && (
-                    <motion.div variants={itemVars}>
-                        <Card className="rounded-[2rem] border-amber-500/20 bg-amber-50/50 dark:bg-amber-950/10 shadow-none border-dashed border-2 overflow-hidden">
-                            <CardContent className="p-5">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
-                                        <IconAlertTriangle className="w-6 h-6 text-amber-600" />
-                                    </div>
-                                    <div className="flex-1">
-                                        <p className="font-black text-sm text-amber-900 dark:text-amber-200 uppercase tracking-tight">Missing Profile Photo</p>
-                                        <p className="text-xs text-amber-700/80 dark:text-amber-500/80 mb-3 font-medium">
-                                            Required for face verification.
-                                        </p>
-                                        <Link href="/mobile/profile">
-                                            <Button size="sm" variant="outline" className="h-9 px-4 rounded-xl text-[11px] font-black border-amber-200 dark:border-amber-800/50 hover:bg-amber-500 hover:text-white transition-all uppercase tracking-wider">
-                                                Setup Now
-                                            </Button>
-                                        </Link>
-                                    </div>
+            {!profile.avatar_url && (
+                <motion.div variants={itemVars}>
+                    <Card className="rounded-[2rem] border-amber-500/20 bg-amber-50/50 dark:bg-amber-950/10 shadow-none border-dashed border-2 overflow-hidden">
+                        <CardContent className="p-5">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+                                    <IconAlertTriangle className="w-6 h-6 text-amber-600" />
                                 </div>
-                            </CardContent>
-                        </Card>
-                    </motion.div>
-                )
-            }
-        </motion.div >
+                                <div className="flex-1">
+                                    <p className="font-black text-sm text-amber-900 dark:text-amber-200 uppercase tracking-tight">Missing Profile Photo</p>
+                                    <p className="text-xs text-amber-700/80 dark:text-amber-500/80 mb-3 font-medium">
+                                        Required for face verification.
+                                    </p>
+                                    <Link href="/mobile/profile">
+                                        <Button size="sm" variant="outline" className="h-9 px-4 rounded-xl text-[11px] font-black border-amber-200 dark:border-amber-800/50 hover:bg-amber-500 hover:text-white transition-all uppercase tracking-wider">
+                                            Setup Now
+                                        </Button>
+                                    </Link>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </motion.div>
+            )}
+        </motion.div>
     )
 }
