@@ -152,12 +152,6 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
         return IconAlertTriangle
     }
 
-    const getStatusText = () => {
-        if (isComplete) return 'Attendance Complete'
-        if (hasCheckedIn) return 'Waiting for Clock Out'
-        return 'Not Clocked In'
-    }
-
     const StatusIcon = getStatusIcon()
     const now = new Date()
 
@@ -168,7 +162,7 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
             animate="show"
             className="space-y-6 pb-4"
         >
-            {/* Today's Status Card - Fresh Modern UI */}
+            {/* Today's Status Card */}
             <motion.div variants={itemVars} whileTap={{ scale: 0.98 }}>
                 <div className={`relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br ${getStatusColor()} p-4 text-white shadow-2xl shadow-primary/20 min-h-[290px] flex flex-col justify-between`}>
                     {/* Glass Decorations */}
@@ -181,14 +175,9 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                                 <StatusIcon className="w-4 h-4 opacity-90" />
                                 <span className="text-xs font-black uppercase tracking-[0.2em] opacity-90">Today's Attendance</span>
                             </div>
-
-                            {/* Status Text */}
-                            <p className="text-[11px] font-bold text-white/70 mt-2">
-                                {getStatusText()}
-                            </p>
                         </div>
 
-                        {/* Integrated Calendar UI - Month on Top for alignment */}
+                        {/* Integrated Calendar UI */}
                         <div className="relative group shrink-0">
                             <motion.div
                                 initial={{ scale: 0.9 }}
@@ -251,50 +240,57 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                             </div>
                         ) : (
                             <div className="w-full space-y-3">
-                                {/* Unified Location Status Button */}
-                                <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl backdrop-blur-md border transition-all
-                                    ${isLocChecking
-                                        ? 'bg-white/15 border-white/25'
-                                        : geofenceResult?.isAllowed
-                                            ? 'bg-emerald-500/20 border-emerald-400/30'
-                                            : 'bg-gradient-to-r from-orange-500/30 to-rose-500/30 border-orange-400/40'}`}>
-                                    {isLocChecking ? (
-                                        <>
-                                            <IconLoader2 className="w-5 h-5 animate-spin text-white/80" />
-                                            <span className="text-[11px] font-black uppercase tracking-widest text-white/80">
-                                                Locating Office Area...
-                                            </span>
-                                        </>
-                                    ) : userCoords ? (
-                                        <>
-                                            <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 
-                                                ${geofenceResult?.isAllowed ? 'bg-emerald-400/30' : 'bg-orange-400/30'}`}>
-                                                <IconMapPin className={`w-4 h-4 ${geofenceResult?.isAllowed ? 'text-emerald-200' : 'text-orange-200'}`} />
-                                            </div>
-                                            <span className="text-[10px] font-bold text-white/90 tracking-tight">
-                                                {userCoords.lat.toFixed(6)}, {userCoords.lng.toFixed(6)}
-                                            </span>
-                                            {geofenceResult?.isAllowed && geofenceResult.withinOffice && (
-                                                <span className="ml-auto text-[9px] font-black uppercase tracking-wider text-emerald-200 bg-emerald-500/30 px-2 py-0.5 rounded-lg">
-                                                    {geofenceResult.withinOffice.name}
-                                                </span>
-                                            )}
-                                        </>
-                                    ) : (
-                                        <>
-                                            <IconMapPinOff className="w-5 h-5 text-white/60" />
-                                            <span className="text-[11px] font-bold text-white/60">Location Unavailable</span>
-                                        </>
-                                    )}
-                                </div>
-
-                                {/* IN / OUT Time Display or Out-of-Office Warning */}
-                                {!isLocChecking && (
+                                {/* Location Loading State - Centered with Zoom Animation */}
+                                {isLocChecking ? (
                                     <motion.div
-                                        initial={{ opacity: 0, y: 5 }}
-                                        animate={{ opacity: 1, y: 0 }}
+                                        initial={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0.8 }}
+                                        className="flex flex-col items-center justify-center p-8 bg-white/10 rounded-2xl border border-white/20 backdrop-blur-sm"
+                                    >
+                                        <IconLoader2 className="w-8 h-8 animate-spin text-white/70 mb-3" />
+                                        <span className="text-[11px] font-black uppercase tracking-widest text-white/70">
+                                            Locating Office Area...
+                                        </span>
+                                    </motion.div>
+                                ) : (
+                                    <motion.div
+                                        initial={{ opacity: 0, scale: 0.9 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        transition={{ duration: 0.3, ease: "easeOut" }}
                                         className="space-y-3"
                                     >
+                                        {/* Office Name Badge + GPS Coordinates */}
+                                        <div className={`flex flex-col gap-2 px-4 py-3 rounded-2xl backdrop-blur-md border transition-all
+                                            ${geofenceResult?.isAllowed
+                                                ? 'bg-emerald-500/20 border-emerald-400/30'
+                                                : 'bg-gradient-to-r from-orange-500/30 to-rose-500/30 border-orange-400/40'}`}>
+                                            {/* Row 1: Office Name Badge or Warning */}
+                                            <div className="flex items-center gap-2">
+                                                <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 
+                                                    ${geofenceResult?.isAllowed ? 'bg-emerald-400/30' : 'bg-orange-400/30'}`}>
+                                                    <IconMapPin className={`w-4 h-4 ${geofenceResult?.isAllowed ? 'text-emerald-200' : 'text-orange-200'}`} />
+                                                </div>
+                                                {geofenceResult?.isAllowed && geofenceResult.withinOffice ? (
+                                                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-100 bg-emerald-500/40 px-3 py-1 rounded-lg">
+                                                        {geofenceResult.withinOffice.name}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-[10px] font-black uppercase tracking-wider text-orange-100">
+                                                        Outside Office Area
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {/* Row 2: GPS Coordinates */}
+                                            {userCoords && (
+                                                <div className="flex items-center gap-2 pl-8">
+                                                    <span className="text-[9px] font-bold text-white/50 tracking-tight">
+                                                        GPS: {userCoords.lat.toFixed(6)}, {userCoords.lng.toFixed(6)}
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* IN / OUT Time Display or Out-of-Office Warning */}
                                         {!geofenceResult?.isAllowed ? (
                                             <div className="p-4 rounded-2xl bg-gradient-to-r from-orange-600/40 to-rose-600/40 border border-orange-400/30 backdrop-blur-md">
                                                 <div className="flex items-center gap-3 mb-2">
