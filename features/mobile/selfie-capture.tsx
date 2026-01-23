@@ -262,7 +262,6 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
 
             if (result.matched) {
                 setStatus('verified')
-                toast.success(`Verified! Match: ${(result.similarity * 100).toFixed(0)}%`)
             } else {
                 setStatus('verify_failed')
                 setApiStatus('idle') // Cancel API tracking on verify fail
@@ -482,65 +481,67 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
                         </div>
                     )}
 
-                    {/* Verification Overlay States */}
-                    <AnimatePresence>
+                    {/* Inline Verification States */}
+                    <AnimatePresence mode="wait">
                         {status === 'verifying' && (
                             <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                className="fixed inset-0 z-[70] bg-slate-950/90 backdrop-blur-xl flex flex-col items-center justify-center p-8"
+                                key="verifying"
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -20 }}
+                                className="flex flex-col items-center py-8"
                             >
                                 <motion.div
                                     animate={{ rotate: 360 }}
                                     transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                                    className="w-20 h-20 rounded-full border-4 border-primary/30 border-t-primary mb-8"
+                                    className="w-16 h-16 rounded-full border-4 border-primary/30 border-t-primary mb-6"
                                 />
-                                <h3 className="text-2xl font-black text-white tracking-tight mb-2">Verifying Identity</h3>
-                                <p className="text-sm text-white/60 font-medium uppercase tracking-wider">Please wait...</p>
+                                <h3 className="text-xl font-black text-white tracking-tight mb-1">Verifying Identity</h3>
+                                <p className="text-xs text-white/50 font-medium uppercase tracking-wider">Please wait...</p>
                             </motion.div>
                         )}
 
                         {status === 'verified' && (
                             <motion.div
-                                initial={{ opacity: 0, scale: 0.9 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0 }}
-                                className="fixed inset-0 z-[70] bg-gradient-to-b from-emerald-950/95 to-slate-950/95 backdrop-blur-xl flex flex-col items-center justify-center p-8"
+                                key="verified"
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -20 }}
+                                className="flex flex-col items-center py-4"
                             >
                                 <motion.div
                                     initial={{ scale: 0 }}
                                     animate={{ scale: 1 }}
                                     transition={{ type: "spring", damping: 12 }}
-                                    className="w-24 h-24 rounded-full bg-emerald-500 flex items-center justify-center mb-8 shadow-2xl shadow-emerald-500/30"
+                                    className="w-16 h-16 rounded-full bg-emerald-500 flex items-center justify-center mb-4 shadow-xl shadow-emerald-500/30"
                                 >
-                                    <IconCheck className="w-12 h-12 text-white stroke-[3]" />
+                                    <IconCheck className="w-8 h-8 text-white stroke-[3]" />
                                 </motion.div>
-                                <h3 className="text-3xl font-black text-white tracking-tight mb-2">Verified!</h3>
-                                <p className="text-lg text-emerald-300 font-bold mb-2">Match: {(similarity * 100).toFixed(0)}%</p>
+                                <h3 className="text-xl font-black text-white tracking-tight mb-1">Verified!</h3>
+                                <p className="text-sm text-emerald-300 font-bold mb-4">Match: {(similarity * 100).toFixed(0)}%</p>
 
                                 {apiStatus === 'pending' ? (
                                     <>
-                                        <div className="flex items-center gap-3 mb-10">
-                                            <IconLoader2 className="w-5 h-5 text-white/60 animate-spin" />
-                                            <p className="text-sm text-white/60 font-medium">Syncing attendance...</p>
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <IconLoader2 className="w-4 h-4 text-white/50 animate-spin" />
+                                            <p className="text-xs text-white/50 font-medium">Syncing attendance...</p>
                                         </div>
                                         <Button
                                             disabled
-                                            className="w-full max-w-xs h-16 rounded-[2rem] bg-white/50 text-slate-500 font-black text-lg shadow-xl cursor-not-allowed"
+                                            className="w-full h-14 rounded-[2rem] bg-white/30 text-white/50 font-black text-lg cursor-not-allowed"
                                         >
-                                            <IconLoader2 className="w-6 h-6 mr-3 animate-spin" />
+                                            <IconLoader2 className="w-5 h-5 mr-3 animate-spin" />
                                             SYNCING...
                                         </Button>
                                     </>
                                 ) : (
                                     <>
-                                        <p className="text-sm text-white/50 font-medium mb-10">Attendance recorded</p>
+                                        <p className="text-xs text-white/40 font-medium mb-4">Attendance recorded</p>
                                         <Button
                                             onClick={handleComplete}
-                                            className="w-full max-w-xs h-16 rounded-[2rem] bg-white text-slate-900 font-black text-lg shadow-xl hover:bg-white/90 transition-all active:scale-95"
+                                            className="w-full h-14 rounded-[2rem] bg-emerald-500 hover:bg-emerald-400 text-white font-black text-lg shadow-xl shadow-emerald-500/20 transition-all active:scale-95"
                                         >
-                                            <IconCheck className="w-6 h-6 mr-3" />
+                                            <IconCheck className="w-5 h-5 mr-3" />
                                             DONE
                                         </Button>
                                     </>
@@ -550,27 +551,28 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
 
                         {status === 'verify_failed' && (
                             <motion.div
-                                initial={{ opacity: 0, scale: 0.9 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0 }}
-                                className="fixed inset-0 z-[70] bg-gradient-to-b from-rose-950/95 to-slate-950/95 backdrop-blur-xl flex flex-col items-center justify-center p-8"
+                                key="failed"
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -20 }}
+                                className="flex flex-col items-center py-4"
                             >
                                 <motion.div
                                     initial={{ scale: 0 }}
                                     animate={{ scale: 1 }}
                                     transition={{ type: "spring", damping: 12 }}
-                                    className="w-24 h-24 rounded-full bg-rose-500 flex items-center justify-center mb-8 shadow-2xl shadow-rose-500/30"
+                                    className="w-16 h-16 rounded-full bg-rose-500 flex items-center justify-center mb-4 shadow-xl shadow-rose-500/30"
                                 >
-                                    <IconX className="w-12 h-12 text-white stroke-[3]" />
+                                    <IconX className="w-8 h-8 text-white stroke-[3]" />
                                 </motion.div>
-                                <h3 className="text-3xl font-black text-white tracking-tight mb-2">Verification Failed</h3>
-                                <p className="text-sm text-rose-300 font-medium mb-2 text-center max-w-xs">{errorMessage}</p>
-                                <p className="text-xs text-white/40 font-medium mb-10 uppercase tracking-wider">Try with better lighting</p>
+                                <h3 className="text-xl font-black text-white tracking-tight mb-1">Verification Failed</h3>
+                                <p className="text-xs text-rose-300 font-medium mb-1 text-center">{errorMessage}</p>
+                                <p className="text-[10px] text-white/40 font-medium mb-4 uppercase tracking-wider">Try with better lighting</p>
                                 <Button
                                     onClick={retakePhoto}
-                                    className="w-full max-w-xs h-16 rounded-[2rem] bg-white text-slate-900 font-black text-lg shadow-xl hover:bg-white/90 transition-all active:scale-95"
+                                    className="w-full h-14 rounded-[2rem] bg-white text-slate-900 font-black text-lg shadow-xl hover:bg-white/90 transition-all active:scale-95"
                                 >
-                                    <IconRefresh className="w-6 h-6 mr-3" />
+                                    <IconRefresh className="w-5 h-5 mr-3" />
                                     RETAKE SELFIE
                                 </Button>
                             </motion.div>
