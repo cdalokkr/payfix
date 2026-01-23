@@ -47,11 +47,6 @@ export function MobileAttendanceWizard({
 
     // Clock in mutation
     const clockIn = trpc.attendance.clockIn.useMutation({
-        onSuccess: () => {
-            setCurrentStep('complete')
-            toast.success('Successfully clocked in!')
-            utils.attendance.getTodayStatus.invalidate()
-        },
         onError: (error) => {
             setCurrentStep('error')
             setErrorMessage(error.message || 'Failed to clock in')
@@ -60,11 +55,6 @@ export function MobileAttendanceWizard({
 
     // Clock out mutation
     const clockOut = trpc.attendance.clockOut.useMutation({
-        onSuccess: () => {
-            setCurrentStep('complete')
-            toast.success('Successfully clocked out!')
-            utils.attendance.getTodayStatus.invalidate()
-        },
         onError: (error) => {
             setCurrentStep('error')
             setErrorMessage(error.message || 'Failed to clock out')
@@ -76,8 +66,7 @@ export function MobileAttendanceWizard({
     }, [])
 
     const handleVerified = useCallback(async (result: { matched: boolean; similarity: number }) => {
-        setCurrentStep('submitting')
-
+        // Call API and go directly to dashboard (skip submitting/complete steps)
         const localDate = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Kolkata' })
 
         try {
@@ -91,10 +80,16 @@ export function MobileAttendanceWizard({
                     localDate,
                 })
             }
-        } catch {
-            // Error handled in mutation callbacks
+            // Go directly to dashboard
+            toast.success(action === 'clock_in' ? 'Successfully clocked in!' : 'Successfully clocked out!')
+            utils.attendance.getTodayStatus.invalidate()
+            onComplete()
+        } catch (error) {
+            // Error handled - stay on current screen
+            setCurrentStep('error')
+            setErrorMessage(error instanceof Error ? error.message : 'Failed to record attendance')
         }
-    }, [action, clockIn, clockOut])
+    }, [action, clockIn, clockOut, onComplete, utils])
 
     const handleBack = useCallback(() => {
         onCancel()
