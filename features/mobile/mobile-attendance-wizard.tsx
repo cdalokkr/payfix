@@ -65,31 +65,30 @@ export function MobileAttendanceWizard({
         // Selfie captured but not verified yet - this is now handled in selfie-capture
     }, [])
 
-    const handleVerified = useCallback(async (result: { matched: boolean; similarity: number }) => {
-        // Call API and go directly to dashboard (skip submitting/complete steps)
+    // This is called by SelfieCapture to submit attendance in parallel with verification
+    const handleSubmitAttendance = useCallback(async () => {
         const localDate = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Kolkata' })
 
-        try {
-            if (action === 'clock_in') {
-                await clockIn.mutateAsync({
-                    localDate,
-                    isExtraDay: false,
-                })
-            } else {
-                await clockOut.mutateAsync({
-                    localDate,
-                })
-            }
-            // Go directly to dashboard
-            toast.success(action === 'clock_in' ? 'Successfully clocked in!' : 'Successfully clocked out!')
-            utils.attendance.getTodayStatus.invalidate()
-            onComplete()
-        } catch (error) {
-            // Error handled - stay on current screen
-            setCurrentStep('error')
-            setErrorMessage(error instanceof Error ? error.message : 'Failed to record attendance')
+        if (action === 'clock_in') {
+            await clockIn.mutateAsync({
+                localDate,
+                isExtraDay: false,
+            })
+        } else {
+            await clockOut.mutateAsync({
+                localDate,
+            })
         }
-    }, [action, clockIn, clockOut, onComplete, utils])
+
+        // Invalidate cache for real-time update
+        utils.attendance.getTodayStatus.invalidate()
+    }, [action, clockIn, clockOut, utils])
+
+    // Called when verification AND API both succeed
+    const handleVerified = useCallback((result: { matched: boolean; similarity: number }) => {
+        toast.success(action === 'clock_in' ? 'Successfully clocked in!' : 'Successfully clocked out!')
+        onComplete()
+    }, [action, onComplete])
 
     const handleBack = useCallback(() => {
         onCancel()
@@ -152,6 +151,7 @@ export function MobileAttendanceWizard({
                         profileImageUrl={profileImageUrl}
                         onCaptured={handleSelfieCaptured}
                         onVerified={handleVerified}
+                        onSubmitAttendance={handleSubmitAttendance}
                         onBack={handleBack}
                     />
                 )}

@@ -14,6 +14,7 @@ interface SelfieCaptureProps {
     profileImageUrl: string | null
     onCaptured: (result: SelfieResult) => void
     onVerified: (result: { matched: boolean; similarity: number }) => void
+    onSubmitAttendance: () => Promise<void>
     onBack?: () => void
 }
 
@@ -24,7 +25,7 @@ export interface SelfieResult {
     similarity: number
 }
 
-export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onBack }: SelfieCaptureProps) {
+export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmitAttendance, onBack }: SelfieCaptureProps) {
     const [status, setStatus] = useState<'idle' | 'streaming' | 'captured' | 'verifying' | 'verified' | 'verify_failed' | 'error'>('idle')
     const [errorMessage, setErrorMessage] = useState<string>('')
     const [capturedImage, setCapturedImage] = useState<string | null>(null)
@@ -33,6 +34,8 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onBack 
     const [zoom, setZoom] = useState<number>(1)
     const [hasZoomSupport, setHasZoomSupport] = useState(false)
     const [similarity, setSimilarity] = useState<number>(0)
+    const [apiStatus, setApiStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle')
+    const [apiError, setApiError] = useState<string>('')
 
     const videoRef = useRef<HTMLVideoElement>(null)
     const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -230,18 +233,30 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onBack 
 
         // Start verification
         setStatus('verifying')
+        setApiStatus('pending')
 
         if (!profileImageUrl) {
             setStatus('verify_failed')
+            setApiStatus('idle')
             setErrorMessage('No profile photo found. Please upload a profile photo first.')
             return
         }
 
+        // Run verification and API call in parallel
+        const verificationPromise = LightweightVerificationService.compareFaces(
+            capturedImage,
+            profileImageUrl
+        )
+
+        const apiPromise = onSubmitAttendance().then(() => {
+            setApiStatus('success')
+        }).catch((error) => {
+            setApiStatus('error')
+            setApiError(error instanceof Error ? error.message : 'Failed to record attendance')
+        })
+
         try {
-            const result = await LightweightVerificationService.compareFaces(
-                capturedImage,
-                profileImageUrl
-            )
+            const result = await verificationPromise
 
             setSimilarity(result.similarity)
 
@@ -250,19 +265,29 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onBack 
                 toast.success(`Verified! Match: ${(result.similarity * 100).toFixed(0)}%`)
             } else {
                 setStatus('verify_failed')
+                setApiStatus('idle') // Cancel API tracking on verify fail
                 setErrorMessage(result.error || 'Face does not match profile photo')
             }
         } catch (error) {
             setStatus('verify_failed')
+            setApiStatus('idle')
             setErrorMessage('Verification failed. Please try again.')
         }
-    }, [capturedImage, capturedAt, profileImageUrl])
+    }, [capturedImage, capturedAt, profileImageUrl, onSubmitAttendance])
 
     const handleComplete = useCallback(() => {
-        if (capturedImage && capturedAt) {
+        if (apiStatus === 'success') {
+            // API already done, go directly to dashboard
             onVerified({ matched: true, similarity })
+        } else if (apiStatus === 'pending') {
+            // Wait for API to complete
+            // The button will show spinner, user needs to wait
+        } else if (apiStatus === 'error') {
+            // Show error
+            setStatus('verify_failed')
+            setErrorMessage(apiError || 'Failed to record attendance')
         }
-    }, [capturedImage, capturedAt, similarity, onVerified])
+    }, [apiStatus, similarity, onVerified, apiError])
 
     // Auto-capture countdown
     useEffect(() => {
@@ -493,14 +518,33 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onBack 
                                 </motion.div>
                                 <h3 className="text-3xl font-black text-white tracking-tight mb-2">Verified!</h3>
                                 <p className="text-lg text-emerald-300 font-bold mb-2">Match: {(similarity * 100).toFixed(0)}%</p>
-                                <p className="text-sm text-white/50 font-medium mb-10">Face verification successful</p>
-                                <Button
-                                    onClick={handleComplete}
-                                    className="w-full max-w-xs h-16 rounded-[2rem] bg-white text-slate-900 font-black text-lg shadow-xl hover:bg-white/90 transition-all active:scale-95"
-                                >
-                                    <IconCheck className="w-6 h-6 mr-3" />
-                                    DONE
-                                </Button>
+
+                                {apiStatus === 'pending' ? (
+                                    <>
+                                        <div className="flex items-center gap-3 mb-10">
+                                            <IconLoader2 className="w-5 h-5 text-white/60 animate-spin" />
+                                            <p className="text-sm text-white/60 font-medium">Syncing attendance...</p>
+                                        </div>
+                                        <Button
+                                            disabled
+                                            className="w-full max-w-xs h-16 rounded-[2rem] bg-white/50 text-slate-500 font-black text-lg shadow-xl cursor-not-allowed"
+                                        >
+                                            <IconLoader2 className="w-6 h-6 mr-3 animate-spin" />
+                                            SYNCING...
+                                        </Button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <p className="text-sm text-white/50 font-medium mb-10">Attendance recorded</p>
+                                        <Button
+                                            onClick={handleComplete}
+                                            className="w-full max-w-xs h-16 rounded-[2rem] bg-white text-slate-900 font-black text-lg shadow-xl hover:bg-white/90 transition-all active:scale-95"
+                                        >
+                                            <IconCheck className="w-6 h-6 mr-3" />
+                                            DONE
+                                        </Button>
+                                    </>
+                                )}
                             </motion.div>
                         )}
 
