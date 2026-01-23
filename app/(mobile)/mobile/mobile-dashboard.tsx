@@ -172,7 +172,7 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
         >
             {/* Today's Status Card */}
             <motion.div variants={itemVars} whileTap={{ scale: 0.98 }}>
-                <div className={`relative overflow-hidden rounded-[1.5rem] bg-gradient-to-br ${getStatusColor()} p-4 text-white shadow-2xl shadow-primary/20 min-h-[290px] flex flex-col justify-between`}>
+                <div className={`relative overflow-hidden rounded-[1rem] bg-gradient-to-br ${getStatusColor()} p-4 text-white shadow-2xl shadow-primary/20 min-h-[290px] flex flex-col justify-between`}>
                     {/* Glass Decorations */}
                     <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full -mr-24 -mt-24 blur-2xl" />
                     <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full -ml-16 -mb-16 blur-xl" />
@@ -209,7 +209,7 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                             <motion.div
                                 initial={{ scale: 0.9 }}
                                 animate={{ scale: 1 }}
-                                className="flex flex-col items-center bg-white rounded-2xl p-2 min-w-[70px] shadow-lg"
+                                className="flex flex-col items-center bg-white rounded-xl p-2 min-w-[70px] shadow-lg"
                             >
                                 <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest border-b border-rose-100 w-full text-center pb-0.5 mb-1">
                                     {format(now, 'MMM').toUpperCase()}
@@ -223,12 +223,12 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                                     </span>
                                 </div>
                             </motion.div>
-                            <div className="absolute -inset-1 bg-white/20 blur-md -z-10 rounded-2xl" />
+                            <div className="absolute -inset-1 bg-white/20 blur-md -z-10 rounded-xl" />
                         </div>
                     </div>
 
                     {/* Integrated Action Row */}
-                    <div className="mt-6 space-y-4">
+                    <div className="mt-2 space-y-4">
                         {!isReady ? (
                             <div className="flex items-center justify-center p-8">
                                 <IconLoader2 className="w-8 h-8 animate-spin opacity-20" />
@@ -287,7 +287,7 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                                         className="space-y-3"
                                     >
                                         {/* Office Name Badge */}
-                                        <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl backdrop-blur-md border transition-all
+                                        <div className={`flex items-center gap-2 px-3 py-2 rounded-xl backdrop-blur-md border transition-all
                                             ${geofenceResult?.isAllowed
                                                 ? 'bg-emerald-500/20 border-emerald-400/30'
                                                 : 'bg-gradient-to-r from-orange-500/30 to-rose-500/30 border-orange-400/40'}`}>
@@ -314,7 +314,7 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
 
                                         {/* IN / OUT Time Display or Out-of-Office Warning */}
                                         {!geofenceResult?.isAllowed ? (
-                                            <div className="p-4 rounded-2xl bg-gradient-to-r from-orange-600/40 to-rose-600/40 border border-orange-400/30 backdrop-blur-md">
+                                            <div className="p-4 rounded-xl bg-gradient-to-r from-orange-600/40 to-rose-600/40 border border-orange-400/30 backdrop-blur-md">
                                                 <div className="flex items-center gap-3 mb-2">
                                                     <div className="w-8 h-8 rounded-xl bg-orange-500/30 flex items-center justify-center">
                                                         <IconAlertTriangle className="w-5 h-5 text-orange-200 animate-pulse" />
@@ -342,11 +342,11 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                                         ) : (
                                             <>
                                                 {/* IN / OUT Time Labels */}
-                                                <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-sm">
+                                                <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-white/10 border border-white/15 backdrop-blur-sm">
                                                     <div className="flex items-center gap-2">
                                                         <div className={`w-6 h-6 rounded-lg flex items-center justify-center
                                                             ${hasCheckedIn ? 'bg-emerald-400/40' : 'bg-white/20'}`}>
-                                                            <IconLogin className={`w-3.5 h-3.5 ${hasCheckedIn ? 'text-emerald-200' : 'text-white/50'}`} />
+                                                            <ClockArrowDown className={`w-3.5 h-3.5 ${hasCheckedIn ? 'text-emerald-200' : 'text-white/50'}`} />
                                                         </div>
                                                         <span className="text-[10px] font-black uppercase tracking-wider text-white/60">IN:</span>
                                                         <span className={`text-sm font-black ${hasCheckedIn ? 'text-white' : 'text-white/40'}`}>
@@ -359,7 +359,7 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                                                     <div className="flex items-center gap-2">
                                                         <div className={`w-6 h-6 rounded-lg flex items-center justify-center
                                                             ${hasCheckedOut ? 'bg-orange-400/40' : 'bg-white/20'}`}>
-                                                            <IconLogout className={`w-3.5 h-3.5 ${hasCheckedOut ? 'text-orange-200' : 'text-white/50'}`} />
+                                                            <ClockArrowUp className={`w-3.5 h-3.5 ${hasCheckedOut ? 'text-orange-200' : 'text-white/50'}`} />
                                                         </div>
                                                         <span className="text-[10px] font-black uppercase tracking-wider text-white/60">OUT:</span>
                                                         <span className={`text-sm font-black ${hasCheckedOut ? 'text-white' : 'text-white/40'}`}>
@@ -396,7 +396,7 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
 
                                                 {/* Attendance Complete Badge */}
                                                 {isComplete && (
-                                                    <div className="flex items-center justify-center gap-3 px-4 py-3 rounded-2xl bg-emerald-500/20 border border-emerald-400/30">
+                                                    <div className="flex items-center justify-center gap-3 px-4 py-3 rounded-xl bg-emerald-500/20 border border-emerald-400/30">
                                                         <div className="w-8 h-8 rounded-xl bg-emerald-500/40 flex items-center justify-center">
                                                             <CircleCheckBig className="w-5 h-5 text-emerald-200" />
                                                         </div>
