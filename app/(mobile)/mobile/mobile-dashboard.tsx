@@ -27,7 +27,10 @@ import {
     MapPinCheck,
     MapPinX,
     MapPinHouse,
-    MapPinOff
+    MapPinOff,
+    ClockArrowDown,
+    ClockArrowUp,
+    CircleCheckBig
 } from "lucide-react"
 import { usePwaCheck } from "@/hooks/use-pwa-check"
 import { isDefaultAvatar } from "@/lib/utils/avatar-helper"
@@ -169,7 +172,7 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
         >
             {/* Today's Status Card */}
             <motion.div variants={itemVars} whileTap={{ scale: 0.98 }}>
-                <div className={`relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br ${getStatusColor()} p-4 text-white shadow-2xl shadow-primary/20 min-h-[290px] flex flex-col justify-between`}>
+                <div className={`relative overflow-hidden rounded-[1.5rem] bg-gradient-to-br ${getStatusColor()} p-4 text-white shadow-2xl shadow-primary/20 min-h-[290px] flex flex-col justify-between`}>
                     {/* Glass Decorations */}
                     <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full -mr-24 -mt-24 blur-2xl" />
                     <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full -ml-16 -mb-16 blur-xl" />
@@ -194,7 +197,7 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                                     ) : (
                                         <MapPinX className="w-3.5 h-3.5 text-orange-300" />
                                     )}
-                                    <span className="text-[9px] font-bold text-white/60 tracking-tight">
+                                    <span className="text-xs font-bold text-white/60 tracking-tight">
                                         {userCoords.lat.toFixed(6)}, {userCoords.lng.toFixed(6)}
                                     </span>
                                 </motion.div>
@@ -284,7 +287,7 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                                         className="space-y-3"
                                     >
                                         {/* Office Name Badge */}
-                                        <div className={`flex items-center gap-2 px-4 py-3 rounded-2xl backdrop-blur-md border transition-all
+                                        <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl backdrop-blur-md border transition-all
                                             ${geofenceResult?.isAllowed
                                                 ? 'bg-emerald-500/20 border-emerald-400/30'
                                                 : 'bg-gradient-to-r from-orange-500/30 to-rose-500/30 border-orange-400/40'}`}>
@@ -339,7 +342,7 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                                         ) : (
                                             <>
                                                 {/* IN / OUT Time Labels */}
-                                                <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-sm">
+                                                <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-sm">
                                                     <div className="flex items-center gap-2">
                                                         <div className={`w-6 h-6 rounded-lg flex items-center justify-center
                                                             ${hasCheckedIn ? 'bg-emerald-400/40' : 'bg-white/20'}`}>
@@ -371,7 +374,7 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                                                 {!isComplete && (
                                                     <Link
                                                         href={`/mobile/attendance?action=${hasCheckedIn ? 'clock_out' : 'clock_in'}`}
-                                                        className={`flex items-center justify-center gap-3 w-full px-5 py-4 rounded-2xl border transition-all active:scale-95 shadow-lg
+                                                        className={`flex items-center justify-center gap-3 w-full px-4 py-3 rounded-2xl border transition-all active:scale-95 shadow-lg
                                                             ${hasCheckedIn
                                                                 ? 'bg-gradient-to-r from-orange-500/40 to-rose-500/40 border-orange-400/40 hover:from-orange-500/50 hover:to-rose-500/50'
                                                                 : 'bg-gradient-to-r from-emerald-500/40 to-teal-500/40 border-emerald-400/40 hover:from-emerald-500/50 hover:to-teal-500/50'}`}
@@ -381,8 +384,8 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                                                                 ? 'bg-orange-500 shadow-orange-600/30'
                                                                 : 'bg-emerald-500 shadow-emerald-600/30'}`}>
                                                             {hasCheckedIn
-                                                                ? <IconLogout className="w-5 h-5 text-white" />
-                                                                : <IconLogin className="w-5 h-5 text-white" />}
+                                                                ? <ClockArrowUp className="w-5 h-5 text-white" />
+                                                                : <ClockArrowDown className="w-5 h-5 text-white" />}
                                                         </div>
                                                         <span className="text-sm font-black uppercase tracking-widest text-white">
                                                             {hasCheckedIn ? 'Mark Office Out' : 'Mark Office In'}
@@ -393,12 +396,12 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
 
                                                 {/* Attendance Complete Badge */}
                                                 {isComplete && (
-                                                    <div className="flex items-center justify-center gap-3 px-5 py-4 rounded-2xl bg-emerald-500/20 border border-emerald-400/30">
+                                                    <div className="flex items-center justify-center gap-3 px-4 py-3 rounded-2xl bg-emerald-500/20 border border-emerald-400/30">
                                                         <div className="w-8 h-8 rounded-xl bg-emerald-500/40 flex items-center justify-center">
-                                                            <IconCheck className="w-5 h-5 text-emerald-200" />
+                                                            <CircleCheckBig className="w-5 h-5 text-emerald-200" />
                                                         </div>
                                                         <span className="text-sm font-black uppercase tracking-widest text-emerald-100">
-                                                            Attendance Complete
+                                                            Attendance Marked
                                                         </span>
                                                     </div>
                                                 )}
