@@ -17,11 +17,10 @@ import {
 } from "@tabler/icons-react"
 import { trpc } from "@/lib/trpc/client"
 import { SelfieCapture, type SelfieResult } from "./selfie-capture"
-import { FaceVerification, type FaceVerificationResult } from "./face-verification"
 import { format } from "date-fns"
 import { usePwaCheck } from "@/hooks/use-pwa-check"
 
-type WizardStep = 'selfie' | 'face' | 'submitting' | 'complete' | 'error'
+type WizardStep = 'selfie' | 'submitting' | 'complete' | 'error'
 
 interface MobileAttendanceWizardProps {
     action: 'clock_in' | 'clock_out'
@@ -31,8 +30,7 @@ interface MobileAttendanceWizardProps {
 }
 
 const STEPS = [
-    { id: 'selfie', label: 'Selfie', icon: IconCamera },
-    { id: 'face', label: 'Verify', icon: IconUserScan },
+    { id: 'selfie', label: 'Verify', icon: IconCamera },
 ]
 
 export function MobileAttendanceWizard({
@@ -43,8 +41,6 @@ export function MobileAttendanceWizard({
 }: MobileAttendanceWizardProps) {
     const { isPwa, isReady } = usePwaCheck()
     const [currentStep, setCurrentStep] = useState<WizardStep>('selfie')
-    const [selfieResult, setSelfieResult] = useState<SelfieResult | null>(null)
-    const [faceResult, setFaceResult] = useState<FaceVerificationResult | null>(null)
     const [errorMessage, setErrorMessage] = useState('')
 
     const utils = trpc.useUtils()
@@ -76,12 +72,10 @@ export function MobileAttendanceWizard({
     })
 
     const handleSelfieCaptured = useCallback((result: SelfieResult) => {
-        setSelfieResult(result)
-        setCurrentStep('face')
+        // Selfie captured but not verified yet - this is now handled in selfie-capture
     }, [])
 
-    const handleFaceVerified = useCallback(async (result: FaceVerificationResult) => {
-        setFaceResult(result)
+    const handleVerified = useCallback(async (result: { matched: boolean; similarity: number }) => {
         setCurrentStep('submitting')
 
         const localDate = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Kolkata' })
@@ -102,24 +96,13 @@ export function MobileAttendanceWizard({
         }
     }, [action, clockIn, clockOut])
 
-    const handleRetakeSelfie = useCallback(() => {
-        setSelfieResult(null)
-        setCurrentStep('selfie')
-    }, [])
-
     const handleBack = useCallback(() => {
-        if (currentStep === 'face') {
-            setSelfieResult(null)
-            setCurrentStep('selfie')
-        } else {
-            onCancel()
-        }
-    }, [currentStep, onCancel])
+        onCancel()
+    }, [onCancel])
 
     const getProgress = () => {
         switch (currentStep) {
-            case 'selfie': return 40
-            case 'face': return 75
+            case 'selfie': return 50
             case 'submitting': return 90
             case 'complete': return 100
             default: return 0
@@ -171,28 +154,14 @@ export function MobileAttendanceWizard({
             >
                 {currentStep === 'selfie' && (
                     <SelfieCapture
+                        profileImageUrl={profileImageUrl}
                         onCaptured={handleSelfieCaptured}
+                        onVerified={handleVerified}
                         onBack={handleBack}
                     />
                 )}
 
-                {currentStep === 'face' && selfieResult && (
-                    <div className="relative">
-                        {/* Selfie Preview as background */}
-                        <div className="absolute inset-0 aspect-[3/4] rounded-[2.5rem] overflow-hidden blur-sm opacity-50">
-                            <img src={selfieResult.imageDataUrl} alt="Preview" className="w-full h-full object-cover" />
-                        </div>
-                        <div className="relative z-10 bg-white/40 backdrop-blur-xl rounded-[2.5rem] p-6 shadow-2xl border border-white/40">
-                            <FaceVerification
-                                selfieDataUrl={selfieResult.imageDataUrl}
-                                profileImageUrl={profileImageUrl}
-                                onVerified={handleFaceVerified}
-                                onRetakeSelfie={handleRetakeSelfie}
-                                onBack={handleBack}
-                            />
-                        </div>
-                    </div>
-                )}
+
 
                 {currentStep === 'submitting' && (
                     <Card className="rounded-[2.5rem] border-none shadow-2xl overflow-hidden bg-white/80 backdrop-blur-xl">

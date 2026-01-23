@@ -8,25 +8,31 @@ import { motion, AnimatePresence } from "framer-motion"
 import { IconCamera, IconLoader2, IconRefresh, IconCheck, IconX, IconArrowLeft, IconZoomIn } from "@tabler/icons-react"
 import { format } from "date-fns"
 import { Slider } from "@/components/ui/slider"
+import { LightweightVerificationService } from "@/lib/services/lightweight-verification.service"
 
 interface SelfieCaptureProps {
+    profileImageUrl: string | null
     onCaptured: (result: SelfieResult) => void
+    onVerified: (result: { matched: boolean; similarity: number }) => void
     onBack?: () => void
 }
 
 export interface SelfieResult {
     imageDataUrl: string
     capturedAt: Date
+    verified: boolean
+    similarity: number
 }
 
-export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
-    const [status, setStatus] = useState<'idle' | 'streaming' | 'captured' | 'error'>('idle')
+export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onBack }: SelfieCaptureProps) {
+    const [status, setStatus] = useState<'idle' | 'streaming' | 'captured' | 'verifying' | 'verified' | 'verify_failed' | 'error'>('idle')
     const [errorMessage, setErrorMessage] = useState<string>('')
     const [capturedImage, setCapturedImage] = useState<string | null>(null)
     const [capturedAt, setCapturedAt] = useState<Date | null>(null)
     const [countdown, setCountdown] = useState<number | null>(null)
     const [zoom, setZoom] = useState<number>(1)
     const [hasZoomSupport, setHasZoomSupport] = useState(false)
+    const [similarity, setSimilarity] = useState<number>(0)
 
     const videoRef = useRef<HTMLVideoElement>(null)
     const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -219,14 +225,44 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
         startCamera()
     }, [startCamera])
 
-    const handleProceed = useCallback(() => {
-        if (capturedImage && capturedAt) {
-            onCaptured({
-                imageDataUrl: capturedImage,
-                capturedAt,
-            })
+    const handleProceed = useCallback(async () => {
+        if (!capturedImage || !capturedAt) return
+
+        // Start verification
+        setStatus('verifying')
+
+        if (!profileImageUrl) {
+            setStatus('verify_failed')
+            setErrorMessage('No profile photo found. Please upload a profile photo first.')
+            return
         }
-    }, [capturedImage, capturedAt, onCaptured])
+
+        try {
+            const result = await LightweightVerificationService.compareFaces(
+                capturedImage,
+                profileImageUrl
+            )
+
+            setSimilarity(result.similarity)
+
+            if (result.matched) {
+                setStatus('verified')
+                toast.success(`Verified! Match: ${(result.similarity * 100).toFixed(0)}%`)
+            } else {
+                setStatus('verify_failed')
+                setErrorMessage(result.error || 'Face does not match profile photo')
+            }
+        } catch (error) {
+            setStatus('verify_failed')
+            setErrorMessage('Verification failed. Please try again.')
+        }
+    }, [capturedImage, capturedAt, profileImageUrl])
+
+    const handleComplete = useCallback(() => {
+        if (capturedImage && capturedAt) {
+            onVerified({ matched: true, similarity })
+        }
+    }, [capturedImage, capturedAt, similarity, onVerified])
 
     // Auto-capture countdown
     useEffect(() => {
@@ -420,6 +456,82 @@ export function SelfieCapture({ onCaptured, onBack }: SelfieCaptureProps) {
                             </Button>
                         </div>
                     )}
+
+                    {/* Verification Overlay States */}
+                    <AnimatePresence>
+                        {status === 'verifying' && (
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="fixed inset-0 z-[70] bg-slate-950/90 backdrop-blur-xl flex flex-col items-center justify-center p-8"
+                            >
+                                <motion.div
+                                    animate={{ rotate: 360 }}
+                                    transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                                    className="w-20 h-20 rounded-full border-4 border-primary/30 border-t-primary mb-8"
+                                />
+                                <h3 className="text-2xl font-black text-white tracking-tight mb-2">Verifying Identity</h3>
+                                <p className="text-sm text-white/60 font-medium uppercase tracking-wider">Please wait...</p>
+                            </motion.div>
+                        )}
+
+                        {status === 'verified' && (
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="fixed inset-0 z-[70] bg-gradient-to-b from-emerald-950/95 to-slate-950/95 backdrop-blur-xl flex flex-col items-center justify-center p-8"
+                            >
+                                <motion.div
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: 1 }}
+                                    transition={{ type: "spring", damping: 12 }}
+                                    className="w-24 h-24 rounded-full bg-emerald-500 flex items-center justify-center mb-8 shadow-2xl shadow-emerald-500/30"
+                                >
+                                    <IconCheck className="w-12 h-12 text-white stroke-[3]" />
+                                </motion.div>
+                                <h3 className="text-3xl font-black text-white tracking-tight mb-2">Verified!</h3>
+                                <p className="text-lg text-emerald-300 font-bold mb-2">Match: {(similarity * 100).toFixed(0)}%</p>
+                                <p className="text-sm text-white/50 font-medium mb-10">Face verification successful</p>
+                                <Button
+                                    onClick={handleComplete}
+                                    className="w-full max-w-xs h-16 rounded-[2rem] bg-white text-slate-900 font-black text-lg shadow-xl hover:bg-white/90 transition-all active:scale-95"
+                                >
+                                    <IconCheck className="w-6 h-6 mr-3" />
+                                    DONE
+                                </Button>
+                            </motion.div>
+                        )}
+
+                        {status === 'verify_failed' && (
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="fixed inset-0 z-[70] bg-gradient-to-b from-rose-950/95 to-slate-950/95 backdrop-blur-xl flex flex-col items-center justify-center p-8"
+                            >
+                                <motion.div
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: 1 }}
+                                    transition={{ type: "spring", damping: 12 }}
+                                    className="w-24 h-24 rounded-full bg-rose-500 flex items-center justify-center mb-8 shadow-2xl shadow-rose-500/30"
+                                >
+                                    <IconX className="w-12 h-12 text-white stroke-[3]" />
+                                </motion.div>
+                                <h3 className="text-3xl font-black text-white tracking-tight mb-2">Verification Failed</h3>
+                                <p className="text-sm text-rose-300 font-medium mb-2 text-center max-w-xs">{errorMessage}</p>
+                                <p className="text-xs text-white/40 font-medium mb-10 uppercase tracking-wider">Try with better lighting</p>
+                                <Button
+                                    onClick={retakePhoto}
+                                    className="w-full max-w-xs h-16 rounded-[2rem] bg-white text-slate-900 font-black text-lg shadow-xl hover:bg-white/90 transition-all active:scale-95"
+                                >
+                                    <IconRefresh className="w-6 h-6 mr-3" />
+                                    RETAKE SELFIE
+                                </Button>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
             </div>
 
