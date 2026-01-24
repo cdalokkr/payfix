@@ -16,8 +16,8 @@ export function MobileAttendanceClient({ profile, action }: MobileAttendanceClie
     const router = useRouter()
 
     const handleComplete = () => {
+        // Just navigate to dashboard - tRPC cache invalidation handles data refresh
         router.push('/mobile')
-        router.refresh()
     }
 
     const handleCancel = () => {
