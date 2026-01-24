@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { format } from "date-fns"
 import Link from "next/link"
 import { motion } from "framer-motion"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { trpc } from "@/lib/trpc/client"
 import {
     IconClock,
@@ -76,23 +76,42 @@ const quickActions = [
 
 export function MobileDashboard({ profile, todayAttendance: initialAttendance }: MobileDashboardProps) {
     const { isPwa, isMobile, isReady } = usePwaCheck()
+
+    // Initialize from sessionStorage if available (persists across navigation)
     const [geofenceResult, setGeofenceResult] = useState<{
         isAllowed: boolean
         nearestOffice?: { id: string; name: string; distance: number }
         withinOffice?: { id: string; name: string; distance: number }
-    } | null>(null)
-    const [isLocChecking, setIsLocChecking] = useState(true)
-    const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null)
+    } | null>(() => {
+        if (typeof window !== 'undefined') {
+            const cached = sessionStorage.getItem('mobileGeofenceResult')
+            return cached ? JSON.parse(cached) : null
+        }
+        return null
+    })
 
-    // Track if location has been fetched to avoid re-fetching on navigation
-    const locationFetchedRef = useRef(false)
+    const [isLocChecking, setIsLocChecking] = useState(() => {
+        // If we have cached geofence result, don't show loading
+        if (typeof window !== 'undefined') {
+            return !sessionStorage.getItem('mobileGeofenceResult')
+        }
+        return true
+    })
+
+    const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(() => {
+        if (typeof window !== 'undefined') {
+            const cached = sessionStorage.getItem('mobileUserCoords')
+            return cached ? JSON.parse(cached) : null
+        }
+        return null
+    })
 
     const utils = trpc.useUtils()
 
     // Use client-side query with server data as initial value for real-time updates
     const { data: todayAttendance } = trpc.attendance.getMobileAttendance.useQuery(undefined, {
         initialData: initialAttendance,
-        refetchOnMount: false, // Don't refetch on mount if we have initial data
+        staleTime: 0, // Consider data always stale so it refetches on invalidation
         refetchOnWindowFocus: false,
     })
 
@@ -113,8 +132,9 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
 
     useEffect(() => {
         const fetchLocation = async () => {
-            // Skip if already fetched location (preserves state on navigation)
-            if (locationFetchedRef.current) {
+            // Skip if already have cached location from sessionStorage
+            if (geofenceResult) {
+                setIsLocChecking(false)
                 return
             }
 
@@ -133,17 +153,21 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
             navigator.geolocation.getCurrentPosition(
                 async (pos) => {
                     // Store user coordinates
-                    setUserCoords({
+                    const coords = {
                         lat: pos.coords.latitude,
                         lng: pos.coords.longitude
-                    })
+                    }
+                    setUserCoords(coords)
+                    sessionStorage.setItem('mobileUserCoords', JSON.stringify(coords))
+
                     try {
                         const result = await utils.officeLocations.checkGeofence.fetch({
                             latitude: pos.coords.latitude,
                             longitude: pos.coords.longitude
                         })
                         setGeofenceResult(result)
-                        locationFetchedRef.current = true // Mark as fetched
+                        // Cache in sessionStorage for navigation persistence
+                        sessionStorage.setItem('mobileGeofenceResult', JSON.stringify(result))
                     } catch (err) {
                         console.error('Geofence check failed:', err)
                     } finally {
@@ -158,7 +182,7 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
         if (isReady) {
             fetchLocation()
         }
-    }, [utils, isPwa, isReady, hasNoPhoto])
+    }, [utils, isPwa, isReady, hasNoPhoto, geofenceResult])
 
     const hasCheckedIn = !!todayAttendance?.check_in
     const hasCheckedOut = !!todayAttendance?.check_out
