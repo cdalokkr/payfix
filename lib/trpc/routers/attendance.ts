@@ -31,6 +31,25 @@ export const attendanceRouter = router({
             return { status: 'marked' as const };
         }),
 
+    // Full attendance record for mobile dashboard real-time updates
+    getMobileAttendance: protectedProcedure
+        .query(async ({ ctx }) => {
+            const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Kolkata' })
+            const record = await ctx.db.query.attendance.findFirst({
+                where: and(
+                    eq(attendance.profile_id, ctx.profile.id),
+                    eq(attendance.date, today)
+                ),
+                columns: {
+                    id: true,
+                    check_in: true,
+                    check_out: true,
+                    status: true
+                }
+            });
+            return record || null;
+        }),
+
     getAttendance: protectedProcedure
         .input(z.object({
             profileId: z.string().uuid().optional(),

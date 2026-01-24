@@ -81,7 +81,7 @@ export function MobileAttendanceWizard({
         }
 
         // Invalidate cache for real-time update
-        utils.attendance.getTodayStatus.invalidate()
+        utils.attendance.getMobileAttendance.invalidate()
     }, [action, clockIn, clockOut, utils])
 
     // Called when verification AND API both succeed

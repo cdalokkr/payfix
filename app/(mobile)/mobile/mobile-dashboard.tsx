@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { format } from "date-fns"
 import Link from "next/link"
 import { motion } from "framer-motion"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { trpc } from "@/lib/trpc/client"
 import {
     IconClock,
@@ -74,7 +74,7 @@ const quickActions = [
     { label: "Help", icon: IconQuestionMark, href: "/mobile/help", color: "bg-amber-500/10 text-amber-600" },
 ]
 
-export function MobileDashboard({ profile, todayAttendance }: MobileDashboardProps) {
+export function MobileDashboard({ profile, todayAttendance: initialAttendance }: MobileDashboardProps) {
     const { isPwa, isMobile, isReady } = usePwaCheck()
     const [geofenceResult, setGeofenceResult] = useState<{
         isAllowed: boolean
@@ -84,7 +84,17 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
     const [isLocChecking, setIsLocChecking] = useState(true)
     const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null)
 
+    // Track if location has been fetched to avoid re-fetching on navigation
+    const locationFetchedRef = useRef(false)
+
     const utils = trpc.useUtils()
+
+    // Use client-side query with server data as initial value for real-time updates
+    const { data: todayAttendance } = trpc.attendance.getMobileAttendance.useQuery(undefined, {
+        initialData: initialAttendance,
+        refetchOnMount: false, // Don't refetch on mount if we have initial data
+        refetchOnWindowFocus: false,
+    })
 
     // Fetch office settings and closures for holiday check
     const { data: settings } = trpc.attendance.getOfficeSettings.useQuery(undefined, {
@@ -103,6 +113,11 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
 
     useEffect(() => {
         const fetchLocation = async () => {
+            // Skip if already fetched location (preserves state on navigation)
+            if (locationFetchedRef.current) {
+                return
+            }
+
             // Only fetch if PWA and Profile photo is updated
             if (!isPwa || hasNoPhoto) {
                 setIsLocChecking(false)
@@ -128,6 +143,7 @@ export function MobileDashboard({ profile, todayAttendance }: MobileDashboardPro
                             longitude: pos.coords.longitude
                         })
                         setGeofenceResult(result)
+                        locationFetchedRef.current = true // Mark as fetched
                     } catch (err) {
                         console.error('Geofence check failed:', err)
                     } finally {
