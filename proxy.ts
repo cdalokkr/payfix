@@ -155,9 +155,25 @@ export async function proxy(request: NextRequest) {
         return NextResponse.redirect(new URL('/login', request.url))
     }
 
-    // Redirect to home if authenticated and on login page
+    // Redirect authenticated users from login page to their dashboard
     if (user && isLoginRoute) {
-        return NextResponse.redirect(new URL('/', request.url))
+        // Fetch user profile to determine role for proper dashboard redirect
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single()
+
+        if (profile?.role === 'admin') {
+            return NextResponse.redirect(new URL('/admin', request.url))
+        } else if (profile?.role === 'moderator') {
+            return NextResponse.redirect(new URL('/moderator', request.url))
+        } else if (profile?.role === 'employee') {
+            return NextResponse.redirect(new URL('/employee', request.url))
+        } else {
+            // Fallback to moderator dashboard for unknown roles
+            return NextResponse.redirect(new URL('/moderator', request.url))
+        }
     }
 
     // ============================================

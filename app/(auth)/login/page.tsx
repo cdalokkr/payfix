@@ -6,13 +6,32 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { ShieldUser } from 'lucide-react'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { createOptimizedContext } from '@/lib/auth/optimized-context'
+import { redirect } from 'next/navigation'
 
 export const metadata = {
   title: 'Login - Full-Stack App',
   description: 'Sign in to your account',
 }
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  // Server-side check: If user is already authenticated, redirect to their dashboard
+  const context = await createOptimizedContext()
+
+  if (context.user && context.profile) {
+    // Redirect based on user role
+    const role = context.profile.role
+    if (role === 'admin') {
+      redirect('/admin')
+    } else if (role === 'moderator') {
+      redirect('/moderator')
+    } else if (role === 'employee') {
+      redirect('/employee')
+    } else {
+      // Fallback for unknown roles
+      redirect('/moderator')
+    }
+  }
   return (
     <div className="min-h-screen bg-white relative overflow-hidden flex flex-col font-sans">
       {/* Dynamic Background Elements - Light Edition */}

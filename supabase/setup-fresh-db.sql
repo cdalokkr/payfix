@@ -215,6 +215,15 @@ CREATE INDEX IF NOT EXISTS idx_leaves_dates ON leaves(start_date, end_date);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, is_read) WHERE is_read = false;
 
+-- Foreign key indexes (for better JOIN/WHERE performance)
+CREATE INDEX IF NOT EXISTS idx_attendance_verified_by ON attendance(verified_by);
+CREATE INDEX IF NOT EXISTS idx_leaves_approved_by ON leaves(approved_by);
+CREATE INDEX IF NOT EXISTS idx_profiles_designation_id ON profiles(designation_id);
+CREATE INDEX IF NOT EXISTS idx_user_status_history_actor ON user_status_history(actor_user_id);
+CREATE INDEX IF NOT EXISTS idx_user_status_history_changed_by ON user_status_history(changed_by);
+CREATE INDEX IF NOT EXISTS idx_user_status_history_profile ON user_status_history(profile_id);
+CREATE INDEX IF NOT EXISTS idx_user_status_history_target ON user_status_history(target_user_id);
+
 -- =============================================================================
 -- 5. FUNCTIONS & TRIGGERS (With SET search_path for security)
 -- =============================================================================

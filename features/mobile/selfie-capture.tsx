@@ -291,7 +291,7 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
     // Auto-capture countdown
     useEffect(() => {
         if (status === 'streaming' && !capturedImage) {
-            setCountdown(7)
+            setCountdown(5)
             const timer = setInterval(() => {
                 setCountdown(prev => {
                     if (prev === null) return null
@@ -306,6 +306,17 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
             return () => clearInterval(timer)
         }
     }, [status, capturedImage, capturePhoto])
+
+    // Auto-verify immediately after capture (no confirm step)
+    useEffect(() => {
+        if (status === 'captured' && capturedImage && capturedAt) {
+            // Small delay for UX - let user see their captured photo briefly
+            const timer = setTimeout(() => {
+                handleProceed()
+            }, 500)
+            return () => clearTimeout(timer)
+        }
+    }, [status, capturedImage, capturedAt, handleProceed])
 
     useEffect(() => {
         startCamera()
@@ -462,22 +473,14 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
                     )}
 
                     {status === 'captured' && (
-                        <div className="grid grid-cols-2 gap-4">
-                            <Button
-                                onClick={retakePhoto}
-                                variant="outline"
-                                className="h-16 rounded-[2rem] border-white/10 text-white bg-white/5 hover:bg-white/10 font-bold"
-                            >
-                                <IconRefresh className="w-5 h-5 mr-3" />
-                                RETAKE
-                            </Button>
-                            <Button
-                                onClick={handleProceed}
-                                className="h-16 rounded-[2rem] bg-primary hover:bg-primary/90 text-white font-black shadow-xl shadow-primary/20 transition-all active:scale-95"
-                            >
-                                <IconCheck className="w-5 h-5 mr-3" />
-                                CONFIRM
-                            </Button>
+                        <div className="flex flex-col items-center py-8">
+                            <motion.div
+                                animate={{ rotate: 360 }}
+                                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                                className="w-16 h-16 rounded-full border-4 border-primary/30 border-t-primary mb-6"
+                            />
+                            <h3 className="text-xl font-black text-white tracking-tight mb-1">Processing</h3>
+                            <p className="text-xs text-white/50 font-medium uppercase tracking-wider">Starting verification...</p>
                         </div>
                     )}
 
@@ -569,11 +572,10 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
                                 <p className="text-xs text-rose-300 font-medium mb-1 text-center">{errorMessage}</p>
                                 <p className="text-[10px] text-white/40 font-medium mb-4 uppercase tracking-wider">Try with better lighting</p>
                                 <Button
-                                    onClick={retakePhoto}
+                                    onClick={onBack}
                                     className="w-full h-14 rounded-[2rem] bg-white text-slate-900 font-black text-lg shadow-xl hover:bg-white/90 transition-all active:scale-95"
                                 >
-                                    <IconRefresh className="w-5 h-5 mr-3" />
-                                    RETAKE SELFIE
+                                    OK
                                 </Button>
                             </motion.div>
                         )}
