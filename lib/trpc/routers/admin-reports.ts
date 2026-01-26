@@ -4,8 +4,9 @@
 // ============================================
 import { z } from 'zod'
 import { router, adminProcedure, protectedProcedure } from '../server'
-import { profiles, activities, attendance, userStatusHistory } from '@/lib/db/schema'
-import { eq, and, gte, lte, count, sql, desc, or, ilike, ne } from 'drizzle-orm'
+import { profiles, activities, attendance, userStatusHistory, leaves, designations, officeSettings, officeClosures } from '@/lib/db/schema'
+import { eq, and, gte, lte, count, sql, desc, or, ilike, ne, isNull, notInArray, between } from 'drizzle-orm'
+import { eachDayOfInterval, parseISO, isWithinInterval, getDay, format } from 'date-fns'
 
 export const adminReportsRouter = router({
   // Get comprehensive reports data for admin
@@ -775,4 +776,259 @@ export const adminReportsRouter = router({
 
       return data || []
     }),
+
+  // Get attendance summary report for all employees (for download)
+  getAttendanceSummaryReport: adminProcedure
+    .input(z.object({
+      startDate: z.string(),
+      endDate: z.string(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const startDate = parseISO(input.startDate)
+      const endDate = parseISO(input.endDate)
+
+      // Get all employees (non-admin profiles)
+      const employeeProfiles = await ctx.db.query.profiles.findMany({
+        where: ne(profiles.role, 'admin'),
+        with: { designation: true },
+        columns: {
+          id: true,
+          full_name: true,
+          first_name: true,
+          last_name: true,
+          mobile_no: true,
+          role: true,
+        }
+      })
+
+      // Get all attendance records in date range
+      const attendanceRecords = await ctx.db.query.attendance.findMany({
+        where: and(
+          gte(attendance.date, input.startDate),
+          lte(attendance.date, input.endDate)
+        )
+      })
+
+      // Get approved leaves in date range
+      const approvedLeaves = await ctx.db.query.leaves.findMany({
+        where: and(
+          eq(leaves.status, 'approved'),
+          or(
+            and(gte(leaves.start_date, input.startDate), lte(leaves.start_date, input.endDate)),
+            and(gte(leaves.end_date, input.startDate), lte(leaves.end_date, input.endDate)),
+            and(lte(leaves.start_date, input.startDate), gte(leaves.end_date, input.endDate))
+          )
+        )
+      })
+
+      // Get office closures (holidays)
+      const closures = await ctx.db.query.officeClosures.findMany({
+        where: and(
+          gte(officeClosures.date, input.startDate),
+          lte(officeClosures.date, input.endDate)
+        )
+      })
+
+      // Get office settings for off days
+      const settings = await ctx.db.query.officeSettings.findFirst()
+      const offDays = settings?.off_days || [0] // Default Sunday off
+
+      const days = eachDayOfInterval({ start: startDate, end: endDate })
+      const closureDates = new Set(closures.map(c => c.date))
+
+      // Calculate stats per employee
+      const summaryData = employeeProfiles.map((employee, index) => {
+        const employeeAttendance = attendanceRecords.filter(a => a.profile_id === employee.id)
+        const employeeLeaves = approvedLeaves.filter(l => l.profile_id === employee.id)
+
+        let fullDays = 0
+        let halfDays = 0
+        let absentDays = 0
+        let leaveDays = 0
+
+        days.forEach(day => {
+          const dateStr = format(day, 'yyyy-MM-dd')
+          const dayOfWeek = getDay(day)
+
+          // Skip off days and holidays
+          if (offDays.includes(dayOfWeek) || closureDates.has(dateStr)) return
+
+          // Check for leave
+          const isOnLeave = employeeLeaves.some(l => {
+            const leaveStart = parseISO(l.start_date)
+            const leaveEnd = parseISO(l.end_date)
+            return isWithinInterval(day, { start: leaveStart, end: leaveEnd })
+          })
+
+          if (isOnLeave) {
+            leaveDays++
+            return
+          }
+
+          // Check attendance
+          const record = employeeAttendance.find(a => a.date === dateStr)
+          if (record) {
+            if (record.status === 'verified' || record.status === 'pending') {
+              if (record.is_half_day) {
+                halfDays++
+              } else {
+                fullDays++
+              }
+            }
+          } else if (day <= new Date()) {
+            absentDays++
+          }
+        })
+
+        const totalPresentDays = fullDays + (halfDays * 0.5)
+        const employeeName = employee.full_name ||
+          `${employee.first_name || ''} ${employee.last_name || ''}`.trim() ||
+          'Unknown'
+
+        return {
+          sr: index + 1,
+          employeeName,
+          employeeMobile: employee.mobile_no || 'N/A',
+          fullDay: fullDays,
+          halfDay: halfDays,
+          absentDay: absentDays,
+          leaveDay: leaveDays,
+          totalPresentDay: totalPresentDays,
+          employeeDesignation: (employee.designation as any)?.name ||
+            (employee.role === 'moderator' ? 'Moderator' : 'Employee')
+        }
+      })
+
+      return {
+        data: summaryData,
+        meta: {
+          startDate: input.startDate,
+          endDate: input.endDate,
+          totalEmployees: employeeProfiles.length,
+          generatedAt: new Date().toISOString()
+        }
+      }
+    }),
+
+  // Get detailed attendance report for a specific employee or all
+  getDetailedAttendanceReport: adminProcedure
+    .input(z.object({
+      startDate: z.string(),
+      endDate: z.string(),
+      profileId: z.string().uuid().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const filters = [
+        gte(attendance.date, input.startDate),
+        lte(attendance.date, input.endDate)
+      ]
+
+      if (input.profileId) {
+        filters.push(eq(attendance.profile_id, input.profileId))
+      }
+
+      const records = await ctx.db.query.attendance.findMany({
+        where: and(...filters),
+        with: {
+          profile: {
+            columns: { full_name: true, first_name: true, last_name: true }
+          }
+        },
+        orderBy: [desc(attendance.date)]
+      })
+
+      // Get office settings for extra hours calculation
+      const settings = await ctx.db.query.officeSettings.findFirst()
+      const defaultCheckIn = settings?.default_check_in || '10:00:00'
+      const defaultCheckOut = settings?.default_check_out || '19:00:00'
+
+      // Calculate scheduled hours
+      const [inH, inM] = defaultCheckIn.split(':').map(Number)
+      const [outH, outM] = defaultCheckOut.split(':').map(Number)
+      const scheduledHours = ((outH * 60 + outM) - (inH * 60 + inM)) / 60
+
+      const detailedData = records.map((record, index) => {
+        const workingHours = Number(record.working_hours) || 0
+        const extraHours = Math.max(0, workingHours - scheduledHours)
+        const employeeName = record.profile?.full_name ||
+          `${record.profile?.first_name || ''} ${record.profile?.last_name || ''}`.trim() ||
+          'Unknown'
+
+        return {
+          sr: index + 1,
+          employeeName,
+          date: record.date,
+          markedOfficeLocation: record.checkin_location_name || 'N/A',
+          clockIn: record.check_in ? new Date(record.check_in).toLocaleTimeString('en-IN', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+          }) : '-',
+          clockOut: record.check_out ? new Date(record.check_out).toLocaleTimeString('en-IN', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+          }) : '-',
+          totalHours: workingHours ? `${workingHours.toFixed(1)}h` : '-',
+          extraHours: extraHours > 0 ? `+${extraHours.toFixed(1)}h` : '0h',
+          status: record.status,
+          remark: record.remarks || '-',
+          markedDay: record.is_half_day ? 'Half Day' : 'Full Day'
+        }
+      })
+
+      return {
+        data: detailedData,
+        meta: {
+          startDate: input.startDate,
+          endDate: input.endDate,
+          employeeId: input.profileId || 'all',
+          totalRecords: records.length,
+          generatedAt: new Date().toISOString()
+        }
+      }
+    }),
+
+  // Search employees for dropdown (for detailed report selection)
+  searchEmployeesForReport: adminProcedure
+    .input(z.object({
+      query: z.string().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const searchQuery = input.query?.trim() || ''
+      let filters = [ne(profiles.role, 'admin')]
+
+      if (searchQuery.length > 0) {
+        filters.push(
+          or(
+            ilike(profiles.first_name, `%${searchQuery}%`),
+            ilike(profiles.last_name, `%${searchQuery}%`),
+            ilike(profiles.full_name, `%${searchQuery}%`),
+            ilike(profiles.email, `%${searchQuery}%`)
+          ) as any
+        )
+      }
+
+      const data = await ctx.db.query.profiles.findMany({
+        where: and(...filters),
+        columns: {
+          id: true,
+          full_name: true,
+          first_name: true,
+          last_name: true,
+          email: true,
+        },
+        with: { designation: true },
+        limit: 50,
+        orderBy: [desc(profiles.created_at)]
+      })
+
+      return data.map(u => ({
+        id: u.id,
+        name: u.full_name || `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email,
+        email: u.email,
+        designation: (u.designation as any)?.name || 'Employee'
+      }))
+    }),
 })
+

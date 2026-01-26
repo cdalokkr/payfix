@@ -1,10 +1,10 @@
 "use client"
 
 import { trpc } from "@/lib/trpc/client"
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, parseISO, isWithinInterval } from "date-fns"
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, parseISO, isWithinInterval, getDay } from "date-fns"
 import { useMemo, useState } from "react"
 import { motion } from "framer-motion"
-import { ClockUser as ClockUserIcon, CalendarDots as CalendarDotsIcon, CalendarCheck as CalendarCheckIcon, CalendarX as CalendarXIcon, CalendarMinus as CalendarMinusIcon, CalendarSlash as CalendarSlashIcon, Calendar as CalendarIcon, Briefcase as BriefcaseIcon } from "@phosphor-icons/react"
+import { ClockUser as ClockUserIcon, CalendarDots as CalendarDotsIcon, CalendarCheck as CalendarCheckIcon, CalendarX as CalendarXIcon, CalendarMinus as CalendarMinusIcon, CalendarSlash as CalendarSlashIcon, Calendar as CalendarIcon, Briefcase as BriefcaseIcon, DownloadSimple } from "@phosphor-icons/react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 import { CardShell } from "./CardShell"
@@ -12,9 +12,18 @@ import { AttendanceCalendarContent } from "./AttendanceCalendarContent"
 import { AttendanceSummaryContent } from "./AttendanceSummaryContent"
 import { CompactMetricCard } from "@/components/dashboard/compact-metric-card"
 import { useUserRealtimeDashboard } from "@/hooks/use-realtime-dashboard-data"
-import { getDay } from "date-fns"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useProfile } from "@/lib/context/profile-context"
+import { jsPDF } from "jspdf"
+import autoTable from "jspdf-autotable"
+import { Button } from "@/components/ui/button"
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { IconFileTypeCsv, IconFileTypePdf } from '@tabler/icons-react'
 
 // Helper to calculate scheduled hours from time strings
 function calculateScheduledHours(checkIn: string, checkOut: string): number {
@@ -28,6 +37,8 @@ function calculateScheduledHours(checkIn: string, checkOut: string): number {
 export function AttendanceDashboard() {
     const { profile } = useProfile()
     const isMobile = useIsMobile()
+    const utils = trpc.useUtils()
+    const [isDownloading, setIsDownloading] = useState(false)
 
     // Enable real-time updates for the employee
     useUserRealtimeDashboard(
@@ -133,8 +144,132 @@ export function AttendanceDashboard() {
         return { marked, present, absent, leave, holiday, noOfficeOut, halfDay, fullDay, totalExtraHours }
     }, [attendanceMap, leaves, closures, settings, monthStart, monthEnd, today])
 
+    // Helper: Generate CSV content
+    const generateCSV = (headers: string[], rows: string[][]): string => {
+        const csvContent = [
+            headers.join(","),
+            ...rows.map(row => row.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(","))
+        ].join("\n")
+        return csvContent
+    }
+
+    // Helper: Download file
+    const downloadFile = (content: string | Blob, filename: string, mimeType: string) => {
+        const blob = content instanceof Blob ? content : new Blob([content], { type: mimeType })
+        const link = document.createElement("a")
+        const url = URL.createObjectURL(blob)
+        link.setAttribute("href", url)
+        link.setAttribute("download", filename)
+        link.style.visibility = "hidden"
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(url)
+    }
+
+    // Helper: Generate PDF
+    const generatePDF = (title: string, headers: string[], rows: string[][], filename: string) => {
+        const doc = new jsPDF()
+
+        // Title
+        doc.setFontSize(18)
+        doc.setTextColor(51, 51, 51)
+        doc.text(title, 14, 22)
+
+        // Date
+        doc.setFontSize(10)
+        doc.setTextColor(128, 128, 128)
+        doc.text(`Generated on: ${format(new Date(), "MMM dd, yyyy 'at' HH:mm:ss")}`, 14, 30)
+
+        // Table
+        autoTable(doc, {
+            head: [headers],
+            body: rows,
+            startY: 40,
+            styles: { fontSize: 9, cellPadding: 3 },
+            headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: 'bold' },
+            alternateRowStyles: { fillColor: [249, 250, 251] },
+        })
+
+        doc.save(filename)
+    }
+
+    const handleDownloadReport = async (formatType: 'csv' | 'pdf') => {
+        setIsDownloading(true)
+        try {
+            const startDate = startOfMonth(currentMonth)
+            const endDate = endOfMonth(currentMonth)
+
+            const result = await utils.attendance.getMyAttendanceReport.fetch({
+                startDate: format(startDate, 'yyyy-MM-dd'),
+                endDate: format(endDate, 'yyyy-MM-dd'),
+            })
+
+            if (!result.data || result.data.length === 0) {
+                // Show toast or error? For now just log
+                console.warn("No data to download")
+                setIsDownloading(false)
+                return
+            }
+
+            const headers = ['Date', 'Clock In', 'Clock Out', 'Duration (Hrs)', 'Status', 'Remarks']
+            const rows = result.data.map((item: any) => [
+                format(new Date(item.date), 'dd/MM/yyyy'),
+                item.clockIn ? format(new Date(item.clockIn), 'HH:mm') : '-',
+                item.clockOut ? format(new Date(item.clockOut), 'HH:mm') : '-',
+                item.durationHours ? item.durationHours.toFixed(2) : '-',
+                item.status,
+                Array.isArray(item.remarks) ? item.remarks.join(', ') : (item.remarks || '')
+            ])
+
+            const monthStr = format(currentMonth, 'MMMM-yyyy')
+            const filename = `my-attendance-${monthStr}`
+
+            if (formatType === 'csv') {
+                const csvContent = generateCSV(headers, rows)
+                downloadFile(csvContent, `${filename}.csv`, 'text/csv;charset=utf-8;')
+            } else {
+                generatePDF(
+                    `My Attendance Report - ${format(currentMonth, 'MMMM yyyy')}`,
+                    headers,
+                    rows,
+                    `${filename}.pdf`
+                )
+            }
+        } catch (error) {
+            console.error("Download failed", error)
+        } finally {
+            setIsDownloading(false)
+        }
+    }
+
     return (
         <div className="space-y-8">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                    <h2 className="text-2xl font-bold tracking-tight">Attendance Dashboard</h2>
+                    <p className="text-muted-foreground">Manage your daily attendance and leave requests</p>
+                </div>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="outline" disabled={isDownloading}>
+                            <DownloadSimple className="mr-2 h-4 w-4" />
+                            {isDownloading ? "Generating..." : "Download Report"}
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleDownloadReport('csv')}>
+                            <IconFileTypeCsv className="mr-2 h-4 w-4 text-green-600" />
+                            <span>Download CSV</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleDownloadReport('pdf')}>
+                            <IconFileTypePdf className="mr-2 h-4 w-4 text-red-600" />
+                            <span>Download PDF</span>
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            </div>
+
             {/* Monthly Statistics Overview - Row 1: Base Metrics */}
             <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
                 {[

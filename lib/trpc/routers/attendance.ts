@@ -474,4 +474,70 @@ export const attendanceRouter = router({
             await ctx.db.delete(officeClosures).where(eq(officeClosures.id, input.id))
             return { success: true }
         }),
+
+    // Employee personal attendance report for download
+    getMyAttendanceReport: protectedProcedure
+        .input(z.object({
+            startDate: z.string(),
+            endDate: z.string(),
+        }))
+        .query(async ({ ctx, input }) => {
+            const profileId = ctx.profile.id
+
+            const records = await ctx.db.query.attendance.findMany({
+                where: and(
+                    eq(attendance.profile_id, profileId),
+                    gte(attendance.date, input.startDate),
+                    lte(attendance.date, input.endDate)
+                ),
+                orderBy: [desc(attendance.date)]
+            })
+
+            // Get office settings for extra hours calculation
+            const settings = await ctx.db.query.officeSettings.findFirst()
+            const defaultCheckIn = settings?.default_check_in || '10:00:00'
+            const defaultCheckOut = settings?.default_check_out || '19:00:00'
+
+            // Calculate scheduled hours
+            const [inH, inM] = defaultCheckIn.split(':').map(Number)
+            const [outH, outM] = defaultCheckOut.split(':').map(Number)
+            const scheduledHours = ((outH * 60 + outM) - (inH * 60 + inM)) / 60
+
+            const reportData = records.map((record, index) => {
+                const workingHours = Number(record.working_hours) || 0
+                const extraHours = Math.max(0, workingHours - scheduledHours)
+
+                return {
+                    sr: index + 1,
+                    date: record.date,
+                    markedOfficeLocation: record.checkin_location_name || 'N/A',
+                    clockIn: record.check_in ? new Date(record.check_in).toLocaleTimeString('en-IN', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: true
+                    }) : '-',
+                    clockOut: record.check_out ? new Date(record.check_out).toLocaleTimeString('en-IN', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: true
+                    }) : '-',
+                    totalHours: workingHours ? `${workingHours.toFixed(1)}h` : '-',
+                    extraHours: extraHours > 0 ? `+${extraHours.toFixed(1)}h` : '0h',
+                    status: record.status,
+                    remark: record.remarks || '-',
+                    markedDay: record.is_half_day ? 'Half Day' : 'Full Day'
+                }
+            })
+
+            return {
+                data: reportData,
+                meta: {
+                    startDate: input.startDate,
+                    endDate: input.endDate,
+                    employeeName: ctx.profile.full_name || ctx.profile.email,
+                    totalRecords: records.length,
+                    generatedAt: new Date().toISOString()
+                }
+            }
+        }),
 })

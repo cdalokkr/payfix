@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { trpc } from "@/lib/trpc/client"
 import { cn } from "@/lib/utils"
-import { Download, Users, Activity, BarChart3, FileText, FileSpreadsheet, Calendar as CalendarIcon, Filter, Loader2, CheckCircle2, XCircle } from "lucide-react"
+import { Download, Users, Activity, BarChart3, FileText, FileSpreadsheet, Calendar as CalendarIcon, Filter, Loader2, CheckCircle2, XCircle, Search, User, ClipboardList, Clock } from "lucide-react"
 import { IconFileTypeCsv, IconFileTypePdf } from '@tabler/icons-react'
 import {
     Select,
@@ -22,6 +22,8 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover"
+import { Input } from "@/components/ui/input"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Calendar } from "@/components/ui/calendar"
 import { format as formatDate } from "date-fns"
 import jsPDF from 'jspdf'
@@ -186,6 +188,28 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
     const [roleFilter, setRoleFilter] = useState<string>('all')
     const [dateRange, setDateRange] = useState<{ from: Date; to: Date } | undefined>()
     const [isDatePopoverOpen, setIsDatePopoverOpen] = useState(false)
+
+    // Attendance Reports State
+    const [attendanceSummaryDownloadStatus, setAttendanceSummaryDownloadStatus] = useState<DownloadStatus>('idle')
+    const [detailedAttendanceDownloadStatus, setDetailedAttendanceDownloadStatus] = useState<DownloadStatus>('idle')
+    const [attendanceDateRange, setAttendanceDateRange] = useState<{ from: Date; to: Date } | undefined>()
+    const [isAttendanceDatePopoverOpen, setIsAttendanceDatePopoverOpen] = useState(false)
+    const [detailedDateRange, setDetailedDateRange] = useState<{ from: Date; to: Date } | undefined>()
+    const [isDetailedDatePopoverOpen, setIsDetailedDatePopoverOpen] = useState(false)
+
+    // Employee Selector State
+    const [selectedEmployee, setSelectedEmployee] = useState<{ id: string, name: string } | undefined>()
+    const [employeeSearchQuery, setEmployeeSearchQuery] = useState('')
+    const [isEmployeePopoverOpen, setIsEmployeePopoverOpen] = useState(false)
+    const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
+
+    // Debounce search query
+    React.useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearchQuery(employeeSearchQuery)
+        }, 300)
+        return () => clearTimeout(timer)
+    }, [employeeSearchQuery])
 
     // tRPC mutations for fetching data
     const utils = trpc.useUtils()
@@ -440,6 +464,137 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
         }
     }, [role, utils])
 
+    // Fetch Employees for Search
+    const adminSearchResults = trpc.admin.reports.searchEmployeesForReport.useQuery(
+        { query: debouncedSearchQuery },
+        { enabled: role === 'admin' && isEmployeePopoverOpen }
+    )
+    const moderatorSearchResults = trpc.moderator.reports.searchEmployeesForReport.useQuery(
+        { query: debouncedSearchQuery },
+        { enabled: role === 'moderator' && isEmployeePopoverOpen }
+    )
+
+    const searchResults = role === 'admin' ? adminSearchResults.data : moderatorSearchResults.data
+
+    // Download Attendance Summary Report
+    const handleAttendanceSummaryDownload = useCallback(async (format: ExportFormat) => {
+        if (!attendanceDateRange?.from || !attendanceDateRange?.to) {
+            // Should be handled by UI validation/disabling but safeguard here
+            return
+        }
+
+        setAttendanceSummaryDownloadStatus('loading')
+        try {
+            const result = role === 'admin'
+                ? await utils.admin.reports.getAttendanceSummaryReport.fetch({
+                    startDate: attendanceDateRange.from.toISOString(),
+                    endDate: attendanceDateRange.to.toISOString(),
+                })
+                : await utils.moderator.reports.getAttendanceSummaryReport.fetch({
+                    startDate: attendanceDateRange.from.toISOString(),
+                    endDate: attendanceDateRange.to.toISOString(),
+                })
+
+            if (!result.data || result.data.length === 0) {
+                throw new Error('No attendance data found')
+            }
+
+            const headers = ['Employee Name', 'Designation', 'Work Days', 'Present', 'Absent', 'Half Days', 'Late', 'Paid Leaves', 'Unpaid Leaves', 'Total Leaves']
+            const rows = result.data.map((item: any) => [
+                item.name,
+                item.designation || 'N/A',
+                String(item.stats.workDays),
+                String(item.stats.present),
+                String(item.stats.absent),
+                String(item.stats.halfDays),
+                String(item.stats.lateDays),
+                String(item.stats.paidLeaves),
+                String(item.stats.unpaidLeaves),
+                String(item.stats.totalLeaves)
+            ])
+
+            const rangeStr = `${formatDate(attendanceDateRange.from, "yyyyMMdd")}-to-${formatDate(attendanceDateRange.to, "yyyyMMdd")}`
+
+            if (format === 'csv') {
+                const csvContent = generateCSV(headers, rows)
+                downloadFile(csvContent, `attendance-summary-${rangeStr}.csv`, 'text/csv;charset=utf-8;')
+            } else {
+                generatePDF(
+                    `Attendance Summary (${formatDate(attendanceDateRange.from, "MMM dd")} - ${formatDate(attendanceDateRange.to, "MMM dd, yyyy")})`,
+                    headers,
+                    rows,
+                    `attendance-summary-${rangeStr}.pdf`
+                )
+            }
+
+            setAttendanceSummaryDownloadStatus('success')
+            setTimeout(() => setAttendanceSummaryDownloadStatus('idle'), 2000)
+        } catch (error) {
+            console.error('Attendance summary download error:', error)
+            setAttendanceSummaryDownloadStatus('error')
+            setTimeout(() => setAttendanceSummaryDownloadStatus('idle'), 2000)
+        }
+    }, [role, attendanceDateRange, utils])
+
+    // Download Detailed Attendance Report
+    const handleDetailedAttendanceDownload = useCallback(async (format: ExportFormat) => {
+        if (!detailedDateRange?.from || !detailedDateRange?.to) {
+            return
+        }
+
+        setDetailedAttendanceDownloadStatus('loading')
+        try {
+            const result = role === 'admin'
+                ? await utils.admin.reports.getDetailedAttendanceReport.fetch({
+                    startDate: detailedDateRange.from.toISOString(),
+                    endDate: detailedDateRange.to.toISOString(),
+                    profileId: selectedEmployee?.id,
+                })
+                : await utils.moderator.reports.getDetailedAttendanceReport.fetch({
+                    startDate: detailedDateRange.from.toISOString(),
+                    endDate: detailedDateRange.to.toISOString(),
+                    profileId: selectedEmployee?.id,
+                })
+
+            if (!result.data || result.data.length === 0) {
+                throw new Error('No detailed attendance data found')
+            }
+
+            const headers = ['Date', 'Employee', 'Clock In', 'Clock Out', 'Duration (Hrs)', 'Status', 'Remarks']
+            const rows = result.data.map((item: any) => [
+                formatDate(new Date(item.date), 'dd/MM/yyyy'),
+                item.employeeName,
+                item.clockIn ? formatDate(new Date(item.clockIn), 'HH:mm') : '-',
+                item.clockOut ? formatDate(new Date(item.clockOut), 'HH:mm') : '-',
+                item.durationHours ? item.durationHours.toFixed(2) : '-',
+                item.status,
+                Array.isArray(item.remarks) ? item.remarks.join(', ') : (item.remarks || '')
+            ])
+
+            const rangeStr = `${formatDate(detailedDateRange.from, "yyyyMMdd")}-to-${formatDate(detailedDateRange.to, "yyyyMMdd")}`
+            const employeeStr = selectedEmployee ? `-${selectedEmployee.name.replace(/\s+/g, '_')}` : ''
+
+            if (format === 'csv') {
+                const csvContent = generateCSV(headers, rows)
+                downloadFile(csvContent, `detailed-attendance${employeeStr}-${rangeStr}.csv`, 'text/csv;charset=utf-8;')
+            } else {
+                generatePDF(
+                    `Detailed Attendance${selectedEmployee ? ` - ${selectedEmployee.name}` : ''} (${formatDate(detailedDateRange.from, "MMM dd")} - ${formatDate(detailedDateRange.to, "MMM dd, yyyy")})`,
+                    headers,
+                    rows,
+                    `detailed-attendance${employeeStr}-${rangeStr}.pdf`
+                )
+            }
+
+            setDetailedAttendanceDownloadStatus('success')
+            setTimeout(() => setDetailedAttendanceDownloadStatus('idle'), 2000)
+        } catch (error) {
+            console.error('Detailed attendance download error:', error)
+            setDetailedAttendanceDownloadStatus('error')
+            setTimeout(() => setDetailedAttendanceDownloadStatus('idle'), 2000)
+        }
+    }, [role, detailedDateRange, selectedEmployee, utils])
+
     return (
         <div className="space-y-6">
             <Card className="shadow-lg">
@@ -575,6 +730,227 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
                             onDownload={handleStatisticsDownload}
                             downloadStatus={statisticsDownloadStatus}
                         />
+                    </div>
+
+                    {/* Attendance Reports Section */}
+                    <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                        {/* Attendance Summary Report */}
+                        <ReportCard
+                            title="Attendance Summary"
+                            description="Aggregated attendance stats"
+                            icon={<ClipboardList className="h-5 w-5" />}
+                            iconBgColor="bg-sky-500/20"
+                            iconColor="text-sky-700 dark:text-sky-400"
+                            borderColor="border-sky-200 dark:border-sky-800"
+                            onDownload={handleAttendanceSummaryDownload}
+                            downloadStatus={attendanceSummaryDownloadStatus}
+                        >
+                            {/* Date Range Filter */}
+                            <Popover open={isAttendanceDatePopoverOpen} onOpenChange={setIsAttendanceDatePopoverOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" size="sm" className="h-9 border-dashed w-full justify-start font-normal relative pl-10">
+                                        <div className="absolute left-0 top-0 bottom-0 w-9 flex items-center justify-center bg-muted/50 border-r rounded-l-md">
+                                            <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                                        </div>
+                                        {attendanceDateRange?.from ? (
+                                            attendanceDateRange.to ? (
+                                                <>
+                                                    {formatDate(attendanceDateRange.from, "LLL dd")} - {formatDate(attendanceDateRange.to, "LLL dd")}
+                                                </>
+                                            ) : (
+                                                formatDate(attendanceDateRange.from, "LLL dd, y")
+                                            )
+                                        ) : (
+                                            "Select Date Range"
+                                        )}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                    <div className="p-2 space-y-2">
+                                        <Calendar
+                                            initialFocus
+                                            mode="range"
+                                            defaultMonth={attendanceDateRange?.from}
+                                            selected={attendanceDateRange}
+                                            onSelect={(range) => {
+                                                if (range?.from && range?.to) {
+                                                    setAttendanceDateRange({ from: range.from, to: range.to })
+                                                } else if (range?.from) {
+                                                    setAttendanceDateRange({ from: range.from, to: range.from })
+                                                } else {
+                                                    setAttendanceDateRange(undefined)
+                                                }
+                                            }}
+                                            numberOfMonths={2}
+                                        />
+                                        <div className="flex gap-2 pt-2 border-t">
+                                            <Button
+                                                size="sm"
+                                                className="flex-1"
+                                                onClick={() => setIsAttendanceDatePopoverOpen(false)}
+                                            >
+                                                Apply
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => {
+                                                    setAttendanceDateRange(undefined)
+                                                    setIsAttendanceDatePopoverOpen(false)
+                                                }}
+                                            >
+                                                Clear
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
+                        </ReportCard>
+
+                        {/* Detailed Attendance Report */}
+                        <ReportCard
+                            title="Detailed Attendance"
+                            description="Daily logs with clock in/out"
+                            icon={<Clock className="h-5 w-5" />}
+                            iconBgColor="bg-indigo-500/20"
+                            iconColor="text-indigo-700 dark:text-indigo-400"
+                            borderColor="border-indigo-200 dark:border-indigo-800"
+                            onDownload={handleDetailedAttendanceDownload}
+                            downloadStatus={detailedAttendanceDownloadStatus}
+                        >
+                            <div className="space-y-2">
+                                {/* Date Range Filter */}
+                                <Popover open={isDetailedDatePopoverOpen} onOpenChange={setIsDetailedDatePopoverOpen}>
+                                    <PopoverTrigger asChild>
+                                        <Button variant="outline" size="sm" className="h-9 border-dashed w-full justify-start font-normal relative pl-10">
+                                            <div className="absolute left-0 top-0 bottom-0 w-9 flex items-center justify-center bg-muted/50 border-r rounded-l-md">
+                                                <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                                            </div>
+                                            {detailedDateRange?.from ? (
+                                                detailedDateRange.to ? (
+                                                    <>
+                                                        {formatDate(detailedDateRange.from, "LLL dd")} - {formatDate(detailedDateRange.to, "LLL dd")}
+                                                    </>
+                                                ) : (
+                                                    formatDate(detailedDateRange.from, "LLL dd, y")
+                                                )
+                                            ) : (
+                                                "Select Date Range"
+                                            )}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="start">
+                                        <div className="p-2 space-y-2">
+                                            <Calendar
+                                                initialFocus
+                                                mode="range"
+                                                defaultMonth={detailedDateRange?.from}
+                                                selected={detailedDateRange}
+                                                onSelect={(range) => {
+                                                    if (range?.from && range?.to) {
+                                                        setDetailedDateRange({ from: range.from, to: range.to })
+                                                    } else if (range?.from) {
+                                                        setDetailedDateRange({ from: range.from, to: range.from })
+                                                    } else {
+                                                        setDetailedDateRange(undefined)
+                                                    }
+                                                }}
+                                                numberOfMonths={2}
+                                            />
+                                            <div className="flex gap-2 pt-2 border-t">
+                                                <Button
+                                                    size="sm"
+                                                    className="flex-1"
+                                                    onClick={() => setIsDetailedDatePopoverOpen(false)}
+                                                >
+                                                    Apply
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        setDetailedDateRange(undefined)
+                                                        setIsDetailedDatePopoverOpen(false)
+                                                    }}
+                                                >
+                                                    Clear
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </PopoverContent>
+                                </Popover>
+
+                                {/* Employee Selector */}
+                                <Popover open={isEmployeePopoverOpen} onOpenChange={setIsEmployeePopoverOpen}>
+                                    <PopoverTrigger asChild>
+                                        <Button variant="outline" role="combobox" aria-expanded={isEmployeePopoverOpen} className="h-9 w-full justify-between relative pl-10">
+                                            <div className="absolute left-0 top-0 bottom-0 w-9 flex items-center justify-center bg-muted/50 border-r rounded-l-md">
+                                                <User className="h-4 w-4 text-muted-foreground" />
+                                            </div>
+                                            {selectedEmployee ? selectedEmployee.name : "Select Employee (Optional)"}
+                                            <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[300px] p-0" align="start">
+                                        <div className="p-2 border-b">
+                                            <div className="flex items-center gap-2 px-2 pb-1">
+                                                <Search className="h-4 w-4 text-muted-foreground" />
+                                                <Input
+                                                    placeholder="Search employees..."
+                                                    value={employeeSearchQuery}
+                                                    onChange={(e) => setEmployeeSearchQuery(e.target.value)}
+                                                    className="h-8 border-none focus-visible:ring-0 shadow-none bg-transparent"
+                                                />
+                                            </div>
+                                        </div>
+                                        <ScrollArea className="h-[200px]">
+                                            <div className="p-1">
+                                                {/* Option to clear selection */}
+                                                <div
+                                                    className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                                                    onClick={() => {
+                                                        setSelectedEmployee(undefined)
+                                                        setIsEmployeePopoverOpen(false)
+                                                    }}
+                                                >
+                                                    <span className="font-medium text-muted-foreground">All Employees</span>
+                                                </div>
+
+                                                {searchResults?.map((employee: any) => (
+                                                    <div
+                                                        key={employee.id}
+                                                        className={cn(
+                                                            "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+                                                            selectedEmployee?.id === employee.id && "bg-accent text-accent-foreground"
+                                                        )}
+                                                        onClick={() => {
+                                                            setSelectedEmployee({
+                                                                id: employee.id,
+                                                                name: `${employee.first_name} ${employee.last_name || ''}`.trim()
+                                                            })
+                                                            setIsEmployeePopoverOpen(false)
+                                                        }}
+                                                    >
+                                                        <div className="flex flex-col">
+                                                            <span className="font-medium">{employee.first_name} {employee.last_name}</span>
+                                                            <span className="text-xs text-muted-foreground">{employee.email}</span>
+                                                        </div>
+                                                        {selectedEmployee?.id === employee.id && (
+                                                            <CheckCircle2 className="ml-auto h-4 w-4" />
+                                                        )}
+                                                    </div>
+                                                ))}
+                                                {searchResults && searchResults.length === 0 && (
+                                                    <div className="py-6 text-center text-sm text-muted-foreground">
+                                                        No employees found.
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </ScrollArea>
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                        </ReportCard>
                     </div>
 
                     {/* Info Card */}
