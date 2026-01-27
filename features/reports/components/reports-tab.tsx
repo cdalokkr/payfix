@@ -23,7 +23,6 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover"
 import { Input } from "@/components/ui/input"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Calendar } from "@/components/ui/calendar"
 import { format as formatDate } from "date-fns"
 import jsPDF from 'jspdf'
@@ -903,7 +902,7 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
                                                 />
                                             </div>
                                         </div>
-                                        <ScrollArea className="h-[200px]">
+                                        <div className="h-[200px] overflow-y-auto">
                                             <div className="p-1">
                                                 {/* Option to clear selection */}
                                                 <div
@@ -946,7 +945,7 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
                                                     </div>
                                                 )}
                                             </div>
-                                        </ScrollArea>
+                                        </div>
                                     </PopoverContent>
                                 </Popover>
                             </div>
