@@ -569,6 +569,8 @@ export const moderatorReportsRouter = router({
                     first_name: true,
                     last_name: true,
                     email: true,
+                    mobile_no: true,
+                    avatar_url: true,
                 },
                 with: { designation: true },
                 limit: 50,
@@ -577,8 +579,12 @@ export const moderatorReportsRouter = router({
 
             return data.map(u => ({
                 id: u.id,
+                first_name: u.first_name,
+                last_name: u.last_name,
                 name: u.full_name || `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email,
                 email: u.email,
+                mobile: u.mobile_no || 'N/A',
+                avatar: u.avatar_url,
                 designation: (u.designation as any)?.name || 'Employee'
             }))
         }),

@@ -66,7 +66,10 @@ export function CalendarDateRangePicker({
                         defaultMonth={date?.from}
                         selected={date}
                         onSelect={setDate}
-                        numberOfMonths={2}
+                        numberOfMonths={1}
+                        captionLayout="dropdown"
+                        fromYear={1960}
+                        toYear={2030}
                     />
                 </PopoverContent>
             </Popover>

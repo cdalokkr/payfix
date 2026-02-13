@@ -933,7 +933,10 @@ export function AnalyticsTab({ role = 'admin' }: { role?: 'admin' | 'moderator' 
                                 setDateRange(undefined)
                               }
                             }}
-                            numberOfMonths={2}
+                            numberOfMonths={1}
+                            captionLayout="dropdown"
+                            fromYear={1960}
+                            toYear={2030}
                           />
                           <div className="flex flex-col gap-2 pt-2 border-t">
                             <Button

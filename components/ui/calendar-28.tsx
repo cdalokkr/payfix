@@ -49,25 +49,25 @@ function isValidDate(date: Date | undefined) {
 function calculateAge(dateOfBirth: Date, asOnDate: Date = new Date()): number {
   let age = asOnDate.getFullYear() - dateOfBirth.getFullYear()
   const monthDiff = asOnDate.getMonth() - dateOfBirth.getMonth()
-  
+
   if (monthDiff < 0 || (monthDiff === 0 && asOnDate.getDate() < dateOfBirth.getDate())) {
     age--
   }
-  
+
   return age
 }
 
 function isValidAge(date: Date, minAge?: number, maxAge?: number, asOnDate?: Date): boolean {
   const age = calculateAge(date, asOnDate)
-  
+
   if (minAge !== undefined && age < minAge) {
     return false
   }
-  
+
   if (maxAge !== undefined && age > maxAge) {
     return false
   }
-  
+
   return true
 }
 
@@ -104,13 +104,13 @@ export function Calendar28({
       if (parts.length === 3) {
         const [day, month, year] = parts
         const fullYear = year.length === 2 ? getFullYearFromTwoDigit(year) : year
-        
+
         // Create Date object for calendar logic
         const parsedDate = new Date(parseInt(fullYear), parseInt(month) - 1, parseInt(day))
         if (!isNaN(parsedDate.getTime())) {
           setDate(parsedDate)
           setMonth(parsedDate)
-          
+
           // Display the exact format received from parent
           setInputValue(`${day}/${month}/${year}`)
         }
@@ -125,13 +125,13 @@ export function Calendar28({
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let inputValue = e.target.value
     let parentValue = inputValue // Value to send to parent
-    
+
     // Mark that user is typing to prevent parent from overwriting
     setIsUserTyping(true)
-    
+
     // Allow only numbers
     const cleanValue = inputValue.replace(/\D/g, '')
-    
+
     if (cleanValue.length === 0) {
       // Empty input
       inputValue = ""
@@ -156,7 +156,7 @@ export function Calendar28({
       const day = cleanValue.substring(0, 2)
       const month = cleanValue.substring(2, 4)
       const year = cleanValue.substring(4, 6)
-      
+
       // Display dd/mm/yy to user
       inputValue = `${day}/${month}/${year}`
       // Only send to parent if it's complete dd/mm/yyyy format (8 digits)
@@ -189,11 +189,11 @@ export function Calendar28({
         parentValue = cleanValue.length >= 8 ? inputValue : ""
       }
     }
-    
+
     setInputValue(inputValue)
     setLastUserValue(inputValue)
     onChange(parentValue)
-    
+
     // Clear typing state after a short delay
     setTimeout(() => setIsUserTyping(false), 500)
   }
@@ -202,7 +202,7 @@ export function Calendar28({
     setDate(selectedDate)
     if (selectedDate) {
       const formatted = formatDateDDMMYYYY(selectedDate)
-      
+
       setInputValue(formatted) // Display full dd/mm/yyyy
       onChange(formatted) // Send full dd/mm/yyyy to parent
     }
@@ -270,6 +270,8 @@ export function Calendar28({
               mode="single"
               selected={date}
               captionLayout="dropdown"
+              fromYear={1900}
+              toYear={new Date().getFullYear()}
               month={month}
               onMonthChange={setMonth}
               onSelect={handleDateSelect}

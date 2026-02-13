@@ -18,6 +18,9 @@ import { useProfile } from "@/lib/context/profile-context"
 import { createAttendanceColumns } from "./attendance-columns"
 import { DataTable } from "@/components/ui/data-table"
 import { ProfileInfoCell } from "@/components/dashboard/profile-info-cell"
+import { format } from "date-fns"
+import { DateRange } from "react-day-picker"
+import { generateCSV, generatePDF, downloadFile } from "@/lib/report-utils"
 import { AttendanceTableToolbar } from "./attendance-table-toolbar"
 import { AttendanceEditSheet } from "./attendance-edit-sheet"
 import { CardShell } from "./CardShell"
@@ -37,11 +40,11 @@ export function AdminAttendanceVerification() {
     const [selectedRecord, setSelectedRecord] = useState<any>(null)
     const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({})
     // Default to current date (IST) and pending status for faster, relevant loading
-    const getLocalDateIST = () => {
-        return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Kolkata' })
-    }
     const [statusFilter, setStatusFilter] = useState('pending')
-    const [dateFilter, setDateFilter] = useState(getLocalDateIST())
+    const [dateFilter, setDateFilter] = useState<DateRange | undefined>({
+        from: new Date(),
+        to: new Date()
+    })
     const [mounted, setMounted] = useState(false)
 
     useEffect(() => {
@@ -63,9 +66,9 @@ export function AdminAttendanceVerification() {
     // Queries with real-time friendly settings - staleTime: 0 ensures immediate refetch on invalidation
     const { data: attendance, isLoading, isFetching, refetch: refetchAttendance } = trpc.attendance.getAttendance.useQuery(
         {
-            mode: dateFilter === 'all' ? 'default' : 'all',
-            startDate: dateFilter !== 'all' ? dateFilter : undefined,
-            endDate: dateFilter !== 'all' ? dateFilter : undefined,
+            mode: !dateFilter ? 'default' : 'all',
+            startDate: dateFilter?.from ? format(dateFilter.from, 'yyyy-MM-dd') : undefined,
+            endDate: dateFilter?.to ? format(dateFilter.to, 'yyyy-MM-dd') : undefined,
         },
         {
             staleTime: 0, // Always consider stale so invalidation triggers immediate refetch
@@ -133,6 +136,54 @@ export function AdminAttendanceVerification() {
         onError: (error) => toast.error(error.message)
     })
 
+    // Report Downloading Logic
+    const [isDownloading, setIsDownloading] = useState(false)
+
+    const handleDownloadReport = async (formatType: 'csv' | 'pdf') => {
+        setIsDownloading(true)
+        try {
+            const currentRole = profile?.role
+            const startDate = dateFilter?.from ? format(dateFilter.from, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')
+            const endDate = dateFilter?.to ? format(dateFilter.to, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')
+
+            // Use utils.fetch() since the server defines this as a query, not a mutation
+            const result = currentRole === 'admin'
+                ? await utils.admin.reports.getDetailedAttendanceReport.fetch({ startDate, endDate })
+                : await utils.moderator.reports.getDetailedAttendanceReport.fetch({ startDate, endDate })
+
+            const headers = ['Sr', 'Employee', 'Date', 'Location', 'Clock In', 'Clock Out', 'Total Hours', 'Extra Hours', 'Status', 'Day Type', 'Remark']
+            const rows = result.data.map(item => [
+                String(item.sr),
+                item.employeeName,
+                item.date,
+                item.markedOfficeLocation,
+                item.clockIn,
+                item.clockOut,
+                item.totalHours,
+                item.extraHours,
+                item.status,
+                item.markedDay,
+                item.remark
+            ])
+
+            const filename = `attendance_report_${format(new Date(), 'yyyy-MM-dd_HH-mm')}`
+
+            if (formatType === 'csv') {
+                const csvContent = generateCSV(headers, rows)
+                downloadFile(csvContent, `${filename}.csv`, 'text/csv')
+            } else {
+                generatePDF("Attendance Report", headers, rows, `${filename}.pdf`)
+            }
+
+            toast.success(`${formatType.toUpperCase()} report downloaded successfully`)
+
+        } catch (error: any) {
+            toast.error(error.message || 'Failed to download report')
+        } finally {
+            setIsDownloading(false)
+        }
+    }
+
     const uniqueDates = useMemo(() => {
         if (!attendance) return []
         const dates = attendance.map(a => a.date)
@@ -148,12 +199,13 @@ export function AdminAttendanceVerification() {
 
             const matchesStatus = statusFilter === 'all' ||
                 (statusFilter === 'halfDay' ? record.is_half_day :
+
                     statusFilter === 'noOfficeOut' ? (record.check_in && !record.check_out) :
                         record.status === statusFilter)
 
-            const matchesDate = dateFilter === 'all' || record.date === dateFilter
-
-            return matchesSearch && matchesStatus && matchesDate
+            // Date filtering is handled by backend query now, but for client side safety:
+            // const matchesDate = ... (Skipping as backend handles it)
+            return matchesSearch && matchesStatus
         })
     }, [attendance, searchTerm, statusFilter, dateFilter])
 
@@ -277,6 +329,8 @@ export function AdminAttendanceVerification() {
                             onBulkReject={() => handleBulkVerify('rejected')}
                             isBulkUpdating={bulkVerifyMutation.isPending}
                             stats={stats}
+                            onDownload={handleDownloadReport}
+                            isDownloading={isDownloading}
                         />
                     )}
                 />

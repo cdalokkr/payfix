@@ -1,5 +1,7 @@
 "use client"
 
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+
 import React, { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -27,6 +29,7 @@ import { Calendar } from "@/components/ui/calendar"
 import { format as formatDate } from "date-fns"
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { generateCSV, generatePDF, downloadFile } from "@/lib/report-utils"
 
 type ExportFormat = 'csv' | 'pdf'
 type DownloadStatus = 'idle' | 'loading' | 'success' | 'error'
@@ -38,8 +41,8 @@ interface ReportCardProps {
     iconBgColor: string
     iconColor: string
     borderColor: string
-    onDownload: (format: ExportFormat) => Promise<void>
-    downloadStatus: DownloadStatus
+    onDownload?: (format: ExportFormat) => Promise<void>
+    downloadStatus?: DownloadStatus
     children?: React.ReactNode
 }
 
@@ -57,7 +60,9 @@ function ReportCard({
     const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('csv')
 
     const handleDownload = async () => {
-        await onDownload(selectedFormat)
+        if (onDownload) {
+            await onDownload(selectedFormat)
+        }
     }
 
     return (
@@ -91,82 +96,84 @@ function ReportCard({
                         </div>
                     )}
 
-                    <div className={cn("flex items-center gap-2", !children && "ml-auto")}>
-                        {/* Format Selector */}
-                        <Select value={selectedFormat} onValueChange={(v) => setSelectedFormat(v as ExportFormat)}>
-                            <SelectTrigger className="w-[100px] h-9">
-                                <div className="flex items-center gap-2">
-                                    {selectedFormat === 'csv' ? (
-                                        <IconFileTypeCsv className="h-4 w-4 text-green-600" />
-                                    ) : (
-                                        <IconFileTypePdf className="h-4 w-4 text-red-600" />
-                                    )}
-                                    <span className="text-xs font-medium">{selectedFormat.toUpperCase()}</span>
-                                </div>
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="csv">
-                                    <div className="flex items-center gap-2">
-                                        <IconFileTypeCsv className="h-4 w-4 text-green-600" />
-                                        CSV
-                                    </div>
-                                </SelectItem>
-                                <SelectItem value="pdf">
-                                    <div className="flex items-center gap-2">
-                                        <IconFileTypePdf className="h-4 w-4 text-red-600" />
-                                        PDF
-                                    </div>
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
 
-                        {/* Download Button */}
-                        <Button
-                            onClick={handleDownload}
-                            disabled={downloadStatus === 'loading'}
-                            size="icon"
-                            variant="outline"
-                            className={cn(
-                                "h-9 w-9 transition-all duration-300 relative items-center justify-center",
-                                downloadStatus === 'success' && "bg-green-600 hover:bg-green-700 text-primary-foreground border-green-600",
-                                downloadStatus === 'error' && "bg-red-600 hover:bg-red-700 text-primary-foreground border-red-600"
-                            )}
-                            title={`Download ${selectedFormat.toUpperCase()}`}
-                        >
-                            <AnimatePresence mode="wait">
-                                <motion.div
-                                    key={downloadStatus}
-                                    initial={{ opacity: 0, scale: 0.8, rotate: -45 }}
-                                    animate={{ opacity: 1, scale: 1, rotate: 0 }}
-                                    exit={{ opacity: 0, scale: 0.8, rotate: 45 }}
-                                    transition={{ duration: 0.2, ease: "easeOut" }}
-                                    className="flex items-center justify-center"
-                                >
-                                    {downloadStatus === 'loading' ? (
-                                        <motion.div
-                                            animate={{ rotate: 360 }}
-                                            transition={{
-                                                duration: 1,
-                                                repeat: Infinity,
-                                                ease: "linear",
-                                                repeatType: "loop"
-                                            }}
-                                            className="flex items-center justify-center"
-                                        >
-                                            <Loader2 className="h-4 w-4" />
-                                        </motion.div>
-                                    ) : downloadStatus === 'success' ? (
-                                        <CheckCircle2 className="h-4 w-4" />
-                                    ) : downloadStatus === 'error' ? (
-                                        <XCircle className="h-4 w-4" />
-                                    ) : (
-                                        <Download className="h-4 w-4" />
-                                    )}
-                                </motion.div>
-                            </AnimatePresence>
-                        </Button>
+                    {onDownload && downloadStatus && (
+                        <div className={cn("flex items-center gap-2", !children && "ml-auto")}>
+                            {/* Format Selector */}
+                            <Select value={selectedFormat} onValueChange={(v) => setSelectedFormat(v as ExportFormat)}>
+                                <SelectTrigger className="w-[100px] h-9">
+                                    <div className="flex items-center gap-2">
+                                        {selectedFormat === 'csv' ? (
+                                            <IconFileTypeCsv className="h-4 w-4 text-green-600" />
+                                        ) : (
+                                            <IconFileTypePdf className="h-4 w-4 text-red-600" />
+                                        )}
+                                        <span className="text-xs font-medium">{selectedFormat.toUpperCase()}</span>
+                                    </div>
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="csv">
+                                        <div className="flex items-center gap-2">
+                                            <IconFileTypeCsv className="h-4 w-4 text-green-600" />
+                                            CSV
+                                        </div>
+                                    </SelectItem>
+                                    <SelectItem value="pdf">
+                                        <div className="flex items-center gap-2">
+                                            <IconFileTypePdf className="h-4 w-4 text-red-600" />
+                                            PDF
+                                        </div>
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
 
-                    </div>
+                            {/* Download Button */}
+                            <Button
+                                onClick={handleDownload}
+                                disabled={downloadStatus === 'loading'}
+                                size="icon"
+                                variant="outline"
+                                className={cn(
+                                    "h-9 w-9 transition-all duration-300 relative items-center justify-center",
+                                    downloadStatus === 'success' && "bg-green-600 hover:bg-green-700 text-primary-foreground border-green-600",
+                                    downloadStatus === 'error' && "bg-red-600 hover:bg-red-700 text-primary-foreground border-red-600"
+                                )}
+                                title={`Download ${selectedFormat.toUpperCase()}`}
+                            >
+                                <AnimatePresence mode="wait">
+                                    <motion.div
+                                        key={downloadStatus}
+                                        initial={{ opacity: 0, scale: 0.8, rotate: -45 }}
+                                        animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                                        exit={{ opacity: 0, scale: 0.8, rotate: 45 }}
+                                        transition={{ duration: 0.2, ease: "easeOut" }}
+                                        className="flex items-center justify-center"
+                                    >
+                                        {downloadStatus === 'loading' ? (
+                                            <motion.div
+                                                animate={{ rotate: 360 }}
+                                                transition={{
+                                                    duration: 1,
+                                                    repeat: Infinity,
+                                                    ease: "linear",
+                                                    repeatType: "loop"
+                                                }}
+                                                className="flex items-center justify-center"
+                                            >
+                                                <Loader2 className="h-4 w-4" />
+                                            </motion.div>
+                                        ) : downloadStatus === 'success' ? (
+                                            <CheckCircle2 className="h-4 w-4" />
+                                        ) : downloadStatus === 'error' ? (
+                                            <XCircle className="h-4 w-4" />
+                                        ) : (
+                                            <Download className="h-4 w-4" />
+                                        )}
+                                    </motion.div>
+                                </AnimatePresence>
+                            </Button>
+                        </div>
+                    )}
                 </div>
             </CardContent>
         </Card>
@@ -197,10 +204,11 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
     const [isDetailedDatePopoverOpen, setIsDetailedDatePopoverOpen] = useState(false)
 
     // Employee Selector State
-    const [selectedEmployee, setSelectedEmployee] = useState<{ id: string, name: string } | undefined>()
+    const [selectedEmployee, setSelectedEmployee] = useState<{ id: string; name: string; designation?: string } | undefined>()
     const [employeeSearchQuery, setEmployeeSearchQuery] = useState('')
     const [isEmployeePopoverOpen, setIsEmployeePopoverOpen] = useState(false)
     const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
+    const [detailedReportFormat, setDetailedReportFormat] = useState<ExportFormat>('csv')
 
     // Debounce search query
     React.useEffect(() => {
@@ -212,65 +220,6 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
 
     // tRPC mutations for fetching data
     const utils = trpc.useUtils()
-
-    // Helper: Generate CSV content
-    const generateCSV = (headers: string[], rows: string[][]): string => {
-        const csvContent = [
-            headers.join(","),
-            ...rows.map(row => row.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(","))
-        ].join("\n")
-        return csvContent
-    }
-
-    // Helper: Download file
-    const downloadFile = (content: string | Blob, filename: string, mimeType: string) => {
-        const blob = content instanceof Blob ? content : new Blob([content], { type: mimeType })
-        const link = document.createElement("a")
-        const url = URL.createObjectURL(blob)
-        link.setAttribute("href", url)
-        link.setAttribute("download", filename)
-        link.style.visibility = "hidden"
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        URL.revokeObjectURL(url)
-    }
-
-    // Helper: Generate PDF
-    const generatePDF = (title: string, headers: string[], rows: string[][], filename: string) => {
-        const doc = new jsPDF()
-
-        // Title
-        doc.setFontSize(18)
-        doc.setTextColor(51, 51, 51)
-        doc.text(title, 14, 22)
-
-        // Date
-        doc.setFontSize(10)
-        doc.setTextColor(128, 128, 128)
-        doc.text(`Generated on: ${formatDate(new Date(), "MMM dd, yyyy 'at' HH:mm:ss")}`, 14, 30)
-
-        // Table
-        autoTable(doc, {
-            head: [headers],
-            body: rows,
-            startY: 40,
-            styles: {
-                fontSize: 9,
-                cellPadding: 3,
-            },
-            headStyles: {
-                fillColor: [79, 70, 229], // Indigo
-                textColor: 255,
-                fontStyle: 'bold',
-            },
-            alternateRowStyles: {
-                fillColor: [249, 250, 251],
-            },
-        })
-
-        doc.save(filename)
-    }
 
     // Download Users Report
     const handleUsersDownload = useCallback(async (format: ExportFormat) => {
@@ -470,10 +419,11 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
     )
     const moderatorSearchResults = trpc.moderator.reports.searchEmployeesForReport.useQuery(
         { query: debouncedSearchQuery },
-        { enabled: role === 'moderator' && isEmployeePopoverOpen }
+        { enabled: role === 'moderator' && debouncedSearchQuery.length > 0 }
     )
 
     const searchResults = role === 'admin' ? adminSearchResults.data : moderatorSearchResults.data
+    const isLoadingSearch = role === 'admin' ? adminSearchResults.isLoading : moderatorSearchResults.isLoading
 
     // Download Attendance Summary Report
     const handleAttendanceSummaryDownload = useCallback(async (format: ExportFormat) => {
@@ -498,18 +448,15 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
                 throw new Error('No attendance data found')
             }
 
-            const headers = ['Employee Name', 'Designation', 'Work Days', 'Present', 'Absent', 'Half Days', 'Late', 'Paid Leaves', 'Unpaid Leaves', 'Total Leaves']
+            const headers = ['Employee Name', 'Designation', 'Full Days', 'Half Days', 'Absent', 'Total Leaves', 'Total Present']
             const rows = result.data.map((item: any) => [
-                item.name,
-                item.designation || 'N/A',
-                String(item.stats.workDays),
-                String(item.stats.present),
-                String(item.stats.absent),
-                String(item.stats.halfDays),
-                String(item.stats.lateDays),
-                String(item.stats.paidLeaves),
-                String(item.stats.unpaidLeaves),
-                String(item.stats.totalLeaves)
+                item.employeeName,
+                item.employeeDesignation || 'N/A',
+                String(item.fullDay),
+                String(item.halfDay),
+                String(item.absentDay),
+                String(item.leaveDay),
+                String(item.totalPresentDay)
             ])
 
             const rangeStr = `${formatDate(attendanceDateRange.from, "yyyyMMdd")}-to-${formatDate(attendanceDateRange.to, "yyyyMMdd")}`
@@ -563,8 +510,8 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
             const rows = result.data.map((item: any) => [
                 formatDate(new Date(item.date), 'dd/MM/yyyy'),
                 item.employeeName,
-                item.clockIn ? formatDate(new Date(item.clockIn), 'HH:mm') : '-',
-                item.clockOut ? formatDate(new Date(item.clockOut), 'HH:mm') : '-',
+                item.clockIn || '-',
+                item.clockOut || '-',
                 item.durationHours ? item.durationHours.toFixed(2) : '-',
                 item.status,
                 Array.isArray(item.remarks) ? item.remarks.join(', ') : (item.remarks || '')
@@ -692,7 +639,10 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
                                                     setDateRange(undefined)
                                                 }
                                             }}
-                                            numberOfMonths={2}
+                                            numberOfMonths={1}
+                                            captionLayout="dropdown"
+                                            fromYear={1960}
+                                            toYear={2030}
                                         />
                                         <div className="flex gap-2 pt-2 border-t">
                                             <Button
@@ -760,7 +710,7 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
                                                 formatDate(attendanceDateRange.from, "LLL dd, y")
                                             )
                                         ) : (
-                                            "Select Date Range"
+                                            "Date Range"
                                         )}
                                     </Button>
                                 </PopoverTrigger>
@@ -780,7 +730,10 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
                                                     setAttendanceDateRange(undefined)
                                                 }
                                             }}
-                                            numberOfMonths={2}
+                                            numberOfMonths={1}
+                                            captionLayout="dropdown"
+                                            fromYear={1960}
+                                            toYear={2030}
                                         />
                                         <div className="flex gap-2 pt-2 border-t">
                                             <Button
@@ -814,83 +767,26 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
                             iconBgColor="bg-indigo-500/20"
                             iconColor="text-indigo-700 dark:text-indigo-400"
                             borderColor="border-indigo-200 dark:border-indigo-800"
-                            onDownload={handleDetailedAttendanceDownload}
-                            downloadStatus={detailedAttendanceDownloadStatus}
                         >
                             <div className="space-y-2">
-                                {/* Date Range Filter */}
-                                <Popover open={isDetailedDatePopoverOpen} onOpenChange={setIsDetailedDatePopoverOpen}>
-                                    <PopoverTrigger asChild>
-                                        <Button variant="outline" size="sm" className="h-9 border-dashed w-full justify-start font-normal relative pl-10">
-                                            <div className="absolute left-0 top-0 bottom-0 w-9 flex items-center justify-center bg-muted/50 border-r rounded-l-md">
-                                                <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-                                            </div>
-                                            {detailedDateRange?.from ? (
-                                                detailedDateRange.to ? (
-                                                    <>
-                                                        {formatDate(detailedDateRange.from, "LLL dd")} - {formatDate(detailedDateRange.to, "LLL dd")}
-                                                    </>
-                                                ) : (
-                                                    formatDate(detailedDateRange.from, "LLL dd, y")
-                                                )
-                                            ) : (
-                                                "Select Date Range"
-                                            )}
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0" align="start">
-                                        <div className="p-2 space-y-2">
-                                            <Calendar
-                                                initialFocus
-                                                mode="range"
-                                                defaultMonth={detailedDateRange?.from}
-                                                selected={detailedDateRange}
-                                                onSelect={(range) => {
-                                                    if (range?.from && range?.to) {
-                                                        setDetailedDateRange({ from: range.from, to: range.to })
-                                                    } else if (range?.from) {
-                                                        setDetailedDateRange({ from: range.from, to: range.from })
-                                                    } else {
-                                                        setDetailedDateRange(undefined)
-                                                    }
-                                                }}
-                                                numberOfMonths={2}
-                                            />
-                                            <div className="flex gap-2 pt-2 border-t">
-                                                <Button
-                                                    size="sm"
-                                                    className="flex-1"
-                                                    onClick={() => setIsDetailedDatePopoverOpen(false)}
-                                                >
-                                                    Apply
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => {
-                                                        setDetailedDateRange(undefined)
-                                                        setIsDetailedDatePopoverOpen(false)
-                                                    }}
-                                                >
-                                                    Clear
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    </PopoverContent>
-                                </Popover>
-
                                 {/* Employee Selector */}
                                 <Popover open={isEmployeePopoverOpen} onOpenChange={setIsEmployeePopoverOpen}>
                                     <PopoverTrigger asChild>
-                                        <Button variant="outline" role="combobox" aria-expanded={isEmployeePopoverOpen} className="h-9 w-full justify-between relative pl-10">
-                                            <div className="absolute left-0 top-0 bottom-0 w-9 flex items-center justify-center bg-muted/50 border-r rounded-l-md">
-                                                <User className="h-4 w-4 text-muted-foreground" />
+                                        <Button variant="outline" role="combobox" aria-expanded={isEmployeePopoverOpen} className="h-9 w-full justify-between relative pl-12">
+                                            <div className="absolute left-0 top-0 bottom-0 w-11 flex items-center justify-center bg-muted/50 border-r rounded-l-md">
+                                                {isLoadingSearch ? (
+                                                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                                ) : (
+                                                    <User className="h-4 w-4 text-muted-foreground" />
+                                                )}
                                             </div>
-                                            {selectedEmployee ? selectedEmployee.name : "Select Employee (Optional)"}
+                                            <span className="truncate text-left w-full">
+                                                {selectedEmployee ? `${selectedEmployee.name} - ${selectedEmployee.designation || 'Employee'}` : "Select Employee (Optional)"}
+                                            </span>
                                             <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                         </Button>
                                     </PopoverTrigger>
-                                    <PopoverContent className="w-[300px] p-0" align="start">
+                                    <PopoverContent className="w-[320px] p-0" align="start">
                                         <div className="p-2 border-b">
                                             <div className="flex items-center gap-2 px-2 pb-1">
                                                 <Search className="h-4 w-4 text-muted-foreground" />
@@ -899,43 +795,56 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
                                                     value={employeeSearchQuery}
                                                     onChange={(e) => setEmployeeSearchQuery(e.target.value)}
                                                     className="h-8 border-none focus-visible:ring-0 shadow-none bg-transparent"
+                                                    autoFocus
                                                 />
                                             </div>
                                         </div>
-                                        <div className="h-[200px] overflow-y-auto">
+                                        <div className="h-[250px] overflow-y-auto">
                                             <div className="p-1">
                                                 {/* Option to clear selection */}
                                                 <div
-                                                    className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                                                    className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
                                                     onClick={() => {
                                                         setSelectedEmployee(undefined)
                                                         setIsEmployeePopoverOpen(false)
                                                     }}
                                                 >
-                                                    <span className="font-medium text-muted-foreground">All Employees</span>
+                                                    <span className="font-medium text-muted-foreground ml-2">All Employees</span>
                                                 </div>
 
                                                 {searchResults?.map((employee: any) => (
                                                     <div
                                                         key={employee.id}
                                                         className={cn(
-                                                            "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+                                                            "relative flex cursor-pointer select-none items-start gap-3 rounded-sm px-2 py-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
                                                             selectedEmployee?.id === employee.id && "bg-accent text-accent-foreground"
                                                         )}
                                                         onClick={() => {
                                                             setSelectedEmployee({
                                                                 id: employee.id,
-                                                                name: `${employee.first_name} ${employee.last_name || ''}`.trim()
+                                                                name: employee.name,
+                                                                designation: employee.designation
                                                             })
                                                             setIsEmployeePopoverOpen(false)
                                                         }}
                                                     >
-                                                        <div className="flex flex-col">
-                                                            <span className="font-medium">{employee.first_name} {employee.last_name}</span>
-                                                            <span className="text-xs text-muted-foreground">{employee.email}</span>
+                                                        <Avatar className="h-8 w-8 mt-0.5">
+                                                            <AvatarImage src={employee.avatar} alt={employee.first_name} />
+                                                            <AvatarFallback>{employee.first_name?.[0]}{employee.last_name?.[0]}</AvatarFallback>
+                                                        </Avatar>
+                                                        <div className="flex flex-col gap-0.5 flex-1 overflow-hidden">
+                                                            <div className="font-medium truncate">
+                                                                {employee.first_name} {employee.last_name}
+                                                                <span className="text-muted-foreground font-normal ml-1 text-xs">
+                                                                    — {employee.designation}
+                                                                </span>
+                                                            </div>
+                                                            <div className="text-xs text-muted-foreground truncate">
+                                                                {employee.mobile}
+                                                            </div>
                                                         </div>
                                                         {selectedEmployee?.id === employee.id && (
-                                                            <CheckCircle2 className="ml-auto h-4 w-4" />
+                                                            <CheckCircle2 className="h-4 w-4 mt-1 text-primary" />
                                                         )}
                                                     </div>
                                                 ))}
@@ -948,6 +857,146 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
                                         </div>
                                     </PopoverContent>
                                 </Popover>
+
+                                {/* Date Range Filter, Format, Download */}
+                                <div className="flex items-center gap-2">
+                                    <Popover open={isDetailedDatePopoverOpen} onOpenChange={setIsDetailedDatePopoverOpen}>
+                                        <PopoverTrigger asChild>
+                                            <Button variant="outline" size="sm" className="h-9 border-dashed flex-1 justify-start font-normal relative pl-10">
+                                                <div className="absolute left-0 top-0 bottom-0 w-9 flex items-center justify-center bg-muted/50 border-r rounded-l-md">
+                                                    <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                                                </div>
+                                                {detailedDateRange?.from ? (
+                                                    detailedDateRange.to ? (
+                                                        <>
+                                                            {formatDate(detailedDateRange.from, "LLL dd")} - {formatDate(detailedDateRange.to, "LLL dd")}
+                                                        </>
+                                                    ) : (
+                                                        formatDate(detailedDateRange.from, "LLL dd, y")
+                                                    )
+                                                ) : (
+                                                    "Date Range"
+                                                )}
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0" align="start">
+                                            <div className="p-2 space-y-2">
+                                                <Calendar
+                                                    initialFocus
+                                                    mode="range"
+                                                    defaultMonth={detailedDateRange?.from}
+                                                    selected={detailedDateRange}
+                                                    onSelect={(range) => {
+                                                        if (range?.from && range?.to) {
+                                                            setDetailedDateRange({ from: range.from, to: range.to })
+                                                        } else if (range?.from) {
+                                                            setDetailedDateRange({ from: range.from, to: range.from })
+                                                        } else {
+                                                            setDetailedDateRange(undefined)
+                                                        }
+                                                    }}
+                                                    numberOfMonths={1}
+                                                    captionLayout="dropdown"
+                                                    fromYear={1960}
+                                                    toYear={2030}
+                                                />
+                                                <div className="flex gap-2 pt-2 border-t">
+                                                    <Button
+                                                        size="sm"
+                                                        className="flex-1"
+                                                        onClick={() => setIsDetailedDatePopoverOpen(false)}
+                                                    >
+                                                        Apply
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            setDetailedDateRange(undefined)
+                                                            setIsDetailedDatePopoverOpen(false)
+                                                        }}
+                                                    >
+                                                        Clear
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </PopoverContent>
+                                    </Popover>
+
+                                    {/* Format Selector */}
+                                    <Select value={detailedReportFormat} onValueChange={(v) => setDetailedReportFormat(v as ExportFormat)}>
+                                        <SelectTrigger className="w-[100px] h-9">
+                                            <div className="flex items-center gap-2">
+                                                {detailedReportFormat === 'csv' ? (
+                                                    <IconFileTypeCsv className="h-4 w-4 text-green-600" />
+                                                ) : (
+                                                    <IconFileTypePdf className="h-4 w-4 text-red-600" />
+                                                )}
+                                                <span className="text-xs font-medium">{detailedReportFormat.toUpperCase()}</span>
+                                            </div>
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="csv">
+                                                <div className="flex items-center gap-2">
+                                                    <IconFileTypeCsv className="h-4 w-4 text-green-600" />
+                                                    CSV
+                                                </div>
+                                            </SelectItem>
+                                            <SelectItem value="pdf">
+                                                <div className="flex items-center gap-2">
+                                                    <IconFileTypePdf className="h-4 w-4 text-red-600" />
+                                                    PDF
+                                                </div>
+                                            </SelectItem>
+                                        </SelectContent>
+                                    </Select>
+
+                                    {/* Download Button */}
+                                    <Button
+                                        onClick={() => handleDetailedAttendanceDownload(detailedReportFormat)}
+                                        disabled={detailedAttendanceDownloadStatus === 'loading'}
+                                        size="icon"
+                                        variant="outline"
+                                        className={cn(
+                                            "h-9 w-9 transition-all duration-300 relative items-center justify-center",
+                                            detailedAttendanceDownloadStatus === 'success' && "bg-green-600 hover:bg-green-700 text-primary-foreground border-green-600",
+                                            detailedAttendanceDownloadStatus === 'error' && "bg-red-600 hover:bg-red-700 text-primary-foreground border-red-600"
+                                        )}
+                                        title={`Download ${detailedReportFormat.toUpperCase()}`}
+                                    >
+                                        <AnimatePresence mode="wait">
+                                            <motion.div
+                                                key={detailedAttendanceDownloadStatus}
+                                                initial={{ opacity: 0, scale: 0.8, rotate: -45 }}
+                                                animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                                                exit={{ opacity: 0, scale: 0.8, rotate: 45 }}
+                                                transition={{ duration: 0.2, ease: "easeOut" }}
+                                                className="flex items-center justify-center"
+                                            >
+                                                {detailedAttendanceDownloadStatus === 'loading' ? (
+                                                    <motion.div
+                                                        animate={{ rotate: 360 }}
+                                                        transition={{
+                                                            duration: 1,
+                                                            repeat: Infinity,
+                                                            ease: "linear",
+                                                            repeatType: "loop"
+                                                        }}
+                                                        className="flex items-center justify-center"
+                                                    >
+                                                        <Loader2 className="h-4 w-4" />
+                                                    </motion.div>
+                                                ) : detailedAttendanceDownloadStatus === 'success' ? (
+                                                    <CheckCircle2 className="h-4 w-4" />
+                                                ) : detailedAttendanceDownloadStatus === 'error' ? (
+                                                    <XCircle className="h-4 w-4" />
+                                                ) : (
+                                                    <Download className="h-4 w-4" />
+                                                )}
+                                            </motion.div>
+                                        </AnimatePresence>
+                                    </Button>
+                                </div>
                             </div>
                         </ReportCard>
                     </div>

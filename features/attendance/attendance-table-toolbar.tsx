@@ -22,6 +22,9 @@ import {
 } from "@/components/ui/popover"
 import { format, parseISO } from "date-fns"
 import { useState, useMemo } from "react"
+import { DateRange } from "react-day-picker"
+import { IconFileTypeCsv, IconFileTypePdf } from '@tabler/icons-react'
+import { Download, CheckCircle2 } from "lucide-react"
 
 interface AttendanceTableToolbarProps<TData> {
     table: Table<TData>
@@ -41,9 +44,11 @@ interface AttendanceTableToolbarProps<TData> {
         rejected: number
         noOfficeOut: number
     }
-    dateFilter?: string
-    onDateFilterChange?: (value: string) => void
+    dateFilter?: DateRange
+    onDateFilterChange?: (value: DateRange | undefined) => void
     uniqueDates?: string[]
+    onDownload?: (format: 'csv' | 'pdf') => void
+    isDownloading?: boolean
 }
 
 export function AttendanceTableToolbar<TData>({
@@ -57,10 +62,13 @@ export function AttendanceTableToolbar<TData>({
     onBulkReject,
     isBulkUpdating = false,
     stats,
-    dateFilter = 'all',
+    dateFilter,
     onDateFilterChange,
     uniqueDates = [],
+    onDownload,
+    isDownloading = false
 }: AttendanceTableToolbarProps<TData>) {
+    const [downloadFormat, setDownloadFormat] = useState<'csv' | 'pdf'>('csv')
     const selectedRows = table.getFilteredSelectedRowModel().rows
     const hasSelection = selectedRows.length > 0
 
@@ -141,21 +149,29 @@ export function AttendanceTableToolbar<TData>({
                 </div>
                 {onDateFilterChange && (
                     <div className="flex items-center gap-2">
-                        <label className="text-sm font-medium whitespace-nowrap">Marked Date :</label>
+                        <label className="text-sm font-medium whitespace-nowrap">Date Range :</label>
                         <Popover>
                             <PopoverTrigger asChild>
                                 <Button
                                     variant="outline"
                                     className={cn(
-                                        "w-40 h-10 rounded-xl justify-start text-left font-normal",
-                                        !dateFilter || dateFilter === 'all' ? "text-muted-foreground" : ""
+                                        "w-[240px] h-10 rounded-xl justify-start text-left font-normal",
+                                        !dateFilter ? "text-muted-foreground" : ""
                                     )}
                                     disabled={isLoading}
                                 >
                                     <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {dateFilter && dateFilter !== 'all'
-                                        ? format(parseISO(dateFilter), 'dd MMM yyyy')
-                                        : "All Dates"}
+                                    {dateFilter?.from ? (
+                                        dateFilter.to ? (
+                                            <>
+                                                {format(dateFilter.from, "LLL dd, y")} - {format(dateFilter.to, "LLL dd, y")}
+                                            </>
+                                        ) : (
+                                            format(dateFilter.from, "LLL dd, y")
+                                        )
+                                    ) : (
+                                        <span>Pick a date range</span>
+                                    )}
                                 </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0" align="start">
@@ -163,35 +179,70 @@ export function AttendanceTableToolbar<TData>({
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        onClick={() => onDateFilterChange('all')}
+                                        onClick={() => onDateFilterChange(undefined)}
                                         className="flex-1 text-xs"
                                     >
                                         Clear
                                     </Button>
                                 </div>
                                 <Calendar
-                                    mode="single"
-                                    captionLayout="dropdown"
-                                    selected={dateFilter && dateFilter !== 'all' ? parseISO(dateFilter) : undefined}
-                                    onSelect={(date) => {
-                                        if (date) {
-                                            onDateFilterChange(format(date, 'yyyy-MM-dd'))
-                                        } else {
-                                            onDateFilterChange('all')
-                                        }
-                                    }}
-                                    modifiers={{
-                                        hasData: uniqueDates.map(d => parseISO(d))
-                                    }}
-                                    modifiersClassNames={{
-                                        hasData: "bg-primary/10 font-bold"
-                                    }}
-                                    fromYear={2020}
-                                    toYear={new Date().getFullYear()}
                                     initialFocus
+                                    mode="range"
+                                    defaultMonth={dateFilter?.from}
+                                    selected={dateFilter}
+                                    onSelect={onDateFilterChange}
+                                    numberOfMonths={1}
+                                    captionLayout="dropdown"
+                                    fromYear={1960}
+                                    toYear={2030}
                                 />
                             </PopoverContent>
                         </Popover>
+                    </div>
+                )}
+
+                {onDownload && (
+                    <div className="flex items-center gap-2">
+                        <Select value={downloadFormat} onValueChange={(v) => setDownloadFormat(v as 'csv' | 'pdf')}>
+                            <SelectTrigger className="w-[100px] h-10 rounded-xl">
+                                <div className="flex items-center gap-2">
+                                    {downloadFormat === 'csv' ? (
+                                        <IconFileTypeCsv className="h-4 w-4 text-green-600" />
+                                    ) : (
+                                        <IconFileTypePdf className="h-4 w-4 text-red-600" />
+                                    )}
+                                    <span className="text-xs font-medium">{downloadFormat.toUpperCase()}</span>
+                                </div>
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="csv">
+                                    <div className="flex items-center gap-2">
+                                        <IconFileTypeCsv className="h-4 w-4 text-green-600" />
+                                        CSV
+                                    </div>
+                                </SelectItem>
+                                <SelectItem value="pdf">
+                                    <div className="flex items-center gap-2">
+                                        <IconFileTypePdf className="h-4 w-4 text-red-600" />
+                                        PDF
+                                    </div>
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-10 w-10 rounded-xl"
+                            onClick={() => onDownload(downloadFormat)}
+                            disabled={isDownloading || isLoading}
+                        >
+                            {isDownloading ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                                <Download className="h-4 w-4" />
+                            )}
+                        </Button>
                     </div>
                 )}
             </div>
