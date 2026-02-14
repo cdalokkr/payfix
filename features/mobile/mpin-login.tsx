@@ -4,7 +4,7 @@ import React, { useState, useCallback, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
-import { IconLock, IconFingerprint, IconKey, IconLoader2 } from "@tabler/icons-react"
+import { Lock as IconLock, Fingerprint as IconFingerprint, Key as IconKey, Loader2 as IconLoader2 } from "lucide-react"
 import { trpc } from "@/lib/trpc/client"
 
 interface MpinLoginProps {
@@ -176,8 +176,8 @@ export function MpinLogin({ onSuccess, onForgotMpin, onUsePassword }: MpinLoginP
                         <div
                             key={i}
                             className={`w-4 h-4 rounded-full border-2 transition-all ${i < mpin.length
-                                    ? 'bg-primary border-primary'
-                                    : 'border-muted-foreground/30'
+                                ? 'bg-primary border-primary'
+                                : 'border-muted-foreground/30'
                                 }`}
                         />
                     ))}

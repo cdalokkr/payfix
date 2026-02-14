@@ -23,7 +23,7 @@ import {
 import { format, parseISO } from "date-fns"
 import { useState, useMemo } from "react"
 import { DateRange } from "react-day-picker"
-import { IconFileTypeCsv, IconFileTypePdf } from '@tabler/icons-react'
+import { FileSpreadsheet as IconFileTypeCsv, FileText as IconFileTypePdf } from 'lucide-react'
 import { Download, CheckCircle2 } from "lucide-react"
 
 interface AttendanceTableToolbarProps<TData> {

@@ -34,11 +34,11 @@ export function MetricCardSkeleton({
     if (typeof window !== 'undefined' && 'matchMedia' in window) {
       const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
       setPrefersReducedMotion(mediaQuery.matches)
-      
+
       const handleChange = (e: MediaQueryListEvent) => {
         setPrefersReducedMotion(e.matches)
       }
-      
+
       mediaQuery.addEventListener('change', handleChange)
       return () => mediaQuery.removeEventListener('change', handleChange)
     }
@@ -111,7 +111,7 @@ export function MetricCardSkeleton({
               aria-hidden="true"
             />
             <div
-              className="absolute inset-0 bg-gradient-to-r from-transparent via-muted to-transparent opacity-20 animate-shimmer animation-delay-100"
+              className="absolute inset-0 bg-gradient-to-r from-transparent via-muted to-transparent opacity-20 animate-shimmer animate-delay-100"
               aria-hidden="true"
             />
           </div>
@@ -124,7 +124,7 @@ export function MetricCardSkeleton({
               aria-hidden="true"
             />
             <div
-              className="absolute inset-0 bg-gradient-to-r from-transparent via-muted to-transparent opacity-15 animate-shimmer animation-delay-150"
+              className="absolute inset-0 bg-gradient-to-r from-transparent via-muted to-transparent opacity-15 animate-shimmer animate-delay-150"
               aria-hidden="true"
             />
           </div>
@@ -181,7 +181,7 @@ export function ProgressiveMetricCardSkeleton() {
           </div>
           <div className="relative">
             <div className="h-3 w-24 bg-blue-200 rounded animate-pulse" />
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-300 to-transparent opacity-20 animate-shimmer animation-delay-100" />
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-300 to-transparent opacity-20 animate-shimmer animate-delay-100" />
           </div>
         </div>
       </CardContent>

@@ -7,14 +7,14 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import {
-    IconMapPin,
-    IconLoader2,
-    IconCheck,
-    IconX,
-    IconCurrentLocation,
-    IconRefresh,
-    IconSettings,
-} from "@tabler/icons-react"
+    MapPin as IconMapPin,
+    Loader2 as IconLoader2,
+    Check as IconCheck,
+    X as IconX,
+    LocateFixed as IconCurrentLocation,
+    RefreshCw as IconRefresh,
+    Settings as IconSettings,
+} from "lucide-react"
 import { trpc } from "@/lib/trpc/client"
 
 interface LocationVerificationProps {

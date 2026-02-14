@@ -11,8 +11,7 @@ import { trpc } from "@/lib/trpc/client"
 import { motion, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
 import { Search, X, User, UserStar, Shield, CircleUserRound, Mail, Phone, Calendar as CalendarIcon, Users, Activity, Download, Filter, TrendingUp, Clock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Loader2, CheckCircle2, History } from "lucide-react"
-import { HugeiconsIcon } from '@hugeicons/react'
-import { UserListIcon, Activity04Icon } from '@hugeicons/core-free-icons'
+// hugeicons removed - using Users and Activity from lucide-react
 import { Skeleton } from "@/components/ui/skeleton"
 import { ActivityLogFeed, getActivityIcon, getActivityTypeColor } from "@/components/dashboard/activity-log-feed"
 import { getDefaultAvatarUrl } from "@/lib/utils/avatar-helper"
@@ -371,7 +370,7 @@ export function AnalyticsTab({ role = 'admin' }: { role?: 'admin' | 'moderator' 
                 <CardHeader className="pb-0">
                   <div className="flex items-center gap-2">
                     <div className="p-2 rounded-lg bg-blue-500/20">
-                      <HugeiconsIcon icon={UserListIcon} size={24} className="text-blue-600 dark:text-blue-400" />
+                      <Users className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                     </div>
                     <div>
                       <CardTitle className="text-lg">User Details</CardTitle>
@@ -529,7 +528,7 @@ export function AnalyticsTab({ role = 'admin' }: { role?: 'admin' | 'moderator' 
                   <CardHeader className="pb-0">
                     <div className="flex items-center gap-2">
                       <div className="p-2 rounded-lg bg-purple-500/20">
-                        <HugeiconsIcon icon={Activity04Icon} size={24} className="text-purple-600 dark:text-purple-400" />
+                        <Activity className="h-6 w-6 text-purple-600 dark:text-purple-400" />
                       </div>
                       <div>
                         <CardTitle className="text-lg">Activity Statistics</CardTitle>

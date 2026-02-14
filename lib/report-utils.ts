@@ -1,6 +1,4 @@
 
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
 import { format as formatDate } from "date-fns"
 
 // Helper: Generate CSV content
@@ -26,8 +24,12 @@ export const downloadFile = (content: string | Blob, filename: string, mimeType:
     URL.revokeObjectURL(url)
 }
 
-// Helper: Generate PDF
-export const generatePDF = (title: string, headers: string[], rows: string[][], filename: string) => {
+// Helper: Generate PDF (dynamically imports jsPDF to reduce initial bundle size)
+export const generatePDF = async (title: string, headers: string[], rows: string[][], filename: string) => {
+    const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+        import('jspdf'),
+        import('jspdf-autotable'),
+    ])
     const doc = new jsPDF()
 
     // Title

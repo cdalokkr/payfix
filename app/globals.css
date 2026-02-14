@@ -40,6 +40,13 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.512 0.262 276.966 / 0.5);
+  /* Semantic colors */
+  --success: oklch(0.548 0.17 142.5);
+  --success-foreground: oklch(0.985 0 0);
+  --warning: oklch(0.768 0.165 74.1);
+  --warning-foreground: oklch(0.205 0 0);
+  --info: oklch(0.623 0.143 243.1);
+  --info-foreground: oklch(0.985 0 0);
 }
 
 .dark {
@@ -75,6 +82,13 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.592 0.249 276.966 / 0.5);
+  /* Semantic colors */
+  --success: oklch(0.648 0.17 150.1);
+  --success-foreground: oklch(0.985 0 0);
+  --warning: oklch(0.828 0.165 84.4);
+  --warning-foreground: oklch(0.205 0 0);
+  --info: oklch(0.703 0.143 243.1);
+  --info-foreground: oklch(0.985 0 0);
 }
 
 @theme inline {
@@ -113,6 +127,12 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
 }
 
 @layer base {
@@ -196,6 +216,30 @@
   }
 }
 
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 /* Animation utilities */
 @layer components {
   .dashboard-wrapper {
@@ -231,20 +275,20 @@
     animation-delay: 100ms;
   }
 
+  .animate-delay-150 {
+    animation-delay: 150ms;
+  }
+
   .animate-delay-200 {
     animation-delay: 200ms;
   }
 
-  .animation-delay-100 {
-    animation-delay: 100ms;
+  .animate-delay-300 {
+    animation-delay: 300ms;
   }
 
-  .animation-delay-150 {
-    animation-delay: 150ms;
-  }
-
-  .animation-delay-200 {
-    animation-delay: 200ms;
+  .animate-delay-1000 {
+    animation-delay: 1000ms;
   }
 
   /* Shimmer effect for skeleton loading */
@@ -265,6 +309,16 @@
   /* Pulse animation for skeleton loading */
   .animate-pulse {
     animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  /* Slide up entrance animation */
+  .animate-slide-up {
+    animation: slideUp 0.3s ease-out forwards;
+  }
+
+  /* Scale in entrance animation */
+  .animate-scale-in {
+    animation: scaleIn 0.2s ease-out forwards;
   }
 
   /* Touch-friendly scroll behavior */
@@ -298,10 +352,48 @@
       font-size: 16px;
     }
   }
-}
 
-@layer utilities {
-  /* ... existing utilities ... */
+  /* Data table row hover */
+  .table-row-hover {
+    transition: background-color 0.15s ease;
+  }
+
+  .table-row-hover:hover {
+    background-color: oklch(0 0 0 / 3%);
+  }
+
+  .dark .table-row-hover:hover {
+    background-color: oklch(1 0 0 / 4%);
+  }
+
+  /* Card hover micro-animation */
+  .card-hover {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .card-hover:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px oklch(0 0 0 / 8%);
+  }
+
+  .dark .card-hover:hover {
+    box-shadow: 0 4px 12px oklch(0 0 0 / 25%);
+  }
+
+  /* Enhanced focus ring with smooth animation */
+  .focus-ring-animated {
+    transition: box-shadow 0.2s ease, outline-offset 0.2s ease;
+  }
+
+  .focus-ring-animated:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px oklch(0.512 0.262 276.966 / 0.15);
+  }
+
+  .dark .focus-ring-animated:focus-visible {
+    box-shadow: 0 0 0 4px oklch(0.592 0.249 276.966 / 0.2);
+  }
 }
 
 /* Base button active state */

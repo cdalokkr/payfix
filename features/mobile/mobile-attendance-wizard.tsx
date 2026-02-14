@@ -7,14 +7,14 @@ import { Progress } from "@/components/ui/progress"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import {
-    IconCheck,
-    IconLoader2,
-    IconCamera,
-    IconUserScan,
-    IconX,
-    IconArrowLeft,
-    IconSparkles,
-} from "@tabler/icons-react"
+    Check as IconCheck,
+    Loader2 as IconLoader2,
+    Camera as IconCamera,
+    ScanFace as IconUserScan,
+    X as IconX,
+    ArrowLeft as IconArrowLeft,
+    Sparkles as IconSparkles,
+} from "lucide-react"
 import { trpc } from "@/lib/trpc/client"
 import { SelfieCapture, type SelfieResult } from "./selfie-capture"
 import { format } from "date-fns"

@@ -5,10 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
-import { IconCamera, IconLoader2, IconRefresh, IconCheck, IconX, IconArrowLeft, IconZoomIn } from "@tabler/icons-react"
+import { Camera as IconCamera, Loader2 as IconLoader2, RefreshCw as IconRefresh, Check as IconCheck, X as IconX, ArrowLeft as IconArrowLeft, ZoomIn as IconZoomIn } from "lucide-react"
 import { format } from "date-fns"
 import { Slider } from "@/components/ui/slider"
-import { LightweightVerificationService } from "@/lib/services/lightweight-verification.service"
+import { FaceVerificationService } from "@/lib/services/face-verification.service"
 
 interface SelfieCaptureProps {
     profileImageUrl: string | null
@@ -65,6 +65,9 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
             return
         }
         isInitializing.current = true
+
+        // Preload face-api models in background (don't await)
+        FaceVerificationService.initialize().catch(() => { })
 
         stopCamera()
         if (isMounted.current) {
@@ -135,6 +138,11 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
                     setTimeout(() => {
                         if (isMounted.current && status === 'idle') handlePlay()
                     }, 1500)
+                }
+
+                // Pre-cache profile descriptor while user positions face
+                if (profileImageUrl) {
+                    FaceVerificationService.preloadProfileDescriptor(profileImageUrl).catch(() => { })
                 }
             }
         } catch (error: unknown) {
@@ -243,7 +251,7 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
         }
 
         // Run verification and API call in parallel
-        const verificationPromise = LightweightVerificationService.compareFaces(
+        const verificationPromise = FaceVerificationService.compareFaces(
             capturedImage,
             profileImageUrl
         )

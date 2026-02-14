@@ -22,20 +22,20 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { motion, AnimatePresence } from "framer-motion"
 import {
-    IconCamera,
-    IconUser,
-    IconMail,
-    IconPhone,
-    IconBriefcase,
-    IconEdit,
-    IconLock,
-    IconCheck,
-    IconLoader2,
-    IconClock,
-    IconCalendar,
-    IconChevronRight,
-    IconShieldCheck,
-} from "@tabler/icons-react"
+    Camera as IconCamera,
+    User as IconUser,
+    Mail as IconMail,
+    Phone as IconPhone,
+    Briefcase as IconBriefcase,
+    Pencil as IconEdit,
+    Lock as IconLock,
+    Check as IconCheck,
+    Loader2 as IconLoader2,
+    Clock as IconClock,
+    Calendar as IconCalendar,
+    ChevronRight as IconChevronRight,
+    ShieldCheck as IconShieldCheck,
+} from "lucide-react"
 import { trpc } from '@/lib/trpc/client'
 import { changePasswordSchema, ChangePasswordInput } from "@/lib/validations/auth"
 

@@ -5,13 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
-    IconAlertCircle,
-    IconPhoto,
-    IconMapPin,
-    IconLogin,
-    IconLogout,
-    IconLoader2,
-} from "@tabler/icons-react"
+    AlertCircle as IconAlertCircle,
+    Image as IconPhoto,
+    MapPin as IconMapPin,
+    LogIn as IconLogin,
+    LogOut as IconLogout,
+    Loader2 as IconLoader2,
+} from "lucide-react"
 import { trpc } from "@/lib/trpc/client"
 import { MobileAttendanceWizard } from "./mobile-attendance-wizard"
 

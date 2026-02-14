@@ -8,20 +8,20 @@ import { motion } from "framer-motion"
 import { useState, useEffect } from "react"
 import { trpc } from "@/lib/trpc/client"
 import {
-    IconClock,
-    IconLogin,
-    IconLogout,
-    IconCheck,
-    IconAlertTriangle,
-    IconArrowRight,
-    IconHistory,
-    IconCalendarEvent,
-    IconSettings,
-    IconQuestionMark,
-    IconLoader2,
-    IconDownload,
-    IconCamera
-} from "@tabler/icons-react"
+    Clock as IconClock,
+    LogIn as IconLogin,
+    LogOut as IconLogout,
+    Check as IconCheck,
+    AlertTriangle as IconAlertTriangle,
+    ArrowRight as IconArrowRight,
+    History as IconHistory,
+    CalendarDays as IconCalendarEvent,
+    Settings as IconSettings,
+    HelpCircle as IconQuestionMark,
+    Loader2 as IconLoader2,
+    Download as IconDownload,
+    Camera as IconCamera
+} from "lucide-react"
 import {
     CalendarClock,
     MapPinCheck,
@@ -473,7 +473,7 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
                                 </div>
                                 <span className="font-bold text-sm tracking-tight">{action.label}</span>
                                 <div className="absolute -right-2 -bottom-2 opacity-[0.03] dark:opacity-[0.05] group-hover:opacity-[0.08] transition-opacity">
-                                    <action.icon size={80} stroke={2} />
+                                    <action.icon size={80} strokeWidth={2} />
                                 </div>
                             </motion.div>
                         </Link>

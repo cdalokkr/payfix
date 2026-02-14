@@ -4,7 +4,7 @@ import { trpc } from "@/lib/trpc/client"
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, parseISO, isWithinInterval, getDay } from "date-fns"
 import { useMemo, useState } from "react"
 import { motion } from "framer-motion"
-import { ClockUser as ClockUserIcon, CalendarDots as CalendarDotsIcon, CalendarCheck as CalendarCheckIcon, CalendarX as CalendarXIcon, CalendarMinus as CalendarMinusIcon, CalendarSlash as CalendarSlashIcon, Calendar as CalendarIcon, Briefcase as BriefcaseIcon, DownloadSimple } from "@phosphor-icons/react"
+import { Timer as ClockUserIcon, CalendarDays as CalendarDotsIcon, CalendarCheck as CalendarCheckIcon, CalendarX2 as CalendarXIcon, CalendarMinus as CalendarMinusIcon, CalendarOff as CalendarSlashIcon, Calendar as CalendarIcon, Briefcase as BriefcaseIcon, Download as DownloadSimple, FileSpreadsheet as IconFileTypeCsv, FileText as IconFileTypePdf } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 import { CardShell } from "./CardShell"
@@ -14,8 +14,7 @@ import { CompactMetricCard } from "@/components/dashboard/compact-metric-card"
 import { useUserRealtimeDashboard } from "@/hooks/use-realtime-dashboard-data"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useProfile } from "@/lib/context/profile-context"
-import { jsPDF } from "jspdf"
-import autoTable from "jspdf-autotable"
+
 import { Button } from "@/components/ui/button"
 import {
     DropdownMenu,
@@ -23,7 +22,6 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { IconFileTypeCsv, IconFileTypePdf } from '@tabler/icons-react'
 
 // Helper to calculate scheduled hours from time strings
 function calculateScheduledHours(checkIn: string, checkOut: string): number {
@@ -168,7 +166,11 @@ export function AttendanceDashboard() {
     }
 
     // Helper: Generate PDF
-    const generatePDF = (title: string, headers: string[], rows: string[][], filename: string) => {
+    const generatePDF = async (title: string, headers: string[], rows: string[][], filename: string) => {
+        const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+            import('jspdf'),
+            import('jspdf-autotable'),
+        ])
         const doc = new jsPDF()
 
         // Title
@@ -229,7 +231,7 @@ export function AttendanceDashboard() {
                 const csvContent = generateCSV(headers, rows)
                 downloadFile(csvContent, `${filename}.csv`, 'text/csv;charset=utf-8;')
             } else {
-                generatePDF(
+                await generatePDF(
                     `My Attendance Report - ${format(currentMonth, 'MMMM yyyy')}`,
                     headers,
                     rows,

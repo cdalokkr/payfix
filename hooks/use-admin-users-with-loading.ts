@@ -4,7 +4,7 @@
 import { useCallback } from 'react'
 import { trpc } from '@/lib/trpc/client'
 import { Profile, UserRole } from '@/types'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 // Query configuration types
 interface UserQueryConfig {
@@ -74,18 +74,18 @@ export function useAdminUsersWithLoading(
   return {
     // Query
     usersQuery,
-    
+
     // Mutations
     createUserMutation,
     updateUserMutation,
     deleteUserMutation,
     updateUserRoleMutation,
-    
+
     // Loading state
     isLoading: usersQuery.isLoading,
     currentOperation: null as any,
     loadingProgress: null,
-    
+
     // Performance
     performance: {
       totalQueryTime: 0,
@@ -95,16 +95,16 @@ export function useAdminUsersWithLoading(
       lastOperationDuration: null,
       isSlowOperation: false
     },
-    
+
     // Utility functions
     refreshAll,
-    cancelAllOperations: () => {},
-    retryFailedOperation: () => {},
+    cancelAllOperations: () => { },
+    retryFailedOperation: () => { },
     clearCache,
-    updateConfig: (config: Partial<UserQueryConfig>) => {},
-    searchUsers: (searchTerm: string) => {},
-    filterByRole: (role: UserRole | 'all') => {},
-    goToPage: (page: number) => {}
+    updateConfig: (config: Partial<UserQueryConfig>) => { },
+    searchUsers: (searchTerm: string) => { },
+    filterByRole: (role: UserRole | 'all') => { },
+    goToPage: (page: number) => { }
   }
 }
 

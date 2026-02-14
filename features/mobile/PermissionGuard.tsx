@@ -3,7 +3,7 @@
 import React from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { IconMapPin, IconCamera, IconAlertTriangle, IconRefresh, IconLock } from "@tabler/icons-react"
+import { MapPin as IconMapPin, Camera as IconCamera, AlertTriangle as IconAlertTriangle, RefreshCw as IconRefresh, Lock as IconLock } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { usePermissionCheck, type PermissionStatus } from "@/hooks/use-permission-check"
 import { usePwaCheck } from "@/hooks/use-pwa-check"

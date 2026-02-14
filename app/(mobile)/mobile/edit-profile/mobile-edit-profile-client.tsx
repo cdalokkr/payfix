@@ -10,14 +10,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from 'sonner'
 import { motion } from "framer-motion"
 import {
-    IconArrowLeft,
-    IconUser,
-    IconPhone,
-    IconCalendar,
-    IconLoader2,
-    IconCheck,
-    IconDeviceFloppy,
-} from "@tabler/icons-react"
+    ArrowLeft as IconArrowLeft,
+    User as IconUser,
+    Phone as IconPhone,
+    Calendar as IconCalendar,
+    Loader2 as IconLoader2,
+    Check as IconCheck,
+    Save as IconDeviceFloppy,
+} from "lucide-react"
 import { trpc } from '@/lib/trpc/client'
 
 interface MobileEditProfileClientProps {

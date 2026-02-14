@@ -11,12 +11,12 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { toast } from 'sonner'
 import { motion } from "framer-motion"
 import {
-    IconArrowLeft,
-    IconLock,
-    IconLoader2,
-    IconCheck,
-    IconShieldCheck,
-} from "@tabler/icons-react"
+    ArrowLeft as IconArrowLeft,
+    Lock as IconLock,
+    Loader2 as IconLoader2,
+    Check as IconCheck,
+    ShieldCheck as IconShieldCheck,
+} from "lucide-react"
 import { trpc } from '@/lib/trpc/client'
 import { changePasswordSchema, ChangePasswordInput } from "@/lib/validations/auth"
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { ArrowDownIcon, ArrowUpIcon, CaretSortIcon, EyeNoneIcon } from "@radix-ui/react-icons"
+import { ArrowDown as ArrowDownIcon, ArrowUp as ArrowUpIcon, ArrowUpDown as CaretSortIcon, EyeOff as EyeNoneIcon } from "lucide-react"
 import { Column } from "@tanstack/react-table"
 
 import { cn } from "@/lib/utils"

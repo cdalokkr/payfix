@@ -1,7 +1,7 @@
 'use client'
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 import { useState } from 'react'
 
 // Types for optimistic updates
@@ -31,12 +31,12 @@ async function callAdminUsersMutation(endpoint: string, input: any) {
     },
     body: JSON.stringify({ input }),
   })
-  
+
   if (!response.ok) {
     const error = await response.json()
     throw new Error(error.message || 'Request failed')
   }
-  
+
   return response.json()
 }
 
@@ -86,14 +86,14 @@ export function useOptimisticUserRoleUpdate() {
       if (context?.previousDashboard) {
         queryClient.setQueryData(['admin-dashboard'], context.previousDashboard)
       }
-      
+
       toast.error(`Failed to update user role: ${err.message}`)
       console.error('User role update failed:', err)
     },
 
     onSettled: (data, error, { userId }) => {
       setIsUpdating(null)
-      
+
       queryClient.invalidateQueries({ queryKey: ['admin-users'] })
       queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] })
     },
@@ -132,7 +132,7 @@ export function useOptimisticUserProfileUpdate() {
 
     onMutate: async ({ userId, updates }) => {
       await queryClient.cancelQueries({ queryKey: ['admin-users'] })
-      
+
       const previousUsers = queryClient.getQueryData(['admin-users'])
       setIsUpdating(userId)
 
@@ -142,14 +142,14 @@ export function useOptimisticUserProfileUpdate() {
           ...old,
           users: old.users.map((user: OptimisticUser) => {
             if (user.id !== userId) return user
-            
+
             const updatedUser = { ...user }
             if (updates.firstName !== undefined) updatedUser.first_name = updates.firstName
             if (updates.lastName !== undefined) updatedUser.last_name = updates.lastName
             if (updates.mobileNo !== undefined) updatedUser.mobile_no = updates.mobileNo
             if (updates.dateOfBirth !== undefined) updatedUser.date_of_birth = updates.dateOfBirth
             updatedUser.updated_at = new Date().toISOString()
-            
+
             return updatedUser
           })
         }
@@ -162,7 +162,7 @@ export function useOptimisticUserProfileUpdate() {
       if (context?.previousUsers) {
         queryClient.setQueryData(['admin-users'], context.previousUsers)
       }
-      
+
       toast.error(`Failed to update user profile: ${err.message}`)
       console.error('User profile update failed:', err)
     },
@@ -221,7 +221,7 @@ export function useOptimisticUserDelete() {
       if (context?.previousDashboard) {
         queryClient.setQueryData(['admin-dashboard'], context.previousDashboard)
       }
-      
+
       toast.error(`Failed to delete user: ${err.message}`)
       console.error('User deletion failed:', err)
     },
@@ -290,7 +290,7 @@ export function useOptimisticUserCreate() {
             pages: 1
           }
         }
-        
+
         return {
           ...old,
           users: [optimisticUser, ...old.users],
@@ -306,7 +306,7 @@ export function useOptimisticUserCreate() {
       if (context?.previousUsers) {
         queryClient.setQueryData(['admin-users'], context.previousUsers)
       }
-      
+
       toast.error(`Failed to create user: ${err.message}`)
       console.error('User creation failed:', err)
     },
@@ -363,10 +363,10 @@ export function useAdminUserOptimisticOperations() {
     createError: createOperation.error,
 
     // Combined states
-    isAnyOperationPending: 
-      roleUpdate.isUpdating || 
-      profileUpdate.isUpdating || 
-      deleteOperation.isDeleting || 
+    isAnyOperationPending:
+      roleUpdate.isUpdating ||
+      profileUpdate.isUpdating ||
+      deleteOperation.isDeleting ||
       createOperation.isCreating
   }
 }

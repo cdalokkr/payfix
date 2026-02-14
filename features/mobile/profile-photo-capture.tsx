@@ -7,18 +7,18 @@ import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import { trpc } from "@/lib/trpc/client"
 import {
-    IconCamera,
-    IconLoader2,
-    IconRefresh,
-    IconCheck,
-    IconX,
-    IconArrowLeft,
-    IconUser,
-    IconMail,
-    IconId,
-    IconClock,
-    IconPhone,
-} from "@tabler/icons-react"
+    Camera as IconCamera,
+    Loader2 as IconLoader2,
+    RefreshCw as IconRefresh,
+    Check as IconCheck,
+    X as IconX,
+    ArrowLeft as IconArrowLeft,
+    User as IconUser,
+    Mail as IconMail,
+    IdCard as IconId,
+    Clock as IconClock,
+    Phone as IconPhone,
+} from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
 interface ProfileData {

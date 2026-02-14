@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { trpc } from "@/lib/trpc/client"
 import { cn } from "@/lib/utils"
 import { Download, Users, Activity, BarChart3, FileText, FileSpreadsheet, Calendar as CalendarIcon, Filter, Loader2, CheckCircle2, XCircle, Search, User, ClipboardList, Clock } from "lucide-react"
-import { IconFileTypeCsv, IconFileTypePdf } from '@tabler/icons-react'
+import { FileSpreadsheet as IconFileTypeCsv, FileText as IconFileTypePdf } from 'lucide-react'
 import {
     Select,
     SelectContent,
@@ -27,8 +27,6 @@ import {
 import { Input } from "@/components/ui/input"
 import { Calendar } from "@/components/ui/calendar"
 import { format as formatDate } from "date-fns"
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
 import { generateCSV, generatePDF, downloadFile } from "@/lib/report-utils"
 
 type ExportFormat = 'csv' | 'pdf'
@@ -278,7 +276,7 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
                 const csvContent = generateCSV(headers, rows)
                 downloadFile(csvContent, `users-report${roleStr}-${dateStr}.csv`, 'text/csv;charset=utf-8;')
             } else {
-                generatePDF(`Users Report${roleFilter !== 'all' ? ` (${roleFilter})` : ''}`, headers, rows, `users-report${roleStr}-${dateStr}.pdf`)
+                await generatePDF(`Users Report${roleFilter !== 'all' ? ` (${roleFilter})` : ''}`, headers, rows, `users-report${roleStr}-${dateStr}.pdf`)
             }
 
             setUsersDownloadStatus('success')
@@ -337,7 +335,7 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
                 const csvContent = generateCSV(headers, rows)
                 downloadFile(csvContent, `activities-report${rangeStr}-${dateStr}.csv`, 'text/csv;charset=utf-8;')
             } else {
-                generatePDF(
+                await generatePDF(
                     `Activities Report${dateRange ? ` (${formatDate(dateRange.from, "MMM dd")} - ${formatDate(dateRange.to, "MMM dd, yyyy")})` : ' (Last 30 Days)'}`,
                     headers,
                     rows,
@@ -400,7 +398,7 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
                 const csvContent = generateCSV(headers, rows)
                 downloadFile(csvContent, `statistics-summary-${dateStr}.csv`, 'text/csv;charset=utf-8;')
             } else {
-                generatePDF('Statistics Summary', headers, rows, `statistics-summary-${dateStr}.pdf`)
+                await generatePDF('Statistics Summary', headers, rows, `statistics-summary-${dateStr}.pdf`)
             }
 
             setStatisticsDownloadStatus('success')
@@ -465,7 +463,7 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
                 const csvContent = generateCSV(headers, rows)
                 downloadFile(csvContent, `attendance-summary-${rangeStr}.csv`, 'text/csv;charset=utf-8;')
             } else {
-                generatePDF(
+                await generatePDF(
                     `Attendance Summary (${formatDate(attendanceDateRange.from, "MMM dd")} - ${formatDate(attendanceDateRange.to, "MMM dd, yyyy")})`,
                     headers,
                     rows,
@@ -524,7 +522,7 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
                 const csvContent = generateCSV(headers, rows)
                 downloadFile(csvContent, `detailed-attendance${employeeStr}-${rangeStr}.csv`, 'text/csv;charset=utf-8;')
             } else {
-                generatePDF(
+                await generatePDF(
                     `Detailed Attendance${selectedEmployee ? ` - ${selectedEmployee.name}` : ''} (${formatDate(detailedDateRange.from, "MMM dd")} - ${formatDate(detailedDateRange.to, "MMM dd, yyyy")})`,
                     headers,
                     rows,

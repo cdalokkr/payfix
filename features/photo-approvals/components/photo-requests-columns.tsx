@@ -6,7 +6,7 @@ import { DataTableColumnHeader } from "@/components/ui/data-table-column-header"
 import { formatDistanceToNow } from "date-fns"
 import { UserAvatarProfile } from "@/components/user-avatar-profile"
 import { Button } from "@/components/ui/button"
-import { IconEye, IconCheck, IconX } from "@tabler/icons-react"
+import { Eye as IconEye, Check as IconCheck, X as IconX } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export interface PhotoRequest {

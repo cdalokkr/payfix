@@ -6,14 +6,14 @@ import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { toast } from "sonner"
 import {
-    IconCheck,
-    IconRefresh,
-    IconPhoto,
-    IconBug,
-    IconChevronDown,
-    IconChevronUp,
-} from "@tabler/icons-react"
-import { LightweightVerificationService } from "@/lib/services/lightweight-verification.service"
+    Check as IconCheck,
+    RefreshCw as IconRefresh,
+    Image as IconPhoto,
+    Bug as IconBug,
+    ChevronDown as IconChevronDown,
+    ChevronUp as IconChevronUp,
+} from "lucide-react"
+import { FaceVerificationService } from "@/lib/services/face-verification.service"
 import { motion, AnimatePresence } from "framer-motion"
 
 interface FaceVerificationProps {
@@ -83,7 +83,7 @@ export function FaceVerification({
             // Use lightweight verification (fast, no AI models)
             setProgress(30)
 
-            const result = await LightweightVerificationService.compareFaces(
+            const result = await FaceVerificationService.compareFaces(
                 selfieDataUrl,
                 profileImageUrl,
                 addDebugLog
@@ -94,7 +94,7 @@ export function FaceVerification({
 
             if (result.matched) {
                 setStatus('success')
-                toast.success(`Verified! Match: ${LightweightVerificationService.formatSimilarity(result.similarity)}`)
+                toast.success(`Verified! Match: ${FaceVerificationService.formatSimilarity(result.similarity)}`)
                 addDebugLog('✅ Verification successful!')
 
                 // Auto proceed after success
@@ -131,7 +131,7 @@ export function FaceVerification({
         }
     }, [similarity, onVerified])
 
-    const threshold = LightweightVerificationService.getThreshold()
+    const threshold = FaceVerificationService.getThreshold()
 
     return (
         <Card className="w-full max-w-md mx-auto border-none shadow-none bg-transparent">
@@ -225,7 +225,7 @@ export function FaceVerification({
                         <p className="text-sm text-muted-foreground mb-1">Match Score</p>
                         <p className={`text-3xl font-bold ${similarity >= threshold ? 'text-green-500' : 'text-destructive'
                             }`}>
-                            {LightweightVerificationService.formatSimilarity(similarity)}
+                            {FaceVerificationService.formatSimilarity(similarity)}
                         </p>
                         <p className="text-xs text-muted-foreground mt-1">
                             Minimum required: {threshold * 100}%

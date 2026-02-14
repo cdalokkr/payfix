@@ -22,14 +22,14 @@ import {
 import { LogoutModal } from "@/components/ui/logout-modal"
 import { trpc } from "@/lib/trpc/client"
 import {
-    IconBell,
-    IconDotsVertical,
-    IconUser,
-    IconLock,
-    IconLogout,
-    IconClock,
-    IconAlertTriangle
-} from "@tabler/icons-react"
+    Bell as IconBell,
+    MoreVertical as IconDotsVertical,
+    User as IconUser,
+    Lock as IconLock,
+    LogOut as IconLogout,
+    Clock as IconClock,
+    AlertTriangle as IconAlertTriangle
+} from "lucide-react"
 
 interface MobileHeaderProps {
     profile: {

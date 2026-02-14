@@ -16,16 +16,16 @@ import {
 import { trpc } from "@/lib/trpc/client"
 import { toast } from "sonner"
 import {
-    IconCheck,
-    IconX,
-    IconLoader2,
-    IconArrowRight,
-    IconScan,
-    IconClock,
-    IconCircleCheck,
-    IconCircleX,
-    IconRefresh
-} from "@tabler/icons-react"
+    Check as IconCheck,
+    X as IconX,
+    Loader2 as IconLoader2,
+    ArrowRight as IconArrowRight,
+    ScanFace as IconScan,
+    Clock as IconClock,
+    CheckCircle2 as IconCircleCheck,
+    XCircle as IconCircleX,
+    RefreshCw as IconRefresh
+} from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { DashboardPageLayout } from "@/components/dashboard/dashboard-page-layout"
 import { CompactMetricCard } from "@/components/dashboard/compact-metric-card"

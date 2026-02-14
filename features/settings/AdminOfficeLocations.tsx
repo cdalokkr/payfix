@@ -25,15 +25,15 @@ import {
 } from "@/components/ui/table"
 import { toast } from "sonner"
 import {
-    IconMapPin,
-    IconPlus,
-    IconPencil,
-    IconTrash,
-    IconLoader2,
-    IconLocation,
-    IconCircleCheck,
-    IconCircleX
-} from "@tabler/icons-react"
+    MapPin as IconMapPin,
+    Plus as IconPlus,
+    Pencil as IconPencil,
+    Trash2 as IconTrash,
+    Loader2 as IconLoader2,
+    LocateFixed as IconLocation,
+    CheckCircle2 as IconCircleCheck,
+    XCircle as IconCircleX
+} from "lucide-react"
 import { trpc } from "@/lib/trpc/client"
 import { type OfficeLocation } from "@/lib/services/geofence.service"
 

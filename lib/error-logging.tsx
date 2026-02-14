@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 
 // Error severity levels
@@ -137,7 +137,7 @@ class ErrorLoggingService {
     switch (error.severity) {
       case ErrorSeverity.CRITICAL:
         toast.error('A critical error occurred. Please refresh the page.', {
-          duration: 0, // Don't auto-dismiss critical errors
+          duration: Infinity, // Don't auto-dismiss critical errors
           id: `error-${error.id}` // Prevent duplicate toasts
         })
         break
@@ -256,7 +256,7 @@ export function withErrorLogging<P extends object>(
   }
 
   WithErrorLogging.displayName = `withErrorLogging(${errorContext.componentName})`
-  
+
   return WithErrorLogging
 }
 
@@ -347,13 +347,13 @@ export class ErrorRecovery {
 
       try {
         const result = await operation()
-        
+
         // Success - reset failure count and close circuit
         if (state === 'half-open') {
           updateState('closed')
         }
         failures = 0
-        
+
         return result
       } catch (error) {
         failures++

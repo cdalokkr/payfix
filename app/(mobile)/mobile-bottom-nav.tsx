@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation"
 import Link from "next/link"
-import { IconHome, IconChecklist } from "@tabler/icons-react"
+import { Home as IconHome, ClipboardCheck as IconChecklist } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { motion } from "framer-motion"
 

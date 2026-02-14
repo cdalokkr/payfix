@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Security Headers Configuration - Enhanced for Phase 7
+  // Security Headers Configuration
   async headers() {
     // Determine if we're in production for stricter CSP
     const isDev = process.env.NODE_ENV === 'development';
@@ -28,7 +28,37 @@ const nextConfig: NextConfig = {
 
     return [
       {
-        // Apply security headers to all routes
+        // Cache immutably — hashed filenames guarantee content uniqueness
+        source: '/_next/static/(.*)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+      {
+        // Cache images for 1 day with stale-while-revalidate fallback
+        source: '/images/(.*)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400, stale-while-revalidate=604800',
+          },
+        ],
+      },
+      {
+        // tRPC API — short cache with stale-while-revalidate for GET queries
+        source: '/api/trpc/(.*)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'private, no-cache, no-store, must-revalidate',
+          },
+        ],
+      },
+      {
+        // All other routes — security headers + no-cache for HTML pages
         source: '/(.*)',
         headers: [
           // Prevent clickjacking
@@ -95,7 +125,7 @@ const nextConfig: NextConfig = {
             key: 'Cross-Origin-Resource-Policy',
             value: 'same-origin',
           },
-          // Prevent browsers from caching sensitive pages
+          // Prevent browsers from caching sensitive HTML pages
           {
             key: 'Cache-Control',
             value: 'no-store, no-cache, must-revalidate, proxy-revalidate',
@@ -107,26 +137,6 @@ const nextConfig: NextConfig = {
           {
             key: 'Expires',
             value: '0',
-          },
-        ],
-      },
-      {
-        // Allow caching for static assets
-        source: '/_next/static/(.*)',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable',
-          },
-        ],
-      },
-      {
-        // Allow caching for images
-        source: '/images/(.*)',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=86400, stale-while-revalidate=604800',
           },
         ],
       },
@@ -180,7 +190,6 @@ const nextConfig: NextConfig = {
       '@radix-ui/react-switch',
       '@radix-ui/react-tabs',
       '@radix-ui/react-tooltip',
-      '@tabler/icons-react',
       'lucide-react',
       'recharts',
       'framer-motion',
@@ -197,7 +206,10 @@ const nextConfig: NextConfig = {
     },
   },
 
-  // Bundle optimization configuration
+  // Turbopack config — acknowledge webpack config coexistence (Next.js 16)
+  turbopack: {},
+
+  // Bundle optimization configuration (used when building with --webpack)
   webpack: (config, { isServer }) => {
     // Optimize bundle splitting for better caching (client-side only)
     if (!isServer) {

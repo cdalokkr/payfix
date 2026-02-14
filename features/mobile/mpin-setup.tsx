@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { toast } from "sonner"
-import { IconLock, IconFingerprint, IconCheck, IconX } from "@tabler/icons-react"
+import { Lock as IconLock, Fingerprint as IconFingerprint, Check as IconCheck, X as IconX } from "lucide-react"
 import { trpc } from "@/lib/trpc/client"
 
 interface MpinSetupProps {
@@ -220,10 +220,10 @@ export function MpinSetup({ onComplete, isFirstTime = false }: MpinSetupProps) {
                                     <div
                                         key={i}
                                         className={`w-3 h-3 rounded-full transition-colors ${i < confirmMpin.length
-                                                ? confirmMpin[i] === mpin[i]
-                                                    ? 'bg-green-500'
-                                                    : 'bg-red-500'
-                                                : 'bg-muted'
+                                            ? confirmMpin[i] === mpin[i]
+                                                ? 'bg-green-500'
+                                                : 'bg-red-500'
+                                            : 'bg-muted'
                                             }`}
                                     />
                                 ))}

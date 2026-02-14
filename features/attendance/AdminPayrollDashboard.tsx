@@ -4,8 +4,7 @@ import { useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { trpc } from "@/lib/trpc/client"
-import { Settings, ArrowRight, Plane as PlaneIcon } from "lucide-react"
-import { Clock as ClockIcon, CalendarCheck as CalendarCheckIcon, CalendarMinus as CalendarMinusIcon, Users as UsersIcon } from "@phosphor-icons/react"
+import { Settings, ArrowRight, Plane as PlaneIcon, Clock as ClockIcon, CalendarCheck as CalendarCheckIcon, CalendarMinus as CalendarMinusIcon, Users as UsersIcon } from "lucide-react"
 import Link from "next/link"
 import { useProfile } from '@/lib/context/profile-context'
 import { useSharedManagementChannel } from "@/hooks/use-shared-management-channel"
@@ -129,7 +128,7 @@ export function AdminPayrollDashboard() {
                     <Card className="group hover:border-primary/50 transition-all duration-300 shadow-sm hover:shadow-md">
                         <CardHeader>
                             <div className="p-2 w-fit rounded-lg bg-primary/10 mb-2">
-                                <CalendarCheckIcon size={20} weight="duotone" className="text-primary" />
+                                <CalendarCheckIcon className="h-5 w-5 text-primary" />
                             </div>
                             <CardTitle>Verify Attendance</CardTitle>
                             <CardDescription>Review and approve employee daily check-ins</CardDescription>
