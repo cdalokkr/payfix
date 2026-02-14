@@ -9,10 +9,9 @@ const nextConfig: NextConfig = {
     // Build CSP directives - stricter in production
     const cspDirectives = [
       "default-src 'self'",
-      // Script sources - allow unsafe-eval only in development for hot reload
-      isDev
-        ? "script-src 'self' 'unsafe-eval' 'unsafe-inline'"
-        : "script-src 'self' 'unsafe-inline'", // Production: no unsafe-eval
+      // Note: 'unsafe-eval' is required in all environments because face-api.js/TensorFlow.js
+      // uses new Function() for dynamic code generation (WebGL shader compilation, WASM).
+      "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",

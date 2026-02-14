@@ -6,9 +6,10 @@
  *
  * Models are loaded once from /models/ and cached in memory.
  * Profile descriptor is cached for fast re-verification.
+ *
+ * face-api.js is loaded dynamically to avoid SSR issues and reduce
+ * initial bundle size — it's only needed on the mobile attendance page.
  */
-
-import * as faceapi from 'face-api.js'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -33,11 +34,29 @@ const IMAGE_LOAD_TIMEOUT = 8000
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let faceapi: any = null
 let modelsLoaded = false
 let modelsLoading: Promise<boolean> | null = null
 
 let cachedProfileUrl: string | null = null
 let cachedProfileDescriptor: Float32Array | null = null
+
+// ─── Dynamic Import ───────────────────────────────────────────────────────────
+
+/**
+ * Dynamically import face-api.js (only runs in browser).
+ * This avoids SSR issues and reduces initial bundle size.
+ */
+async function getFaceApi() {
+    if (faceapi) return faceapi
+    if (typeof window === 'undefined') {
+        throw new Error('face-api.js can only be used in the browser')
+    }
+    const mod = await import('face-api.js')
+    faceapi = mod
+    return faceapi
+}
 
 // ─── Image Loading ────────────────────────────────────────────────────────────
 
@@ -54,7 +73,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
         img.onload = () => { clearTimeout(timer); resolve(img) }
         img.onerror = () => {
             clearTimeout(timer)
-            // Retry without CORS for data URL fallback
+            // Retry without CORS as fallback
             if (img.crossOrigin) {
                 const img2 = new Image()
                 const timer2 = setTimeout(() => reject(new Error('Image load failed')), IMAGE_LOAD_TIMEOUT)
@@ -79,8 +98,9 @@ async function extractDescriptor(
     input: HTMLImageElement | HTMLCanvasElement,
     log: (msg: string) => void
 ): Promise<Float32Array | null> {
-    const detection = await faceapi
-        .detectSingleFace(input, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
+    const api = await getFaceApi()
+    const detection = await api
+        .detectSingleFace(input, new api.SsdMobilenetv1Options({ minConfidence: 0.5 }))
         .withFaceLandmarks()
         .withFaceDescriptor()
 
@@ -134,10 +154,11 @@ export const FaceVerificationService = {
 
         modelsLoading = (async () => {
             try {
+                const api = await getFaceApi()
                 await Promise.all([
-                    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
-                    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-                    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+                    api.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+                    api.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+                    api.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
                 ])
                 modelsLoaded = true
                 return true
