@@ -1,6 +1,6 @@
 /**
  * Type declarations for face-api.js
- * This is a stub declaration - the actual types come with the package when installed
+ * Covers detection-only usage (no landmarks/descriptors needed for hybrid approach)
  */
 
 declare module 'face-api.js' {
@@ -23,21 +23,23 @@ declare module 'face-api.js' {
         }
     }
 
-    export function detectSingleFace(
-        input: HTMLImageElement | HTMLCanvasElement | HTMLVideoElement,
-        options?: SsdMobilenetv1Options
-    ): DetectionTask
+    interface FaceDetection {
+        score: number
+        box: {
+            x: number
+            y: number
+            width: number
+            height: number
+        }
+    }
 
-    export function detectAllFaces(
-        input: HTMLImageElement | HTMLCanvasElement | HTMLVideoElement,
-        options?: SsdMobilenetv1Options
-    ): DetectionAllTask
-
-    interface DetectionTask {
+    // detectSingleFace returns a task that is also a thenable (Promise-like)
+    // When awaited directly (without chaining), it resolves to FaceDetection | undefined
+    interface DetectionTask extends Promise<FaceDetection | undefined> {
         withFaceLandmarks(): LandmarksTask
     }
 
-    interface DetectionAllTask {
+    interface DetectionAllTask extends Promise<FaceDetection[]> {
         withFaceLandmarks(): LandmarksAllTask
     }
 
@@ -50,15 +52,17 @@ declare module 'face-api.js' {
     }
 
     interface FaceDetectionResult {
-        detection: {
-            score: number
-            box: {
-                x: number
-                y: number
-                width: number
-                height: number
-            }
-        }
+        detection: FaceDetection
         descriptor: Float32Array
     }
+
+    export function detectSingleFace(
+        input: HTMLImageElement | HTMLCanvasElement | HTMLVideoElement,
+        options?: SsdMobilenetv1Options
+    ): DetectionTask
+
+    export function detectAllFaces(
+        input: HTMLImageElement | HTMLCanvasElement | HTMLVideoElement,
+        options?: SsdMobilenetv1Options
+    ): DetectionAllTask
 }

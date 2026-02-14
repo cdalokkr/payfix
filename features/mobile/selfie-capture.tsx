@@ -241,43 +241,42 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
 
         // Start verification
         setStatus('verifying')
-        setApiStatus('pending')
 
         if (!profileImageUrl) {
             setStatus('verify_failed')
-            setApiStatus('idle')
             setErrorMessage('No profile photo found. Please upload a profile photo first.')
             return
         }
 
-        // Run verification and API call in parallel
-        const verificationPromise = FaceVerificationService.compareFaces(
-            capturedImage,
-            profileImageUrl
-        )
-
-        const apiPromise = onSubmitAttendance().then(() => {
-            setApiStatus('success')
-        }).catch((error) => {
-            setApiStatus('error')
-            setApiError(error instanceof Error ? error.message : 'Failed to record attendance')
-        })
-
         try {
-            const result = await verificationPromise
+            // Step 1: Run face verification FIRST
+            const result = await FaceVerificationService.compareFaces(
+                capturedImage,
+                profileImageUrl
+            )
 
             setSimilarity(result.similarity)
 
-            if (result.matched) {
-                setStatus('verified')
-            } else {
+            if (!result.matched) {
+                // Verification failed — do NOT submit attendance
                 setStatus('verify_failed')
-                setApiStatus('idle') // Cancel API tracking on verify fail
                 setErrorMessage(result.error || 'Face does not match profile photo')
+                return
+            }
+
+            // Step 2: Verification passed — now submit attendance
+            setStatus('verified')
+            setApiStatus('pending')
+
+            try {
+                await onSubmitAttendance()
+                setApiStatus('success')
+            } catch (error) {
+                setApiStatus('error')
+                setApiError(error instanceof Error ? error.message : 'Failed to record attendance')
             }
         } catch (error) {
             setStatus('verify_failed')
-            setApiStatus('idle')
             setErrorMessage('Verification failed. Please try again.')
         }
     }, [capturedImage, capturedAt, profileImageUrl, onSubmitAttendance])
