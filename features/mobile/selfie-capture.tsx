@@ -249,22 +249,23 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
         }
 
         try {
-            // Step 1: Run face verification FIRST
-            const result = await FaceVerificationService.compareFaces(
-                capturedImage,
-                profileImageUrl
-            )
+            // Hard timeout — spinner NEVER gets stuck
+            const result = await Promise.race([
+                FaceVerificationService.compareFaces(capturedImage, profileImageUrl),
+                new Promise<never>((_, reject) =>
+                    setTimeout(() => reject(new Error('TIMEOUT')), 12000)
+                ),
+            ])
 
             setSimilarity(result.similarity)
 
             if (!result.matched) {
-                // Verification failed — do NOT submit attendance
                 setStatus('verify_failed')
                 setErrorMessage(result.error || 'Face does not match profile photo')
                 return
             }
 
-            // Step 2: Verification passed — now submit attendance
+            // Verification passed — now submit attendance
             setStatus('verified')
             setApiStatus('pending')
 
@@ -277,7 +278,10 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
             }
         } catch (error) {
             setStatus('verify_failed')
-            setErrorMessage('Verification failed. Please try again.')
+            const msg = error instanceof Error && error.message === 'TIMEOUT'
+                ? 'Verification timed out. Please try again.'
+                : 'Verification failed. Please try again.'
+            setErrorMessage(msg)
         }
     }, [capturedImage, capturedAt, profileImageUrl, onSubmitAttendance])
 
