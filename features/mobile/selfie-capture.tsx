@@ -18,6 +18,9 @@ interface SelfieCaptureProps {
     onBack?: () => void
 }
 
+// Track whether face-api models have been loaded this session
+let modelsPreloaded = false
+
 export interface SelfieResult {
     imageDataUrl: string
     capturedAt: Date
@@ -34,6 +37,7 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
     const [zoom, setZoom] = useState<number>(1)
     const [hasZoomSupport, setHasZoomSupport] = useState(false)
     const [similarity, setSimilarity] = useState<number>(0)
+    const [modelsReady, setModelsReady] = useState(modelsPreloaded)
     const [apiStatus, setApiStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle')
     const [apiError, setApiError] = useState<string>('')
 
@@ -66,8 +70,13 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
         }
         isInitializing.current = true
 
-        // Preload face-api models in background (don't await)
-        FaceVerificationService.initialize().catch(() => { })
+        // Preload face-api models in background
+        FaceVerificationService.initialize().then((ready) => {
+            if (ready) {
+                modelsPreloaded = true
+                if (isMounted.current) setModelsReady(true)
+            }
+        }).catch(() => { })
 
         stopCamera()
         if (isMounted.current) {
@@ -187,9 +196,9 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
         const ctx = canvas.getContext('2d')
         if (!ctx) return
 
-        // Higher resolution canvas for better quality selfies
-        canvas.width = 1200
-        canvas.height = 1200
+        // 640×640: optimal for face-api.js performance while retaining quality
+        canvas.width = 640
+        canvas.height = 640
 
         const vw = video.videoWidth
         const vh = video.videoHeight
@@ -206,22 +215,22 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
         const now = new Date()
         const timestamp = format(now, "dd MMM yyyy, hh:mm:ss a")
 
-        // Draw modern timestamp pill
+        // Draw modern timestamp pill (scaled to 640px canvas)
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
-        const pillWidth = 350
-        const pillHeight = 50
+        const pillWidth = 220
+        const pillHeight = 32
         const pillX = (canvas.width - pillWidth) / 2
-        const pillY = canvas.height - 80
+        const pillY = canvas.height - 50
 
         // Rounded rect for pill
         ctx.beginPath()
-        ctx.roundRect(pillX, pillY, pillWidth, pillHeight, 25)
+        ctx.roundRect(pillX, pillY, pillWidth, pillHeight, 16)
         ctx.fill()
 
         ctx.fillStyle = '#ffffff'
-        ctx.font = 'bold 22px Inter, system-ui'
+        ctx.font = 'bold 14px Inter, system-ui'
         ctx.textAlign = 'center'
-        ctx.fillText(timestamp, canvas.width / 2, pillY + 33)
+        ctx.fillText(timestamp, canvas.width / 2, pillY + 22)
 
         const imageDataUrl = canvas.toDataURL('image/jpeg', 0.9)
         setCapturedImage(imageDataUrl)
@@ -411,7 +420,9 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
                                     ) : (
                                         <div className="flex flex-col items-center gap-4 text-white/50">
                                             <IconLoader2 className="w-12 h-12 animate-spin text-primary" />
-                                            <p className="text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Initializing Camera</p>
+                                            <p className="text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">
+                                                {!modelsReady ? 'Loading Face Recognition...' : 'Initializing Camera'}
+                                            </p>
                                         </div>
                                     )}
                                 </div>

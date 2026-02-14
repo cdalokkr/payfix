@@ -1,255 +1,196 @@
 /**
- * Face Verification Service — Pure Canvas, Zero Dependencies
- * 
- * NO model downloads. NO external APIs. Just fast pixel math.
- * 
- * Strategy:
- * 1. Basic skin-tone detection in center of image (confirms it's likely a face, not a wall/desk)
- * 2. Perceptual hash comparison on center-cropped regions (face-focused matching)
- * 3. All operations ~10-50ms total
+ * Face Verification Service — face-api.js (Real Face Recognition)
+ *
+ * Uses SSD MobileNetV1 + 68-point landmarks + 128-dim face descriptor.
+ * Compares Euclidean distance between descriptors to verify identity.
+ *
+ * Models are loaded once from /models/ and cached in memory.
+ * Profile descriptor is cached for fast re-verification.
  */
+
+import * as faceapi from 'face-api.js'
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface FaceVerificationResult {
     matched: boolean
     similarity: number
-    method: 'canvas'
+    method: 'face-api'
     debugLog: string[]
     error?: string
 }
 
-// Match threshold — percentage similarity required for a match
-// Selfie vs profile photo: allow for lighting, angle, camera differences
-const MATCH_THRESHOLD = 0.55
-
-// Minimum skin-tone pixel percentage in center region to consider "has face"
-const MIN_SKIN_PERCENTAGE = 0.15 // 15% of center pixels should be skin-toned
-
-// Hash comparison canvas size
-const HASH_SIZE = 64
-
-// ─── Image Utilities ──────────────────────────────────────────────────────────
+// ─── Config ───────────────────────────────────────────────────────────────────
 
 /**
- * Load image with robust CORS handling
- * - Data URLs: loaded directly (no CORS needed)
- * - HTTP URLs: try CORS first → fetch-to-dataURL fallback → no-CORS fallback
+ * Euclidean distance threshold for face matching.
+ * face-api.js descriptors: distance < 0.6 ≈ same person (industry standard).
+ * We convert to a 0-1 "similarity" for UI display: similarity = max(0, 1 - distance).
  */
-async function loadImage(src: string): Promise<HTMLImageElement> {
-    // Data URLs don't need CORS — load directly
-    if (src.startsWith('data:')) {
-        return loadImgElement(src, false)
-    }
+const MATCH_DISTANCE_THRESHOLD = 0.6
+const MODEL_URL = '/models'
+const IMAGE_LOAD_TIMEOUT = 8000
 
-    // Try loading with CORS header
-    try {
-        return await loadImgElement(src, true)
-    } catch {
-        // CORS failed — try converting via fetch
-        try {
-            const response = await fetchWithTimeout(src, 5000)
-            const blob = await response.blob()
-            const dataUrl = await blobToDataURL(blob)
-            return await loadImgElement(dataUrl, false)
-        } catch {
-            // Last resort: load without CORS (canvas tainted but still drawable)
-            return loadImgElement(src, false)
-        }
-    }
-}
+// ─── State ────────────────────────────────────────────────────────────────────
 
-function loadImgElement(src: string, useCors: boolean): Promise<HTMLImageElement> {
+let modelsLoaded = false
+let modelsLoading: Promise<boolean> | null = null
+
+let cachedProfileUrl: string | null = null
+let cachedProfileDescriptor: Float32Array | null = null
+
+// ─── Image Loading ────────────────────────────────────────────────────────────
+
+function loadImage(src: string): Promise<HTMLImageElement> {
     return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error('Image load timeout')), 5000)
+        const timer = setTimeout(() => reject(new Error('Image load timeout')), IMAGE_LOAD_TIMEOUT)
         const img = new Image()
-        if (useCors) img.crossOrigin = 'anonymous'
+
+        // Data URLs don't need CORS
+        if (!src.startsWith('data:')) {
+            img.crossOrigin = 'anonymous'
+        }
+
         img.onload = () => { clearTimeout(timer); resolve(img) }
-        img.onerror = () => { clearTimeout(timer); reject(new Error('Image load failed')) }
+        img.onerror = () => {
+            clearTimeout(timer)
+            // Retry without CORS for data URL fallback
+            if (img.crossOrigin) {
+                const img2 = new Image()
+                const timer2 = setTimeout(() => reject(new Error('Image load failed')), IMAGE_LOAD_TIMEOUT)
+                img2.onload = () => { clearTimeout(timer2); resolve(img2) }
+                img2.onerror = () => { clearTimeout(timer2); reject(new Error('Image load failed')) }
+                img2.src = src
+            } else {
+                reject(new Error('Image load failed'))
+            }
+        }
         img.src = src
     })
 }
 
-function fetchWithTimeout(url: string, ms: number): Promise<Response> {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), ms)
-    return fetch(url, { signal: controller.signal, mode: 'cors' })
-        .finally(() => clearTimeout(timer))
-}
-
-function blobToDataURL(blob: Blob): Promise<string> {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(reader.result as string)
-        reader.onerror = reject
-        reader.readAsDataURL(blob)
-    })
-}
+// ─── Descriptor Extraction ────────────────────────────────────────────────────
 
 /**
- * Draw image center-cropped into a square canvas
+ * Detect a single face and extract its 128-dim descriptor.
+ * Returns null if no face is detected.
  */
-function centerCrop(img: HTMLImageElement, size: number): HTMLCanvasElement {
-    const c = document.createElement('canvas')
-    c.width = size; c.height = size
-    const ctx = c.getContext('2d')!
-    const w = img.naturalWidth, h = img.naturalHeight
-    const s = Math.min(w, h)
-    ctx.drawImage(img, (w - s) / 2, (h - s) / 2, s, s, 0, 0, size, size)
-    return c
-}
+async function extractDescriptor(
+    input: HTMLImageElement | HTMLCanvasElement,
+    log: (msg: string) => void
+): Promise<Float32Array | null> {
+    const detection = await faceapi
+        .detectSingleFace(input, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
+        .withFaceLandmarks()
+        .withFaceDescriptor()
 
-// ─── Skin Tone Detection ──────────────────────────────────────────────────────
-
-/**
- * Check if the center region of the image contains skin-toned pixels
- * This catches obvious non-face images (walls, desks, objects)
- * Works across all human skin tones
- */
-function hasSkinTone(canvas: HTMLCanvasElement): { hasSkin: boolean; percentage: number } {
-    const ctx = canvas.getContext('2d')!
-    const size = canvas.width
-    // Sample center 60% of image
-    const from = Math.floor(size * 0.2)
-    const to = Math.floor(size * 0.8)
-    const { data } = ctx.getImageData(from, from, to - from, to - from)
-
-    let skinPixels = 0
-    let totalPixels = 0
-
-    for (let i = 0; i < data.length; i += 4) {
-        const r = data[i], g = data[i + 1], b = data[i + 2]
-        totalPixels++
-
-        // Convert to YCbCr color space (better for skin detection across ethnicities)
-        const y = 0.299 * r + 0.587 * g + 0.114 * b
-        const cb = 128 - 0.169 * r - 0.331 * g + 0.5 * b
-        const cr = 128 + 0.5 * r - 0.419 * g - 0.081 * b
-
-        // Skin detection in YCbCr space — works for all skin tones
-        // Reference: "Face Detection in Color Images" (Chai & Ngan, 1999)
-        if (y > 40 && cb > 77 && cb < 127 && cr > 133 && cr < 173) {
-            skinPixels++
-        }
+    if (!detection) {
+        log('⚠️ No face detected in image')
+        return null
     }
 
-    const percentage = totalPixels > 0 ? skinPixels / totalPixels : 0
-    return { hasSkin: percentage >= MIN_SKIN_PERCENTAGE, percentage }
+    log(`✅ Face detected (confidence: ${(detection.detection.score * 100).toFixed(1)}%)`)
+    return detection.descriptor
 }
 
-// ─── Perceptual Hash ──────────────────────────────────────────────────────────
-
-function getGray(canvas: HTMLCanvasElement): number[] {
-    const { data } = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height)
-    const g: number[] = []
-    for (let i = 0; i < data.length; i += 4)
-        g.push(data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114)
-    return g
+/**
+ * Prepare image for detection: draw onto a canvas at a reasonable size.
+ * face-api.js performs best at ~320-640px. We cap at 512px square.
+ */
+function prepareCanvas(img: HTMLImageElement, maxSize = 512): HTMLCanvasElement {
+    const canvas = document.createElement('canvas')
+    const scale = Math.min(1, maxSize / Math.max(img.naturalWidth, img.naturalHeight))
+    canvas.width = Math.round(img.naturalWidth * scale)
+    canvas.height = Math.round(img.naturalHeight * scale)
+    const ctx = canvas.getContext('2d')!
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+    return canvas
 }
 
-function averageHash(canvas: HTMLCanvasElement): string {
-    const g = getGray(canvas)
-    const avg = g.reduce((a, b) => a + b, 0) / g.length
-    const s = canvas.width, step = s / 8
-    let h = ''
-    for (let y = 0; y < 8; y++)
-        for (let x = 0; x < 8; x++)
-            h += g[Math.floor(y * step) * s + Math.floor(x * step)] > avg ? '1' : '0'
-    return h
+/**
+ * Compute Euclidean distance between two 128-dim face descriptors.
+ */
+function euclideanDistance(d1: Float32Array, d2: Float32Array): number {
+    let sum = 0
+    for (let i = 0; i < d1.length; i++) {
+        const diff = d1[i] - d2[i]
+        sum += diff * diff
+    }
+    return Math.sqrt(sum)
 }
-
-function perceptualHash(canvas: HTMLCanvasElement): string {
-    const g = getGray(canvas)
-    const s = canvas.width, bs = s / 8
-    const blocks: number[] = []
-    for (let by = 0; by < 8; by++)
-        for (let bx = 0; bx < 8; bx++) {
-            let sum = 0, n = 0
-            for (let y = 0; y < bs; y++)
-                for (let x = 0; x < bs; x++) {
-                    sum += g[Math.floor(by * bs + y) * s + Math.floor(bx * bs + x)]
-                    n++
-                }
-            blocks.push(sum / n)
-        }
-    const med = [...blocks].sort((a, b) => a - b)[32]
-    return blocks.map(v => v > med ? '1' : '0').join('')
-}
-
-function colorSignature(canvas: HTMLCanvasElement): number[] {
-    const { data } = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height)
-    const s = canvas.width
-    const from = Math.floor(s * 0.15), to = Math.floor(s * 0.85)
-    let r = 0, g = 0, b = 0, n = 0
-    for (let y = from; y < to; y++)
-        for (let x = from; x < to; x++) {
-            const i = (y * s + x) * 4
-            r += data[i]; g += data[i + 1]; b += data[i + 2]; n++
-        }
-    return [Math.round(r / n), Math.round(g / n), Math.round(b / n)]
-}
-
-function hamming(h1: string, h2: string): number {
-    let d = 0
-    for (let i = 0; i < h1.length; i++) if (h1[i] !== h2[i]) d++
-    return d
-}
-
-function colorDist(c1: number[], c2: number[]): number {
-    return Math.max(0, 1 - Math.sqrt(
-        (c1[0] - c2[0]) ** 2 + (c1[1] - c2[1]) ** 2 + (c1[2] - c2[2]) ** 2
-    ) / 441)
-}
-
-interface ImageHash { a: string; p: string; c: number[] }
-
-function computeHash(canvas: HTMLCanvasElement): ImageHash {
-    return { a: averageHash(canvas), p: perceptualHash(canvas), c: colorSignature(canvas) }
-}
-
-function compareHashes(h1: ImageHash, h2: ImageHash): number {
-    const aSim = 1 - hamming(h1.a, h2.a) / 64
-    const pSim = 1 - hamming(h1.p, h2.p) / 64
-    const cSim = colorDist(h1.c, h2.c)
-    // pHash most important (face structure), color (skin tone), aHash (general)
-    return pSim * 0.45 + cSim * 0.30 + aSim * 0.25
-}
-
-// ─── Cache ────────────────────────────────────────────────────────────────────
-
-let cachedUrl: string | null = null
-let cachedHash: ImageHash | null = null
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export const FaceVerificationService = {
+    /**
+     * Load face-api.js models from /models/.
+     * Safe to call multiple times — only loads once.
+     */
     async initialize(): Promise<boolean> {
-        return true // No models to load!
+        if (modelsLoaded) return true
+
+        // Prevent parallel loading
+        if (modelsLoading) return modelsLoading
+
+        modelsLoading = (async () => {
+            try {
+                await Promise.all([
+                    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+                ])
+                modelsLoaded = true
+                return true
+            } catch (e) {
+                console.error('Failed to load face-api models:', e)
+                modelsLoading = null
+                return false
+            }
+        })()
+
+        return modelsLoading
     },
 
     isReady(): boolean {
-        return true // Always ready — pure canvas
+        return modelsLoaded
     },
 
     clearCache(): void {
-        cachedUrl = null
-        cachedHash = null
+        cachedProfileUrl = null
+        cachedProfileDescriptor = null
     },
 
     /**
-     * Pre-compute profile image hash while camera streams
+     * Pre-compute and cache the profile image's face descriptor.
+     * Call this while the camera is initializing for faster verification later.
      */
     async preloadProfileDescriptor(
         profileImageUrl: string,
         log?: (msg: string) => void
     ): Promise<boolean> {
-        if (cachedUrl === profileImageUrl && cachedHash) return true
+        if (cachedProfileUrl === profileImageUrl && cachedProfileDescriptor) return true
         const logFn = log || (() => { })
 
         try {
+            // Ensure models are loaded
+            const ready = await this.initialize()
+            if (!ready) {
+                logFn('⚠️ Models not loaded, cannot preload profile')
+                return false
+            }
+
             const img = await loadImage(profileImageUrl)
-            const canvas = centerCrop(img, HASH_SIZE)
-            cachedHash = computeHash(canvas)
-            cachedUrl = profileImageUrl
-            logFn('✅ Profile hash cached')
+            const canvas = prepareCanvas(img)
+            const descriptor = await extractDescriptor(canvas, logFn)
+
+            if (!descriptor) {
+                logFn('⚠️ No face found in profile image')
+                return false
+            }
+
+            cachedProfileDescriptor = descriptor
+            cachedProfileUrl = profileImageUrl
+            logFn('✅ Profile descriptor cached')
             return true
         } catch (e) {
             logFn(`⚠️ Profile preload failed: ${e}`)
@@ -258,8 +199,8 @@ export const FaceVerificationService = {
     },
 
     /**
-     * Compare selfie against profile photo
-     * Pure canvas — no models, no downloads, ~10-50ms
+     * Compare a selfie against a profile photo using real face recognition.
+     * Returns match result with similarity score (0-1).
      */
     async compareFaces(
         selfieDataUrl: string,
@@ -277,70 +218,96 @@ export const FaceVerificationService = {
         const ms = () => `${(performance.now() - t0).toFixed(0)}ms`
 
         try {
-            log('🚀 Starting verification...')
+            log('🚀 Starting face verification...')
 
-            // ── 1. Load and process selfie ──
+            // ── 1. Ensure models are loaded ──
+            if (!modelsLoaded) {
+                log('📦 Loading face recognition models...')
+                const ready = await this.initialize()
+                if (!ready) {
+                    log(`❌ Models failed to load (${ms()})`)
+                    return {
+                        matched: false, similarity: 0, method: 'face-api', debugLog,
+                        error: 'Face recognition models failed to load. Please check your connection and try again.',
+                    }
+                }
+                log(`✅ Models loaded (${ms()})`)
+            }
+
+            // ── 2. Load and process selfie ──
             const selfieImg = await loadImage(selfieDataUrl)
-            const selfieCanvas = centerCrop(selfieImg, HASH_SIZE)
-            log(`📷 Selfie processed (${ms()})`)
+            const selfieCanvas = prepareCanvas(selfieImg)
+            log(`📷 Selfie loaded (${selfieCanvas.width}×${selfieCanvas.height}) (${ms()})`)
 
-            // ── 2. Skin tone check (is it a human face?) ──
-            const skin = hasSkinTone(selfieCanvas)
-            log(`🔍 Skin detection: ${(skin.percentage * 100).toFixed(1)}% skin pixels`)
+            // ── 3. Extract selfie face descriptor ──
+            const selfieDescriptor = await extractDescriptor(selfieCanvas, log)
 
-            if (!skin.hasSkin) {
-                log(`❌ No face detected — likely not a human (${ms()})`)
+            if (!selfieDescriptor) {
+                log(`❌ No face detected in selfie (${ms()})`)
                 return {
-                    matched: false, similarity: 0, method: 'canvas', debugLog,
-                    error: 'No face detected. Please ensure your face is clearly visible.',
+                    matched: false, similarity: 0, method: 'face-api', debugLog,
+                    error: 'No face detected in your selfie. Please ensure your face is clearly visible with good lighting.',
                 }
             }
+            log(`🔢 Selfie descriptor extracted (${ms()})`)
 
-            // ── 3. Get selfie hash ──
-            const selfieHash = computeHash(selfieCanvas)
-            log(`🔢 Selfie hash computed (${ms()})`)
+            // ── 4. Get profile descriptor (cached or compute) ──
+            let profileDescriptor: Float32Array
 
-            // ── 4. Get profile hash (cached or compute) ──
-            let profileHash: ImageHash
-
-            if (cachedUrl === profileImageUrl && cachedHash) {
-                profileHash = cachedHash
-                log('📋 Using cached profile hash')
+            if (cachedProfileUrl === profileImageUrl && cachedProfileDescriptor) {
+                profileDescriptor = cachedProfileDescriptor
+                log('📋 Using cached profile descriptor')
             } else {
-                log('📷 Loading profile...')
+                log('📷 Loading profile image...')
                 const profileImg = await loadImage(profileImageUrl)
-                const profileCanvas = centerCrop(profileImg, HASH_SIZE)
-                profileHash = computeHash(profileCanvas)
-                cachedUrl = profileImageUrl
-                cachedHash = profileHash
-                log(`✅ Profile processed (${ms()})`)
+                const profileCanvas = prepareCanvas(profileImg)
+                log(`📷 Profile loaded (${profileCanvas.width}×${profileCanvas.height}) (${ms()})`)
+
+                const desc = await extractDescriptor(profileCanvas, log)
+                if (!desc) {
+                    log(`❌ No face detected in profile image (${ms()})`)
+                    return {
+                        matched: false, similarity: 0, method: 'face-api', debugLog,
+                        error: 'No face detected in your profile photo. Please upload a clear profile photo with your face visible.',
+                    }
+                }
+
+                profileDescriptor = desc
+                cachedProfileUrl = profileImageUrl
+                cachedProfileDescriptor = profileDescriptor
+                log(`✅ Profile descriptor extracted (${ms()})`)
             }
 
-            // ── 5. Compare ──
-            const similarity = compareHashes(selfieHash, profileHash)
-            const matched = similarity >= MATCH_THRESHOLD
+            // ── 5. Compare descriptors ──
+            const distance = euclideanDistance(selfieDescriptor, profileDescriptor)
+            const similarity = Math.max(0, 1 - distance)
+            const matched = distance < MATCH_DISTANCE_THRESHOLD
 
-            log(`📊 Similarity: ${(similarity * 100).toFixed(1)}% (threshold: ${(MATCH_THRESHOLD * 100).toFixed(0)}%)`)
+            log(`📊 Distance: ${distance.toFixed(3)} | Similarity: ${(similarity * 100).toFixed(1)}% (threshold: <${MATCH_DISTANCE_THRESHOLD})`)
             log(`⏱️ Total: ${ms()}`)
-            log(matched ? '✅ MATCH — Verified!' : '❌ NO MATCH')
+            log(matched ? '✅ MATCH — Same person verified!' : '❌ NO MATCH — Different person')
 
             return {
-                matched, similarity, method: 'canvas', debugLog,
-                error: matched ? undefined
-                    : `Face does not match profile (${(similarity * 100).toFixed(0)}%). Please ensure you are the account holder.`,
+                matched,
+                similarity,
+                method: 'face-api',
+                debugLog,
+                error: matched
+                    ? undefined
+                    : `Face does not match profile photo (${(similarity * 100).toFixed(0)}% similarity). Only the registered employee can mark their own attendance.`,
             }
         } catch (error) {
             const msg = error instanceof Error ? error.message : 'Unknown error'
             log(`❌ Error: ${msg} (${ms()})`)
             return {
-                matched: false, similarity: 0, method: 'canvas', debugLog,
+                matched: false, similarity: 0, method: 'face-api', debugLog,
                 error: `Verification error: ${msg}`,
             }
         }
     },
 
     getThreshold(): number {
-        return MATCH_THRESHOLD
+        return 1 - MATCH_DISTANCE_THRESHOLD // Convert distance to similarity for UI
     },
 
     formatSimilarity(similarity: number): string {

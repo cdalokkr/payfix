@@ -80,7 +80,7 @@ export function FaceVerification({
         setProgress(10)
 
         try {
-            // Use lightweight verification (fast, no AI models)
+            // Use face-api.js AI verification
             setProgress(30)
 
             const result = await FaceVerificationService.compareFaces(
@@ -210,7 +210,7 @@ export function FaceVerification({
                     <div className="space-y-2">
                         <Progress value={progress} className="h-2" />
                         <p className="text-xs text-center text-muted-foreground">
-                            Fast hash-based verification...
+                            AI face recognition in progress...
                         </p>
                     </div>
                 )}
