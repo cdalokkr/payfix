@@ -29,7 +29,7 @@ export interface FaceVerificationResult {
  * face-api.js descriptors: distance < 0.6 ≈ same person (industry standard).
  * We convert to a 0-1 "similarity" for UI display: similarity = max(0, 1 - distance).
  */
-const MATCH_DISTANCE_THRESHOLD = 0.6
+const MATCH_DISTANCE_THRESHOLD = 0.5
 const MODEL_URL = '/models'
 const SCRIPT_URL = '/js/face-api.min.js'
 const IMAGE_LOAD_TIMEOUT = 8000
@@ -131,7 +131,7 @@ async function extractDescriptor(
 ): Promise<Float32Array | null> {
     const api = faceapi
     const detection = await api
-        .detectSingleFace(input, new api.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.4 }))
+        .detectSingleFace(input, new api.SsdMobilenetv1Options({ minConfidence: 0.5 }))
         .withFaceLandmarks()
         .withFaceDescriptor()
 
@@ -187,9 +187,9 @@ export const FaceVerificationService = {
                 await loadFaceApiScript()
 
                 // Step 2: Load model weight files
-                // TinyFaceDetector (190KB) is ~5x faster than SSD MobileNetV1 (5.6MB)
+                // SSD MobileNetV1 is slower but much more accurate than TinyFaceDetector
                 await Promise.all([
-                    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+                    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
                     faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
                     faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
                 ])
