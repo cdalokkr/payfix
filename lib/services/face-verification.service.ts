@@ -131,7 +131,7 @@ async function extractDescriptor(
 ): Promise<Float32Array | null> {
     const api = faceapi
     const detection = await api
-        .detectSingleFace(input, new api.SsdMobilenetv1Options({ minConfidence: 0.5 }))
+        .detectSingleFace(input, new api.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.4 }))
         .withFaceLandmarks()
         .withFaceDescriptor()
 
@@ -186,9 +186,10 @@ export const FaceVerificationService = {
                 // Step 1: Load the face-api.js script
                 await loadFaceApiScript()
 
-                // Step 2: Load the 3 model weight files
+                // Step 2: Load model weight files
+                // TinyFaceDetector (190KB) is ~5x faster than SSD MobileNetV1 (5.6MB)
                 await Promise.all([
-                    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+                    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
                     faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
                     faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
                 ])
