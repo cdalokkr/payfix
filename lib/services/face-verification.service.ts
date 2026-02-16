@@ -4,11 +4,12 @@
  * Uses SSD MobileNetV1 + 68-point landmarks + 128-dim face descriptor.
  * Compares Euclidean distance between descriptors to verify identity.
  *
- * Models are loaded once from /models/ and cached in memory.
- * Profile descriptor is cached for fast re-verification.
+ * face-api.js is loaded as a UMD script from /js/face-api.min.js
+ * (NOT via npm import) to avoid Turbopack/Webpack bundling issues
+ * with the old TensorFlow.js 1.2.2 dependency.
  *
- * face-api.js is loaded dynamically to avoid SSR issues and reduce
- * initial bundle size — it's only needed on the mobile attendance page.
+ * Models load once from /models/ and are cached in memory.
+ * Profile descriptor is cached for fast re-verification.
  */
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -30,32 +31,62 @@ export interface FaceVerificationResult {
  */
 const MATCH_DISTANCE_THRESHOLD = 0.6
 const MODEL_URL = '/models'
+const SCRIPT_URL = '/js/face-api.min.js'
 const IMAGE_LOAD_TIMEOUT = 8000
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let faceapi: any = null
+let scriptLoading: Promise<any> | null = null
 let modelsLoaded = false
 let modelsLoading: Promise<boolean> | null = null
 
 let cachedProfileUrl: string | null = null
 let cachedProfileDescriptor: Float32Array | null = null
 
-// ─── Dynamic Import ───────────────────────────────────────────────────────────
+// ─── Script Loader ────────────────────────────────────────────────────────────
 
 /**
- * Dynamically import face-api.js (only runs in browser).
- * This avoids SSR issues and reduces initial bundle size.
+ * Load face-api.js by injecting a <script> tag.
+ * This bypasses all bundler issues — the UMD bundle sets window.faceapi.
  */
-async function getFaceApi() {
-    if (faceapi) return faceapi
+function loadFaceApiScript(): Promise<any> {
+    if (faceapi) return Promise.resolve(faceapi)
     if (typeof window === 'undefined') {
-        throw new Error('face-api.js can only be used in the browser')
+        return Promise.reject(new Error('face-api.js can only be used in the browser'))
     }
-    const mod = await import('face-api.js')
-    faceapi = mod
-    return faceapi
+
+    // Check if already loaded globally (e.g. from a previous page)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((window as any).faceapi) {
+        faceapi = (window as any).faceapi
+        return Promise.resolve(faceapi)
+    }
+
+    if (scriptLoading) return scriptLoading
+
+    scriptLoading = new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = SCRIPT_URL
+        script.async = true
+        script.onload = () => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            faceapi = (window as any).faceapi
+            if (faceapi) {
+                resolve(faceapi)
+            } else {
+                reject(new Error('face-api.js loaded but window.faceapi is undefined'))
+            }
+        }
+        script.onerror = () => {
+            scriptLoading = null
+            reject(new Error('Failed to load face-api.js script'))
+        }
+        document.head.appendChild(script)
+    })
+
+    return scriptLoading
 }
 
 // ─── Image Loading ────────────────────────────────────────────────────────────
@@ -98,7 +129,7 @@ async function extractDescriptor(
     input: HTMLImageElement | HTMLCanvasElement,
     log: (msg: string) => void
 ): Promise<Float32Array | null> {
-    const api = await getFaceApi()
+    const api = faceapi
     const detection = await api
         .detectSingleFace(input, new api.SsdMobilenetv1Options({ minConfidence: 0.5 }))
         .withFaceLandmarks()
@@ -115,7 +146,7 @@ async function extractDescriptor(
 
 /**
  * Prepare image for detection: draw onto a canvas at a reasonable size.
- * face-api.js performs best at ~320-640px. We cap at 512px square.
+ * face-api.js performs best at ~320-640px. We cap at 512px.
  */
 function prepareCanvas(img: HTMLImageElement, maxSize = 512): HTMLCanvasElement {
     const canvas = document.createElement('canvas')
@@ -143,27 +174,28 @@ function euclideanDistance(d1: Float32Array, d2: Float32Array): number {
 
 export const FaceVerificationService = {
     /**
-     * Load face-api.js models from /models/.
-     * Safe to call multiple times — only loads once.
+     * Load face-api.js script and then load models from /models/.
+     * Safe to call multiple times — loads once.
      */
     async initialize(): Promise<boolean> {
         if (modelsLoaded) return true
-
-        // Prevent parallel loading
         if (modelsLoading) return modelsLoading
 
         modelsLoading = (async () => {
             try {
-                const api = await getFaceApi()
+                // Step 1: Load the face-api.js script
+                await loadFaceApiScript()
+
+                // Step 2: Load the 3 model weight files
                 await Promise.all([
-                    api.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
-                    api.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-                    api.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+                    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
                 ])
                 modelsLoaded = true
                 return true
             } catch (e) {
-                console.error('Failed to load face-api models:', e)
+                console.error('[FaceVerification] Init failed:', e)
                 modelsLoading = null
                 return false
             }
@@ -193,7 +225,6 @@ export const FaceVerificationService = {
         const logFn = log || (() => { })
 
         try {
-            // Ensure models are loaded
             const ready = await this.initialize()
             if (!ready) {
                 logFn('⚠️ Models not loaded, cannot preload profile')
@@ -241,18 +272,18 @@ export const FaceVerificationService = {
         try {
             log('🚀 Starting face verification...')
 
-            // ── 1. Ensure models are loaded ──
+            // ── 1. Ensure script + models are loaded ──
             if (!modelsLoaded) {
-                log('📦 Loading face recognition models...')
+                log('📦 Loading face recognition engine...')
                 const ready = await this.initialize()
                 if (!ready) {
-                    log(`❌ Models failed to load (${ms()})`)
+                    log(`❌ Engine failed to load (${ms()})`)
                     return {
                         matched: false, similarity: 0, method: 'face-api', debugLog,
                         error: 'Face recognition models failed to load. Please check your connection and try again.',
                     }
                 }
-                log(`✅ Models loaded (${ms()})`)
+                log(`✅ Engine ready (${ms()})`)
             }
 
             // ── 2. Load and process selfie ──
@@ -328,7 +359,7 @@ export const FaceVerificationService = {
     },
 
     getThreshold(): number {
-        return 1 - MATCH_DISTANCE_THRESHOLD // Convert distance to similarity for UI
+        return 1 - MATCH_DISTANCE_THRESHOLD
     },
 
     formatSimilarity(similarity: number): string {
