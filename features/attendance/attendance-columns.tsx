@@ -62,8 +62,8 @@ export function createAttendanceColumns({
             header: ({ column }) => (
                 <DataTableColumnHeader column={column} title="Email ID" />
             ),
-            cell: ({ row }) => <span className="text-xs text-muted-foreground font-medium truncate block max-w-[140px]">{row.original.profile?.email || 'N/A'}</span>,
-            size: 150,
+            cell: ({ row }) => <span className="text-xs text-muted-foreground font-medium truncate block">{row.original.profile?.email || 'N/A'}</span>,
+            size: 280,
         },
         {
             accessorKey: "date",
@@ -79,7 +79,7 @@ export function createAttendanceColumns({
                     </div>
                 )
             },
-            size: 90,
+            size: 70,
         },
         {
             accessorKey: "check_in",
@@ -94,7 +94,7 @@ export function createAttendanceColumns({
                     </div>
                 ) : <span className="text-muted-foreground/30 text-[10px]">--:--</span>
             },
-            size: 80,
+            size: 58,
         },
         {
             accessorKey: "check_out",
@@ -109,7 +109,7 @@ export function createAttendanceColumns({
                     </div>
                 ) : <span className="text-muted-foreground/30 text-[10px]">--:--</span>
             },
-            size: 80,
+            size: 58,
         },
         {
             accessorKey: "working_hours",
@@ -122,7 +122,7 @@ export function createAttendanceColumns({
                     </Badge>
                 ) : <span className="text-muted-foreground/30 text-[10px]">--</span>
             },
-            size: 55,
+            size: 44,
         },
         {
             id: "extra_hours",
@@ -147,7 +147,7 @@ export function createAttendanceColumns({
                     </span>
                 )
             },
-            size: 55,
+            size: 44,
         },
         {
             accessorKey: "status",
@@ -176,7 +176,7 @@ export function createAttendanceColumns({
                     </div>
                 )
             },
-            size: 80,
+            size: 62,
         },
         {
             id: "actions",
@@ -233,7 +233,7 @@ export function createAttendanceColumns({
                     </div>
                 )
             },
-            size: 100,
+            size: 80,
         },
     ]
 }

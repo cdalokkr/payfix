@@ -69,10 +69,33 @@ export function MobileAttendanceWizard({
     const handleSubmitAttendance = useCallback(async () => {
         const localDate = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Kolkata' })
 
+        let coords = {}
+        if (action === 'clock_in') {
+            try {
+                if ('geolocation' in navigator) {
+                    const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+                        navigator.geolocation.getCurrentPosition(resolve, reject, {
+                            enableHighAccuracy: true,
+                            timeout: 5000,
+                            maximumAge: 0
+                        })
+                    })
+                    coords = {
+                        latitude: pos.coords.latitude,
+                        longitude: pos.coords.longitude
+                    }
+                }
+            } catch (err) {
+                console.warn('Failed to get location:', err)
+                // Proceed without location
+            }
+        }
+
         if (action === 'clock_in') {
             await clockIn.mutateAsync({
                 localDate,
                 isExtraDay: false,
+                ...coords
             })
         } else {
             await clockOut.mutateAsync({

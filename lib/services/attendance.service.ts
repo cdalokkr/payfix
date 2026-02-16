@@ -1,5 +1,5 @@
 import { db } from '@/lib/db'
-import { attendance, activities, officeSettings, officeClosures } from '@/lib/db/schema'
+import { attendance, activities, officeSettings, officeClosures, officeLocations } from '@/lib/db/schema'
 import { eq, and, gte, lte, desc, sql, inArray } from 'drizzle-orm'
 import { throwAppError } from '@/lib/errors/app-errors'
 import { getLocalDateIST, getLocalTimeIST12Hour } from '@/lib/utils/date-utils'
@@ -81,13 +81,17 @@ export class AttendanceService {
         fullName,
         email,
         localDate,
-        isExtraDay
+        isExtraDay,
+        latitude,
+        longitude
     }: {
         profileId: string
         fullName?: string
         email: string
         localDate?: string
         isExtraDay?: boolean
+        latitude?: number
+        longitude?: number
     }) {
         const today = localDate || getLocalDateIST()
         const dayOfWeek = new Date(today).getDay()
@@ -119,12 +123,62 @@ export class AttendanceService {
             throwAppError('ALREADY_CLOCKED_IN', 'Already clocked in for today.')
         }
 
+        // Resolve location name & Validate Geofence
+        let locationName: string | null = null
+
+        // Get active office locations (for potential validation)
+        const activeLocations = await db.query.officeLocations.findMany({
+            where: eq(officeLocations.is_active, true)
+        })
+
+        if (latitude && longitude) {
+            try {
+                // Dynamically import geo-utils
+                const { getDistanceFromLatLonInMeters } = await import('@/lib/utils/geo-utils')
+
+                // Check distance against each
+                for (const office of activeLocations) {
+                    const dist = getDistanceFromLatLonInMeters(
+                        latitude,
+                        longitude,
+                        Number(office.latitude),
+                        Number(office.longitude)
+                    )
+
+                    if (dist <= (office.radius_meters || 200)) {
+                        locationName = office.name
+                        break
+                    }
+                }
+
+                if (!locationName) {
+                    // Strict Geofencing: If office locations exist, user MUST be at an office
+                    if (activeLocations.length > 0) {
+                        throwAppError('FORBIDDEN', 'You are outside the allowed office location range.')
+                    }
+                    locationName = 'Remote'
+                }
+            } catch (err: any) {
+                if (err?.code === 'FORBIDDEN') throw err
+                console.error('Error resolving location:', err)
+                locationName = 'Unknown'
+            }
+        } else {
+            // Strict Geofencing: If office locations exist, location is MANDATORY
+            if (activeLocations.length > 0) {
+                throwAppError('FORBIDDEN', 'Location access is required to clock in at an office location.')
+            }
+        }
+
         const [data] = await db.insert(attendance).values({
             profile_id: profileId,
             date: today,
             check_in: new Date(),
             status: 'pending',
-            is_extra_day: isExtraDay || false
+            is_extra_day: isExtraDay || false,
+            checkin_latitude: latitude ? String(latitude) : null,
+            checkin_longitude: longitude ? String(longitude) : null,
+            checkin_location_name: locationName
         }).returning()
 
         if (!data) throwAppError('DATABASE_ERROR', 'Failed to create clock-in record')
@@ -133,7 +187,7 @@ export class AttendanceService {
             user_id: profileId,
             activity_type: 'data_create',
             module: 'attendance',
-            description: `Clocked in at ${getLocalTimeIST12Hour()}${isExtraDay ? ' (Extra Work)' : ''}`,
+            description: `Clocked in at ${getLocalTimeIST12Hour()}${isExtraDay ? ' (Extra Work)' : ''}${locationName ? ` from ${locationName}` : ''}`,
         })
 
         return data

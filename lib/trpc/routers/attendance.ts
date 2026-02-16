@@ -74,7 +74,9 @@ export const attendanceRouter = router({
     clockIn: protectedProcedure
         .input(z.object({
             localDate: z.string().optional(),
-            isExtraDay: z.boolean().optional()
+            isExtraDay: z.boolean().optional(),
+            latitude: z.number().optional(),
+            longitude: z.number().optional()
         }).optional())
         .mutation(async ({ ctx, input }) => {
             const result = await AttendanceService.clockIn({
@@ -82,7 +84,9 @@ export const attendanceRouter = router({
                 fullName: ctx.profile.full_name || undefined,
                 email: ctx.profile.email,
                 localDate: input?.localDate,
-                isExtraDay: input?.isExtraDay
+                isExtraDay: input?.isExtraDay,
+                latitude: input?.latitude,
+                longitude: input?.longitude
             })
             // Invalidate dashboard cache immediately on server
             invalidateDashboardCache()

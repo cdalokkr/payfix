@@ -149,34 +149,85 @@ export function AdminAttendanceVerification() {
                 return
             }
 
-            const headers = ['Sr', 'Employee', 'Designation', 'Date', 'Clock In', 'Clock Out', 'Total Hours', 'Extra Hours', 'Status', 'Day Type']
-            const rows = dataToExport.map((record: any, index: number) => {
-                const workingHours = Number(record.working_hours) || 0
-                const dayOfWeek = new Date(record.date).getDay()
-                const scheduled = scheduledHoursMap[dayOfWeek] ?? 9
-                const extraHours = Math.max(0, workingHours - scheduled)
+            // Sort by date ascending
+            const sortedData = [...dataToExport].sort((a: any, b: any) =>
+                new Date(a.date).getTime() - new Date(b.date).getTime()
+            )
 
-                return [
-                    String(index + 1),
-                    record.profile?.full_name || 'Unknown',
-                    record.profile?.designation?.name || 'N/A',
-                    record.date,
-                    record.check_in ? new Date(record.check_in).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : '-',
-                    record.check_out ? new Date(record.check_out).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : '-',
-                    workingHours ? `${workingHours.toFixed(1)}h` : '-',
-                    extraHours > 0 ? `+${extraHours.toFixed(1)}h` : '0h',
-                    record.status || '-',
-                    record.is_half_day ? 'Half Day' : 'Full Day'
-                ]
-            })
+            // Detect if all records belong to one employee (name-filtered)
+            const uniqueNames = new Set(sortedData.map((r: any) => r.profile?.full_name))
+            const isSingleEmployee = uniqueNames.size === 1 && searchTerm.trim().length > 0
+
+            let headers: string[]
+            let rows: string[][]
+            let metaRow: string[] | undefined
+
+            if (isSingleEmployee) {
+                const first = sortedData[0] as any
+                const empName = first.profile?.full_name || 'Unknown'
+                const empDesignation = first.profile?.designation?.name || 'N/A'
+                // CSV cell positions: A1 empty, B1=Employee Name:, C1 empty, D1=value, E1 empty, F1=Designation:, G1 empty, H1=value
+                metaRow = ['', 'Employee Name:', '', empName, '', 'Designation:', '', empDesignation]
+
+                headers = ['Sr', 'Date', 'Clock In', 'Clock Out', 'Total Hours', 'Extra Hours', 'Status', 'Day Type', 'Office Location']
+                rows = sortedData.map((record: any, index: number) => {
+                    const workingHours = Number(record.working_hours) || 0
+                    const dayOfWeek = new Date(record.date).getDay()
+                    const scheduled = scheduledHoursMap[dayOfWeek] ?? 9
+                    const extraHours = Math.max(0, workingHours - scheduled)
+
+                    return [
+                        String(index + 1),
+                        record.date,
+                        record.check_in ? new Date(record.check_in).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : '-',
+                        record.check_out ? new Date(record.check_out).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : '-',
+                        workingHours ? `${workingHours.toFixed(1)}h` : '-',
+                        extraHours > 0 ? `+${extraHours.toFixed(1)}h` : '0h',
+                        record.status || '-',
+                        record.is_half_day ? 'Half Day' : 'Full Day',
+                        record.checkin_location_name || '-'
+                    ]
+                })
+            } else {
+                headers = ['Sr', 'Employee', 'Designation', 'Date', 'Clock In', 'Clock Out', 'Total Hours', 'Extra Hours', 'Status', 'Day Type', 'Office Location']
+                rows = sortedData.map((record: any, index: number) => {
+                    const workingHours = Number(record.working_hours) || 0
+                    const dayOfWeek = new Date(record.date).getDay()
+                    const scheduled = scheduledHoursMap[dayOfWeek] ?? 9
+                    const extraHours = Math.max(0, workingHours - scheduled)
+
+                    return [
+                        String(index + 1),
+                        record.profile?.full_name || 'Unknown',
+                        record.profile?.designation?.name || 'N/A',
+                        record.date,
+                        record.check_in ? new Date(record.check_in).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : '-',
+                        record.check_out ? new Date(record.check_out).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : '-',
+                        workingHours ? `${workingHours.toFixed(1)}h` : '-',
+                        extraHours > 0 ? `+${extraHours.toFixed(1)}h` : '0h',
+                        record.status || '-',
+                        record.is_half_day ? 'Half Day' : 'Full Day',
+                        record.checkin_location_name || '-'
+                    ]
+                })
+            }
 
             const filename = `attendance_report_${format(new Date(), 'yyyy-MM-dd_HH-mm')}`
 
             if (formatType === 'csv') {
-                const csvContent = generateCSV(headers, rows)
+                const csvLines: string[] = []
+                // Single-employee: first row has Employee Name at B1 and Designation at F1
+                if (metaRow) csvLines.push(metaRow.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(','))
+                csvLines.push(headers.join(','))
+                rows.forEach(row => csvLines.push(row.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(',')))
+                const csvContent = csvLines.join('\n')
                 downloadFile(csvContent, `${filename}.csv`, 'text/csv')
             } else {
-                await generatePDF("Attendance Report", headers, rows, `${filename}.pdf`)
+                const first = sortedData[0] as any
+                const title = isSingleEmployee
+                    ? `Attendance Report\nEmployee Name: ${first.profile?.full_name || 'Unknown'}  |  Designation: ${first.profile?.designation?.name || 'N/A'}`
+                    : "Attendance Report"
+                await generatePDF(title, headers, rows, `${filename}.pdf`)
             }
 
             toast.success(`${formatType.toUpperCase()} report downloaded successfully`)

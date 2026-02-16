@@ -211,7 +211,7 @@ const nextConfig: NextConfig = {
   // Bundle optimization configuration (used when building with --webpack)
   webpack: (config, { isServer }) => {
     // Optimize bundle splitting for better caching (client-side only)
-    if (!isServer) {
+    if (!isServer && config.optimization.splitChunks && typeof config.optimization.splitChunks === 'object') {
       config.optimization.splitChunks.cacheGroups = {
         ...config.optimization.splitChunks.cacheGroups,
         // Separate heavy UI libraries for better caching
