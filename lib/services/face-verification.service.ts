@@ -146,9 +146,9 @@ async function extractDescriptor(
 
 /**
  * Prepare image for detection: draw onto a canvas at a reasonable size.
- * face-api.js performs best at ~320-640px. We cap at 512px.
+ * face-api.js works well at 320px and is ~2.5x faster than 512px on mobile.
  */
-function prepareCanvas(img: HTMLImageElement, maxSize = 512): HTMLCanvasElement {
+function prepareCanvas(img: HTMLImageElement, maxSize = 320): HTMLCanvasElement {
     const canvas = document.createElement('canvas')
     const scale = Math.min(1, maxSize / Math.max(img.naturalWidth, img.naturalHeight))
     canvas.width = Math.round(img.naturalWidth * scale)

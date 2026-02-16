@@ -70,11 +70,15 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
         }
         isInitializing.current = true
 
-        // Preload face-api models in background
-        FaceVerificationService.initialize().then((ready) => {
+        // Preload face-api models — MUST complete before selfie can be verified
+        FaceVerificationService.initialize().then(async (ready) => {
             if (ready) {
                 modelsPreloaded = true
                 if (isMounted.current) setModelsReady(true)
+                // Also preload profile descriptor while waiting
+                if (profileImageUrl) {
+                    await FaceVerificationService.preloadProfileDescriptor(profileImageUrl).catch(() => { })
+                }
             }
         }).catch(() => { })
 
@@ -149,10 +153,7 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
                     }, 1500)
                 }
 
-                // Pre-cache profile descriptor while user positions face
-                if (profileImageUrl) {
-                    FaceVerificationService.preloadProfileDescriptor(profileImageUrl).catch(() => { })
-                }
+                // Profile descriptor preloading now handled above in initialize() chain
             }
         } catch (error: unknown) {
             console.error('Camera error:', error)
@@ -196,9 +197,9 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
         const ctx = canvas.getContext('2d')
         if (!ctx) return
 
-        // 640×640: optimal for face-api.js performance while retaining quality
-        canvas.width = 640
-        canvas.height = 640
+        // 480×480: optimized for fast face-api.js processing on mobile
+        canvas.width = 480
+        canvas.height = 480
 
         const vw = video.videoWidth
         const vh = video.videoHeight
@@ -215,22 +216,22 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
         const now = new Date()
         const timestamp = format(now, "dd MMM yyyy, hh:mm:ss a")
 
-        // Draw modern timestamp pill (scaled to 640px canvas)
+        // Draw modern timestamp pill (scaled to 480px canvas)
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
-        const pillWidth = 220
-        const pillHeight = 32
+        const pillWidth = 200
+        const pillHeight = 28
         const pillX = (canvas.width - pillWidth) / 2
-        const pillY = canvas.height - 50
+        const pillY = canvas.height - 42
 
         // Rounded rect for pill
         ctx.beginPath()
-        ctx.roundRect(pillX, pillY, pillWidth, pillHeight, 16)
+        ctx.roundRect(pillX, pillY, pillWidth, pillHeight, 14)
         ctx.fill()
 
         ctx.fillStyle = '#ffffff'
-        ctx.font = 'bold 14px Inter, system-ui'
+        ctx.font = 'bold 12px Inter, system-ui'
         ctx.textAlign = 'center'
-        ctx.fillText(timestamp, canvas.width / 2, pillY + 22)
+        ctx.fillText(timestamp, canvas.width / 2, pillY + 19)
 
         const imageDataUrl = canvas.toDataURL('image/jpeg', 0.9)
         setCapturedImage(imageDataUrl)
@@ -258,11 +259,11 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
         }
 
         try {
-            // Hard timeout — spinner NEVER gets stuck
+            // Hard timeout — 45s allows for model loading + inference on slow mobile devices
             const result = await Promise.race([
                 FaceVerificationService.compareFaces(capturedImage, profileImageUrl),
                 new Promise<never>((_, reject) =>
-                    setTimeout(() => reject(new Error('TIMEOUT')), 12000)
+                    setTimeout(() => reject(new Error('TIMEOUT')), 45000)
                 ),
             ])
 
@@ -308,9 +309,9 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
         }
     }, [apiStatus, similarity, onVerified, apiError])
 
-    // Auto-capture countdown
+    // Auto-capture countdown — only starts after face-api models are loaded
     useEffect(() => {
-        if (status === 'streaming' && !capturedImage) {
+        if (status === 'streaming' && !capturedImage && modelsReady) {
             setCountdown(5)
             const timer = setInterval(() => {
                 setCountdown(prev => {
