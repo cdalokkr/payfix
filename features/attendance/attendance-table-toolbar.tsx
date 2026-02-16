@@ -2,7 +2,7 @@
 
 import { Table } from "@tanstack/react-table"
 import { Input } from "@/components/ui/input"
-import { DataTableViewOptions } from "@/components/ui/data-table-view-options"
+
 import {
     Select,
     SelectContent,
@@ -75,7 +75,7 @@ export function AttendanceTableToolbar<TData>({
     return (
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
             <div className="flex-1 flex flex-col sm:flex-row gap-4 items-start sm:items-center w-full">
-                <div className="relative w-full max-w-sm">
+                <div className="relative w-full max-w-md">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
                     <Input
                         placeholder="Search name, email or designation..."
@@ -247,34 +247,31 @@ export function AttendanceTableToolbar<TData>({
                 )}
             </div>
 
-            <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
-                {hasSelection && (
-                    <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2 duration-300">
-                        <span className="text-[11px] font-bold text-muted-foreground whitespace-nowrap bg-muted/50 px-2 py-1 rounded-lg border">
-                            {selectedRows.length} Selected
-                        </span>
-                        <ActionButton
-                            action="verify"
-                            size="sm"
-                            onClick={onBulkVerify}
-                            loading={isBulkUpdating}
-                            className="h-9 px-3 rounded-xl shadow-sm"
-                        >
-                            Approve All
-                        </ActionButton>
-                        <ActionButton
-                            action="reject"
-                            size="sm"
-                            onClick={onBulkReject}
-                            loading={isBulkUpdating}
-                            className="h-9 px-3 rounded-xl shadow-sm border-rose-100 bg-rose-50 text-rose-600 hover:bg-rose-100"
-                        >
-                            Reject All
-                        </ActionButton>
-                    </div>
-                )}
-                <DataTableViewOptions table={table} />
-            </div>
+            {hasSelection && (
+                <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0 animate-in fade-in slide-in-from-right-2 duration-300">
+                    <span className="text-[11px] font-bold text-muted-foreground whitespace-nowrap bg-muted/50 px-2 py-1 rounded-lg border">
+                        {selectedRows.length} Selected
+                    </span>
+                    <ActionButton
+                        action="verify"
+                        size="sm"
+                        onClick={onBulkVerify}
+                        loading={isBulkUpdating}
+                        className="h-9 px-3 rounded-xl shadow-sm"
+                    >
+                        Approve All
+                    </ActionButton>
+                    <ActionButton
+                        action="reject"
+                        size="sm"
+                        onClick={onBulkReject}
+                        loading={isBulkUpdating}
+                        className="h-9 px-3 rounded-xl shadow-sm border-rose-100 bg-rose-50 text-rose-600 hover:bg-rose-100"
+                    >
+                        Reject All
+                    </ActionButton>
+                </div>
+            )}
         </div>
     )
 }

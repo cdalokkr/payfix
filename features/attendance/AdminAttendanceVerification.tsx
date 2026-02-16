@@ -141,29 +141,34 @@ export function AdminAttendanceVerification() {
     const handleDownloadReport = async (formatType: 'csv' | 'pdf') => {
         setIsDownloading(true)
         try {
-            const currentRole = profile?.role
-            const startDate = dateFilter?.from ? format(dateFilter.from, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')
-            const endDate = dateFilter?.to ? format(dateFilter.to, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')
+            const dataToExport = filteredAttendance || []
 
-            // Use utils.fetch() since the server defines this as a query, not a mutation
-            const result = currentRole === 'admin'
-                ? await utils.admin.reports.getDetailedAttendanceReport.fetch({ startDate, endDate })
-                : await utils.moderator.reports.getDetailedAttendanceReport.fetch({ startDate, endDate })
+            if (dataToExport.length === 0) {
+                toast.error('No data to download')
+                setIsDownloading(false)
+                return
+            }
 
-            const headers = ['Sr', 'Employee', 'Date', 'Location', 'Clock In', 'Clock Out', 'Total Hours', 'Extra Hours', 'Status', 'Day Type', 'Remark']
-            const rows = result.data.map(item => [
-                String(item.sr),
-                item.employeeName,
-                item.date,
-                item.markedOfficeLocation,
-                item.clockIn,
-                item.clockOut,
-                item.totalHours,
-                item.extraHours,
-                item.status,
-                item.markedDay,
-                item.remark
-            ])
+            const headers = ['Sr', 'Employee', 'Designation', 'Date', 'Clock In', 'Clock Out', 'Total Hours', 'Extra Hours', 'Status', 'Day Type']
+            const rows = dataToExport.map((record: any, index: number) => {
+                const workingHours = Number(record.working_hours) || 0
+                const dayOfWeek = new Date(record.date).getDay()
+                const scheduled = scheduledHoursMap[dayOfWeek] ?? 9
+                const extraHours = Math.max(0, workingHours - scheduled)
+
+                return [
+                    String(index + 1),
+                    record.profile?.full_name || 'Unknown',
+                    record.profile?.designation?.name || 'N/A',
+                    record.date,
+                    record.check_in ? new Date(record.check_in).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : '-',
+                    record.check_out ? new Date(record.check_out).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : '-',
+                    workingHours ? `${workingHours.toFixed(1)}h` : '-',
+                    extraHours > 0 ? `+${extraHours.toFixed(1)}h` : '0h',
+                    record.status || '-',
+                    record.is_half_day ? 'Half Day' : 'Full Day'
+                ]
+            })
 
             const filename = `attendance_report_${format(new Date(), 'yyyy-MM-dd_HH-mm')}`
 
@@ -171,7 +176,7 @@ export function AdminAttendanceVerification() {
                 const csvContent = generateCSV(headers, rows)
                 downloadFile(csvContent, `${filename}.csv`, 'text/csv')
             } else {
-                generatePDF("Attendance Report", headers, rows, `${filename}.pdf`)
+                await generatePDF("Attendance Report", headers, rows, `${filename}.pdf`)
             }
 
             toast.success(`${formatType.toUpperCase()} report downloaded successfully`)
