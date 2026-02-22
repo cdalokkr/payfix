@@ -28,7 +28,7 @@ export function CardShell({
 }: CardShellProps) {
     return (
         <Card className={cn(
-            "shadow-xl border-primary/10 overflow-hidden flex flex-col h-full bg-background/50 backdrop-blur-sm pt-0 transition-all duration-300 group/shell cursor-default hover:border-primary/20",
+            "border-primary/10 overflow-hidden flex flex-col h-full bg-background/50 backdrop-blur-md pt-0 transition-all duration-300 group/shell cursor-default hover:border-primary/20 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.1)]",
             className
         )}>
             <CardHeader className="border-b border-muted/20 bg-muted/50 transition-colors p-0 py-4 overflow-hidden group-hover/shell:bg-muted/80">

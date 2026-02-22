@@ -15,6 +15,7 @@ import { attendanceRouter } from './attendance'
 import { mpinRouter } from './mpin'
 import { officeLocationsRouter } from './office-locations'
 import { pushRouter } from './push'
+import { salaryRouter } from './salary'
 
 export const appRouter = router({
   auth: authRouter,
@@ -26,19 +27,23 @@ export const appRouter = router({
     reports: adminReportsRouter,
     designation: designationRouter,
     officeLocations: officeLocationsRouter,
+    salary: salaryRouter,
   }),
   moderator: router({
     reports: moderatorReportsRouter,
     attendance: attendanceRouter,
+    salary: salaryRouter,
   }),
   notification: notificationRouter,
   attendance: attendanceRouter,
+  salary: salaryRouter,
   mpin: mpinRouter,
   officeLocations: officeLocationsRouter,
   push: pushRouter,
 })
 
 export type AppRouter = typeof appRouter
+
 
 
 

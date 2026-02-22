@@ -30,7 +30,8 @@ import {
     MapPinOff,
     ClockArrowDown,
     ClockArrowUp,
-    CircleCheckBig
+    CircleCheckBig,
+    CircleDollarSign
 } from "lucide-react"
 import { usePwaCheck } from "@/hooks/use-pwa-check"
 import { isDefaultAvatar } from "@/lib/utils/avatar-helper"
@@ -70,6 +71,7 @@ const itemVars = {
 const quickActions = [
     { label: "History", icon: IconHistory, href: "/mobile/history", color: "bg-blue-500/10 text-blue-600" },
     { label: "Leaves", icon: IconCalendarEvent, href: "/mobile/leaves", color: "bg-purple-500/10 text-purple-600" },
+    { label: "Advances", icon: CircleDollarSign, href: "/mobile/advances", color: "bg-emerald-500/10 text-emerald-600" },
     { label: "Settings", icon: IconSettings, href: "/mobile/profile", color: "bg-slate-500/10 text-slate-600" },
     { label: "Help", icon: IconQuestionMark, href: "/mobile/help", color: "bg-amber-500/10 text-amber-600" },
 ]
@@ -461,20 +463,17 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
                     <h3 className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">Quick Access</h3>
                     <div className="h-px bg-slate-200 dark:bg-slate-800 flex-1 ml-4" />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="flex overflow-x-auto gap-4 px-2 pb-4 pt-1 snap-x snap-mandatory hide-scrollbar">
                     {quickActions.map((action) => (
-                        <Link key={action.label} href={action.href}>
+                        <Link key={action.label} href={action.href} className="snap-start shrink-0">
                             <motion.div
                                 whileTap={{ scale: 0.95 }}
-                                className="bg-white dark:bg-slate-900/50 p-5 rounded-[2rem] flex flex-col gap-4 shadow-sm border border-slate-100 dark:border-slate-800/50 h-full relative overflow-hidden group"
+                                className="bg-white dark:bg-slate-900/80 p-4 rounded-3xl flex flex-col gap-3 shadow-[0_2px_10px_rgba(0,0,0,0.03)] border border-slate-100 dark:border-slate-800/50 w-[110px] relative overflow-hidden group items-center text-center backdrop-blur-sm"
                             >
-                                <div className={`w-12 h-12 rounded-2xl ${action.color} flex items-center justify-center transition-transform group-hover:scale-110 duration-300`}>
-                                    <action.icon className="w-7 h-7" />
+                                <div className={`w-12 h-12 rounded-[1.1rem] ${action.color} flex items-center justify-center transition-transform group-hover:scale-110 duration-300`}>
+                                    <action.icon className="w-6 h-6" />
                                 </div>
-                                <span className="font-bold text-sm tracking-tight">{action.label}</span>
-                                <div className="absolute -right-2 -bottom-2 opacity-[0.03] dark:opacity-[0.05] group-hover:opacity-[0.08] transition-opacity">
-                                    <action.icon size={80} strokeWidth={2} />
-                                </div>
+                                <span className="font-bold text-[11px] tracking-tight">{action.label}</span>
                             </motion.div>
                         </Link>
                     ))}

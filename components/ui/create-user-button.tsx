@@ -41,6 +41,8 @@ interface CreateUserButtonProps extends Omit<React.ComponentProps<'button'>, 'on
   size?: 'sm' | 'md' | 'lg';
   /** Button mode: create or edit */
   mode?: ButtonMode;
+  /** Optional custom icon component to override the default idle icon */
+  icon?: React.ComponentType<{ className?: string }>;
 }
 
 export default function CreateUserButton({
@@ -54,6 +56,7 @@ export default function CreateUserButton({
   className,
   size = 'lg',
   mode = 'create',
+  icon: CustomIcon,
   ...props
 }: CreateUserButtonProps) {
   const handleClick = async () => {
@@ -146,7 +149,7 @@ export default function CreateUserButton({
           className: defaultTexts.errorBgClass
         };
       default: {
-        const IdleIcon = defaultTexts.idleIcon;
+        const IdleIcon = CustomIcon || defaultTexts.idleIcon;
         return {
           text: defaultTexts.idleText,
           icon: <IdleIcon className={cn(sizeConfig.icon, "mr-2")} />,

@@ -197,6 +197,68 @@ export const profilePhotoRequests = pgTable('profile_photo_requests', {
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 
+// Employee Salary Setup (versioned salary components)
+export const employeeSalarySetup = pgTable('employee_salary_setup', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    profile_id: uuid('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+    basic_salary: numeric('basic_salary', { precision: 12, scale: 2 }).notNull().default('0'),
+    hra: numeric('hra', { precision: 12, scale: 2 }).notNull().default('0'),
+    da: numeric('da', { precision: 12, scale: 2 }).notNull().default('0'),
+    ta: numeric('ta', { precision: 12, scale: 2 }).notNull().default('0'),
+    special_allowance: numeric('special_allowance', { precision: 12, scale: 2 }).notNull().default('0'),
+    incentive: numeric('incentive', { precision: 12, scale: 2 }).notNull().default('0'),
+    other_deductions: numeric('other_deductions', { precision: 12, scale: 2 }).notNull().default('0'),
+    effective_from_month: integer('effective_from_month').notNull(),
+    effective_from_year: integer('effective_from_year').notNull(),
+    effective_to_month: integer('effective_to_month'),
+    effective_to_year: integer('effective_to_year'),
+    change_reason: text('change_reason'),
+    is_active: boolean('is_active').default(true),
+    created_by: uuid('created_by').references(() => profiles.id, { onDelete: 'set null' }),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+// Employee Advances / Loans (day-by-day tracking)
+export const employeeAdvances = pgTable('employee_advances', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    profile_id: uuid('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+    date: date('date').notNull(),
+    amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
+    particulars: text('particulars').notNull(),
+    status: text('status').notNull().default('pending'), // 'pending' | 'adjusted'
+    adjusted_in_month: integer('adjusted_in_month'),
+    adjusted_in_year: integer('adjusted_in_year'),
+    created_by: uuid('created_by').references(() => profiles.id, { onDelete: 'set null' }),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
+// Monthly Attendance Summary (compiled attendance + payslip)
+export const monthlyAttendanceSummary = pgTable('monthly_attendance_summary', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    profile_id: uuid('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+    month: integer('month').notNull(),
+    year: integer('year').notNull(),
+    total_working_days: integer('total_working_days').notNull().default(0),
+    total_present_days: integer('total_present_days').notNull().default(0),
+    total_absent_days: integer('total_absent_days').notNull().default(0),
+    total_half_days: integer('total_half_days').notNull().default(0),
+    total_leaves: integer('total_leaves').notNull().default(0),
+    total_working_hours: numeric('total_working_hours', { precision: 8, scale: 2 }).default('0'),
+    total_extra_hours: numeric('total_extra_hours', { precision: 8, scale: 2 }).default('0'),
+    status: text('status').notNull().default('draft'), // 'draft' | 'set_for_salary' | 'payslip_generated'
+    set_for_salary_by: uuid('set_for_salary_by').references(() => profiles.id, { onDelete: 'set null' }),
+    set_for_salary_at: timestamp('set_for_salary_at', { withTimezone: true }),
+    gross_salary: numeric('gross_salary', { precision: 12, scale: 2 }),
+    absence_deduction: numeric('absence_deduction', { precision: 12, scale: 2 }),
+    net_salary: numeric('net_salary', { precision: 12, scale: 2 }),
+    advance_recovery: numeric('advance_recovery', { precision: 12, scale: 2 }),
+    take_home: numeric('take_home', { precision: 12, scale: 2 }),
+    salary_breakdown: jsonb('salary_breakdown'),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
 
 // Relations
 export const profilesRelations = relations(profiles, ({ one, many }) => ({
@@ -212,6 +274,9 @@ export const profilesRelations = relations(profiles, ({ one, many }) => ({
         references: [employeeSettings.profile_id],
     }),
     statusHistory: many(userStatusHistory),
+    salarySetups: many(employeeSalarySetup),
+    advances: many(employeeAdvances),
+    monthlySummaries: many(monthlyAttendanceSummary),
 }));
 
 export const attendanceRelations = relations(attendance, ({ one }) => ({
@@ -282,6 +347,39 @@ export const profilePhotoRequestsRelations = relations(profilePhotoRequests, ({ 
     }),
     reviewer: one(profiles, {
         fields: [profilePhotoRequests.reviewed_by],
+        references: [profiles.id],
+    }),
+}));
+
+export const employeeSalarySetupRelations = relations(employeeSalarySetup, ({ one }) => ({
+    profile: one(profiles, {
+        fields: [employeeSalarySetup.profile_id],
+        references: [profiles.id],
+    }),
+    creator: one(profiles, {
+        fields: [employeeSalarySetup.created_by],
+        references: [profiles.id],
+    }),
+}));
+
+export const employeeAdvancesRelations = relations(employeeAdvances, ({ one }) => ({
+    profile: one(profiles, {
+        fields: [employeeAdvances.profile_id],
+        references: [profiles.id],
+    }),
+    creator: one(profiles, {
+        fields: [employeeAdvances.created_by],
+        references: [profiles.id],
+    }),
+}));
+
+export const monthlyAttendanceSummaryRelations = relations(monthlyAttendanceSummary, ({ one }) => ({
+    profile: one(profiles, {
+        fields: [monthlyAttendanceSummary.profile_id],
+        references: [profiles.id],
+    }),
+    confirmedBy: one(profiles, {
+        fields: [monthlyAttendanceSummary.set_for_salary_by],
         references: [profiles.id],
     }),
 }));

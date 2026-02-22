@@ -103,6 +103,35 @@ export const adminNavItems: NavGroup[] = [
         description: "Manage leave applications"
       },
       {
+        title: "Salary Setup",
+        href: "/admin/payroll/salary-setup",
+        icon: "IndianRupee",
+        moduleId: "salary",
+        requiredRole: "admin",
+        description: "Configure employee salary components"
+      },
+      {
+        title: "Advances",
+        href: "/admin/payroll/advances",
+        icon: "HandCoins",
+        moduleId: "salary",
+        description: "Manage employee advances and loans"
+      },
+      {
+        title: "Monthly Attendance",
+        href: "/admin/payroll/monthly-attendance",
+        icon: "CalendarRange",
+        moduleId: "salary",
+        description: "Compile monthly attendance for payroll"
+      },
+      {
+        title: "Payslips",
+        href: "/admin/payroll/payslips",
+        icon: "Receipt",
+        moduleId: "salary",
+        description: "Generate and view payslips"
+      },
+      {
         title: "Settings",
         href: "/admin/payroll/settings",
         icon: "Settings",
@@ -193,6 +222,27 @@ export const moderatorNavItems: NavGroup[] = [
         icon: "CalendarOff",
         moduleId: "leaves",
         description: "Manage leave applications"
+      },
+      {
+        title: "Advances",
+        href: "/moderator/payroll/advances",
+        icon: "HandCoins",
+        moduleId: "salary",
+        description: "Manage employee advances and loans"
+      },
+      {
+        title: "Monthly Attendance",
+        href: "/moderator/payroll/monthly-attendance",
+        icon: "CalendarRange",
+        moduleId: "salary",
+        description: "Compile monthly attendance for payroll"
+      },
+      {
+        title: "Payslips",
+        href: "/moderator/payroll/payslips",
+        icon: "Receipt",
+        moduleId: "salary",
+        description: "Generate and view payslips"
       },
     ]
   },

@@ -28,10 +28,19 @@ import {
   XCircle,
   History,
   UserCheck,
+
+  // Payroll & Salary icons
+  Banknote,
+  CalendarCheck,
+  CalendarOff,
+  IndianRupee,
+  HandCoins,
+  CalendarRange,
+  Receipt,
 } from 'lucide-react';
 
 export const Icons: Record<string, React.ElementType> = {
-  Home: LayoutDashboard, // Backwards compatibility if needed, though replaced in nav items
+  Home: LayoutDashboard,
   LayoutDashboard,
   Users,
   BarChart2,
@@ -60,4 +69,14 @@ export const Icons: Record<string, React.ElementType> = {
   XCircle,
   History,
   UserCheck,
+
+  // Payroll & Salary icons
+  Banknote,
+  CalendarCheck,
+  CalendarOff,
+  IndianRupee,
+  HandCoins,
+  CalendarRange,
+  Receipt,
 };
+

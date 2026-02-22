@@ -197,3 +197,62 @@ export interface EmployeeSettings {
   custom_check_out: string | null
   updated_at: string
 }
+
+export interface EmployeeSalarySetup {
+  id: string
+  profile_id: string
+  basic_salary: string
+  hra: string
+  da: string
+  ta: string
+  special_allowance: string
+  incentive: string
+  other_deductions: string
+  effective_from_month: number
+  effective_from_year: number
+  effective_to_month: number | null
+  effective_to_year: number | null
+  change_reason: string | null
+  is_active: boolean
+  created_by: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface EmployeeAdvance {
+  id: string
+  profile_id: string
+  date: string
+  amount: string
+  particulars: string
+  status: 'pending' | 'adjusted'
+  adjusted_in_month: number | null
+  adjusted_in_year: number | null
+  created_by: string | null
+  created_at: string | null
+}
+
+export interface MonthlyAttendanceSummary {
+  id: string
+  profile_id: string
+  month: number
+  year: number
+  total_working_days: number
+  total_present_days: number
+  total_absent_days: number
+  total_half_days: number
+  total_leaves: number
+  total_working_hours: string | null
+  total_extra_hours: string | null
+  status: 'draft' | 'set_for_salary' | 'payslip_generated'
+  set_for_salary_by: string | null
+  set_for_salary_at: string | null
+  gross_salary: string | null
+  absence_deduction: string | null
+  net_salary: string | null
+  advance_recovery: string | null
+  take_home: string | null
+  salary_breakdown: Record<string, unknown> | null
+  created_at: string | null
+  updated_at: string | null
+}
