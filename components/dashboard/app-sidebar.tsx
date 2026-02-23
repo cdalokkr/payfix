@@ -48,6 +48,7 @@ export function AppSidebar({ role, tenants, defaultTenant, onTenantSwitch, user,
         item.moduleId === "payroll" ||
         item.moduleId === "attendance" ||
         item.moduleId === "leaves" ||
+        item.moduleId === "salary" ||
         (item.moduleId && user?.allowed_modules?.includes(item.moduleId as Module))
       )
     })).filter(group => group.items.length > 0)

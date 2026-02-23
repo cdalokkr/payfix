@@ -301,6 +301,13 @@ export const employeeNavItems: NavGroup[] = [
         moduleId: "leaves",
         description: "Apply for leaves and view status"
       },
+      {
+        title: "Advances",
+        href: "/employee/payroll/advances",
+        icon: "HandCoins",
+        moduleId: "salary",
+        description: "View your personal advances and loans"
+      },
     ]
   },
   {
