@@ -59,7 +59,9 @@ export function LoginForm() {
       setAuthError(null)
       setFieldErrors({})
 
-      if (error.data?.code === 'FORBIDDEN') {
+      if (error.data?.code === 'INTERNAL_SERVER_ERROR') {
+        setAuthError(error.message)
+      } else if (error.data?.code === 'FORBIDDEN') {
         setAuthError(error.message)
       } else if (fieldToHighlight === 'email') {
         setFieldErrors({ email: 'Email id not found' })
@@ -173,6 +175,15 @@ export function LoginForm() {
   const onSubmit = async (data: LoginInput) => {
     setAuthError(null)
     setFieldErrors({})
+
+    // INSTANT CHECK: If no network, show error immediately without sending request
+    if (!navigator.onLine) {
+      setAsyncState('error')
+      setAuthError('No internet connection. Please check your network and try again.')
+      setTimeout(() => setAsyncState('idle'), 2000)
+      return
+    }
+
     setIsLoading(true)
 
     try {

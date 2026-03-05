@@ -19,9 +19,13 @@ const AuthErrorTypes = {
   INCORRECT_PASSWORD: 'INCORRECT_PASSWORD',
   INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
   NETWORK_ERROR: 'NETWORK_ERROR',
+  SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
 } as const
 
 export const authRouter = router({
+
+  // Helper: walk the full error cause chain and collect all messages into one string
+  // This handles cases like Drizzle wrapping Postgres errors in nested .cause properties
   login: publicProcedure
     .input(loginSchema)
     .mutation(async ({ input, ctx }) => {
@@ -57,6 +61,31 @@ export const authRouter = router({
         }
       } catch (err) {
         if (err instanceof TRPCError) throw err
+        // Walk full error cause chain to find database-specific messages
+        const fullChain = (() => {
+          const msgs: string[] = []
+          let current: any = err
+          while (current) {
+            if (current.message) msgs.push(current.message.toLowerCase())
+            current = current.cause
+          }
+          return msgs.join(' | ')
+        })()
+        // Detect database-level failures that indicate the project is paused or unavailable
+        if (
+          fullChain.includes('tenant or user not found') ||
+          fullChain.includes('project is paused') ||
+          fullChain.includes('connection terminated') ||
+          fullChain.includes('too many connections') ||
+          fullChain.includes('xx000')
+        ) {
+          console.error('[Auth] Database unavailable (project likely paused):', fullChain)
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Database service is currently unavailable. The Supabase project might be paused or disconnected. Please check the Supabase dashboard.',
+            cause: { type: AuthErrorTypes.SERVICE_UNAVAILABLE, field: 'none' }
+          })
+        }
         console.error('[Auth] Pre-check failed, falling back to standard auth:', err)
       }
 
@@ -82,6 +111,52 @@ export const authRouter = router({
         if (error) {
           // Parse Supabase error to provide specific error types
           const errorMessage = error.message?.toLowerCase() || ''
+          const status = (error as any).status
+
+          // Check for network/fetch failures — but inspect cause to distinguish
+          // project-paused (supabase DNS gone) vs user's actual network being down
+          if (
+            errorMessage.includes('fetch failed') ||
+            errorMessage.includes('failed to fetch') ||
+            errorMessage.includes('network request failed') ||
+            errorMessage.includes('enotfound') ||
+            errorMessage.includes('econnrefused')
+          ) {
+            // Inspect the cause chain for supabase-specific hostnames
+            const causeMsg = (error as any)?.cause?.message?.toLowerCase() || ''
+            const isSupabaseHost = causeMsg.includes('supabase.co') || causeMsg.includes('supabase.in')
+
+            if (isSupabaseHost) {
+              throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Database service is currently unavailable. The Supabase project might be paused or disconnected. Please check the Supabase dashboard.',
+                cause: { type: AuthErrorTypes.SERVICE_UNAVAILABLE, field: 'none' }
+              })
+            }
+
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Unable to connect to the server. Please check your internet connection.',
+              cause: { type: AuthErrorTypes.NETWORK_ERROR, field: 'none' }
+            })
+          }
+
+          // Check for service unavailability (5xx errors or database-specific messages)
+          if (
+            status >= 500 ||
+            errorMessage.includes('service unavailable') ||
+            errorMessage.includes('database') ||
+            errorMessage.includes('timeout') ||
+            errorMessage.includes('project is paused') ||
+            errorMessage.includes('connection terminated') ||
+            errorMessage.includes('too many connections')
+          ) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Database service is currently unavailable. The project might be paused or disconnected.',
+              cause: { type: AuthErrorTypes.SERVICE_UNAVAILABLE, field: 'none' }
+            })
+          }
 
           if (errorMessage.includes('invalid login credentials') ||
             errorMessage.includes('invalid credentials') ||
@@ -238,15 +313,74 @@ export const authRouter = router({
           warning: null as string | null
         }
       } catch (error) {
-        // Handle network or other errors
+        // Handle network or other errors outside of the signInWithPassword call
         if (error instanceof TRPCError) {
           throw error
         }
 
-        // Network or other errors
+        const errorMessage = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+
+        // Walk the full cause chain for deeper inspection
+        const fullChain = (() => {
+          const msgs: string[] = []
+          let current: any = error
+          while (current) {
+            if (current.message) msgs.push(current.message.toLowerCase())
+            current = current.cause
+          }
+          return msgs.join(' | ')
+        })()
+
+        // Check if the cause chain mentions supabase hostnames (project paused/down)
+        if (
+          fullChain.includes('supabase.co') ||
+          fullChain.includes('supabase.in') ||
+          fullChain.includes('tenant or user not found') ||
+          fullChain.includes('project is paused') ||
+          fullChain.includes('connection terminated')
+        ) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Database service is currently unavailable. The Supabase project might be paused or disconnected. Please check the Supabase dashboard.',
+            cause: { type: AuthErrorTypes.SERVICE_UNAVAILABLE, field: 'none' }
+          })
+        }
+
+        // Network connectivity issues (no supabase host in chain = user's own network)
+        if (
+          errorMessage.includes('fetch failed') ||
+          errorMessage.includes('failed to fetch') ||
+          errorMessage.includes('network request failed') ||
+          errorMessage.includes('enotfound') ||
+          errorMessage.includes('econnrefused')
+        ) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Unable to connect to the server. Please check your internet connection.',
+            cause: { type: AuthErrorTypes.NETWORK_ERROR, field: 'none' }
+          })
+        }
+
+        // Database/service unavailability
+        if (
+          errorMessage.includes('service unavailable') ||
+          errorMessage.includes('database') ||
+          errorMessage.includes('timeout') ||
+          errorMessage.includes('project is paused') ||
+          errorMessage.includes('connection terminated') ||
+          errorMessage.includes('too many connections')
+        ) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Database service is currently unavailable. The project might be paused or down.',
+            cause: { type: AuthErrorTypes.SERVICE_UNAVAILABLE, field: 'none' }
+          })
+        }
+
+        // Generic Network or other errors
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: 'Network error. Please check your connection and try again.',
+          message: 'Network error or service unavailable. Please check your connection and try again.',
           cause: { type: AuthErrorTypes.NETWORK_ERROR, field: 'none' }
         })
       }
