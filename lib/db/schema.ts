@@ -208,6 +208,7 @@ export const employeeSalarySetup = pgTable('employee_salary_setup', {
     special_allowance: numeric('special_allowance', { precision: 12, scale: 2 }).notNull().default('0'),
     incentive: numeric('incentive', { precision: 12, scale: 2 }).notNull().default('0'),
     other_deductions: numeric('other_deductions', { precision: 12, scale: 2 }).notNull().default('0'),
+    deduction_remark: text('deduction_remark'),
     effective_from_month: integer('effective_from_month').notNull(),
     effective_from_year: integer('effective_from_year').notNull(),
     effective_to_month: integer('effective_to_month'),

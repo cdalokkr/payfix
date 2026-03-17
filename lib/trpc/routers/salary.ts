@@ -69,6 +69,7 @@ export const salaryRouter = router({
             specialAllowance: z.string(),
             incentive: z.string(),
             otherDeductions: z.string(),
+            deductionRemark: z.string().optional(),
             effectiveFromMonth: z.number().min(1).max(12),
             effectiveFromYear: z.number().min(2020).max(2100),
             changeReason: z.string().optional(),

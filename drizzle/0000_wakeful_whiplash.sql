@@ -1,0 +1,1 @@
+ALTER TABLE "employee_salary_setup" ADD COLUMN "deduction_remark" text;

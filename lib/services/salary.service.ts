@@ -28,6 +28,7 @@ export class SalaryService {
         specialAllowance,
         incentive,
         otherDeductions,
+        deductionRemark,
         effectiveFromMonth,
         effectiveFromYear,
         changeReason,
@@ -41,6 +42,7 @@ export class SalaryService {
         specialAllowance: string
         incentive: string
         otherDeductions: string
+        deductionRemark?: string
         effectiveFromMonth: number
         effectiveFromYear: number
         changeReason?: string
@@ -81,6 +83,7 @@ export class SalaryService {
             special_allowance: specialAllowance,
             incentive,
             other_deductions: otherDeductions,
+            deduction_remark: deductionRemark,
             effective_from_month: effectiveFromMonth,
             effective_from_year: effectiveFromYear,
             change_reason: changeReason || 'Initial Setup',
@@ -99,6 +102,14 @@ export class SalaryService {
                 id: true,
                 full_name: true,
                 email: true,
+                avatar_url: true,
+                role: true,
+                mobile_no: true,
+            },
+            with: {
+                designation: {
+                    columns: { name: true }
+                }
             }
         })
 
@@ -110,6 +121,7 @@ export class SalaryService {
 
         return allProfiles.map(p => ({
             ...p,
+            designation_name: p.designation?.name || null,
             salary_setup: setupMap.get(p.id) || null,
         }))
     }
@@ -456,18 +468,58 @@ export class SalaryService {
 
     /** Get monthly summaries for a month/year */
     static async getMonthlySummaries(month: number, year: number) {
-        return await db.query.monthlyAttendanceSummary.findMany({
+        const summaries = await db.query.monthlyAttendanceSummary.findMany({
             where: and(
                 eq(monthlyAttendanceSummary.month, month),
                 eq(monthlyAttendanceSummary.year, year)
             ),
             with: {
                 profile: {
-                    columns: { full_name: true, email: true }
+                    columns: { id: true, full_name: true, email: true, role: true },
+                    with: {
+                        designation: {
+                            columns: { name: true }
+                        }
+                    }
                 }
             },
             orderBy: [desc(monthlyAttendanceSummary.created_at)],
         })
+
+        // Also fetch active salary setups for these profiles to return has_salary_setup boolean
+        const profileIds = summaries.map(s => s.profile_id)
+        let activeSetupsMap = new Map<string, boolean>()
+
+        if (profileIds.length > 0) {
+            const activeSetups = await db.query.employeeSalarySetup.findMany({
+                where: and(
+                    inArray(employeeSalarySetup.profile_id, profileIds),
+                    eq(employeeSalarySetup.is_active, true)
+                )
+            })
+
+            // Or use the getActiveSalaryForPeriod logic for a more accurate check,
+            // but for simplicity, checking if an active setup exists or querying specific period:
+            for (const setup of activeSetups) {
+                const fromVal = setup.effective_from_year * 100 + setup.effective_from_month
+                const targetVal = year * 100 + month
+                if (fromVal <= targetVal) {
+                    if (!setup.effective_to_month || !setup.effective_to_year) {
+                        activeSetupsMap.set(setup.profile_id, true)
+                    } else {
+                        const toVal = setup.effective_to_year * 100 + setup.effective_to_month
+                        if (targetVal <= toVal) {
+                            activeSetupsMap.set(setup.profile_id, true)
+                        }
+                    }
+                }
+            }
+        }
+
+        return summaries.map(s => ({
+            ...s,
+            has_salary_setup: activeSetupsMap.get(s.profile_id) || false
+        }))
     }
 
     // ==========================================
@@ -612,7 +664,12 @@ export class SalaryService {
             where: eq(monthlyAttendanceSummary.id, summaryId),
             with: {
                 profile: {
-                    columns: { full_name: true, email: true }
+                    columns: { full_name: true, email: true, role: true },
+                    with: {
+                        designation: {
+                            columns: { name: true }
+                        }
+                    }
                 }
             }
         })

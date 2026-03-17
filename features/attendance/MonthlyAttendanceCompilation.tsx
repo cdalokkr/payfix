@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { trpc } from "@/lib/trpc/client"
 import { toast } from "sonner"
-import { CalendarRange, RefreshCw, CheckCircle, Loader2, ArrowRight } from "lucide-react"
+import { CalendarRange, RefreshCw, CheckCircle, Loader2, ArrowRight, Users, TrendingUp, FileEdit, Clock } from "lucide-react"
 import { CardShell } from "./CardShell"
 import {
     Select,
@@ -24,8 +24,18 @@ const MONTHS = [
 
 export function MonthlyAttendanceCompilation({ basePath }: { basePath: string }) {
     const router = useRouter()
-    const [month, setMonth] = useState(new Date().getMonth() + 1)
-    const [year, setYear] = useState(new Date().getFullYear())
+    
+    // Default to last completed month
+    const currentDate = new Date()
+    let defaultMonth = currentDate.getMonth() // 0-based, so current month - 1 is the 1-based previous month
+    let defaultYear = currentDate.getFullYear()
+    if (defaultMonth === 0) {
+        defaultMonth = 12
+        defaultYear -= 1
+    }
+
+    const [month, setMonth] = useState(defaultMonth)
+    const [year, setYear] = useState(defaultYear)
     const [selectedIds, setSelectedIds] = useState<string[]>([])
 
     const { data: summaries, isLoading, refetch } = trpc.salary.getMonthlySummaries.useQuery(
@@ -54,6 +64,32 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
         summaries?.filter((s: any) => s.status === 'draft') || [], [summaries]
     )
 
+    // Compute last compiled timestamp from summaries
+    const lastCompiledAt = useMemo(() => {
+        if (!summaries || summaries.length === 0) return null
+        const maxDate = summaries.reduce((latest: string | null, s: any) => {
+            const d = s.updated_at
+            if (!d) return latest
+            if (!latest) return d
+            return new Date(d) > new Date(latest) ? d : latest
+        }, null)
+        return maxDate ? new Date(maxDate) : null
+    }, [summaries])
+
+    // Compute summary stats
+    const summaryStats = useMemo(() => {
+        if (!summaries || summaries.length === 0) return null
+        const totalEmployees = summaries.length
+        const avgPresent = summaries.reduce((sum: number, s: any) => {
+            const wd = s.total_working_days || 1
+            return sum + ((s.total_present_days || 0) / wd) * 100
+        }, 0) / totalEmployees
+        const draftCount = summaries.filter((s: any) => s.status === 'draft').length
+        const setForSalaryCount = summaries.filter((s: any) => s.status === 'set_for_salary').length
+        const payslipCount = summaries.filter((s: any) => s.status === 'payslip_generated').length
+        return { totalEmployees, avgPresent: Math.round(avgPresent), draftCount, setForSalaryCount, payslipCount }
+    }, [summaries])
+
     const toggleSelect = (id: string) => {
         setSelectedIds(prev =>
             prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
@@ -81,6 +117,36 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
         }
     }
 
+    const roleBadge = (role: string) => {
+        switch (role) {
+            case 'admin':
+                return <Badge className="bg-purple-500/15 text-purple-600 border-purple-500/25 text-[9px] px-1.5 py-0 font-medium hover:bg-purple-500/15">Admin</Badge>
+            case 'moderator':
+                return <Badge className="bg-sky-500/15 text-sky-600 border-sky-500/25 text-[9px] px-1.5 py-0 font-medium hover:bg-sky-500/15">Moderator</Badge>
+            default:
+                return <Badge className="bg-slate-500/10 text-slate-500 border-slate-500/20 text-[9px] px-1.5 py-0 font-medium hover:bg-slate-500/10">Employee</Badge>
+        }
+    }
+
+    const attendancePercent = (present: number, workingDays: number) => {
+        if (workingDays === 0) return 0
+        return Math.round((present / workingDays) * 100)
+    }
+
+    const percentColor = (pct: number) => {
+        if (pct >= 90) return 'text-emerald-600'
+        if (pct >= 75) return 'text-amber-600'
+        return 'text-rose-600'
+    }
+
+    const formatLastCompiled = (date: Date) => {
+        return date.toLocaleDateString('en-IN', {
+            month: 'short', day: 'numeric', year: 'numeric'
+        }) + ' at ' + date.toLocaleTimeString('en-IN', {
+            hour: 'numeric', minute: '2-digit', hour12: true
+        })
+    }
+
     return (
         <div className="space-y-6">
             {/* Controls */}
@@ -106,15 +172,23 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                             ))}
                         </SelectContent>
                     </Select>
-                    <Button
-                        onClick={() => compileMutation.mutate({ month, year })}
-                        disabled={compileMutation.isPending}
-                    >
-                        {compileMutation.isPending
-                            ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Compiling...</>
-                            : <><RefreshCw className="h-4 w-4 mr-1" />Compile</>
-                        }
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            onClick={() => compileMutation.mutate({ month, year })}
+                            disabled={compileMutation.isPending}
+                        >
+                            {compileMutation.isPending
+                                ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Compiling...</>
+                                : <><RefreshCw className="h-4 w-4 mr-1" />Compile</>
+                            }
+                        </Button>
+                        {lastCompiledAt && (
+                            <span className="text-xs text-muted-foreground flex items-center gap-1 whitespace-nowrap">
+                                <Clock className="h-3 w-3" />
+                                {formatLastCompiled(lastCompiledAt)}
+                            </span>
+                        )}
+                    </div>
                 </div>
 
                 <div className="flex items-center gap-2 sm:ml-auto">
@@ -142,6 +216,48 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                 </div>
             </div>
 
+            {/* Summary Stats Bar */}
+            {summaryStats && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="flex items-center gap-3 p-3 rounded-xl bg-card border border-border/50 shadow-sm">
+                        <div className="p-2 rounded-lg bg-primary/10">
+                            <Users className="h-4 w-4 text-primary" />
+                        </div>
+                        <div>
+                            <p className="text-lg font-bold leading-none">{summaryStats.totalEmployees}</p>
+                            <p className="text-[11px] text-muted-foreground mt-0.5">Employees</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 rounded-xl bg-card border border-border/50 shadow-sm">
+                        <div className="p-2 rounded-lg bg-emerald-500/10">
+                            <TrendingUp className="h-4 w-4 text-emerald-600" />
+                        </div>
+                        <div>
+                            <p className="text-lg font-bold leading-none">{summaryStats.avgPresent}%</p>
+                            <p className="text-[11px] text-muted-foreground mt-0.5">Avg Attendance</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 rounded-xl bg-card border border-border/50 shadow-sm">
+                        <div className="p-2 rounded-lg bg-blue-500/10">
+                            <FileEdit className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <div>
+                            <p className="text-lg font-bold leading-none">{summaryStats.draftCount}</p>
+                            <p className="text-[11px] text-muted-foreground mt-0.5">Drafts</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 rounded-xl bg-card border border-border/50 shadow-sm">
+                        <div className="p-2 rounded-lg bg-amber-500/10">
+                            <CheckCircle className="h-4 w-4 text-amber-600" />
+                        </div>
+                        <div>
+                            <p className="text-lg font-bold leading-none">{summaryStats.setForSalaryCount}</p>
+                            <p className="text-[11px] text-muted-foreground mt-0.5">Set for Salary</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Summary Table */}
             <CardShell
                 title={`Monthly Attendance — ${MONTHS[month - 1]} ${year}`}
@@ -165,7 +281,7 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                     <>
                         {/* Mobile Cards */}
                         <div className="divide-y divide-border/50 sm:hidden">
-                            {summaries.map((s: any) => (
+                            {summaries.map((s: any, index: number) => (
                                 <div key={s.id} className="p-4 space-y-2">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2">
@@ -175,7 +291,15 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                                                     onCheckedChange={() => toggleSelect(s.id)}
                                                 />
                                             )}
-                                            <span className="font-semibold text-sm">{s.profile?.full_name || s.profile?.email}</span>
+                                            <div className="flex flex-col">
+                                                <span className="font-semibold text-sm">{s.profile?.full_name || s.profile?.email}</span>
+                                                <div className="flex items-center gap-1.5 mt-0.5">
+                                                    <span className="text-[11px] text-muted-foreground">
+                                                        {s.profile?.designation?.name || '—'}
+                                                    </span>
+                                                    {roleBadge(s.profile?.role || 'employee')}
+                                                </div>
+                                            </div>
                                         </div>
                                         {statusBadge(s.status)}
                                     </div>
@@ -210,7 +334,9 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                                                 />
                                             )}
                                         </th>
+                                        <th className="p-3 text-center font-semibold text-muted-foreground w-10">#</th>
                                         <th className="p-3 text-left font-semibold text-muted-foreground">Employee</th>
+                                        <th className="p-3 text-left font-semibold text-muted-foreground">Designation</th>
                                         <th className="p-3 text-center font-semibold text-muted-foreground">Working Days</th>
                                         <th className="p-3 text-center font-semibold text-muted-foreground">Present</th>
                                         <th className="p-3 text-center font-semibold text-muted-foreground">Absent</th>
@@ -221,30 +347,45 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border/30">
-                                    {summaries.map((s: any) => (
-                                        <tr key={s.id} className="hover:bg-muted/20 transition-colors">
-                                            <td className="p-3">
-                                                {s.status === 'draft' && (
-                                                    <Checkbox
-                                                        checked={selectedIds.includes(s.id)}
-                                                        onCheckedChange={() => toggleSelect(s.id)}
-                                                    />
-                                                )}
-                                            </td>
-                                            <td className="p-3 font-medium">{s.profile?.full_name || s.profile?.email}</td>
-                                            <td className="p-3 text-center">{s.total_working_days}</td>
-                                            <td className="p-3 text-center">
-                                                <span className="font-bold text-emerald-600">{s.total_present_days}</span>
-                                            </td>
-                                            <td className="p-3 text-center">
-                                                <span className="font-bold text-rose-600">{s.total_absent_days}</span>
-                                            </td>
-                                            <td className="p-3 text-center">{s.total_half_days}</td>
-                                            <td className="p-3 text-center">{s.total_leaves}</td>
-                                            <td className="p-3 text-center text-muted-foreground">{s.total_working_hours || 0}h</td>
-                                            <td className="p-3 text-center">{statusBadge(s.status)}</td>
-                                        </tr>
-                                    ))}
+                                    {summaries.map((s: any, index: number) => {
+                                        const pct = attendancePercent(s.total_present_days, s.total_working_days)
+                                        return (
+                                            <tr key={s.id} className="hover:bg-muted/20 transition-colors">
+                                                <td className="p-3">
+                                                    {s.status === 'draft' && (
+                                                        <Checkbox
+                                                            checked={selectedIds.includes(s.id)}
+                                                            onCheckedChange={() => toggleSelect(s.id)}
+                                                        />
+                                                    )}
+                                                </td>
+                                                <td className="p-3 text-center text-muted-foreground text-xs">{index + 1}</td>
+                                                <td className="p-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-medium">{s.profile?.full_name || s.profile?.email}</span>
+                                                        {roleBadge(s.profile?.role || 'employee')}
+                                                    </div>
+                                                </td>
+                                                <td className="p-3 text-muted-foreground text-xs">
+                                                    {s.profile?.designation?.name || <span className="opacity-40">—</span>}
+                                                </td>
+                                                <td className="p-3 text-center">{s.total_working_days}</td>
+                                                <td className="p-3 text-center">
+                                                    <div className="flex flex-col items-center">
+                                                        <span className="font-bold text-emerald-600">{s.total_present_days}</span>
+                                                        <span className={`text-[10px] ${percentColor(pct)}`}>{pct}%</span>
+                                                    </div>
+                                                </td>
+                                                <td className="p-3 text-center">
+                                                    <span className="font-bold text-rose-600">{s.total_absent_days}</span>
+                                                </td>
+                                                <td className="p-3 text-center">{s.total_half_days}</td>
+                                                <td className="p-3 text-center">{s.total_leaves}</td>
+                                                <td className="p-3 text-center text-muted-foreground">{s.total_working_hours || 0}h</td>
+                                                <td className="p-3 text-center">{statusBadge(s.status)}</td>
+                                            </tr>
+                                        )
+                                    })}
                                 </tbody>
                             </table>
                         </div>
