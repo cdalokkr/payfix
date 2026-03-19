@@ -170,7 +170,7 @@ const nextConfig: NextConfig = {
     'jose', // JWT library with native crypto
   ],
 
-  // Enable experimental features for better performance (Next.js 16.0.4)
+  // Enable experimental features for better performance (Next.js 16.2.0)
   experimental: {
     // Optimize imports for tree-shaking heavy UI libraries
     optimizePackageImports: [

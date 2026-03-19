@@ -1,19 +1,16 @@
 // ============================================
 // lib/supabase/server.ts
 // Enhanced with security best practices
+// Uses modern getAll/setAll cookie API (@supabase/ssr v0.9+)
 // ============================================
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
-// Secure cookie configuration
-const SECURE_COOKIE_OPTIONS: Partial<CookieOptions> = {
-  // Only send cookies over HTTPS in production
+// Secure cookie defaults applied to every setAll call
+const SECURE_COOKIE_DEFAULTS = {
   secure: process.env.NODE_ENV === 'production',
-  // Prevent JavaScript access to cookies (XSS protection)
   httpOnly: true,
-  // Strict same-site policy for CSRF protection
-  sameSite: 'lax',
-  // Set path to root
+  sameSite: 'lax' as const,
   path: '/',
 }
 
@@ -30,34 +27,22 @@ export function createSupabaseClientSync(cookieStore: Awaited<ReturnType<typeof 
     supabaseKey,
     {
       cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
+        getAll() {
+          return cookieStore.getAll()
         },
-        set(name: string, value: string, options: CookieOptions) {
+        setAll(cookiesToSet) {
           try {
-            const secureOptions = {
-              ...SECURE_COOKIE_OPTIONS,
-              ...options,
-              httpOnly: name.includes('auth') ? true : options.httpOnly,
-            }
-            cookieStore.set({ name, value, ...secureOptions })
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, {
+                ...SECURE_COOKIE_DEFAULTS,
+                ...options,
+                // Force httpOnly on auth cookies for XSS protection
+                httpOnly: name.includes('auth') ? true : (options?.httpOnly ?? SECURE_COOKIE_DEFAULTS.httpOnly),
+              })
+            })
           } catch (error) {
             if (process.env.NODE_ENV === 'development') {
               console.warn('[Supabase] Cookie set warning:', error)
-            }
-          }
-        },
-        remove(name: string, options: CookieOptions) {
-          try {
-            const secureOptions = {
-              ...SECURE_COOKIE_OPTIONS,
-              ...options,
-              maxAge: 0,
-            }
-            cookieStore.set({ name, value: '', ...secureOptions })
-          } catch (error) {
-            if (process.env.NODE_ENV === 'development') {
-              console.warn('[Supabase] Cookie remove warning:', error)
             }
           }
         },
@@ -84,25 +69,19 @@ export async function createPublicSupabaseClient() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     {
       cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
+        getAll() {
+          return cookieStore.getAll()
         },
-        set(name: string, value: string, options: CookieOptions) {
+        setAll(cookiesToSet) {
           try {
-            const secureOptions = {
-              ...SECURE_COOKIE_OPTIONS,
-              ...options,
-            }
-            cookieStore.set({ name, value, ...secureOptions })
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, {
+                ...SECURE_COOKIE_DEFAULTS,
+                ...options,
+              })
+            })
           } catch {
-            // Silent fail for read-only contexts
-          }
-        },
-        remove(name: string, options: CookieOptions) {
-          try {
-            cookieStore.set({ name, value: '', ...SECURE_COOKIE_OPTIONS, ...options, maxAge: 0 })
-          } catch {
-            // Silent fail for read-only contexts
+            // Silent fail for read-only contexts (e.g. Server Components)
           }
         },
       },
