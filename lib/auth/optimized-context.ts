@@ -627,29 +627,6 @@ export async function createOptimizedContext() {
   }
 }
 
-// Batch context creation for multiple requests
-export async function createOptimizedContextBatch(userIds: string[]): Promise<Map<string, OptimizedContextResult>> {
-  const results = new Map<string, OptimizedContextResult>()
-  const promises: Promise<void>[] = []
-
-  for (const userId of userIds) {
-    if (!userId) continue
-
-    const promise = createOptimizedContext().then(context => {
-      if (context.user?.id === userId) {
-        results.set(userId, context)
-      }
-    }).catch(error => {
-      console.error(`[AUTH-PERF] Batch context creation failed for user ${userId}:`, error)
-    })
-
-    promises.push(promise)
-  }
-
-  await Promise.allSettled(promises)
-  return results
-}
-
 // Performance monitoring utilities
 export function getAuthPerformanceStats() {
   const avgContextTime = createContextCallCount > 0 ? totalContextTime / createContextCallCount : 0

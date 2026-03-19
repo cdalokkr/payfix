@@ -4,8 +4,16 @@ import './globals.css'
 import { TRPCProvider } from '@/lib/trpc/provider'
 import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster as SonnerToaster } from "@/components/ui/sonner"
-import { WebVitalsReporter } from '@/components/monitoring/web-vitals-reporter'
-import { PWARegister } from '@/components/pwa/pwa-register'
+import dynamic from 'next/dynamic'
+
+// Lazy-load non-critical components (they render null but load JS modules)
+// Code-split to keep them off the initial bundle critical path
+const WebVitalsReporter = dynamic(
+  () => import('@/components/monitoring/web-vitals-reporter')
+)
+const PWARegister = dynamic(
+  () => import('@/components/pwa/pwa-register')
+)
 
 const inter = Inter({
   subsets: ['latin'],

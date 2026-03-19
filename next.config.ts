@@ -168,6 +168,9 @@ const nextConfig: NextConfig = {
   // These are packages that have native dependencies or should run on server only
   serverExternalPackages: [
     'jose', // JWT library with native crypto
+    'jspdf', // PDF generation (fflate uses dynamic Worker that Turbopack can't resolve)
+    'jspdf-autotable', // jsPDF table plugin
+    'fflate', // Compression library used by jspdf (uses Node Worker)
   ],
 
   // Enable experimental features for better performance (Next.js 16.2.0)
@@ -183,12 +186,15 @@ const nextConfig: NextConfig = {
       '@radix-ui/react-dropdown-menu',
       '@radix-ui/react-label',
       '@radix-ui/react-popover',
+      '@radix-ui/react-radio-group',
       '@radix-ui/react-select',
       '@radix-ui/react-separator',
+      '@radix-ui/react-slider',
       '@radix-ui/react-slot',
       '@radix-ui/react-switch',
       '@radix-ui/react-tabs',
       '@radix-ui/react-tooltip',
+      '@tanstack/react-table',
       'lucide-react',
       'recharts',
       'framer-motion',
@@ -203,6 +209,8 @@ const nextConfig: NextConfig = {
       dynamic: 60, // 1 minute for dynamic routes
       static: 86400, // 24 hours for static routes
     },
+    // Bundle all segment data into a single response per link (Next.js 16.2)
+    prefetchInlining: true,
   },
 
   // Turbopack config — acknowledge webpack config coexistence (Next.js 16)

@@ -14,8 +14,8 @@ function makeQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        // Increase stale time for better caching (30 seconds)
-        staleTime: 30 * 1000,
+        // Increase stale time for better caching (60 seconds - matches next.config staleTimes.dynamic)
+        staleTime: 60 * 1000,
         // Cache time - how long to keep data in cache after it becomes unused (5 minutes)
         gcTime: 5 * 60 * 1000,
         // Don't refetch on window focus for better UX
