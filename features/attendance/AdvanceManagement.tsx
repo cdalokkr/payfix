@@ -421,11 +421,12 @@ export function AdvanceManagement() {
             cell: ({ row }) => {
                 const advance = row.original
                 const isPending = advance.status === 'pending'
+                const isCarryForward = advance.particulars?.startsWith('Salary deficit carry-forward from')
 
                 return (
                     <div className="flex items-center justify-end gap-1">
                         <TooltipProvider>
-                            {isPending && (
+                            {isPending && !isCarryForward && (
                                 <>
                                     <Tooltip>
                                         <TooltipTrigger asChild>
@@ -450,6 +451,16 @@ export function AdvanceManagement() {
                                         <TooltipContent>Delete</TooltipContent>
                                     </Tooltip>
                                 </>
+                            )}
+                            {isPending && isCarryForward && (
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-violet-500/10 text-violet-600 border-violet-500/20 font-medium cursor-default">
+                                            System
+                                        </Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent>System-generated carry-forward — cannot be edited or deleted</TooltipContent>
+                                </Tooltip>
                             )}
                             {!isPending && (
                                 <span className="text-[9px] text-muted-foreground/50 italic">Adjusted</span>

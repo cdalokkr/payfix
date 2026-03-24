@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { trpc } from "@/lib/trpc/client"
 import { toast } from "sonner"
-import { Receipt, Loader2, Download, Printer, Eye, IndianRupee, ArrowDown, ArrowRight, AlertTriangle } from "lucide-react"
+import { Receipt, Loader2, Printer, Eye, AlertTriangle } from "lucide-react"
 import { CardShell } from "./CardShell"
 import {
     Select,
@@ -21,7 +21,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
-import { Separator } from "@/components/ui/separator"
+
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 const MONTHS = [
@@ -125,24 +125,34 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
             if (printWindow) {
                 printWindow.document.write(`
                     <html>
-                    <head><title>Payslip</title>
+                    <head><title>Salary Slip - ${payslipDetail?.profile?.full_name || 'Employee'} - ${MONTHS[month - 1]} ${year}</title>
                     <style>
-                        body { font-family: system-ui, sans-serif; padding: 24px; color: #333; }
-                        .payslip { max-width: 600px; margin: 0 auto; }
-                        .header { text-align: center; margin-bottom: 24px; border-bottom: 2px solid #333; padding-bottom: 12px; }
-                        .header h2 { margin: 0; font-size: 20px; }
-                        .header p { margin: 4px 0 0; color: #666; font-size: 14px; }
-                        .info-row { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 14px; }
-                        .info-row .label { color: #666; }
-                        .info-row .value { font-weight: 600; }
-                        table { width: 100%; border-collapse: collapse; margin: 16px 0; }
-                        th, td { text-align: left; padding:  8px 12px; border-bottom: 1px solid #eee; font-size: 13px; }
-                        th { background: #f5f5f5; font-weight: 600; }
-                        .amount { text-align: right; }
-                        .total-row { font-weight: 700; background: #f0f9ff; border-top: 2px solid #333; }
-                        .deduction { color: #dc2626; }
-                        .net { color: #16a34a; font-size: 16px; }
-                        @media print { body { padding: 0; } }
+                        @page { size: A4; margin: 20mm 18mm; }
+                        * { box-sizing: border-box; margin: 0; padding: 0; }
+                        body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #1a1a1a; background: #fff; }
+                        .slip-page { max-width: 760px; margin: 0 auto; padding: 0; }
+                        .slip-header { text-align: center; padding-bottom: 16px; margin-bottom: 20px; border-bottom: 3px double #1a1a1a; }
+                        .slip-header h1 { font-size: 22px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 4px; }
+                        .slip-header .period { font-size: 14px; color: #555; font-weight: 500; }
+                        .emp-details { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 40px; margin-bottom: 20px; padding: 14px 18px; border: 1px solid #ddd; border-radius: 4px; background: #fafafa; }
+                        .emp-details .detail-item { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; }
+                        .emp-details .detail-label { color: #666; }
+                        .emp-details .detail-value { font-weight: 600; text-align: right; }
+                        .salary-table { width: 100%; border-collapse: collapse; margin-bottom: 0; }
+                        .salary-table th { background: #f0f0f0; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; padding: 10px 14px; border: 1px solid #ccc; }
+                        .salary-table td { padding: 7px 14px; border: 1px solid #ddd; font-size: 13px; vertical-align: top; }
+                        .salary-table .amt { text-align: right; font-variant-numeric: tabular-nums; }
+                        .salary-table .component { color: #333; }
+                        .salary-table .deduction-text { color: #b91c1c; }
+                        .salary-table .total-row td { font-weight: 700; background: #f5f5f5; border-top: 2px solid #999; font-size: 13px; }
+                        .salary-table .empty-cell { border-left: none; border-right: none; border-bottom: none; }
+                        .net-pay-box { margin-top: 16px; padding: 14px 18px; border: 2px solid #1a1a1a; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; }
+                        .net-pay-box .label { font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+                        .net-pay-box .value { font-size: 18px; font-weight: 800; }
+                        .slip-footer { margin-top: 40px; padding-top: 12px; border-top: 1px solid #ccc; display: flex; justify-content: space-between; font-size: 11px; color: #888; }
+                        @media print {
+                            body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                        }
                     </style>
                     </head>
                     <body>${payslipRef.current.innerHTML}</body>
@@ -155,6 +165,86 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
     }
 
     const breakdown = payslipDetail?.salary_breakdown as Record<string, any> | null
+
+    // Compute totals for the columnar layout
+    const totalEarnings = breakdown ? (
+        Number(breakdown.basic_salary || 0) +
+        Number(breakdown.hra || 0) +
+        Number(breakdown.da || 0) +
+        Number(breakdown.ta || 0) +
+        Number(breakdown.special_allowance || 0) +
+        Number(breakdown.incentive || 0)
+    ) : 0
+
+    const totalDeductions = breakdown ? (
+        Number(breakdown.absence_deduction || 0) +
+        Number(breakdown.other_deductions || 0) +
+        Number(breakdown.advance_recovery || 0)
+    ) : 0
+
+    const earningsItems = breakdown ? [
+        { label: 'Basic Salary', amount: breakdown.basic_salary },
+        { label: 'HRA', amount: breakdown.hra },
+        { label: 'DA', amount: breakdown.da },
+        { label: 'TA', amount: breakdown.ta },
+        { label: 'Special Allowance', amount: breakdown.special_allowance },
+        { label: 'Incentive', amount: breakdown.incentive },
+    ] : []
+
+    const deductionItems = breakdown ? [
+        { label: 'Absence Deduction', amount: breakdown.absence_deduction },
+        { label: 'Other Deductions (PF/ESI/etc.)', amount: breakdown.other_deductions },
+        ...(Number(breakdown.advance_recovery) > 0 ? [{ label: 'Advance Recovery', amount: breakdown.advance_recovery }] : []),
+    ] : []
+
+    // Convert number to words for Net Pay
+    const numberToWords = (num: number): string => {
+        if (num === 0) return 'Zero'
+        const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
+            'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen']
+        const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety']
+        const scales = ['', 'Thousand', 'Lakh', 'Crore']
+
+        const absNum = Math.abs(Math.round(num))
+        if (absNum === 0) return 'Zero'
+
+        // Split into Indian grouping: last 3, then groups of 2
+        const groups: number[] = []
+        let remaining = absNum
+        groups.push(remaining % 1000)
+        remaining = Math.floor(remaining / 1000)
+        while (remaining > 0) {
+            groups.push(remaining % 100)
+            remaining = Math.floor(remaining / 100)
+        }
+
+        const twoDigitToWords = (n: number): string => {
+            if (n === 0) return ''
+            if (n < 20) return ones[n]
+            return tens[Math.floor(n / 10)] + (n % 10 ? ' ' + ones[n % 10] : '')
+        }
+
+        const threeDigitToWords = (n: number): string => {
+            if (n === 0) return ''
+            const h = Math.floor(n / 100)
+            const rest = n % 100
+            let result = ''
+            if (h > 0) result = ones[h] + ' Hundred'
+            if (rest > 0) result += (h > 0 ? ' ' : '') + twoDigitToWords(rest)
+            return result
+        }
+
+        const parts: string[] = []
+        for (let i = groups.length - 1; i >= 0; i--) {
+            if (groups[i] === 0) continue
+            const words = i === 0 ? threeDigitToWords(groups[i]) : twoDigitToWords(groups[i])
+            if (words) parts.push(words + (scales[i] ? ' ' + scales[i] : ''))
+        }
+
+        return (num < 0 ? 'Minus ' : '') + parts.join(' ') + ' Rupees Only'
+    }
+
+    const maxRows = Math.max(earningsItems.length, deductionItems.length)
 
     return (
         <TooltipProvider>
@@ -411,114 +501,186 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
                     </div>
                 )}
 
-                {/* Payslip Detail Dialog */}
+                {/* Payslip Detail Dialog — A4 Salary Slip */}
                 <Dialog open={!!viewPayslipId} onOpenChange={(open) => !open && setViewPayslipId(null)}>
-                    <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-                        <DialogHeader>
+                    <DialogContent className="max-w-[820px] max-h-[95vh] overflow-y-auto p-0">
+                        <DialogHeader className="px-6 pt-5 pb-0">
                             <DialogTitle className="flex items-center gap-2">
                                 <Receipt className="h-5 w-5 text-primary" />
-                                Payslip Detail
+                                Salary Slip
                             </DialogTitle>
                         </DialogHeader>
 
                         {payslipDetail && breakdown && (
                             <>
                                 <div ref={payslipRef}>
-                                    <div className="payslip">
-                                        <div className="text-center mb-4 pb-3 border-b-2 border-foreground/20">
-                                            <h2 className="text-lg font-bold">SALARY SLIP</h2>
-                                            <p className="text-sm text-muted-foreground">{MONTHS[month - 1]} {year}</p>
+                                    <div className="slip-page" style={{ padding: '32px 40px 40px' }}>
+                                        {/* Slip Header */}
+                                        <div style={{ textAlign: 'center', paddingBottom: '14px', marginBottom: '18px', borderBottom: '3px double currentColor' }}>
+                                            <h1 style={{ fontSize: '20px', fontWeight: 700, letterSpacing: '3px', textTransform: 'uppercase' as const, marginBottom: '4px' }}>
+                                                SALARY SLIP
+                                            </h1>
+                                            <p style={{ fontSize: '14px', opacity: 0.6, fontWeight: 500 }}>
+                                                For the month of {MONTHS[month - 1]} {year}
+                                            </p>
                                         </div>
 
-                                        <div className="space-y-1 mb-4 text-sm bg-muted/10 p-3 rounded-lg border border-border/50">
-                                            <div className="flex justify-between items-center mb-1">
-                                                <span className="text-muted-foreground">Employee:</span>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="font-semibold">{payslipDetail.profile?.full_name || payslipDetail.profile?.email}</span>
-                                                    {roleBadge(payslipDetail.profile?.role || 'employee')}
-                                                </div>
+                                        {/* Employee Details Grid */}
+                                        <div style={{
+                                            display: 'grid',
+                                            gridTemplateColumns: '1fr 1fr',
+                                            gap: '4px 36px',
+                                            marginBottom: '22px',
+                                            padding: '14px 18px',
+                                            border: '1px solid',
+                                            borderRadius: '4px',
+                                            borderColor: 'var(--border, #ddd)',
+                                            background: 'var(--muted, #fafafa)',
+                                        }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0' }}>
+                                                <span style={{ opacity: 0.6 }}>Employee Name</span>
+                                                <span style={{ fontWeight: 600 }}>{payslipDetail.profile?.full_name || '—'}</span>
                                             </div>
-                                            <div className="flex justify-between items-center mb-3">
-                                                <span className="text-muted-foreground">Designation:</span>
-                                                <span className="text-xs text-muted-foreground font-medium">{payslipDetail.profile?.designation?.name || '—'}</span>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0' }}>
+                                                <span style={{ opacity: 0.6 }}>Designation</span>
+                                                <span style={{ fontWeight: 600 }}>{payslipDetail.profile?.designation?.name || '—'}</span>
                                             </div>
-                                            <div className="flex justify-between">
-                                                <span className="text-muted-foreground">Working Days:</span>
-                                                <span>{breakdown.total_working_days}</span>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0' }}>
+                                                <span style={{ opacity: 0.6 }}>Email</span>
+                                                <span style={{ fontWeight: 600, fontSize: '12px' }}>{payslipDetail.profile?.email || '—'}</span>
                                             </div>
-                                            <div className="flex justify-between">
-                                                <span className="text-muted-foreground">Present Days:</span>
-                                                <span className="text-emerald-600 font-medium">{payslipDetail.total_present_days}</span>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0' }}>
+                                                <span style={{ opacity: 0.6 }}>Month / Year</span>
+                                                <span style={{ fontWeight: 600 }}>{MONTHS[month - 1]} {year}</span>
                                             </div>
-                                            <div className="flex justify-between">
-                                                <span className="text-muted-foreground">Absent Days:</span>
-                                                <span className="text-rose-600 font-medium">{breakdown.absent_days}</span>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0' }}>
+                                                <span style={{ opacity: 0.6 }}>Working Days</span>
+                                                <span style={{ fontWeight: 600 }}>{breakdown.total_working_days}</span>
                                             </div>
-                                        </div>
-
-                                        <Separator className="my-3" />
-
-                                        {/* Earnings */}
-                                        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">Earnings</p>
-                                        <div className="space-y-1 text-sm bg-background p-2">
-                                            <div className="flex justify-between"><span>Basic Salary</span><span>{formatCurrency(breakdown.basic_salary)}</span></div>
-                                            <div className="flex justify-between"><span>HRA</span><span>{formatCurrency(breakdown.hra)}</span></div>
-                                            <div className="flex justify-between"><span>DA</span><span>{formatCurrency(breakdown.da)}</span></div>
-                                            <div className="flex justify-between"><span>TA</span><span>{formatCurrency(breakdown.ta)}</span></div>
-                                            <div className="flex justify-between"><span>Special Allowance</span><span>{formatCurrency(breakdown.special_allowance)}</span></div>
-                                            <div className="flex justify-between"><span>Incentive</span><span>{formatCurrency(breakdown.incentive)}</span></div>
-                                            <div className="flex justify-between font-bold border-t pt-2 mt-2 py-1">
-                                                <span>Gross Salary</span>
-                                                <span>{formatCurrency(breakdown.gross_salary)}</span>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0' }}>
+                                                <span style={{ opacity: 0.6 }}>Present Days</span>
+                                                <span style={{ fontWeight: 600, color: '#16a34a' }}>{payslipDetail.total_present_days}</span>
                                             </div>
-                                        </div>
-
-                                        <Separator className="my-3" />
-
-                                        {/* Deductions */}
-                                        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">Deductions</p>
-                                        <div className="space-y-2 text-sm bg-rose-500/5 p-3 rounded-md border border-rose-500/10">
-                                            <div className="flex justify-between text-rose-600">
-                                                <span>Absence Deduction ({breakdown.absent_days} days × {formatCurrency(breakdown.per_day_rate)}/day)</span>
-                                                <span>−{formatCurrency(breakdown.absence_deduction)}</span>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0' }}>
+                                                <span style={{ opacity: 0.6 }}>Absent Days</span>
+                                                <span style={{ fontWeight: 600, color: '#dc2626' }}>{breakdown.absent_days}</span>
                                             </div>
-                                            <div className="flex justify-between text-rose-600">
-                                                <span>Other Deductions (PF/ESI/etc.)</span>
-                                                <span>−{formatCurrency(breakdown.other_deductions)}</span>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0' }}>
+                                                <span style={{ opacity: 0.6 }}>Leaves</span>
+                                                <span style={{ fontWeight: 600 }}>{payslipDetail.total_leaves}</span>
                                             </div>
                                         </div>
 
-                                        <Separator className="my-3" />
+                                        {/* Earnings & Deductions — Side by Side Table */}
+                                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                            <thead>
+                                                <tr>
+                                                    <th style={{ background: '#f0f0f0', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.8px', padding: '10px 14px', border: '1px solid #ccc', textAlign: 'left', width: '30%' }}>Earnings</th>
+                                                    <th style={{ background: '#f0f0f0', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.8px', padding: '10px 14px', border: '1px solid #ccc', textAlign: 'right', width: '20%' }}>Amount (₹)</th>
+                                                    <th style={{ background: '#f0f0f0', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.8px', padding: '10px 14px', border: '1px solid #ccc', textAlign: 'left', width: '30%' }}>Deductions</th>
+                                                    <th style={{ background: '#f0f0f0', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.8px', padding: '10px 14px', border: '1px solid #ccc', textAlign: 'right', width: '20%' }}>Amount (₹)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {Array.from({ length: maxRows }).map((_, i) => (
+                                                    <tr key={i}>
+                                                        <td style={{ padding: '7px 14px', border: '1px solid #ddd', fontSize: '13px', color: '#333' }}>
+                                                            {earningsItems[i]?.label || ''}
+                                                        </td>
+                                                        <td style={{ padding: '7px 14px', border: '1px solid #ddd', fontSize: '13px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                                                            {earningsItems[i] ? formatCurrency(earningsItems[i].amount) : ''}
+                                                        </td>
+                                                        <td style={{ padding: '7px 14px', border: '1px solid #ddd', fontSize: '13px', color: '#b91c1c' }}>
+                                                            {deductionItems[i]?.label || ''}
+                                                        </td>
+                                                        <td style={{ padding: '7px 14px', border: '1px solid #ddd', fontSize: '13px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#b91c1c' }}>
+                                                            {deductionItems[i] ? formatCurrency(deductionItems[i].amount) : ''}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                                {/* Totals Row */}
+                                                <tr>
+                                                    <td style={{ padding: '10px 14px', border: '1px solid #ccc', fontSize: '13px', fontWeight: 700, background: '#f5f5f5', borderTop: '2px solid #999' }}>
+                                                        Total Earnings
+                                                    </td>
+                                                    <td style={{ padding: '10px 14px', border: '1px solid #ccc', fontSize: '13px', fontWeight: 700, background: '#f5f5f5', textAlign: 'right', borderTop: '2px solid #999', fontVariantNumeric: 'tabular-nums' }}>
+                                                        {formatCurrency(totalEarnings)}
+                                                    </td>
+                                                    <td style={{ padding: '10px 14px', border: '1px solid #ccc', fontSize: '13px', fontWeight: 700, background: '#f5f5f5', borderTop: '2px solid #999', color: '#b91c1c' }}>
+                                                        Total Deductions
+                                                    </td>
+                                                    <td style={{ padding: '10px 14px', border: '1px solid #ccc', fontSize: '13px', fontWeight: 700, background: '#f5f5f5', textAlign: 'right', borderTop: '2px solid #999', fontVariantNumeric: 'tabular-nums', color: '#b91c1c' }}>
+                                                        {formatCurrency(totalDeductions)}
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
 
-                                        {/* Net Salary */}
-                                        <div className="flex justify-between font-bold text-sm px-2">
-                                            <span>Net Salary</span>
-                                            <span>{formatCurrency(breakdown.net_salary)}</span>
+                                        {/* Net Pay Box */}
+                                        <div style={{
+                                            marginTop: '20px',
+                                            padding: '16px 20px',
+                                            border: '2px solid currentColor',
+                                            borderRadius: '4px',
+                                        }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <span style={{ fontSize: '15px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '1px' }}>
+                                                    Net Pay
+                                                </span>
+                                                <span style={{ fontSize: '20px', fontWeight: 800 }}>
+                                                    {formatCurrency(breakdown.take_home)}
+                                                </span>
+                                            </div>
+                                            <div style={{ fontSize: '12px', opacity: 0.7, marginTop: '6px', fontStyle: 'italic' }}>
+                                                ({numberToWords(Number(breakdown.take_home || 0))})
+                                            </div>
                                         </div>
 
-                                        {/* Advance Recovery */}
-                                        {Number(breakdown.advance_recovery) > 0 && (
-                                            <>
-                                                <Separator className="my-3" />
-                                                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">Advance Recovery</p>
-                                                <div className="flex justify-between text-sm text-amber-600 bg-amber-500/5 p-3 rounded-md border border-amber-500/10">
-                                                    <span>Advance/Loan Adjusted</span>
-                                                    <span>−{formatCurrency(breakdown.advance_recovery)}</span>
-                                                </div>
-                                            </>
+                                        {/* Carry-Forward Notice */}
+                                        {Number(breakdown.carry_forward || 0) > 0 && (
+                                            <div style={{
+                                                marginTop: '12px',
+                                                padding: '12px 16px',
+                                                border: '1px solid #fca5a5',
+                                                borderRadius: '4px',
+                                                background: '#fef2f2',
+                                                color: '#991b1b',
+                                                fontSize: '12px',
+                                            }}>
+                                                <strong>Note:</strong> Deductions exceeded earnings by {formatCurrency(breakdown.carry_forward)}.
+                                                This amount has been carried forward as an advance and will be adjusted in the next month&apos;s salary.
+                                            </div>
                                         )}
 
-                                        <Separator className="my-3" />
+                                        {/* Authorized Signatory */}
+                                        <div style={{
+                                            marginTop: '60px',
+                                            display: 'flex',
+                                            justifyContent: 'flex-end',
+                                        }}>
+                                            <div style={{ textAlign: 'center', minWidth: '200px' }}>
+                                                <div style={{ borderBottom: '1px solid #999', marginBottom: '8px', height: '50px' }} />
+                                                <span style={{ fontSize: '13px', fontWeight: 600 }}>Authorized Signatory</span>
+                                            </div>
+                                        </div>
 
-                                        {/* Take-Home */}
-                                        <div className="flex justify-between font-bold text-lg p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 mt-4">
-                                            <span className="text-emerald-700 dark:text-emerald-500">Take-Home Amount</span>
-                                            <span className="text-emerald-700 dark:text-emerald-400">{formatCurrency(breakdown.take_home)}</span>
+                                        {/* Footer */}
+                                        <div style={{
+                                            marginTop: '30px',
+                                            paddingTop: '10px',
+                                            borderTop: '1px solid #ccc',
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            fontSize: '11px',
+                                            opacity: 0.5,
+                                        }}>
+                                            <span>This is a computer-generated salary slip.</span>
+                                            <span>Generated on {new Date().toLocaleDateString('en-IN')}</span>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-border/50">
+                                <div className="flex justify-end gap-2 px-6 pb-5 pt-3 border-t border-border/50">
                                     <Button variant="outline" size="sm" onClick={handlePrint}>
                                         <Printer className="h-4 w-4 mr-1" />Print
                                     </Button>

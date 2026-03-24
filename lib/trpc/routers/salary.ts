@@ -214,4 +214,25 @@ export const salaryRouter = router({
         .query(async ({ input }) => {
             return await SalaryService.getPayslipDetail(input.summaryId)
         }),
+
+    // ==========================================
+    // EMPLOYEE SELF-SERVICE PAYSLIP
+    // ==========================================
+
+    getMyPayslips: protectedProcedure
+        .input(z.object({
+            month: z.number().min(1).max(12),
+            year: z.number().min(2020).max(2100),
+        }))
+        .query(async ({ ctx, input }) => {
+            return await SalaryService.getMyPayslips(ctx.profile.id, input.month, input.year)
+        }),
+
+    getMyPayslipDetail: protectedProcedure
+        .input(z.object({
+            summaryId: z.string().uuid(),
+        }))
+        .query(async ({ ctx, input }) => {
+            return await SalaryService.getMyPayslipDetail(input.summaryId, ctx.profile.id)
+        }),
 })

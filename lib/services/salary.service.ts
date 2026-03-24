@@ -12,6 +12,11 @@ import {
 import { eq, and, gte, lte, desc, sql, inArray, or, ne } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 
+const MONTH_NAMES = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+]
+
 export class SalaryService {
 
     // ==========================================
@@ -73,17 +78,17 @@ export class SalaryService {
             }).where(eq(employeeSalarySetup.id, currentActive.id))
         }
 
-        // Insert new active record
+        // Insert new active record — coalesce empty strings to '0' for numeric fields
         const [newSetup] = await db.insert(employeeSalarySetup).values({
             profile_id: profileId,
-            basic_salary: basicSalary,
-            hra,
-            da,
-            ta,
-            special_allowance: specialAllowance,
-            incentive,
-            other_deductions: otherDeductions,
-            deduction_remark: deductionRemark,
+            basic_salary: basicSalary || '0',
+            hra: hra || '0',
+            da: da || '0',
+            ta: ta || '0',
+            special_allowance: specialAllowance || '0',
+            incentive: incentive || '0',
+            other_deductions: otherDeductions || '0',
+            deduction_remark: deductionRemark || null,
             effective_from_month: effectiveFromMonth,
             effective_from_year: effectiveFromYear,
             change_reason: changeReason || 'Initial Setup',
@@ -291,6 +296,9 @@ export class SalaryService {
         if (advance.status === 'adjusted') {
             throw new TRPCError({ code: 'BAD_REQUEST', message: 'Cannot update an adjusted advance' })
         }
+        if (advance.particulars?.startsWith('Salary deficit carry-forward from')) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'Cannot edit a system-generated salary deficit carry-forward' })
+        }
 
         const [updated] = await db.update(employeeAdvances).set({
             ...(date ? { date } : {}),
@@ -322,6 +330,9 @@ export class SalaryService {
         if (!advance) throw new TRPCError({ code: 'NOT_FOUND', message: 'Advance not found' })
         if (advance.status === 'adjusted') {
             throw new TRPCError({ code: 'BAD_REQUEST', message: 'Cannot delete an adjusted advance' })
+        }
+        if (advance.particulars?.startsWith('Salary deficit carry-forward from')) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'Cannot delete a system-generated salary deficit carry-forward' })
         }
 
         await db.delete(employeeAdvances).where(eq(employeeAdvances.id, id))
@@ -607,7 +618,12 @@ export class SalaryService {
             // Get pending advances
             const advanceTotal = Number(await this.getPendingAdvancesTotal(summary.profile_id))
 
-            const takeHome = netSalary - advanceTotal
+            const rawTakeHome = netSalary - advanceTotal
+
+            // Handle negative take-home: carry forward deficit as next-month advance
+            const isNegative = rawTakeHome < 0
+            const carryForwardAmount = isNegative ? Math.abs(rawTakeHome) : 0
+            const actualTakeHome = isNegative ? 0 : rawTakeHome
 
             const salaryBreakdown = {
                 basic_salary: basic,
@@ -625,7 +641,8 @@ export class SalaryService {
                 other_deductions: otherDeductions,
                 net_salary: Number(netSalary.toFixed(2)),
                 advance_recovery: advanceTotal,
-                take_home: Number(takeHome.toFixed(2)),
+                take_home: Number(actualTakeHome.toFixed(2)),
+                carry_forward: Number(carryForwardAmount.toFixed(2)),
             }
 
             // Update summary with payslip data
@@ -635,7 +652,7 @@ export class SalaryService {
                 absence_deduction: absenceDeduction.toFixed(2),
                 net_salary: netSalary.toFixed(2),
                 advance_recovery: advanceTotal.toFixed(2),
-                take_home: takeHome.toFixed(2),
+                take_home: actualTakeHome.toFixed(2),
                 salary_breakdown: salaryBreakdown,
                 updated_at: new Date(),
             }).where(eq(monthlyAttendanceSummary.id, summary.id)).returning()
@@ -652,6 +669,27 @@ export class SalaryService {
                 ))
             }
 
+            // If negative take-home, create a pending advance for the carry-forward amount
+            if (isNegative && carryForwardAmount > 0) {
+                // Determine the date for the advance (1st of next month)
+                let nextMonth = summary.month + 1
+                let nextYear = summary.year
+                if (nextMonth > 12) {
+                    nextMonth = 1
+                    nextYear += 1
+                }
+                const advanceDate = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`
+
+                await db.insert(employeeAdvances).values({
+                    profile_id: summary.profile_id,
+                    date: advanceDate,
+                    amount: carryForwardAmount.toFixed(2),
+                    particulars: `Salary deficit carry-forward from ${MONTH_NAMES[summary.month - 1]} ${summary.year} payslip`,
+                    status: 'pending',
+                    created_by: summary.profile_id, // system-generated
+                })
+            }
+
             results.push(updated)
         }
 
@@ -662,6 +700,57 @@ export class SalaryService {
     static async getPayslipDetail(summaryId: string) {
         const summary = await db.query.monthlyAttendanceSummary.findFirst({
             where: eq(monthlyAttendanceSummary.id, summaryId),
+            with: {
+                profile: {
+                    columns: { full_name: true, email: true, role: true },
+                    with: {
+                        designation: {
+                            columns: { name: true }
+                        }
+                    }
+                }
+            }
+        })
+
+        if (!summary) {
+            throw new TRPCError({ code: 'NOT_FOUND', message: 'Payslip not found' })
+        }
+
+        return summary
+    }
+
+    /** Get payslips for an employee (self-service) */
+    static async getMyPayslips(profileId: string, month: number, year: number) {
+        const summaries = await db.query.monthlyAttendanceSummary.findMany({
+            where: and(
+                eq(monthlyAttendanceSummary.profile_id, profileId),
+                eq(monthlyAttendanceSummary.month, month),
+                eq(monthlyAttendanceSummary.year, year),
+                eq(monthlyAttendanceSummary.status, 'payslip_generated')
+            ),
+            with: {
+                profile: {
+                    columns: { full_name: true, email: true, role: true },
+                    with: {
+                        designation: {
+                            columns: { name: true }
+                        }
+                    }
+                }
+            },
+            orderBy: [desc(monthlyAttendanceSummary.created_at)],
+        })
+
+        return summaries
+    }
+
+    /** Get individual payslip detail for an employee (self-service with ownership check) */
+    static async getMyPayslipDetail(summaryId: string, profileId: string) {
+        const summary = await db.query.monthlyAttendanceSummary.findFirst({
+            where: and(
+                eq(monthlyAttendanceSummary.id, summaryId),
+                eq(monthlyAttendanceSummary.profile_id, profileId)
+            ),
             with: {
                 profile: {
                     columns: { full_name: true, email: true, role: true },

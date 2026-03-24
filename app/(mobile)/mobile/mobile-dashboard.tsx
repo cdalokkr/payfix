@@ -31,7 +31,8 @@ import {
     ClockArrowDown,
     ClockArrowUp,
     CircleCheckBig,
-    CircleDollarSign
+    CircleDollarSign,
+    Receipt
 } from "lucide-react"
 import { usePwaCheck } from "@/hooks/use-pwa-check"
 import { isDefaultAvatar } from "@/lib/utils/avatar-helper"
@@ -72,6 +73,7 @@ const quickActions = [
     { label: "History", icon: IconHistory, href: "/mobile/history", color: "bg-blue-500/10 text-blue-600" },
     { label: "Leaves", icon: IconCalendarEvent, href: "/mobile/leaves", color: "bg-purple-500/10 text-purple-600" },
     { label: "Advances", icon: CircleDollarSign, href: "/mobile/advances", color: "bg-emerald-500/10 text-emerald-600" },
+    { label: "PaySlip", icon: Receipt, href: "/mobile/payslip", color: "bg-orange-500/10 text-orange-600" },
     { label: "Settings", icon: IconSettings, href: "/mobile/profile", color: "bg-slate-500/10 text-slate-600" },
     { label: "Help", icon: IconQuestionMark, href: "/mobile/help", color: "bg-amber-500/10 text-amber-600" },
 ]
