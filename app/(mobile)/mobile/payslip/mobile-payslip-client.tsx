@@ -15,7 +15,8 @@ import {
     X,
     TrendingDown,
     TrendingUp,
-    Banknote
+    IndianRupee,
+    Loader2
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -109,7 +110,7 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
     const [viewPayslipId, setViewPayslipId] = useState<string | null>(null)
     const payslipRef = useRef<HTMLDivElement>(null)
 
-    const { data: payslips, isLoading } = trpc.salary.getMyPayslips.useQuery({ month, year })
+    const { data: payslips, isLoading, isFetching } = trpc.salary.getMyPayslips.useQuery({ month, year })
 
     const { data: payslipDetail } = trpc.salary.getMyPayslipDetail.useQuery(
         { summaryId: viewPayslipId || "" },
@@ -188,24 +189,25 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
     const firstPayslip = payslips?.[0]
 
     return (
-        <div className="flex flex-col min-h-[100dvh] bg-slate-50 dark:bg-slate-950 pb-20">
-            {/* Header */}
-            <header className="sticky top-0 z-50 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800">
-                <div className="flex items-center justify-between px-4 h-16">
+        <div className="flex flex-col h-[calc(100dvh-5rem-5rem)] -mx-4 -mt-4 bg-slate-50 dark:bg-slate-950">
+            {/* Fixed Top Section */}
+            <div className="flex-none px-4 pt-2 pb-4 space-y-6 z-10 bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 shadow-sm relative">
+                {/* Header */}
+                <header className="flex items-center justify-between">
                     <Link href="/mobile">
-                        <Button variant="ghost" size="icon" className="rounded-full shrink-0">
+                        <Button variant="ghost" size="icon" className="rounded-full shrink-0 -ml-2 h-10 w-10">
                             <ChevronLeft className="w-6 h-6" />
                         </Button>
                     </Link>
                     <div className="flex items-center gap-2">
                         <Receipt className="w-5 h-5 text-orange-500" />
-                        <h1 className="text-lg font-black tracking-tight">My PaySlips</h1>
+                        <h1 className="text-lg font-black tracking-tight flex items-center gap-2">
+                            My PaySlips
+                            {isFetching && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
+                        </h1>
                     </div>
                     <div className="w-10"></div>
-                </div>
-            </header>
-
-            <main className="flex-1 overflow-y-auto p-4 space-y-6">
+                </header>
 
                 {/* Summary Card */}
                 <motion.div variants={itemVars} initial="hidden" animate="show">
@@ -216,7 +218,7 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
 
                         <div className="relative">
                             <div className="flex items-center gap-2 mb-4 opacity-90">
-                                <Banknote className="w-4 h-4" />
+                                <IndianRupee className="w-4 h-4" />
                                 <span className="text-xs font-black uppercase tracking-widest">Take-Home Pay</span>
                             </div>
                             <div className="flex items-end gap-2 mb-6">
@@ -287,9 +289,11 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                         </Select>
                     </div>
                 </motion.div>
+            </div>
 
-                {/* PaySlip List */}
-                <div className="space-y-4 pt-2">
+            {/* Scrollable List */}
+            <div className="flex-1 overflow-y-auto px-4 pb-4 pt-4 space-y-4 hide-scrollbar">
+                <div className="space-y-4">
                     <div className="flex items-center justify-between px-1">
                         <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Salary Slips</h2>
                         <Badge variant="secondary" className="bg-slate-200/50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-black rounded-lg">
@@ -383,7 +387,7 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                         </motion.div>
                     )}
                 </div>
-            </main>
+            </div>
 
             {/* PaySlip Detail Bottom Sheet */}
             <AnimatePresence>
