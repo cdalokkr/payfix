@@ -14,14 +14,12 @@ import {
     CheckCircle2,
     Clock,
     WalletCards,
-    ChevronLeft,
     Wallet,
     Loader2
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import Link from "next/link"
+
 
 const containerVars = {
     hidden: { opacity: 0 },
@@ -67,22 +65,14 @@ export function MobileAdvancesClient({ profile }: { profile: any }) {
     return (
         <div className="flex flex-col h-[calc(100dvh-5rem-5rem)] -mx-4 -mt-4 bg-slate-50 dark:bg-slate-950">
             {/* Fixed Top Section */}
-            <div className="flex-none px-4 pt-2 pb-4 space-y-6 z-10 bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 shadow-sm relative">
+            <div className="flex-none px-4 pt-1 pb-2 space-y-3 z-10 bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 shadow-sm relative">
                 {/* Header */}
-                <header className="flex items-center justify-between">
-                    <Link href="/mobile">
-                        <Button variant="ghost" size="icon" className="rounded-full shrink-0 -ml-2 h-10 w-10">
-                            <ChevronLeft className="w-6 h-6" />
-                        </Button>
-                    </Link>
-                    <div className="flex items-center gap-2">
-                        <Wallet className="w-5 h-5 text-emerald-500" />
-                        <h1 className="text-lg font-black tracking-tight flex items-center gap-2">
-                            My Advances
-                            {isFetching && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
-                        </h1>
-                    </div>
-                    <div className="w-10"></div>
+                <header className="flex items-center gap-2">
+                    <Wallet className="w-5 h-5 text-emerald-500" />
+                    <h1 className="text-lg font-black tracking-tight flex items-center gap-2">
+                        My Advances
+                        {isFetching && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
+                    </h1>
                 </header>
 
                 {/* Summary Card */}

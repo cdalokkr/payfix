@@ -1,17 +1,12 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { format } from "date-fns"
 import { trpc } from "@/lib/trpc/client"
 import {
     Receipt,
-    ChevronLeft,
-    Calendar,
-    Eye,
-    Printer,
     FileText,
-    Wallet,
     X,
     TrendingDown,
     TrendingUp,
@@ -21,7 +16,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import Link from "next/link"
+
 
 const containerVars = {
     hidden: { opacity: 0 },
@@ -108,7 +103,7 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
     const [month, setMonth] = useState<number>(defaultMonth)
     const [year, setYear] = useState<number>(defaultYear)
     const [viewPayslipId, setViewPayslipId] = useState<string | null>(null)
-    const payslipRef = useRef<HTMLDivElement>(null)
+
 
     const { data: payslips, isLoading, isFetching } = trpc.salary.getMyPayslips.useQuery({ month, year })
 
@@ -145,45 +140,7 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
     const totalEarnings = earningsItems.reduce((s, e) => s + Number(e.amount || 0), 0)
     const totalDeductions = deductionItems.reduce((s, e) => s + Number(e.amount || 0), 0)
 
-    const handlePrint = () => {
-        if (payslipRef.current) {
-            const printWindow = window.open('', '_blank')
-            if (printWindow) {
-                printWindow.document.write(`
-                    <html>
-                    <head><title>Salary Slip - ${payslipDetail?.profile?.full_name || 'Employee'} - ${MONTHS[month - 1]} ${year}</title>
-                    <style>
-                        @page { size: A4; margin: 20mm 18mm; }
-                        * { box-sizing: border-box; margin: 0; padding: 0; }
-                        body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #1a1a1a; background: #fff; }
-                        .slip-page { max-width: 760px; margin: 0 auto; padding: 0; }
-                        .slip-header { text-align: center; padding-bottom: 16px; margin-bottom: 20px; border-bottom: 3px double #1a1a1a; }
-                        .slip-header h1 { font-size: 22px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 4px; }
-                        .slip-header .period { font-size: 14px; color: #555; font-weight: 500; }
-                        .emp-details { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 40px; margin-bottom: 20px; padding: 14px 18px; border: 1px solid #ddd; border-radius: 4px; background: #fafafa; }
-                        .emp-details .detail-item { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; }
-                        .emp-details .detail-label { color: #666; }
-                        .emp-details .detail-value { font-weight: 600; text-align: right; }
-                        .salary-table { width: 100%; border-collapse: collapse; margin-bottom: 0; }
-                        .salary-table th { background: #f0f0f0; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; padding: 10px 14px; border: 1px solid #ccc; }
-                        .salary-table td { padding: 7px 14px; border: 1px solid #ddd; font-size: 13px; vertical-align: top; }
-                        .salary-table .amt { text-align: right; font-variant-numeric: tabular-nums; }
-                        .salary-table .total-row td { font-weight: 700; background: #f5f5f5; border-top: 2px solid #999; }
-                        .net-pay-box { margin-top: 16px; padding: 14px 18px; border: 2px solid #1a1a1a; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; }
-                        .net-pay-box .label { font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
-                        .net-pay-box .value { font-size: 18px; font-weight: 800; }
-                        .slip-footer { margin-top: 40px; padding-top: 12px; border-top: 1px solid #ccc; display: flex; justify-content: space-between; font-size: 11px; color: #888; }
-                        @media print { body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }
-                    </style>
-                    </head>
-                    <body>${payslipRef.current.innerHTML}</body>
-                    </html>
-                `)
-                printWindow.document.close()
-                printWindow.print()
-            }
-        }
-    }
+
 
     // Determine first payslip summary data for the hero card
     const firstPayslip = payslips?.[0]
@@ -191,22 +148,14 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
     return (
         <div className="flex flex-col h-[calc(100dvh-5rem-5rem)] -mx-4 -mt-4 bg-slate-50 dark:bg-slate-950">
             {/* Fixed Top Section */}
-            <div className="flex-none px-4 pt-2 pb-4 space-y-6 z-10 bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 shadow-sm relative">
+            <div className="flex-none px-4 pt-1 pb-2 space-y-3 z-10 bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 shadow-sm relative">
                 {/* Header */}
-                <header className="flex items-center justify-between">
-                    <Link href="/mobile">
-                        <Button variant="ghost" size="icon" className="rounded-full shrink-0 -ml-2 h-10 w-10">
-                            <ChevronLeft className="w-6 h-6" />
-                        </Button>
-                    </Link>
-                    <div className="flex items-center gap-2">
-                        <Receipt className="w-5 h-5 text-orange-500" />
-                        <h1 className="text-lg font-black tracking-tight flex items-center gap-2">
-                            My PaySlips
-                            {isFetching && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
-                        </h1>
-                    </div>
-                    <div className="w-10"></div>
+                <header className="flex items-center gap-2">
+                    <Receipt className="w-5 h-5 text-orange-500" />
+                    <h1 className="text-lg font-black tracking-tight flex items-center gap-2">
+                        My PaySlips
+                        {isFetching && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
+                    </h1>
                 </header>
 
                 {/* Summary Card */}
@@ -325,6 +274,21 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                         <motion.div variants={containerVars} initial="hidden" animate="show" className="space-y-3">
                             {payslips.map((slip: any) => {
                                 const bd = slip.salary_breakdown as Record<string, any> | null
+                                const cardEarnings = bd ? [
+                                    { label: 'Basic', amount: bd.basic_salary },
+                                    { label: 'HRA', amount: bd.hra },
+                                    { label: 'DA', amount: bd.da },
+                                    { label: 'TA', amount: bd.ta },
+                                    { label: 'Special Allow.', amount: bd.special_allowance },
+                                    { label: 'Incentive', amount: bd.incentive },
+                                ].filter(e => Number(e.amount) > 0) : []
+                                const cardDeductions = bd ? [
+                                    { label: 'Absence Ded.', amount: bd.absence_deduction },
+                                    { label: 'Other Ded.', amount: bd.other_deductions },
+                                    ...(Number(bd.advance_recovery) > 0 ? [{ label: 'Adv. Recovery', amount: bd.advance_recovery }] : []),
+                                ].filter(e => Number(e.amount) > 0) : []
+                                const cardTotalEarnings = cardEarnings.reduce((s: number, e: any) => s + Number(e.amount || 0), 0)
+                                const cardTotalDeductions = cardDeductions.reduce((s: number, e: any) => s + Number(e.amount || 0), 0)
                                 return (
                                     <motion.div
                                         key={slip.id}
@@ -333,53 +297,87 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                                         onClick={() => setViewPayslipId(slip.id)}
                                         className="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-100 dark:border-slate-800/50 cursor-pointer active:bg-slate-50 dark:active:bg-slate-800/50 transition-colors"
                                     >
+                                        {/* Header: Month + Generated Badge */}
                                         <div className="flex items-center justify-between mb-3">
                                             <div className="flex items-center gap-2">
                                                 <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center shrink-0">
                                                     <Receipt className="w-5 h-5 text-orange-600 dark:text-orange-400" />
                                                 </div>
-                                                <div>
-                                                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Period</div>
-                                                    <div className="text-sm font-black text-slate-900 dark:text-white leading-none">
-                                                        {MONTHS[slip.month - 1]} {slip.year}
-                                                    </div>
+                                                <div className="text-sm font-black text-slate-900 dark:text-white leading-none">
+                                                    {MONTHS[slip.month - 1]} {slip.year}
                                                 </div>
                                             </div>
-                                            <div className="text-right">
-                                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Take-Home</div>
-                                                <div className="text-lg font-black text-emerald-600 dark:text-emerald-400 tracking-tight leading-none">
-                                                    {formatCurr(slip.take_home)}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-3 gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
-                                            <div>
-                                                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Gross</div>
-                                                <div className="text-[13px] font-bold text-slate-700 dark:text-slate-300">{formatCurr(slip.gross_salary)}</div>
-                                            </div>
-                                            <div>
-                                                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Deductions</div>
-                                                <div className="text-[13px] font-bold text-rose-600">
-                                                    {formatCurr(Number(slip.absence_deduction || 0) + Number(bd?.other_deductions || 0))}
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Adv. Rec.</div>
-                                                <div className="text-[13px] font-bold text-amber-600">
-                                                    {Number(slip.advance_recovery) > 0 ? formatCurr(slip.advance_recovery) : '—'}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="flex items-center justify-between mt-3 pt-2">
                                             <Badge variant="outline" className="border-emerald-200 text-emerald-600 bg-emerald-50/50 font-bold uppercase tracking-widest text-[9px] py-1 px-2 rounded-lg gap-1">
                                                 <FileText className="w-3 h-3" /> Generated
                                             </Badge>
-                                            <div className="flex items-center gap-1 text-[11px] font-bold text-orange-500">
-                                                <Eye className="w-3.5 h-3.5" />
-                                                <span>View Details</span>
+                                        </div>
+
+                                        {/* Attendance Stats */}
+                                        <div className="grid grid-cols-4 gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                                            <div className="text-center">
+                                                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Working</div>
+                                                <div className="text-[13px] font-bold text-slate-700 dark:text-slate-300">{bd?.total_working_days ?? slip.total_working_days ?? '—'}</div>
                                             </div>
+                                            <div className="text-center">
+                                                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Absent</div>
+                                                <div className="text-[13px] font-bold text-rose-600">{bd?.absent_days ?? slip.total_absent_days ?? '—'}</div>
+                                            </div>
+                                            <div className="text-center">
+                                                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Leave</div>
+                                                <div className="text-[13px] font-bold text-amber-600">{slip.total_leaves ?? '—'}</div>
+                                            </div>
+                                            <div className="text-center">
+                                                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Present</div>
+                                                <div className="text-[13px] font-bold text-emerald-600">{slip.total_present_days ?? '—'}</div>
+                                            </div>
+                                        </div>
+
+                                        {/* Earnings & Deductions */}
+                                        <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-3">
+                                            {cardEarnings.length > 0 && (
+                                                <div>
+                                                    <div className="text-[9px] font-black uppercase tracking-widest text-emerald-600 mb-1.5 flex items-center gap-1">
+                                                        <TrendingUp className="w-3 h-3" /> Earnings
+                                                    </div>
+                                                    <div className="bg-emerald-50/50 dark:bg-emerald-500/5 rounded-xl border border-emerald-100/50 dark:border-emerald-500/10 overflow-hidden">
+                                                        {cardEarnings.map((item, i) => (
+                                                            <div key={i} className={`flex justify-between px-3 py-1.5 text-[11px] ${i > 0 ? 'border-t border-emerald-100/50 dark:border-emerald-500/10' : ''}`}>
+                                                                <span className="text-slate-500 font-medium">{item.label}</span>
+                                                                <span className="font-bold tabular-nums text-slate-700 dark:text-slate-300">{formatCurr(item.amount)}</span>
+                                                            </div>
+                                                        ))}
+                                                        <div className="flex justify-between px-3 py-1.5 text-[11px] border-t-2 border-emerald-200/60 dark:border-emerald-500/20 bg-emerald-100/40 dark:bg-emerald-500/10">
+                                                            <span className="font-black text-emerald-700 dark:text-emerald-400">Total Earnings</span>
+                                                            <span className="font-black text-emerald-700 dark:text-emerald-400 tabular-nums">{formatCurr(cardTotalEarnings)}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {cardDeductions.length > 0 && (
+                                                <div>
+                                                    <div className="text-[9px] font-black uppercase tracking-widest text-rose-600 mb-1.5 flex items-center gap-1">
+                                                        <TrendingDown className="w-3 h-3" /> Deductions
+                                                    </div>
+                                                    <div className="bg-rose-50/50 dark:bg-rose-500/5 rounded-xl border border-rose-100/50 dark:border-rose-500/10 overflow-hidden">
+                                                        {cardDeductions.map((item, i) => (
+                                                            <div key={i} className={`flex justify-between px-3 py-1.5 text-[11px] ${i > 0 ? 'border-t border-rose-100/50 dark:border-rose-500/10' : ''}`}>
+                                                                <span className="text-slate-500 font-medium">{item.label}</span>
+                                                                <span className="font-bold tabular-nums text-rose-600">{formatCurr(item.amount)}</span>
+                                                            </div>
+                                                        ))}
+                                                        <div className="flex justify-between px-3 py-1.5 text-[11px] border-t-2 border-rose-200/60 dark:border-rose-500/20 bg-rose-100/40 dark:bg-rose-500/10">
+                                                            <span className="font-black text-rose-700 dark:text-rose-400">Total Deductions</span>
+                                                            <span className="font-black text-rose-700 dark:text-rose-400 tabular-nums">{formatCurr(cardTotalDeductions)}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Net Pay */}
+                                        <div className="mt-3 pt-3 border-t border-dashed border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Net Pay</span>
+                                            <span className="text-base font-black text-emerald-600 dark:text-emerald-400 tracking-tight">{formatCurr(slip.take_home)}</span>
                                         </div>
                                     </motion.div>
                                 )
@@ -416,9 +414,6 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                                         <h2 className="text-base font-black tracking-tight">Salary Slip</h2>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <Button variant="outline" size="sm" className="h-8 rounded-lg text-[11px] font-bold gap-1" onClick={handlePrint}>
-                                            <Printer className="w-3.5 h-3.5" /> Print
-                                        </Button>
                                         <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => setViewPayslipId(null)}>
                                             <X className="w-4 h-4" />
                                         </Button>
@@ -525,95 +520,6 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                                 )}
                             </div>
 
-                            {/* Hidden A4 Print Layout */}
-                            <div ref={payslipRef} className="hidden">
-                                <div className="slip-page" style={{ padding: '32px 40px 40px' }}>
-                                    <div style={{ textAlign: 'center', paddingBottom: '14px', marginBottom: '18px', borderBottom: '3px double currentColor' }}>
-                                        <h1 style={{ fontSize: '20px', fontWeight: 700, letterSpacing: '3px', textTransform: 'uppercase', marginBottom: '4px' }}>
-                                            SALARY SLIP
-                                        </h1>
-                                        <p style={{ fontSize: '14px', opacity: 0.6, fontWeight: 500 }}>
-                                            For the month of {MONTHS[month - 1]} {year}
-                                        </p>
-                                    </div>
-                                    <div style={{
-                                        display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 36px', marginBottom: '22px',
-                                        padding: '14px 18px', border: '1px solid #ddd', borderRadius: '4px', background: '#fafafa'
-                                    }}>
-                                        {[
-                                            ['Employee Name', payslipDetail.profile?.full_name || '—'],
-                                            ['Designation', payslipDetail.profile?.designation?.name || '—'],
-                                            ['Email', payslipDetail.profile?.email || '—'],
-                                            ['Month / Year', `${MONTHS[month - 1]} ${year}`],
-                                            ['Working Days', breakdown.total_working_days],
-                                            ['Present Days', payslipDetail.total_present_days],
-                                            ['Absent Days', breakdown.absent_days],
-                                            ['Leaves', payslipDetail.total_leaves],
-                                        ].map(([label, value], i) => (
-                                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0' }}>
-                                                <span style={{ opacity: 0.6 }}>{label}</span>
-                                                <span style={{ fontWeight: 600 }}>{value}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-
-                                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                        <thead>
-                                            <tr>
-                                                <th style={{ background: '#f0f0f0', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', padding: '10px 14px', border: '1px solid #ccc', textAlign: 'left', width: '30%' }}>Earnings</th>
-                                                <th style={{ background: '#f0f0f0', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', padding: '10px 14px', border: '1px solid #ccc', textAlign: 'right', width: '20%' }}>Amount (₹)</th>
-                                                <th style={{ background: '#f0f0f0', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', padding: '10px 14px', border: '1px solid #ccc', textAlign: 'left', width: '30%' }}>Deductions</th>
-                                                <th style={{ background: '#f0f0f0', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', padding: '10px 14px', border: '1px solid #ccc', textAlign: 'right', width: '20%' }}>Amount (₹)</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {Array.from({ length: Math.max(earningsItems.length, deductionItems.length) }).map((_, i) => (
-                                                <tr key={i}>
-                                                    <td style={{ padding: '7px 14px', border: '1px solid #ddd', fontSize: '13px', color: '#333' }}>{earningsItems[i]?.label || ''}</td>
-                                                    <td style={{ padding: '7px 14px', border: '1px solid #ddd', fontSize: '13px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{earningsItems[i] ? formatCurr(earningsItems[i].amount) : ''}</td>
-                                                    <td style={{ padding: '7px 14px', border: '1px solid #ddd', fontSize: '13px', color: '#b91c1c' }}>{deductionItems[i]?.label || ''}</td>
-                                                    <td style={{ padding: '7px 14px', border: '1px solid #ddd', fontSize: '13px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#b91c1c' }}>{deductionItems[i] ? formatCurr(deductionItems[i].amount) : ''}</td>
-                                                </tr>
-                                            ))}
-                                            <tr>
-                                                <td style={{ padding: '10px 14px', border: '1px solid #ccc', fontSize: '13px', fontWeight: 700, background: '#f5f5f5', borderTop: '2px solid #999' }}>Total Earnings</td>
-                                                <td style={{ padding: '10px 14px', border: '1px solid #ccc', fontSize: '13px', fontWeight: 700, background: '#f5f5f5', textAlign: 'right', borderTop: '2px solid #999', fontVariantNumeric: 'tabular-nums' }}>{formatCurr(totalEarnings)}</td>
-                                                <td style={{ padding: '10px 14px', border: '1px solid #ccc', fontSize: '13px', fontWeight: 700, background: '#f5f5f5', borderTop: '2px solid #999', color: '#b91c1c' }}>Total Deductions</td>
-                                                <td style={{ padding: '10px 14px', border: '1px solid #ccc', fontSize: '13px', fontWeight: 700, background: '#f5f5f5', textAlign: 'right', borderTop: '2px solid #999', fontVariantNumeric: 'tabular-nums', color: '#b91c1c' }}>{formatCurr(totalDeductions)}</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-
-                                    <div style={{ marginTop: '20px', padding: '16px 20px', border: '2px solid currentColor', borderRadius: '4px' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span style={{ fontSize: '15px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px' }}>Net Pay</span>
-                                            <span style={{ fontSize: '20px', fontWeight: 800 }}>{formatCurr(breakdown.take_home)}</span>
-                                        </div>
-                                        <div style={{ fontSize: '12px', opacity: 0.7, marginTop: '6px', fontStyle: 'italic' }}>
-                                            ({numberToWords(Number(breakdown.take_home || 0))})
-                                        </div>
-                                    </div>
-
-                                    {Number(breakdown.carry_forward || 0) > 0 && (
-                                        <div style={{ marginTop: '12px', padding: '12px 16px', border: '1px solid #fca5a5', borderRadius: '4px', background: '#fef2f2', color: '#991b1b', fontSize: '12px' }}>
-                                            <strong>Note:</strong> Deductions exceeded earnings by {formatCurr(breakdown.carry_forward)}.
-                                            This amount has been carried forward as an advance and will be adjusted in the next month&apos;s salary.
-                                        </div>
-                                    )}
-
-                                    <div style={{ marginTop: '60px', display: 'flex', justifyContent: 'flex-end' }}>
-                                        <div style={{ textAlign: 'center', minWidth: '200px' }}>
-                                            <div style={{ borderBottom: '1px solid #999', marginBottom: '8px', height: '50px' }} />
-                                            <span style={{ fontSize: '13px', fontWeight: 600 }}>Authorized Signatory</span>
-                                        </div>
-                                    </div>
-
-                                    <div style={{ marginTop: '30px', paddingTop: '10px', borderTop: '1px solid #ccc', display: 'flex', justifyContent: 'space-between', fontSize: '11px', opacity: 0.5 }}>
-                                        <span>This is a computer-generated salary slip.</span>
-                                        <span>Generated on {new Date().toLocaleDateString('en-IN')}</span>
-                                    </div>
-                                </div>
-                            </div>
                         </motion.div>
                     </motion.div>
                 )}
