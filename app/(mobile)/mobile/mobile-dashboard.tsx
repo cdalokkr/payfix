@@ -475,7 +475,7 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
                                 <div className={`w-10 h-10 rounded-[1rem] ${action.color} flex items-center justify-center transition-transform group-hover:scale-110 duration-300`}>
                                     <action.icon className="w-5 h-5" />
                                 </div>
-                                <span className="font-bold text-[10px] tracking-tight">{action.label}</span>
+                                <span className="font-bold text-[11.5px] tracking-tight">{action.label}</span>
                             </motion.div>
                         </Link>
                     ))}

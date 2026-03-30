@@ -232,9 +232,9 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
             
             finalY = (doc as any).lastAutoTable.finalY + 15;
             
-            doc.setFontSize(12);
+            doc.setFontSize(16);
             doc.setFont('helvetica', 'bold');
-            doc.text(`Net Pay: Rs. ${Number(slip.take_home).toFixed(2)}`, 14, finalY);
+            doc.text(`NET PAY: Rs. ${Number(slip.take_home).toFixed(2)}`, 14, finalY);
             
             doc.setFontSize(9);
             doc.setFont('helvetica', 'italic');

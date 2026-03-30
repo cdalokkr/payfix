@@ -157,7 +157,7 @@ export function MobileAdvancesClient({ profile }: { profile: any }) {
                         </Badge>
                     </div>
 
-                    {isLoading ? (
+                    {(isLoading || isFetching) ? (
                         <div className="space-y-3">
                             {[1, 2, 3].map(i => (
                                 <div key={i} className="bg-slate-200/50 dark:bg-slate-800/50 animate-pulse h-28 rounded-2xl" />

@@ -17,7 +17,7 @@ export default async function MobilePayslipPage() {
 
     const { data: profile } = await supabase
         .from('profiles')
-        .select('*')
+        .select(`*, designation:designations(name)`)
         .eq('id', session.user.id)
         .single()
 
@@ -25,5 +25,12 @@ export default async function MobilePayslipPage() {
         redirect("/login")
     }
 
-    return <MobilePayslipClient profile={profile} />
+    const transformedProfile = {
+        ...profile,
+        designation: Array.isArray(profile.designation)
+            ? profile.designation[0] || null
+            : profile.designation
+    }
+
+    return <MobilePayslipClient profile={transformedProfile} />
 }
