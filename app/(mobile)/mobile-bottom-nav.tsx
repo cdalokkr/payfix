@@ -47,6 +47,7 @@ export function MobileBottomNav() {
                             <Link
                                 key={item.href}
                                 href={item.href}
+                                prefetch={true}
                                 className="relative -top-6 flex flex-col items-center group"
                             >
                                 <motion.div
@@ -74,6 +75,7 @@ export function MobileBottomNav() {
                         <Link
                             key={item.href}
                             href={item.href}
+                            prefetch={true}
                             className="relative flex flex-col items-center justify-center h-16 min-w-[64px] group"
                         >
                             <motion.div

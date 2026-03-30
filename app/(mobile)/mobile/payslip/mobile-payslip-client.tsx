@@ -11,7 +11,8 @@ import {
     TrendingDown,
     TrendingUp,
     IndianRupee,
-    Loader2
+    Loader2,
+    Download
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -103,6 +104,7 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
     const [month, setMonth] = useState<number>(defaultMonth)
     const [year, setYear] = useState<number>(defaultYear)
     const [viewPayslipId, setViewPayslipId] = useState<string | null>(null)
+    const [isDownloading, setIsDownloading] = useState<string | null>(null)
 
 
     const { data: payslips, isLoading, isFetching } = trpc.salary.getMyPayslips.useQuery({ month, year })
@@ -139,6 +141,113 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
 
     const totalEarnings = earningsItems.reduce((s, e) => s + Number(e.amount || 0), 0)
     const totalDeductions = deductionItems.reduce((s, e) => s + Number(e.amount || 0), 0)
+
+    const handleDownloadPdf = async (slip: any, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setIsDownloading(slip.id);
+        
+        try {
+            const bd = slip.salary_breakdown as Record<string, any>;
+            const monthName = MONTHS[slip.month - 1];
+            
+            const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+                import('jspdf'),
+                import('jspdf-autotable'),
+            ]);
+            
+            const doc = new jsPDF();
+            
+            doc.setFontSize(20);
+            doc.text("SALARY SLIP", 105, 20, { align: "center" });
+            
+            doc.setFontSize(10);
+            doc.text(`For the month of ${monthName} ${slip.year}`, 105, 28, { align: "center" });
+            
+            autoTable(doc, {
+                startY: 40,
+                body: [
+                    ['Employee Name', profile.full_name || '—', 'Working Days', bd?.total_working_days || '—'],
+                    ['Designation', profile.designation?.name || '—', 'Present Days', slip.total_present_days || '—'],
+                    ['Email', profile.email || '—', 'Absent Days', bd?.absent_days || '—'],
+                    ['Month / Year', `${monthName} ${slip.year}`, 'Leaves', slip.total_leaves || '—'],
+                ],
+                theme: 'grid',
+                styles: { fontSize: 9, cellPadding: 3 },
+                columnStyles: {
+                    0: { fontStyle: 'bold', fillColor: [245, 245, 245] },
+                    2: { fontStyle: 'bold', fillColor: [245, 245, 245] }
+                }
+            });
+            
+            const eItems = bd ? [
+                { label: 'Basic Salary', amount: bd.basic_salary },
+                { label: 'HRA', amount: bd.hra },
+                { label: 'DA', amount: bd.da },
+                { label: 'TA', amount: bd.ta },
+                { label: 'Special Allowance', amount: bd.special_allowance },
+                { label: 'Incentive', amount: bd.incentive },
+            ].filter(ev => Number(ev.amount) > 0) : [];
+            
+            const dItems = bd ? [
+                { label: 'Absence Deduction', amount: bd.absence_deduction },
+                { label: 'Other Deductions', amount: bd.other_deductions },
+                ...(Number(bd.advance_recovery) > 0 ? [{ label: 'Advance Recovery', amount: bd.advance_recovery }] : []),
+            ].filter(ev => Number(ev.amount) > 0) : [];
+            
+            const tEarn = eItems.reduce((s, ev) => s + Number(ev.amount || 0), 0);
+            const tDed = dItems.reduce((s, ev) => s + Number(ev.amount || 0), 0);
+            
+            const maxRows = Math.max(eItems.length, dItems.length);
+            const tableBody: any[] = [];
+            for (let i = 0; i < maxRows; i++) {
+                tableBody.push([
+                    eItems[i]?.label || '',
+                    eItems[i] ? `Rs. ${Number(eItems[i].amount).toFixed(2)}` : '',
+                    dItems[i]?.label || '',
+                    dItems[i] ? `Rs. ${Number(dItems[i].amount).toFixed(2)}` : ''
+                ]);
+            }
+            
+            tableBody.push([
+                { content: 'Total Earnings', styles: { fontStyle: 'bold' } },
+                { content: `Rs. ${Number(tEarn).toFixed(2)}`, styles: { fontStyle: 'bold' } },
+                { content: 'Total Deductions', styles: { fontStyle: 'bold' } },
+                { content: `Rs. ${Number(tDed).toFixed(2)}`, styles: { fontStyle: 'bold' } }
+            ]);
+            
+            let finalY = (doc as any).lastAutoTable.finalY + 10;
+            
+            autoTable(doc, {
+                startY: finalY,
+                head: [['Earnings', 'Amount', 'Deductions', 'Amount']],
+                body: tableBody,
+                theme: 'grid',
+                headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold' },
+                styles: { fontSize: 9, cellPadding: 3 },
+                columnStyles: {
+                    1: { halign: 'right' },
+                    3: { halign: 'right' }
+                }
+            });
+            
+            finalY = (doc as any).lastAutoTable.finalY + 15;
+            
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'bold');
+            doc.text(`Net Pay: Rs. ${Number(slip.take_home).toFixed(2)}`, 14, finalY);
+            
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'italic');
+            doc.text(`(${numberToWords(Number(slip.take_home))})`, 14, finalY + 6);
+            
+            const fileName = `Salary_Slip_${profile.full_name?.replace(/\s+/g, '_')}_${monthName}_${slip.year}.pdf`;
+            doc.save(fileName);
+        } catch (error) {
+            console.error("Failed to generate PDF", error);
+        } finally {
+            setIsDownloading(null);
+        }
+    }
 
 
 
@@ -307,9 +416,20 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                                                     {MONTHS[slip.month - 1]} {slip.year}
                                                 </div>
                                             </div>
-                                            <Badge variant="outline" className="border-emerald-200 text-emerald-600 bg-emerald-50/50 font-bold uppercase tracking-widest text-[9px] py-1 px-2 rounded-lg gap-1">
-                                                <FileText className="w-3 h-3" /> Generated
-                                            </Badge>
+                                            <div className="flex items-center gap-1.5">
+                                                <Badge variant="outline" className="border-emerald-200 text-emerald-600 bg-emerald-50/50 font-bold uppercase tracking-widest text-[9px] py-1 px-2 rounded-lg gap-1">
+                                                    <FileText className="w-3 h-3" /> Generated
+                                                </Badge>
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="icon" 
+                                                    className="w-8 h-8 rounded-full text-slate-400 hover:text-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700" 
+                                                    onClick={(e) => handleDownloadPdf(slip, e)}
+                                                    disabled={isDownloading === slip.id}
+                                                >
+                                                    {isDownloading === slip.id ? <Loader2 className="w-4 h-4 animate-spin"/> : <Download className="w-4 h-4" />}
+                                                </Button>
+                                            </div>
                                         </div>
 
                                         {/* Attendance Stats */}
