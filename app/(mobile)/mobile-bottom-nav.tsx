@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation"
 import Link from "next/link"
-import { Home as IconHome, ClipboardCheck as IconChecklist, User2 as IconUser } from "lucide-react"
+import { Home as IconHome, ClipboardCheck as IconChecklist, User2 as IconUser, TicketCheck as IconTicket } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { motion } from "framer-motion"
 
@@ -17,6 +17,11 @@ const navItems = [
         icon: IconChecklist,
         label: "Attendance",
         isPrimary: true,
+    },
+    {
+        href: "/mobile/tickets",
+        icon: IconTicket,
+        label: "Tickets",
     },
     {
         href: "/mobile/profile",

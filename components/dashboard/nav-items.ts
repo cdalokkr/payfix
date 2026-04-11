@@ -141,6 +141,36 @@ export const adminNavItems: NavGroup[] = [
     ]
   },
   {
+    label: "Service Desk",
+    icon: "Headset",
+    items: [
+      {
+        title: "Clients",
+        href: "/admin/clients",
+        icon: "Building2",
+        moduleId: "clients",
+        requiredRole: "admin",
+        description: "Manage client directory"
+      },
+      {
+        title: "Complaints",
+        href: "/admin/complaints",
+        icon: "MessageSquareWarning",
+        moduleId: "complaints",
+        requiredRole: "admin",
+        description: "Client complaint management"
+      },
+      {
+        title: "Tickets",
+        href: "/admin/tickets",
+        icon: "TicketCheck",
+        moduleId: "tickets",
+        requiredRole: "admin",
+        description: "Track assigned tickets"
+      },
+    ]
+  },
+  {
     label: "Personalize",
     icon: "UserPen",
     items: [
@@ -247,6 +277,33 @@ export const moderatorNavItems: NavGroup[] = [
     ]
   },
   {
+    label: "Service Desk",
+    icon: "Headset",
+    items: [
+      {
+        title: "Clients",
+        href: "/moderator/clients",
+        icon: "Building2",
+        moduleId: "clients",
+        description: "Manage client directory"
+      },
+      {
+        title: "Complaints",
+        href: "/moderator/complaints",
+        icon: "MessageSquareWarning",
+        moduleId: "complaints",
+        description: "Client complaint management"
+      },
+      {
+        title: "Tickets",
+        href: "/moderator/tickets",
+        icon: "TicketCheck",
+        moduleId: "tickets",
+        description: "Track assigned tickets"
+      },
+    ]
+  },
+  {
     label: "Personalize",
     icon: "UserPen",
     items: [
@@ -307,6 +364,19 @@ export const employeeNavItems: NavGroup[] = [
         icon: "HandCoins",
         moduleId: "salary",
         description: "View your personal advances and loans"
+      },
+    ]
+  },
+  {
+    label: "Service Desk",
+    icon: "Headset",
+    items: [
+      {
+        title: "My Tickets",
+        href: "/employee/tickets",
+        icon: "TicketCheck",
+        moduleId: "tickets",
+        description: "View and work on assigned tickets"
       },
     ]
   },

@@ -37,6 +37,13 @@ import {
   HandCoins,
   CalendarRange,
   Receipt,
+
+  // Complaint & Ticket icons
+  Headset,
+  MessageSquareWarning,
+  TicketCheck,
+  Building2,
+  Phone,
 } from 'lucide-react';
 
 export const Icons: Record<string, React.ElementType> = {
@@ -78,5 +85,12 @@ export const Icons: Record<string, React.ElementType> = {
   HandCoins,
   CalendarRange,
   Receipt,
+
+  // Complaint & Ticket icons
+  Headset,
+  MessageSquareWarning,
+  TicketCheck,
+  Building2,
+  Phone,
 };
 

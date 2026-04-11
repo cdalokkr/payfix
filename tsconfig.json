@@ -1,12 +1,14 @@
 {
   "compilerOptions": {
-    // Target ES2022 for better performance with modern JavaScript features
-    "target": "ES2022",
+    // Target ES2024 for modern JavaScript features (TypeScript 6 compatible)
+    "target": "ES2024",
     "lib": [
       "dom",
       "dom.iterable",
       "esnext"
     ],
+    // TypeScript 6: explicitly list required @types packages (default is now [])
+    "types": ["node", "jest", "react"],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,

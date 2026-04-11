@@ -1,7 +1,7 @@
 // ============================================
 // types/index.ts
 // ============================================
-export type Module = 'dashboard' | 'users' | 'reports' | 'settings' | 'analytics' | 'notifications' | 'billing' | 'profile' | 'attendance' | 'leaves' | 'payroll'
+export type Module = 'dashboard' | 'users' | 'reports' | 'settings' | 'analytics' | 'notifications' | 'billing' | 'profile' | 'attendance' | 'leaves' | 'payroll' | 'complaints' | 'tickets' | 'clients'
 
 export type UserRole = 'admin' | 'moderator' | 'employee'
 
@@ -255,4 +255,121 @@ export interface MonthlyAttendanceSummary {
   salary_breakdown: Record<string, unknown> | null
   created_at: string | null
   updated_at: string | null
+}
+
+export type TicketStatus = 'open' | 'in_progress' | 'resolved' | 'closed' | 'cancelled'
+export type TicketPriority = 'low' | 'medium' | 'high' | 'critical'
+export type CallLogStatus = 'done' | 'pending' | 'cancelled'
+export type ComplaintCategory = 'billing' | 'technical' | 'service' | 'product' | 'general'
+
+export interface ClientContact {
+  name: string
+  role: string
+  phone: string
+  email: string
+}
+
+export interface Client {
+  id: string
+  company_name: string
+  contact_person: string | null
+  email: string | null
+  phone: string | null
+  alt_phone: string | null
+  gst_number: string | null
+  pan_number: string | null
+  website: string | null
+  industry: string | null
+  address_line1: string | null
+  address_line2: string | null
+  city: string | null
+  state: string | null
+  pincode: string | null
+  country: string | null
+  contacts: ClientContact[] | null
+  notes: string | null
+  status: 'active' | 'inactive' | null
+  created_by: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface Complaint {
+  id: string
+  complaint_number: string
+  client_id: string | null
+  subject: string
+  description: string | null
+  category: ComplaintCategory | null
+  priority: TicketPriority | null
+  status: TicketStatus | null
+  source: string | null
+  sla_hours: number | null
+  resolved_at: string | null
+  closed_at: string | null
+  created_by: string | null
+  created_at: string | null
+  updated_at: string | null
+  client?: Client | null
+  tickets?: Ticket[]
+}
+
+export interface Ticket {
+  id: string
+  ticket_number: string
+  complaint_id: string | null
+  title: string
+  description: string | null
+  priority: TicketPriority | null
+  status: TicketStatus | null
+  due_date: string | null
+  estimated_hours: string | null
+  actual_hours: string | null
+  created_by: string | null
+  created_at: string | null
+  updated_at: string | null
+  complaint?: Complaint | null
+  assignments?: TicketAssignment[]
+  resolutions?: TicketResolution[]
+}
+
+export interface TicketAssignment {
+  id: string
+  ticket_id: string
+  assigned_to: string
+  assigned_by: string | null
+  role: string | null
+  is_primary: boolean | null
+  assigned_at: string | null
+  assignee?: Profile | null
+}
+
+export interface TicketResolution {
+  id: string
+  ticket_id: string
+  resolved_by: string
+  resolution_text: string
+  remarks: string | null
+  hours_spent: string | null
+  status_after: TicketStatus | null
+  created_at: string | null
+  resolver?: Profile | null
+}
+
+export interface CallLog {
+  id: string
+  ticket_id: string | null
+  complaint_id: string | null
+  client_id: string | null
+  called_by: string
+  contact_name: string | null
+  contact_phone: string | null
+  call_type: string | null
+  duration_minutes: number | null
+  notes: string | null
+  remarks: string | null
+  status: CallLogStatus | null
+  next_follow_up: string | null
+  created_at: string | null
+  caller?: Profile | null
 }

@@ -16,6 +16,9 @@ import { mpinRouter } from './mpin'
 import { officeLocationsRouter } from './office-locations'
 import { pushRouter } from './push'
 import { salaryRouter } from './salary'
+import { clientsRouter } from './clients'
+import { complaintsRouter } from './complaints'
+import { ticketsRouter } from './tickets'
 
 export const appRouter = router({
   auth: authRouter,
@@ -40,9 +43,14 @@ export const appRouter = router({
   mpin: mpinRouter,
   officeLocations: officeLocationsRouter,
   push: pushRouter,
+  // Complaint & Ticket Management
+  clients: clientsRouter,
+  complaints: complaintsRouter,
+  tickets: ticketsRouter,
 })
 
 export type AppRouter = typeof appRouter
+
 
 
 

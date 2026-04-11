@@ -32,7 +32,8 @@ import {
     ClockArrowUp,
     CircleCheckBig,
     IndianRupee,
-    Receipt
+    Receipt,
+    TicketCheck
 } from "lucide-react"
 import { usePwaCheck } from "@/hooks/use-pwa-check"
 import { isDefaultAvatar } from "@/lib/utils/avatar-helper"
@@ -73,9 +74,9 @@ const quickActions = [
     { label: "Leaves", icon: IconCalendarEvent, href: "/mobile/leaves", color: "bg-purple-500/10 text-purple-600" },
     { label: "Advances", icon: IndianRupee, href: "/mobile/advances", color: "bg-emerald-500/10 text-emerald-600" },
     { label: "Pay Slips", icon: Receipt, href: "/mobile/payslip", color: "bg-orange-500/10 text-orange-600" },
+    { label: "My Tickets", icon: TicketCheck, href: "/mobile/tickets", color: "bg-cyan-500/10 text-cyan-600" },
     { label: "History", icon: IconHistory, href: "/mobile/history", color: "bg-blue-500/10 text-blue-600" },
     { label: "Settings", icon: IconSettings, href: "/mobile/profile", color: "bg-slate-500/10 text-slate-600" },
-    { label: "Help", icon: IconQuestionMark, href: "/mobile/help", color: "bg-amber-500/10 text-amber-600" },
 ]
 
 export function MobileDashboard({ profile, todayAttendance: initialAttendance }: MobileDashboardProps) {

@@ -5,6 +5,12 @@ import { relations } from 'drizzle-orm';
 export const userRoleEnum = pgEnum('user_role', ['admin', 'moderator', 'employee']);
 export const activityTypeEnum = pgEnum('activity_type', ['login', 'logout', 'profile_update', 'data_view', 'data_edit', 'data_delete', 'data_create', 'password_change']);
 
+// Complaint & Ticket Enums
+export const ticketStatusEnum = pgEnum('ticket_status', ['open', 'in_progress', 'resolved', 'closed', 'cancelled']);
+export const ticketPriorityEnum = pgEnum('ticket_priority', ['low', 'medium', 'high', 'critical']);
+export const callLogStatusEnum = pgEnum('call_log_status', ['done', 'pending', 'cancelled']);
+export const complaintCategoryEnum = pgEnum('complaint_category', ['billing', 'technical', 'service', 'product', 'general']);
+
 // Designations
 export const designations = pgTable('designations', {
     id: uuid('id').primaryKey().defaultRandom(),
@@ -260,6 +266,113 @@ export const monthlyAttendanceSummary = pgTable('monthly_attendance_summary', {
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 
+// ============================================
+// Complaint & Ticket Management Tables
+// ============================================
+
+// Clients (CRM-style)
+export const clients = pgTable('clients', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    company_name: text('company_name').notNull(),
+    contact_person: text('contact_person'),
+    email: text('email'),
+    phone: varchar('phone', { length: 20 }),
+    alt_phone: varchar('alt_phone', { length: 20 }),
+    gst_number: varchar('gst_number', { length: 20 }),
+    pan_number: varchar('pan_number', { length: 15 }),
+    website: text('website'),
+    industry: text('industry'),
+    address_line1: text('address_line1'),
+    address_line2: text('address_line2'),
+    city: text('city'),
+    state: text('state'),
+    pincode: varchar('pincode', { length: 10 }),
+    country: text('country').default('India'),
+    contacts: jsonb('contacts').default([]), // Array of {name, role, phone, email}
+    notes: text('notes'),
+    status: text('status').default('active'), // 'active' | 'inactive'
+    created_by: uuid('created_by').references(() => profiles.id, { onDelete: 'set null' }),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+// Complaints
+export const complaints = pgTable('complaints', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    complaint_number: varchar('complaint_number', { length: 20 }).notNull().unique(),
+    client_id: uuid('client_id').references(() => clients.id, { onDelete: 'set null' }),
+    subject: text('subject').notNull(),
+    description: text('description'),
+    category: complaintCategoryEnum('category').default('general'),
+    priority: ticketPriorityEnum('priority').default('medium'),
+    status: ticketStatusEnum('status').default('open'),
+    source: text('source').default('email'), // 'email' | 'phone' | 'walk-in' | 'whatsapp'
+    sla_hours: integer('sla_hours').default(48),
+    resolved_at: timestamp('resolved_at', { withTimezone: true }),
+    closed_at: timestamp('closed_at', { withTimezone: true }),
+    created_by: uuid('created_by').references(() => profiles.id, { onDelete: 'set null' }),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+// Tickets (linked to complaints, supports multi-member via ticket_assignments)
+export const tickets = pgTable('tickets', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ticket_number: varchar('ticket_number', { length: 20 }).notNull().unique(),
+    complaint_id: uuid('complaint_id').references(() => complaints.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    description: text('description'),
+    priority: ticketPriorityEnum('priority').default('medium'),
+    status: ticketStatusEnum('status').default('open'),
+    due_date: date('due_date'),
+    estimated_hours: numeric('estimated_hours', { precision: 6, scale: 2 }),
+    actual_hours: numeric('actual_hours', { precision: 6, scale: 2 }),
+    created_by: uuid('created_by').references(() => profiles.id, { onDelete: 'set null' }),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+// Ticket Assignments (multi-member assignment junction table)
+export const ticketAssignments = pgTable('ticket_assignments', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ticket_id: uuid('ticket_id').notNull().references(() => tickets.id, { onDelete: 'cascade' }),
+    assigned_to: uuid('assigned_to').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+    assigned_by: uuid('assigned_by').references(() => profiles.id, { onDelete: 'set null' }),
+    role: text('role').default('assignee'), // 'assignee' | 'reviewer' | 'observer'
+    is_primary: boolean('is_primary').default(false),
+    assigned_at: timestamp('assigned_at', { withTimezone: true }).defaultNow(),
+});
+
+// Ticket Resolutions (detailed remarks by team members)
+export const ticketResolutions = pgTable('ticket_resolutions', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ticket_id: uuid('ticket_id').notNull().references(() => tickets.id, { onDelete: 'cascade' }),
+    resolved_by: uuid('resolved_by').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+    resolution_text: text('resolution_text').notNull(),
+    remarks: text('remarks'),
+    hours_spent: numeric('hours_spent', { precision: 6, scale: 2 }),
+    status_after: ticketStatusEnum('status_after').default('in_progress'),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
+// Call Logs (tracked as done / pending / cancelled on dashboard)
+export const callLogs = pgTable('call_logs', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ticket_id: uuid('ticket_id').references(() => tickets.id, { onDelete: 'cascade' }),
+    complaint_id: uuid('complaint_id').references(() => complaints.id, { onDelete: 'cascade' }),
+    client_id: uuid('client_id').references(() => clients.id, { onDelete: 'set null' }),
+    called_by: uuid('called_by').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+    contact_name: text('contact_name'),
+    contact_phone: varchar('contact_phone', { length: 20 }),
+    call_type: text('call_type').default('outbound'), // 'inbound' | 'outbound' | 'follow_up'
+    duration_minutes: integer('duration_minutes'),
+    notes: text('notes'),
+    remarks: text('remarks'),
+    status: callLogStatusEnum('status').default('pending'),
+    next_follow_up: timestamp('next_follow_up', { withTimezone: true }),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
 
 // Relations
 export const profilesRelations = relations(profiles, ({ one, many }) => ({
@@ -278,6 +391,9 @@ export const profilesRelations = relations(profiles, ({ one, many }) => ({
     salarySetups: many(employeeSalarySetup),
     advances: many(employeeAdvances),
     monthlySummaries: many(monthlyAttendanceSummary),
+    ticketAssignments: many(ticketAssignments),
+    ticketResolutions: many(ticketResolutions),
+    callLogs: many(callLogs),
 }));
 
 export const attendanceRelations = relations(attendance, ({ one }) => ({
@@ -381,6 +497,88 @@ export const monthlyAttendanceSummaryRelations = relations(monthlyAttendanceSumm
     }),
     confirmedBy: one(profiles, {
         fields: [monthlyAttendanceSummary.set_for_salary_by],
+        references: [profiles.id],
+    }),
+}));
+
+// Complaint & Ticket Relations
+export const clientsRelations = relations(clients, ({ one, many }) => ({
+    creator: one(profiles, {
+        fields: [clients.created_by],
+        references: [profiles.id],
+    }),
+    complaints: many(complaints),
+    callLogs: many(callLogs),
+}));
+
+export const complaintsRelations = relations(complaints, ({ one, many }) => ({
+    client: one(clients, {
+        fields: [complaints.client_id],
+        references: [clients.id],
+    }),
+    creator: one(profiles, {
+        fields: [complaints.created_by],
+        references: [profiles.id],
+    }),
+    tickets: many(tickets),
+    callLogs: many(callLogs),
+}));
+
+export const ticketsRelations = relations(tickets, ({ one, many }) => ({
+    complaint: one(complaints, {
+        fields: [tickets.complaint_id],
+        references: [complaints.id],
+    }),
+    creator: one(profiles, {
+        fields: [tickets.created_by],
+        references: [profiles.id],
+    }),
+    assignments: many(ticketAssignments),
+    resolutions: many(ticketResolutions),
+    callLogs: many(callLogs),
+}));
+
+export const ticketAssignmentsRelations = relations(ticketAssignments, ({ one }) => ({
+    ticket: one(tickets, {
+        fields: [ticketAssignments.ticket_id],
+        references: [tickets.id],
+    }),
+    assignee: one(profiles, {
+        fields: [ticketAssignments.assigned_to],
+        references: [profiles.id],
+    }),
+    assigner: one(profiles, {
+        fields: [ticketAssignments.assigned_by],
+        references: [profiles.id],
+    }),
+}));
+
+export const ticketResolutionsRelations = relations(ticketResolutions, ({ one }) => ({
+    ticket: one(tickets, {
+        fields: [ticketResolutions.ticket_id],
+        references: [tickets.id],
+    }),
+    resolver: one(profiles, {
+        fields: [ticketResolutions.resolved_by],
+        references: [profiles.id],
+    }),
+}));
+
+export const callLogsRelations = relations(callLogs, ({ one }) => ({
+    ticket: one(tickets, {
+        fields: [callLogs.ticket_id],
+        references: [tickets.id],
+    }),
+    complaint: one(complaints, {
+        fields: [callLogs.complaint_id],
+        references: [complaints.id],
+    }),
+    client: one(clients, {
+        fields: [callLogs.client_id],
+        references: [clients.id],
+    }),
+    caller: one(profiles, {
+        fields: [callLogs.called_by],
         references: [profiles.id],
     }),
 }));
