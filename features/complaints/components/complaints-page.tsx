@@ -17,8 +17,14 @@ import { toast } from "sonner"
 import Link from "next/link"
 import {
   MessageSquareWarning, Plus, Search, Filter, Building2,
-  Phone, PhoneCall, PhoneOff, TicketCheck, Clock
+  Phone, PhoneCall, PhoneOff, TicketCheck, Clock, FileText, Info
 } from "lucide-react"
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "@/components/ui/accordion"
 import { motion } from "framer-motion"
 import { DashboardPageLayout } from "@/components/dashboard/dashboard-page-layout"
 import { cn } from "@/lib/utils"
@@ -222,71 +228,95 @@ export default function ComplaintsPage({ basePath = "/admin" }: { basePath?: str
             </SheetHeader>
           </div>
           <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 mt-0">
-            <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Client</Label>
-              <Select value={formData.client_id} onValueChange={(v) => setFormData(d => ({ ...d, client_id: v }))}>
-                <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select client..." /></SelectTrigger>
-                <SelectContent>
-                  {clientsForSelect?.map((c: any) => (
-                    <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Subject *</Label>
-              <Input value={formData.subject} onChange={(e) => setFormData(d => ({ ...d, subject: e.target.value }))} className="rounded-xl" placeholder="Brief complaint subject" />
-            </div>
-            <div className="space-y-2">
-              <Label>Description</Label>
-              <Textarea value={formData.description} onChange={(e) => setFormData(d => ({ ...d, description: e.target.value }))} className="rounded-xl min-h-[100px]" placeholder="Detailed complaint description..." />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Category</Label>
-                <Select value={formData.category} onValueChange={(v: any) => setFormData(d => ({ ...d, category: v }))}>
-                  <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="billing">Billing</SelectItem>
-                    <SelectItem value="technical">Technical</SelectItem>
-                    <SelectItem value="service">Service</SelectItem>
-                    <SelectItem value="product">Product</SelectItem>
-                    <SelectItem value="general">General</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Priority</Label>
-                <Select value={formData.priority} onValueChange={(v: any) => setFormData(d => ({ ...d, priority: v }))}>
-                  <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="critical">Critical</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Source</Label>
-                <Select value={formData.source} onValueChange={(v) => setFormData(d => ({ ...d, source: v }))}>
-                  <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="email">Email</SelectItem>
-                    <SelectItem value="phone">Phone</SelectItem>
-                    <SelectItem value="walk-in">Walk-in</SelectItem>
-                    <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>SLA (Hours)</Label>
-                <Input type="number" value={formData.sla_hours} onChange={(e) => setFormData(d => ({ ...d, sla_hours: parseInt(e.target.value) || 48 }))} className="rounded-xl" />
-              </div>
-            </div>
+            <Accordion type="multiple" defaultValue={["primary-details", "classification-details"]} className="space-y-4">
+              {/* Primary Information */}
+              <AccordionItem value="primary-details" className="border border-border/60 rounded-lg overflow-hidden bg-white shadow-sm">
+                <AccordionTrigger className="px-4 py-3 hover:no-underline transition-colors bg-blue-50 hover:bg-blue-100/80">
+                  <div className="flex items-center gap-3">
+                    <FileText className="h-5 w-5 text-blue-600" />
+                    <span className="font-medium text-blue-900">Primary Information</span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="px-4 pb-4 pt-4 space-y-4 bg-white/80">
+                  <div className="space-y-2">
+                    <Label>Client</Label>
+                    <Select value={formData.client_id} onValueChange={(v) => setFormData(d => ({ ...d, client_id: v }))}>
+                      <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select client..." /></SelectTrigger>
+                      <SelectContent>
+                        {clientsForSelect?.map((c: any) => (
+                          <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Subject *</Label>
+                    <Input value={formData.subject} onChange={(e) => setFormData(d => ({ ...d, subject: e.target.value }))} className="rounded-xl" placeholder="Brief complaint subject" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Description</Label>
+                    <Textarea value={formData.description} onChange={(e) => setFormData(d => ({ ...d, description: e.target.value }))} className="rounded-xl min-h-[100px]" placeholder="Detailed complaint description..." />
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* Classification Details */}
+              <AccordionItem value="classification-details" className="border border-border/60 rounded-lg overflow-hidden bg-white shadow-sm">
+                <AccordionTrigger className="px-4 py-3 hover:no-underline transition-colors bg-blue-50 hover:bg-blue-100/80">
+                  <div className="flex items-center gap-3">
+                    <Filter className="h-5 w-5 text-blue-600" />
+                    <span className="font-medium text-blue-900">Classification Information</span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="px-4 pb-4 pt-4 space-y-4 bg-white/80">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Category</Label>
+                      <Select value={formData.category} onValueChange={(v: any) => setFormData(d => ({ ...d, category: v }))}>
+                        <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="billing">Billing</SelectItem>
+                          <SelectItem value="technical">Technical</SelectItem>
+                          <SelectItem value="service">Service</SelectItem>
+                          <SelectItem value="product">Product</SelectItem>
+                          <SelectItem value="general">General</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Priority</Label>
+                      <Select value={formData.priority} onValueChange={(v: any) => setFormData(d => ({ ...d, priority: v }))}>
+                        <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="low">Low</SelectItem>
+                          <SelectItem value="medium">Medium</SelectItem>
+                          <SelectItem value="high">High</SelectItem>
+                          <SelectItem value="critical">Critical</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Source</Label>
+                      <Select value={formData.source} onValueChange={(v) => setFormData(d => ({ ...d, source: v }))}>
+                        <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="email">Email</SelectItem>
+                          <SelectItem value="phone">Phone</SelectItem>
+                          <SelectItem value="walk-in">Walk-in</SelectItem>
+                          <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>SLA (Hours)</Label>
+                      <Input type="number" value={formData.sla_hours} onChange={(e) => setFormData(d => ({ ...d, sla_hours: parseInt(e.target.value) || 48 }))} className="rounded-xl" />
+                    </div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
             <div className="pt-4 border-t border-border/50">
               <Button onClick={handleCreate} disabled={!formData.subject || createMutation.isPending} className="w-full rounded-xl transition-all duration-200">
                 {createMutation.isPending ? (
@@ -296,7 +326,6 @@ export default function ComplaintsPage({ basePath = "/admin" }: { basePath?: str
                   </div>
                 ) : "Register Complaint"}
               </Button>
-            </div>
             </div>
           </div>
         </SheetContent>

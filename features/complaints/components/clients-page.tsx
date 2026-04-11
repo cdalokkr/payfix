@@ -11,8 +11,14 @@ import { Textarea } from "@/components/ui/textarea"
 import { PageHeading } from "@/components/ui/page-heading"
 import { toast } from "sonner"
 import {
-  Building2, Plus, Search, Phone, Mail, MapPin, Globe
+  Building2, Plus, Search, Phone, Mail, MapPin, Globe, FileText
 } from "lucide-react"
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "@/components/ui/accordion"
 import { motion } from "framer-motion"
 import { DashboardPageLayout } from "@/components/dashboard/dashboard-page-layout"
 import { cn } from "@/lib/utils"
@@ -205,77 +211,120 @@ export default function ClientsPage() {
             </SheetHeader>
           </div>
           <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 mt-0">
-            <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Company Name *</Label>
-              <Input value={formData.company_name} onChange={(e) => set('company_name', e.target.value)} className="rounded-xl" />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Contact Person</Label>
-                <Input value={formData.contact_person} onChange={(e) => set('contact_person', e.target.value)} className="rounded-xl" />
-              </div>
-              <div className="space-y-2">
-                <Label>Industry</Label>
-                <Input value={formData.industry} onChange={(e) => set('industry', e.target.value)} className="rounded-xl" placeholder="e.g. IT, Manufacturing" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Phone</Label>
-                <Input value={formData.phone} onChange={(e) => set('phone', e.target.value)} className="rounded-xl" />
-              </div>
-              <div className="space-y-2">
-                <Label>Alt Phone</Label>
-                <Input value={formData.alt_phone} onChange={(e) => set('alt_phone', e.target.value)} className="rounded-xl" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Email</Label>
-                <Input value={formData.email} onChange={(e) => set('email', e.target.value)} className="rounded-xl" type="email" />
-              </div>
-              <div className="space-y-2">
-                <Label>Website</Label>
-                <Input value={formData.website} onChange={(e) => set('website', e.target.value)} className="rounded-xl" placeholder="https://" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>GST Number</Label>
-                <Input value={formData.gst_number} onChange={(e) => set('gst_number', e.target.value)} className="rounded-xl" />
-              </div>
-              <div className="space-y-2">
-                <Label>PAN Number</Label>
-                <Input value={formData.pan_number} onChange={(e) => set('pan_number', e.target.value)} className="rounded-xl" />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Address Line 1</Label>
-              <Input value={formData.address_line1} onChange={(e) => set('address_line1', e.target.value)} className="rounded-xl" />
-            </div>
-            <div className="space-y-2">
-              <Label>Address Line 2</Label>
-              <Input value={formData.address_line2} onChange={(e) => set('address_line2', e.target.value)} className="rounded-xl" />
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label>City</Label>
-                <Input value={formData.city} onChange={(e) => set('city', e.target.value)} className="rounded-xl" />
-              </div>
-              <div className="space-y-2">
-                <Label>State</Label>
-                <Input value={formData.state} onChange={(e) => set('state', e.target.value)} className="rounded-xl" />
-              </div>
-              <div className="space-y-2">
-                <Label>Pincode</Label>
-                <Input value={formData.pincode} onChange={(e) => set('pincode', e.target.value)} className="rounded-xl" />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Notes</Label>
-              <Textarea value={formData.notes} onChange={(e) => set('notes', e.target.value)} className="rounded-xl" />
-            </div>
+            <Accordion type="multiple" defaultValue={["company-details", "contact-details", "location-details"]} className="space-y-4">
+              {/* Company Details */}
+              <AccordionItem value="company-details" className="border border-border/60 rounded-lg overflow-hidden bg-white shadow-sm">
+                <AccordionTrigger className={cn(
+                  "px-4 py-3 hover:no-underline transition-colors",
+                  editingClient ? "bg-purple-50 hover:bg-purple-100/80" : "bg-blue-50 hover:bg-blue-100/80"
+                )}>
+                  <div className="flex items-center gap-3">
+                    <Building2 className={cn("h-5 w-5", editingClient ? "text-purple-600" : "text-blue-600")} />
+                    <span className={cn("font-medium", editingClient ? "text-purple-900" : "text-blue-900")}>Company Details</span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="px-4 pb-4 pt-4 space-y-4 bg-white/80">
+                  <div className="space-y-2">
+                    <Label>Company Name *</Label>
+                    <Input value={formData.company_name} onChange={(e) => set('company_name', e.target.value)} className="rounded-xl" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Industry</Label>
+                      <Input value={formData.industry} onChange={(e) => set('industry', e.target.value)} className="rounded-xl" placeholder="e.g. IT, Manufacturing" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Website</Label>
+                      <Input value={formData.website} onChange={(e) => set('website', e.target.value)} className="rounded-xl" placeholder="https://" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>GST Number</Label>
+                      <Input value={formData.gst_number} onChange={(e) => set('gst_number', e.target.value)} className="rounded-xl" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>PAN Number</Label>
+                      <Input value={formData.pan_number} onChange={(e) => set('pan_number', e.target.value)} className="rounded-xl" />
+                    </div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* Contact Details */}
+              <AccordionItem value="contact-details" className="border border-border/60 rounded-lg overflow-hidden bg-white shadow-sm">
+                <AccordionTrigger className={cn(
+                  "px-4 py-3 hover:no-underline transition-colors",
+                  editingClient ? "bg-purple-50 hover:bg-purple-100/80" : "bg-blue-50 hover:bg-blue-100/80"
+                )}>
+                  <div className="flex items-center gap-3">
+                    <Mail className={cn("h-5 w-5", editingClient ? "text-purple-600" : "text-blue-600")} />
+                    <span className={cn("font-medium", editingClient ? "text-purple-900" : "text-blue-900")}>Contact Information</span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="px-4 pb-4 pt-4 space-y-4 bg-white/80">
+                  <div className="space-y-2">
+                    <Label>Contact Person</Label>
+                    <Input value={formData.contact_person} onChange={(e) => set('contact_person', e.target.value)} className="rounded-xl" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Phone</Label>
+                      <Input value={formData.phone} onChange={(e) => set('phone', e.target.value)} className="rounded-xl" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Alt Phone</Label>
+                      <Input value={formData.alt_phone} onChange={(e) => set('alt_phone', e.target.value)} className="rounded-xl" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Email Address</Label>
+                    <Input value={formData.email} onChange={(e) => set('email', e.target.value)} className="rounded-xl" type="email" />
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* Location Details */}
+              <AccordionItem value="location-details" className="border border-border/60 rounded-lg overflow-hidden bg-white shadow-sm">
+                <AccordionTrigger className={cn(
+                  "px-4 py-3 hover:no-underline transition-colors",
+                  editingClient ? "bg-purple-50 hover:bg-purple-100/80" : "bg-blue-50 hover:bg-blue-100/80"
+                )}>
+                  <div className="flex items-center gap-3">
+                    <MapPin className={cn("h-5 w-5", editingClient ? "text-purple-600" : "text-blue-600")} />
+                    <span className={cn("font-medium", editingClient ? "text-purple-900" : "text-blue-900")}>Location Details</span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="px-4 pb-4 pt-4 space-y-4 bg-white/80">
+                  <div className="space-y-2">
+                    <Label>Address Line 1</Label>
+                    <Input value={formData.address_line1} onChange={(e) => set('address_line1', e.target.value)} className="rounded-xl" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Address Line 2</Label>
+                    <Input value={formData.address_line2} onChange={(e) => set('address_line2', e.target.value)} className="rounded-xl" />
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label>City</Label>
+                      <Input value={formData.city} onChange={(e) => set('city', e.target.value)} className="rounded-xl" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>State</Label>
+                      <Input value={formData.state} onChange={(e) => set('state', e.target.value)} className="rounded-xl" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Pincode</Label>
+                      <Input value={formData.pincode} onChange={(e) => set('pincode', e.target.value)} className="rounded-xl" />
+                    </div>
+                  </div>
+                  <div className="space-y-2 border-t border-border/50 pt-4 mt-2">
+                    <Label>Notes</Label>
+                    <Textarea value={formData.notes} onChange={(e) => set('notes', e.target.value)} className="rounded-xl" />
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
             <div className="pt-4 border-t border-border/50">
               <Button
                 onClick={handleSubmit}
@@ -289,7 +338,6 @@ export default function ClientsPage() {
                   </div>
                 ) : editingClient ? "Update Client" : "Add Client"}
               </Button>
-            </div>
             </div>
           </div>
         </SheetContent>
