@@ -33,22 +33,29 @@ export function NavMain({ groups }: { groups: NavGroup[] }) {
     return (
         <div className="flex flex-col gap-4">
             {groups.map((group) => {
-                const GroupIcon = Icons[group.icon as keyof typeof Icons]
                 return (
-                    <SidebarGroup key={group.label} className="px-2 py-0">
-                        <SidebarGroupLabel className="flex items-center gap-2 pl-2 py-4 text-[10px] font-bold text-sidebar-foreground/40 uppercase tracking-[0.2em]">
-                            <span>{group.label}</span>
-                        </SidebarGroupLabel>
+                    <Collapsible key={group.label} defaultOpen className="group/collapsible-group">
+                        <SidebarGroup className="px-2 py-0">
+                            <CollapsibleTrigger asChild>
+                                <SidebarGroupLabel className="flex w-full items-center justify-between hover:bg-sidebar-accent hover:text-sidebar-accent-foreground cursor-pointer transition-colors rounded-md group/label">
+                                    <div className="flex items-center gap-2 py-4 text-[10px] font-bold text-sidebar-foreground/40 uppercase tracking-[0.2em] group-hover/label:text-sidebar-foreground/70 transition-colors">
+                                        <span>{group.label}</span>
+                                    </div>
+                                    <ChevronRight className="h-4 w-4 text-sidebar-foreground/40 transition-transform duration-200 group-data-[state=open]/collapsible-group:rotate-90 group-hover/label:text-sidebar-foreground/70" />
+                                </SidebarGroupLabel>
+                            </CollapsibleTrigger>
 
-                        <SidebarGroupContent>
-
-                            <SidebarMenu className="gap-1">
-                                {group.items.map((item) => (
-                                    <NavItemComponent key={item.href} item={item} pathname={pathname} />
-                                ))}
-                            </SidebarMenu>
-                        </SidebarGroupContent>
-                    </SidebarGroup>
+                            <CollapsibleContent>
+                                <SidebarGroupContent>
+                                    <SidebarMenu className="gap-1 mt-1">
+                                        {group.items.map((item) => (
+                                            <NavItemComponent key={item.href} item={item} pathname={pathname} />
+                                        ))}
+                                    </SidebarMenu>
+                                </SidebarGroupContent>
+                            </CollapsibleContent>
+                        </SidebarGroup>
+                    </Collapsible>
                 )
             })}
         </div>
