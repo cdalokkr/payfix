@@ -12,7 +12,7 @@ import { Profile, Activity as ActivityType } from '@/types'
 import { useEffect } from 'react'
 import { ActivityLogFeed, type UserActivity } from '@/components/dashboard/activity-log-feed'
 import { motion } from 'framer-motion'
-import { format } from 'date-fns'
+import { format, isValid } from 'date-fns'
 import { LogIn, LogOut, Calendar, History, Edit, User, Activity, Bell, BarChart3, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
 
@@ -279,7 +279,7 @@ export function UserOverview({
                       <div className="h-5 w-24 bg-muted animate-pulse rounded" />
                     ) : (
                       <p className="text-sm font-bold truncate">
-                        {sessionInfo?.lastLogout ? format(new Date(sessionInfo.lastLogout), "MMM dd, HH:mm") : "None"}
+                        {sessionInfo?.lastLogout && isValid(new Date(sessionInfo.lastLogout)) ? format(new Date(sessionInfo.lastLogout), "MMM dd, HH:mm") : "None"}
                       </p>
                     )}
                   </div>

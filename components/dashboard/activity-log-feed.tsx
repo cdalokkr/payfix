@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { motion, AnimatePresence } from "framer-motion"
-import { format } from "date-fns"
+import { format, isValid } from "date-fns"
 import { cn } from "@/lib/utils"
 import {
     LogIn,
@@ -226,7 +226,7 @@ export function ActivityLogFeed({
                                     </div>
                                     <div className="flex items-center text-[11px] text-muted-foreground font-medium bg-muted/50 px-2 py-0.5 rounded-full w-fit">
                                         <Clock className="h-3 w-3 mr-1" />
-                                        {activity.created_at ? format(new Date(activity.created_at), "MMM dd, yyyy HH:mm:ss") : "N/A"}
+                                        {activity.created_at && isValid(new Date(activity.created_at)) ? format(new Date(activity.created_at), "MMM dd, yyyy HH:mm:ss") : "N/A"}
                                     </div>
                                 </div>
                                 <p className="text-sm font-medium leading-relaxed tracking-tight text-foreground/90 break-words">

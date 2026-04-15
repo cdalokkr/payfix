@@ -12,7 +12,7 @@ import dynamic from 'next/dynamic'
 import { ActionButton } from '@/components/ui/action-button'
 import { PageHeading } from '@/components/ui/page-heading'
 import { cn } from '@/lib/utils'
-import { format } from 'date-fns'
+import { format, isValid } from 'date-fns'
 import { useProfile } from '@/lib/context/profile-context'
 
 const ModernAddUserForm = dynamic(() => import('@/features/users/components/ModernAddUserForm').then(mod => mod.ModernAddUserForm), {
@@ -251,7 +251,7 @@ export function AdminOverview({
                     {sessionLoading || !magicCardsDataReady ? (
                       <span className="h-5 w-24 bg-muted animate-pulse rounded block" />
                     ) : (
-                      sessionInfo?.lastLogout ? format(new Date(sessionInfo.lastLogout), "MMM dd, HH:mm") : "None"
+                      sessionInfo?.lastLogout && isValid(new Date(sessionInfo.lastLogout)) ? format(new Date(sessionInfo.lastLogout), "MMM dd, HH:mm") : "None"
                     )}
                   </p>
                 </div>

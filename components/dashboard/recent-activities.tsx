@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { motion } from 'framer-motion'
-import { format } from 'date-fns'
+import { format, isValid } from 'date-fns'
 import {
     Activity,
     LogIn,
@@ -115,7 +115,7 @@ export function RecentActivities({
                             </p>
                             <p className="text-[11px] text-muted-foreground/70 mt-1 font-medium tracking-wide flex items-center gap-1.5">
                                 <span className="inline-block w-1 h-1 rounded-full bg-muted-foreground/30" />
-                                {format(new Date(activity.created_at), "dd/MM/yyyy HH:mm:ss")}
+                                {activity.created_at && isValid(new Date(activity.created_at)) ? format(new Date(activity.created_at), "dd/MM/yyyy HH:mm:ss") : "N/A"}
                             </p>
                         </div>
                     </motion.div>

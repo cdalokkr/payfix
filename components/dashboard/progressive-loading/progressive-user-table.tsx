@@ -336,14 +336,17 @@ export function ProgressiveUserTable({
   }
 
   // Format date
-  const formatDate = (date: Date) => {
+  const formatDate = (date: Date | string | undefined | null) => {
+    if (!date) return 'N/A'
+    const dateObj = new Date(date)
+    if (isNaN(dateObj.getTime())) return 'N/A'
     return new Intl.DateTimeFormat('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
-    }).format(date)
+    }).format(dateObj)
   }
 
   // Handle bulk actions
