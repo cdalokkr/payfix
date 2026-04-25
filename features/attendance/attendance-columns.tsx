@@ -150,6 +150,29 @@ export function createAttendanceColumns({
             size: 44,
         },
         {
+            accessorKey: "source",
+            header: "Src",
+            cell: ({ row }) => {
+                const source = (row.getValue("source") as string) || 'mobile';
+                let icon = '📱';
+                if (source === 'biometric') icon = '☝️';
+                if (source === 'bulk') icon = '📁';
+                if (source === 'manual') icon = '✍️';
+                
+                return (
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger className="cursor-help">
+                                <span className="text-[13px]">{icon}</span>
+                            </TooltipTrigger>
+                            <TooltipContent className="capitalize">{source}</TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                )
+            },
+            size: 38,
+        },
+        {
             accessorKey: "status",
             header: "Status",
             cell: ({ row }) => {

@@ -374,6 +374,7 @@ export class AttendanceService {
             updateData.check_out = dateObj
         }
 
+        updateData.source = 'manual'
         if (status) updateData.status = status
         if (isHalfDay !== undefined) updateData.is_half_day = isHalfDay
         if (remarks) updateData.remarks = remarks
@@ -465,6 +466,7 @@ export class AttendanceService {
                     check_in: checkInDate,
                     check_out: checkOutDate,
                     status: 'pending',
+                    source: 'bulk',
                     is_half_day: record.isHalfDay,
                     remarks: record.remarks || `Bulk uploaded by ${uploaderName}`,
                 })

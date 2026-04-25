@@ -8,6 +8,13 @@
       "when": 1772710495593,
       "tag": "0000_wakeful_whiplash",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1777120314987,
+      "tag": "0001_harsh_exiles",
+      "breakpoints": true
     }
   ]
 }

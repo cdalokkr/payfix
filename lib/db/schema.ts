@@ -5,6 +5,8 @@ import { relations } from 'drizzle-orm';
 export const userRoleEnum = pgEnum('user_role', ['admin', 'moderator', 'employee']);
 export const activityTypeEnum = pgEnum('activity_type', ['login', 'logout', 'profile_update', 'data_view', 'data_edit', 'data_delete', 'data_create', 'password_change']);
 
+export const attendanceSourceEnum = pgEnum('attendance_source', ['mobile', 'biometric', 'manual', 'bulk']);
+
 // Complaint & Ticket Enums
 export const ticketStatusEnum = pgEnum('ticket_status', ['open', 'in_progress', 'resolved', 'closed', 'cancelled']);
 export const ticketPriorityEnum = pgEnum('ticket_priority', ['low', 'medium', 'high', 'critical']);
@@ -66,6 +68,8 @@ export const attendance = pgTable('attendance', {
     verified_by: uuid('verified_by').references(() => profiles.id, { onDelete: 'set null' }),
     is_extra_day: boolean('is_extra_day').default(false),
     is_half_day: boolean('is_half_day').default(false),
+    source: attendanceSourceEnum('source').default('mobile'),
+    device_id: text('device_id'),
     // Mobile attendance fields
     selfie_url: text('selfie_url'),
     checkin_latitude: numeric('checkin_latitude', { precision: 10, scale: 7 }),
@@ -150,6 +154,20 @@ export const employeeSettings = pgTable('employee_settings', {
     profile_id: uuid('profile_id').primaryKey().references(() => profiles.id, { onDelete: 'cascade' }),
     custom_check_in: text('custom_check_in'),
     custom_check_out: text('custom_check_out'),
+    biometric_device_user_id: text('biometric_device_user_id'),
+    updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+// Biometric Devices
+export const biometricDevices = pgTable('biometric_devices', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    serial_number: varchar('serial_number', { length: 100 }).unique(),
+    location: text('location'),
+    ip_address: varchar('ip_address', { length: 45 }),
+    status: text('status').default('active'),
+    last_sync_time: timestamp('last_sync_time', { withTimezone: true }),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 
