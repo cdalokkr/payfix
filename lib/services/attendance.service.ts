@@ -394,4 +394,98 @@ export class AttendanceService {
 
         return data
     }
+
+    /**
+     * Bulk upload daily attendance records from Excel
+     * Skips existing records for same employee+date
+     */
+    static async bulkUploadDailyAttendance({
+        records,
+        uploadedBy,
+        uploaderName
+    }: {
+        records: Array<{
+            profileId: string
+            date: string
+            checkIn: string       // "HH:MM"
+            checkOut: string      // "HH:MM" or empty
+            isHalfDay: boolean
+            remarks?: string
+        }>
+        uploadedBy: string
+        uploaderName: string
+    }): Promise<{ inserted: number, skipped: number, errors: string[] }> {
+        let inserted = 0
+        let skipped = 0
+        const errors: string[] = []
+
+        for (const record of records) {
+            try {
+                // Check if record already exists for this employee+date
+                const existing = await db.query.attendance.findFirst({
+                    where: and(
+                        eq(attendance.profile_id, record.profileId),
+                        eq(attendance.date, record.date)
+                    ),
+                    columns: { id: true }
+                })
+
+                if (existing) {
+                    skipped++
+                    continue
+                }
+
+                // Build check_in and check_out timestamps
+                let checkInDate: Date | null = null
+                let checkOutDate: Date | null = null
+
+                if (record.checkIn) {
+                    const parts = record.checkIn.split(':')
+                    const h = parseInt(parts[0], 10)
+                    const m = parseInt(parts[1] || '0', 10)
+                    if (!isNaN(h) && !isNaN(m)) {
+                        checkInDate = new Date(record.date + 'T00:00:00')
+                        checkInDate.setHours(h, m, 0, 0)
+                    }
+                }
+
+                if (record.checkOut) {
+                    const parts = record.checkOut.split(':')
+                    const h = parseInt(parts[0], 10)
+                    const m = parseInt(parts[1] || '0', 10)
+                    if (!isNaN(h) && !isNaN(m)) {
+                        checkOutDate = new Date(record.date + 'T00:00:00')
+                        checkOutDate.setHours(h, m, 0, 0)
+                    }
+                }
+
+                await db.insert(attendance).values({
+                    profile_id: record.profileId,
+                    date: record.date,
+                    check_in: checkInDate,
+                    check_out: checkOutDate,
+                    status: 'pending',
+                    is_half_day: record.isHalfDay,
+                    remarks: record.remarks || `Bulk uploaded by ${uploaderName}`,
+                })
+
+                inserted++
+            } catch (err: any) {
+                errors.push(`Failed to insert record for date ${record.date}: ${err.message}`)
+            }
+        }
+
+        // Log activity
+        if (inserted > 0) {
+            await db.insert(activities).values({
+                user_id: uploadedBy,
+                activity_type: 'data_create',
+                module: 'attendance',
+                description: `Bulk uploaded ${inserted} daily attendance records (${skipped} skipped) by ${uploaderName}`,
+            })
+        }
+
+        return { inserted, skipped, errors }
+    }
 }
+

@@ -769,4 +769,99 @@ export class SalaryService {
 
         return summary
     }
+
+    // ==========================================
+    // BULK UPLOAD MONTHLY SUMMARY
+    // ==========================================
+
+    /** Bulk upload monthly attendance summary from Excel */
+    static async bulkUploadMonthlySummary({
+        month,
+        year,
+        records,
+        uploadedBy,
+        uploaderName
+    }: {
+        month: number
+        year: number
+        records: Array<{
+            profileId: string
+            totalWorkingDays: number
+            totalPresent: number
+            totalHalfDays: number
+            totalAbsent: number
+            totalLeaves: number
+            totalWorkingHours?: number
+        }>
+        uploadedBy: string
+        uploaderName: string
+    }): Promise<{ inserted: number, updated: number, skipped: number, errors: string[] }> {
+        let inserted = 0
+        let updated = 0
+        let skipped = 0
+        const errors: string[] = []
+
+        for (const record of records) {
+            try {
+                // Check if summary already exists for this employee+month+year
+                const existing = await db.query.monthlyAttendanceSummary.findFirst({
+                    where: and(
+                        eq(monthlyAttendanceSummary.profile_id, record.profileId),
+                        eq(monthlyAttendanceSummary.month, month),
+                        eq(monthlyAttendanceSummary.year, year)
+                    )
+                })
+
+                if (existing) {
+                    if (existing.status === 'draft') {
+                        // Update existing draft
+                        await db.update(monthlyAttendanceSummary).set({
+                            total_working_days: record.totalWorkingDays,
+                            total_present_days: record.totalPresent,
+                            total_half_days: record.totalHalfDays,
+                            total_absent_days: record.totalAbsent,
+                            total_leaves: record.totalLeaves,
+                            total_working_hours: record.totalWorkingHours?.toFixed(2) || '0',
+                            updated_at: new Date(),
+                        }).where(eq(monthlyAttendanceSummary.id, existing.id))
+                        updated++
+                    } else {
+                        // Already processed (set_for_salary or payslip_generated) — skip
+                        skipped++
+                    }
+                } else {
+                    // Insert new draft
+                    await db.insert(monthlyAttendanceSummary).values({
+                        profile_id: record.profileId,
+                        month,
+                        year,
+                        total_working_days: record.totalWorkingDays,
+                        total_present_days: record.totalPresent,
+                        total_half_days: record.totalHalfDays,
+                        total_absent_days: record.totalAbsent,
+                        total_leaves: record.totalLeaves,
+                        total_working_hours: record.totalWorkingHours?.toFixed(2) || '0',
+                        status: 'draft',
+                    })
+                    inserted++
+                }
+            } catch (err: any) {
+                errors.push(`Failed to process record for profile ${record.profileId}: ${err.message}`)
+            }
+        }
+
+        // Log activity
+        if (inserted > 0 || updated > 0) {
+            const { activities } = await import('@/lib/db/schema')
+            await db.insert(activities).values({
+                user_id: uploadedBy,
+                activity_type: 'data_create',
+                module: 'attendance',
+                description: `Bulk uploaded monthly summary for ${MONTH_NAMES[month - 1]} ${year}: ${inserted} new, ${updated} updated, ${skipped} skipped — by ${uploaderName}`,
+            })
+        }
+
+        return { inserted, updated, skipped, errors }
+    }
 }
+

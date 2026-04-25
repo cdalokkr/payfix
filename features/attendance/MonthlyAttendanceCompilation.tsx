@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { trpc } from "@/lib/trpc/client"
 import { toast } from "sonner"
-import { CalendarRange, RefreshCw, CheckCircle, Loader2, ArrowRight, Users, TrendingUp, FileEdit, Clock } from "lucide-react"
+import { CalendarRange, RefreshCw, CheckCircle, Loader2, ArrowRight, Users, TrendingUp, FileEdit, Clock, FileUp } from "lucide-react"
 import { CardShell } from "./CardShell"
 import {
     Select,
@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useRouter } from "next/navigation"
+import { BulkMonthlySummaryUpload } from "./BulkMonthlySummaryUpload"
 
 const MONTHS = [
     "January", "February", "March", "April", "May", "June",
@@ -37,6 +38,7 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
     const [month, setMonth] = useState(defaultMonth)
     const [year, setYear] = useState(defaultYear)
     const [selectedIds, setSelectedIds] = useState<string[]>([])
+    const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false)
 
     const { data: summaries, isLoading, refetch } = trpc.salary.getMonthlySummaries.useQuery(
         { month, year },
@@ -147,6 +149,16 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
         })
     }
 
+    // Utility to determine if a month is in the future or current month
+    const isMonthDisabled = (mIndex: number, selectedYear: number) => {
+        const currentM = currentDate.getMonth() + 1 // 1-12
+        const currentY = currentDate.getFullYear()
+        
+        if (selectedYear > currentY) return true
+        if (selectedYear === currentY && mIndex >= currentM) return true
+        return false
+    }
+
     return (
         <div className="space-y-6">
             {/* Controls */}
@@ -157,19 +169,39 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            {MONTHS.map((m, i) => (
-                                <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>
-                            ))}
+                            {MONTHS.map((m, i) => {
+                                const mNum = i + 1
+                                return (
+                                    <SelectItem 
+                                        key={i} 
+                                        value={String(mNum)}
+                                        disabled={isMonthDisabled(mNum, year)}
+                                    >
+                                        {m}
+                                    </SelectItem>
+                                )
+                            })}
                         </SelectContent>
                     </Select>
-                    <Select value={String(year)} onValueChange={(val) => setYear(Number(val))}>
+                    <Select value={String(year)} onValueChange={(val) => {
+                        const newYear = Number(val)
+                        setYear(newYear)
+                        if (isMonthDisabled(month, newYear)) {
+                            setMonth(1)
+                            if (newYear === currentDate.getFullYear()) {
+                                setMonth(Math.max(1, currentDate.getMonth()))
+                            }
+                        }
+                    }}>
                         <SelectTrigger className="w-[100px]">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => (
-                                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-                            ))}
+                            {Array.from({ length: 5 }, (_, i) => currentDate.getFullYear() - 2 + i)
+                                .filter(y => y <= currentDate.getFullYear())
+                                .map(y => (
+                                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                                ))}
                         </SelectContent>
                     </Select>
                     <div className="flex items-center gap-2">
@@ -188,6 +220,15 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                                 {formatLastCompiled(lastCompiledAt)}
                             </span>
                         )}
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5 rounded-lg"
+                            onClick={() => setIsBulkUploadOpen(true)}
+                        >
+                            <FileUp className="h-4 w-4" />
+                            Upload Summary
+                        </Button>
                     </div>
                 </div>
 
@@ -392,6 +433,13 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                     </>
                 )}
             </CardShell>
+
+            <BulkMonthlySummaryUpload
+                isOpen={isBulkUploadOpen}
+                onOpenChange={setIsBulkUploadOpen}
+                initialMonth={month}
+                initialYear={year}
+            />
         </div>
     )
 }

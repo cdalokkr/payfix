@@ -22,7 +22,7 @@ function validateRequest(request: NextRequest): { valid: boolean; reason?: strin
         /<script/i,                  // XSS attempt in URL
         /javascript:/i,              // JavaScript protocol
         /vbscript:/i,                // VBScript protocol
-        /on\w+\s*=/i,                // Event handlers
+        /\bon\w+\s*=/i,              // Event handlers (word-boundary to avoid false positives like "month=")
         /union\s+select/i,           // SQL injection
         /;\s*drop\s+/i,              // SQL injection
         /;\s*delete\s+/i,            // SQL injection

@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { trpc } from "@/lib/trpc/client"
-import { Search, Loader2, FileText, Save, Clock as ClockIcon, CheckCircle2 as CheckCircleIcon, XCircle as XCircleIcon, CalendarMinus as CalendarMinusIcon } from "lucide-react"
+import { Search, Loader2, FileText, Save, Clock as ClockIcon, CheckCircle2 as CheckCircleIcon, XCircle as XCircleIcon, CalendarMinus as CalendarMinusIcon, Upload } from "lucide-react"
 import { toast } from "sonner"
 import { getEventBroadcaster } from "@/lib/events/event-broadcaster"
 import { Label } from "@/components/ui/label"
@@ -22,6 +22,7 @@ import { DateRange } from "react-day-picker"
 import { generateCSV, generatePDF, downloadFile } from "@/lib/report-utils"
 import { AttendanceTableToolbar } from "./attendance-table-toolbar"
 import { AttendanceEditSheet } from "./attendance-edit-sheet"
+import { BulkDailyUpload } from "./BulkDailyUpload"
 import { CardShell } from "./CardShell"
 
 // Helper to calculate scheduled hours from time strings
@@ -36,6 +37,7 @@ function calculateScheduledHours(checkIn: string, checkOut: string): number {
 export function AdminAttendanceVerification() {
     const [searchTerm, setSearchTerm] = useState("")
     const [isEditOpen, setIsEditOpen] = useState(false)
+    const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false)
     const [selectedRecord, setSelectedRecord] = useState<any>(null)
     const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({})
     // Default to current date (IST) and pending status for faster, relevant loading
@@ -362,6 +364,17 @@ export function AdminAttendanceVerification() {
                 description="Review and verify employee attendance records for processing."
                 icon={FileText}
                 contentClassName="min-h-0 p-6 pt-2 h-full overflow-auto"
+                headerActions={
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 rounded-xl h-8 text-xs"
+                        onClick={() => setIsBulkUploadOpen(true)}
+                    >
+                        <Upload className="h-3.5 w-3.5" />
+                        Bulk Upload
+                    </Button>
+                }
             >
                 <DataTable
                     columns={columns}
@@ -407,6 +420,11 @@ export function AdminAttendanceVerification() {
                         isHalfDay: data.isHalfDay
                     })
                 }}
+            />
+
+            <BulkDailyUpload
+                isOpen={isBulkUploadOpen}
+                onOpenChange={setIsBulkUploadOpen}
             />
         </div>
     )
