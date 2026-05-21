@@ -19,6 +19,7 @@ import {
     Save as IconDeviceFloppy,
 } from "lucide-react"
 import { trpc } from '@/lib/trpc/client'
+import { Calendar28 } from "@/components/ui/calendar-28"
 
 interface MobileEditProfileClientProps {
     profile: {
@@ -279,12 +280,28 @@ export function MobileEditProfileClient({ profile }: MobileEditProfileClientProp
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-2">
-                                <Input
-                                    type="date"
-                                    value={dateOfBirth}
-                                    onChange={(e) => setDateOfBirth(e.target.value)}
-                                    className="rounded-xl h-11"
-                                    max={new Date().toISOString().split('T')[0]}
+                                <Calendar28
+                                    id="dateOfBirth"
+                                    value={dateOfBirth && dateOfBirth.includes('-') ? (() => {
+                                        const [year, month, day] = dateOfBirth.split('-')
+                                        return `${day}/${month}/${year}`
+                                    })() : dateOfBirth || ""}
+                                    onChange={(value) => {
+                                        if (value) {
+                                            const [day, month, year] = value.split('/')
+                                            if (day && month && year) {
+                                                setDateOfBirth(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`)
+                                            }
+                                        } else {
+                                            setDateOfBirth("")
+                                        }
+                                    }}
+                                    label=""
+                                    className="rounded-xl h-11 border border-input"
+                                    removeSpacing={true}
+                                    minAge={13}
+                                    maxAge={120}
+                                    defaultAge={18}
                                 />
                             </div>
                         </CardContent>

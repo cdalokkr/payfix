@@ -9,6 +9,12 @@ import { trpc } from '@/lib/trpc/client'
 // Mock the hooks and dependencies
 jest.mock('@/hooks/use-realtime-dashboard-data')
 jest.mock('@/hooks/use-dashboard-prefetch')
+jest.mock('@/lib/context/profile-context', () => ({
+  useProfile: () => ({
+    profile: { id: 'test-user-id', role: 'admin' },
+    isLoading: false,
+  }),
+}))
 jest.mock('@/lib/trpc/client', () => ({
   trpc: {
     useUtils: jest.fn(),
@@ -106,16 +112,16 @@ describe('AdminOverview', () => {
   })
 
   describe('Dashboard Rendering', () => {
-    it('renders the Admin Dashboard heading', () => {
+    it('renders the Quick Actions heading', () => {
       render(<AdminOverview onLoadingChange={mockOnLoadingChange} />)
 
-      expect(screen.getByText('Admin Dashboard')).toBeInTheDocument()
+      expect(screen.getByText('Quick Actions')).toBeInTheDocument()
     })
 
-    it('renders the Add User button', () => {
+    it('renders the Create User action', () => {
       render(<AdminOverview onLoadingChange={mockOnLoadingChange} />)
 
-      expect(screen.getByRole('button', { name: /add user/i })).toBeInTheDocument()
+      expect(screen.getByText('Create User')).toBeInTheDocument()
     })
 
     it('displays metric cards with correct values when data is ready', () => {
@@ -125,7 +131,7 @@ describe('AdminOverview', () => {
       expect(screen.getByText('100')).toBeInTheDocument() // Total Users
       expect(screen.getByText('10')).toBeInTheDocument() // Employee Role (replaces Active Users if > 0)
       expect(screen.getByText('5')).toBeInTheDocument() // Moderator Role
-      expect(screen.getByText('20')).toBeInTheDocument() // Today's Activity
+      expect(screen.getByText('3')).toBeInTheDocument() // Administrators
     })
 
     it('shows skeleton loading state when showSkeleton is true', () => {
@@ -143,12 +149,12 @@ describe('AdminOverview', () => {
   })
 
   describe('Add User Form', () => {
-    it('opens the add user form when Add User button is clicked', async () => {
+    it('opens the add user form when Create User action is clicked', async () => {
       const user = userEvent.setup()
       render(<AdminOverview onLoadingChange={mockOnLoadingChange} />)
 
-      const addUserButton = screen.getByRole('button', { name: /add user/i })
-      await user.click(addUserButton)
+      const createUserAction = screen.getByText('Create User')
+      await user.click(createUserAction)
 
       expect(screen.getByTestId('modern-add-user-form')).toBeInTheDocument()
       expect(screen.getByText('Create New User')).toBeInTheDocument()

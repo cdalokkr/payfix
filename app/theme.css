@@ -28,12 +28,12 @@ body {
 
 .theme-default,
 .theme-default-scaled {
-  --primary: var(--color-neutral-600);
-  --primary-foreground: var(--color-neutral-50);
+  --primary: oklch(0.48 0.23 282);
+  --primary-foreground: oklch(0.985 0.005 285);
 
   @variant dark {
-    --primary: var(--color-neutral-500);
-    --primary-foreground: var(--color-neutral-50);
+    --primary: oklch(0.58 0.22 282);
+    --primary-foreground: oklch(0.985 0.005 285);
   }
 }
 

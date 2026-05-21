@@ -17,6 +17,7 @@ import { Profile } from '@/types'
 import { cn } from '@/lib/utils'
 import { useDashboardCacheInvalidation } from '@/hooks/use-dashboard-cache-invalidation'
 import { NotificationToastListener } from './notification-toast-listener'
+import { motion, AnimatePresence } from 'framer-motion'
 
 // Dynamic imports for heavy dashboard components to reduce initial bundle size
 const AdminOverview = dynamic(
@@ -367,7 +368,18 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <SidebarInset className="flex flex-col h-screen overflow-hidden">
             <TopBar user={currentUser} />
             <div className="flex-1 overflow-y-auto pt-6 pb-20 lg:pb-4 scroll-smooth">
-              {children || <DashboardContent profile={profile} isLoading={profileLoading} onLoadingChange={handleLoadingChange} />}
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={pathname}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+                  className="w-full"
+                >
+                  {children || <DashboardContent profile={profile} isLoading={profileLoading} onLoadingChange={handleLoadingChange} />}
+                </motion.div>
+              </AnimatePresence>
             </div>
             <BottomNav />
             <StatusBar className="hidden lg:flex" />

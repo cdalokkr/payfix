@@ -25,6 +25,7 @@ interface DatePickerDDMMYYYYProps {
   minAge?: number
   maxAge?: number
   asOnDate?: Date
+  defaultAge?: number
 }
 
 function formatDateDDMMYYYY(date: Date | undefined) {
@@ -88,11 +89,34 @@ export function Calendar28({
   removeSpacing = false,
   minAge,
   maxAge,
-  asOnDate
+  asOnDate,
+  defaultAge = 18
 }: DatePickerDDMMYYYYProps) {
   const [open, setOpen] = React.useState(false)
   const [date, setDate] = React.useState<Date | undefined>(undefined)
-  const [month, setMonth] = React.useState<Date | undefined>(date)
+  
+  // Helper to calculate default month (18 years ago, or based on defaultAge)
+  const getDefaultMonth = React.useCallback(() => {
+    const today = asOnDate || new Date()
+    const targetAge = defaultAge !== undefined ? defaultAge : 18
+    const targetYear = today.getFullYear() - targetAge
+    return new Date(targetYear, today.getMonth(), 1)
+  }, [defaultAge, asOnDate])
+
+  const [month, setMonth] = React.useState<Date | undefined>(() => {
+    if (value) {
+      const parts = value.split('/')
+      if (parts.length === 3) {
+        const [day, monthVal, year] = parts
+        const fullYear = year.length === 2 ? getFullYearFromTwoDigit(year) : year
+        const parsedDate = new Date(parseInt(fullYear), parseInt(monthVal) - 1, parseInt(day))
+        if (!isNaN(parsedDate.getTime())) {
+          return parsedDate
+        }
+      }
+    }
+    return getDefaultMonth()
+  })
   const [inputValue, setInputValue] = React.useState("")
   const [isUserTyping, setIsUserTyping] = React.useState(false)
   const [lastUserValue, setLastUserValue] = React.useState("")
@@ -102,25 +126,25 @@ export function Calendar28({
       // Handle both dd/mm/yyyy and dd/mm/yy formats
       const parts = value.split('/')
       if (parts.length === 3) {
-        const [day, month, year] = parts
+        const [day, monthVal, year] = parts
         const fullYear = year.length === 2 ? getFullYearFromTwoDigit(year) : year
 
         // Create Date object for calendar logic
-        const parsedDate = new Date(parseInt(fullYear), parseInt(month) - 1, parseInt(day))
+        const parsedDate = new Date(parseInt(fullYear), parseInt(monthVal) - 1, parseInt(day))
         if (!isNaN(parsedDate.getTime())) {
           setDate(parsedDate)
           setMonth(parsedDate)
 
           // Display the exact format received from parent
-          setInputValue(`${day}/${month}/${year}`)
+          setInputValue(`${day}/${monthVal}/${year}`)
         }
       }
     } else {
       setInputValue("")
       setDate(undefined)
-      setMonth(undefined)
+      setMonth(getDefaultMonth())
     }
-  }, [value])
+  }, [value, getDefaultMonth])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let inputValue = e.target.value

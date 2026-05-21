@@ -114,6 +114,166 @@ export default function UserManagement({ initialData }: UserManagementProps) {
     }
   })
 
+  const onConfirmToggleStatus = useCallback(() => {
+    if (!statusToggleUser) return
+    const newStatus = statusToggleUser.status === 'active' ? 'deactive' : 'active'
+    toggleStatusMutation.mutate({
+      userId: statusToggleUser.id,
+      status: newStatus,
+      reason: `User ${newStatus === 'active' ? 'activated' : 'deactivated'} from management table`
+    })
+  }, [statusToggleUser, toggleStatusMutation])
+
+  const handleTabChange = useCallback((val: string) => {
+    setActiveTab(val as 'live' | 'deleted')
+    setRowSelection({}) // Clear selection when switching tabs
+  }, [])
+
+  const renderLiveToolbar = useCallback((table: TanstackTable<Profile>) => (
+    <UsersTableToolbar
+      table={table}
+      onCreateUser={handleCreateUser}
+      isLoading={isLoading}
+      searchTerm={searchTerm}
+      onSearchChange={setSearchTerm}
+      roleFilter={roleFilter}
+      onRoleFilterChange={setRoleFilter}
+    />
+  ), [handleCreateUser, isLoading, searchTerm, roleFilter])
+
+  const renderDeletedToolbar = useCallback((table: TanstackTable<Profile>) => (
+    <UsersTableToolbar
+      table={table}
+      isLoading={isLoading}
+      searchTerm={searchTerm}
+      onSearchChange={setSearchTerm}
+      roleFilter={roleFilter}
+      onRoleFilterChange={setRoleFilter}
+    />
+  ), [isLoading, searchTerm, roleFilter])
+
+  const handleAddUserOpenChange = useCallback((open: boolean) => {
+    setShowAddUserSheet(open)
+  }, [])
+
+  const handleAddUserSuccess = useCallback(() => {
+    setShowAddUserSheet(false)
+  }, [])
+
+  const handleEditOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      if (isMounted.current) setEditingUser(null)
+      // If closing without success, unselect the row
+      setRowSelection(prev => {
+        if (!isMounted.current || !editingUser) return prev
+        const newSelection = { ...prev } as Record<string, boolean>
+        delete newSelection[editingUser.id]
+        return newSelection
+      })
+    }
+  }, [editingUser])
+
+  const handleEditSuccess = useCallback((updatedFields?: string[]) => {
+    if (!editingUser) return
+    if (isMounted.current) setEditingUser(null)
+
+    // Update updatedCells state if there are modified fields
+    if (updatedFields && updatedFields.length > 0) {
+      setUpdatedCells((prev: Record<string, string[]>) => {
+        if (!isMounted.current) return prev
+        const existing = prev[editingUser.id] || []
+        // Merge and deduplicate
+        const merged = Array.from(new Set([...existing, ...updatedFields]))
+        return {
+          ...prev,
+          [editingUser.id]: merged
+        }
+      })
+    }
+
+    const currentEditingUserId = editingUser.id
+    // Wait for sheet close animation to finish before showing row success animation
+    setTimeout(() => {
+      if (isMounted.current) {
+        setRecentlyUpdatedId(currentEditingUserId)
+        // Clear animation after it finishes (2s duration)
+        setTimeout(() => {
+          if (isMounted.current) setRecentlyUpdatedId(null)
+        }, 2000)
+      }
+    }, 500)
+  }, [editingUser])
+
+  const handleDeleteOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      if (isMounted.current) setDeletingUser(null)
+      // Unselect the row if cancelled
+      setRowSelection(prev => {
+        if (!isMounted.current || !deletingUser) return prev
+        const newSelection = { ...prev } as Record<string, boolean>
+        delete newSelection[deletingUser.id]
+        return newSelection
+      })
+    }
+  }, [deletingUser])
+
+  const handleDeleteSuccess = useCallback(() => {
+    if (!deletingUser) return
+    console.log('[USER-MANAGEMENT] Delete success callback - cache invalidation handled by ModernAddUserForm')
+    if (isMounted.current) setDeletingUser(null)
+    // Unselect the row on success
+    setRowSelection(prev => {
+      if (!isMounted.current) return prev
+      const newSelection = { ...prev } as Record<string, boolean>
+      delete newSelection[deletingUser.id]
+      return newSelection
+    })
+  }, [deletingUser])
+
+  const handlePasswordResetOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      if (isMounted.current) setPasswordResetUser(null)
+      // Unselect the row if cancelled
+      setRowSelection(prev => {
+        if (!isMounted.current || !passwordResetUser) return prev
+        const newSelection = { ...prev } as Record<string, boolean>
+        delete newSelection[passwordResetUser.id]
+        return newSelection
+      })
+    }
+  }, [passwordResetUser])
+
+  const handlePasswordResetSuccess = useCallback(() => {
+    if (!passwordResetUser) return
+    if (isMounted.current) setPasswordResetUser(null)
+    // Unselect the row on success
+    setRowSelection(prev => {
+      if (!isMounted.current) return prev
+      const newSelection = { ...prev } as Record<string, boolean>
+      delete newSelection[passwordResetUser.id]
+      return newSelection
+    })
+
+    const currentResetUserId = passwordResetUser.id
+    // Show success animation
+    setTimeout(() => {
+      if (isMounted.current) {
+        setRecentlyUpdatedId(currentResetUserId)
+        setTimeout(() => {
+          if (isMounted.current) setRecentlyUpdatedId(null)
+        }, 2000)
+      }
+    }, 500)
+  }, [passwordResetUser])
+
+  const handleStatusToggleOpenChange = useCallback((open: boolean) => {
+    if (!open) setStatusToggleUser(null)
+  }, [])
+
+  const handleStatusToggleCancel = useCallback(() => {
+    setRowSelection({})
+  }, [])
+
   // Create columns with action handlers
   const columns = useMemo(() => createUsersColumns(
     handleEditUser,
@@ -189,15 +349,6 @@ export default function UserManagement({ initialData }: UserManagementProps) {
 
 
 
-  const onConfirmToggleStatus = () => {
-    if (!statusToggleUser) return
-    const newStatus = statusToggleUser.status === 'active' ? 'deactive' : 'active'
-    toggleStatusMutation.mutate({
-      userId: statusToggleUser.id,
-      status: newStatus,
-      reason: `User ${newStatus === 'active' ? 'activated' : 'deactivated'} from management table`
-    })
-  }
 
   return (
     <DashboardPageLayout
@@ -215,10 +366,7 @@ export default function UserManagement({ initialData }: UserManagementProps) {
         <CardContent>
           <div className="[&_td:not(:first-child)]:px-3 [&_th:not(:first-child)]:px-3 [&_td]:py-3 [&_table]:text-xs">
             {hasMounted ? (
-              <Tabs defaultValue="live" className="w-full" onValueChange={(val) => {
-                setActiveTab(val as 'live' | 'deleted')
-                setRowSelection({}) // Clear selection when switching tabs
-              }}>
+              <Tabs defaultValue="live" className="w-full" onValueChange={handleTabChange}>
                 <TabsList className="mb-4">
                   <TabsTrigger value="live">Live Users</TabsTrigger>
                   <TabsTrigger value="deleted">Deleted Users</TabsTrigger>
@@ -228,17 +376,7 @@ export default function UserManagement({ initialData }: UserManagementProps) {
                     columns={columns}
                     data={filteredUsers}
                     isLoading={isLoading}
-                    toolbar={(table: TanstackTable<Profile>) => (
-                      <UsersTableToolbar
-                        table={table}
-                        onCreateUser={handleCreateUser}
-                        isLoading={isLoading}
-                        searchTerm={searchTerm}
-                        onSearchChange={setSearchTerm}
-                        roleFilter={roleFilter}
-                        onRoleFilterChange={setRoleFilter}
-                      />
-                    )}
+                    toolbar={renderLiveToolbar}
                     recentlyUpdatedId={recentlyUpdatedId}
                     rowSelection={rowSelection}
                     onRowSelectionChange={setRowSelection}
@@ -254,16 +392,7 @@ export default function UserManagement({ initialData }: UserManagementProps) {
                     columns={deletedColumns}
                     data={filteredUsers}
                     isLoading={isLoading}
-                    toolbar={(table: TanstackTable<Profile>) => (
-                      <UsersTableToolbar
-                        table={table}
-                        isLoading={isLoading}
-                        searchTerm={searchTerm}
-                        onSearchChange={setSearchTerm}
-                        roleFilter={roleFilter}
-                        onRoleFilterChange={setRoleFilter}
-                      />
-                    )}
+                    toolbar={renderDeletedToolbar}
                     recentlyUpdatedId={recentlyUpdatedId}
                     rowSelection={rowSelection}
                     onRowSelectionChange={setRowSelection}
@@ -311,13 +440,9 @@ export default function UserManagement({ initialData }: UserManagementProps) {
       {showAddUserSheet && (
         <ModernAddUserForm
           open={showAddUserSheet}
-          onOpenChange={setShowAddUserSheet}
+          onOpenChange={handleAddUserOpenChange}
           useSheet={true}
-          onSuccess={() => {
-            // Note: refetch() removed - ModernAddUserForm already handles cache invalidation
-            // via invalidateDashboardCache() and utils.admin.users.getUsers.invalidate()
-            setShowAddUserSheet(false)
-          }}
+          onSuccess={handleAddUserSuccess}
         />
       )}
 
@@ -325,50 +450,10 @@ export default function UserManagement({ initialData }: UserManagementProps) {
       {editingUser && (
         <ModernAddUserForm
           open={!!editingUser}
-          onOpenChange={(open) => {
-            if (!open) {
-              if (isMounted.current) setEditingUser(null)
-              // If closing without success (implied by onOpenChange vs onSuccess), unselect the row
-              setRowSelection(prev => {
-                if (!isMounted.current) return prev
-                const newSelection = { ...prev } as Record<string, boolean>
-                delete newSelection[editingUser.id]
-                return newSelection
-              })
-            }
-          }}
+          onOpenChange={handleEditOpenChange}
           editingUser={editingUser}
           useSheet={true}
-          onSuccess={(updatedFields) => {
-            // Note: refetch() removed - ModernAddUserForm already handles cache invalidation
-            // via invalidateDashboardCache() and utils.admin.users.getUsers.invalidate()
-            if (isMounted.current) setEditingUser(null)
-
-            // Update updatedCells state if there are modified fields
-            if (updatedFields && updatedFields.length > 0) {
-              setUpdatedCells((prev: Record<string, string[]>) => {
-                if (!isMounted.current) return prev
-                const existing = prev[editingUser.id] || []
-                // Merge and deduplicate
-                const merged = Array.from(new Set([...existing, ...updatedFields]))
-                return {
-                  ...prev,
-                  [editingUser.id]: merged
-                }
-              })
-            }
-
-            // Wait for sheet close animation to finish before showing row success animation
-            setTimeout(() => {
-              if (isMounted.current) {
-                setRecentlyUpdatedId(editingUser.id)
-                // Clear animation after it finishes (2s duration)
-                setTimeout(() => {
-                  if (isMounted.current) setRecentlyUpdatedId(null)
-                }, 2000)
-              }
-            }, 500)
-          }}
+          onSuccess={handleEditSuccess}
         />
       )}
 
@@ -376,34 +461,11 @@ export default function UserManagement({ initialData }: UserManagementProps) {
       {deletingUser && (
         <ModernAddUserForm
           open={!!deletingUser}
-          onOpenChange={(open) => {
-            if (!open) {
-              if (isMounted.current) setDeletingUser(null)
-              // Unselect the row if cancelled
-              setRowSelection(prev => {
-                if (!isMounted.current) return prev
-                const newSelection = { ...prev } as Record<string, boolean>
-                delete newSelection[deletingUser.id]
-                return newSelection
-              })
-            }
-          }}
+          onOpenChange={handleDeleteOpenChange}
           editingUser={deletingUser}
           useSheet={true}
           isDeleteMode={true}
-          onSuccess={() => {
-            // Note: refetch() removed - ModernAddUserForm already handles cache invalidation
-            // via invalidateDashboardCache() and utils.admin.users.getUsers.invalidate()
-            console.log('[USER-MANAGEMENT] Delete success callback - cache invalidation handled by ModernAddUserForm')
-            if (isMounted.current) setDeletingUser(null)
-            // Unselect the row on success
-            setRowSelection(prev => {
-              if (!isMounted.current) return prev
-              const newSelection = { ...prev } as Record<string, boolean>
-              delete newSelection[deletingUser.id]
-              return newSelection
-            })
-          }}
+          onSuccess={handleDeleteSuccess}
         />
       )}
 
@@ -411,46 +473,16 @@ export default function UserManagement({ initialData }: UserManagementProps) {
       {passwordResetUser && (
         <ModernAddUserForm
           open={!!passwordResetUser}
-          onOpenChange={(open) => {
-            if (!open) {
-              if (isMounted.current) setPasswordResetUser(null)
-              // Unselect the row if cancelled
-              setRowSelection(prev => {
-                if (!isMounted.current) return prev
-                const newSelection = { ...prev } as Record<string, boolean>
-                delete newSelection[passwordResetUser.id]
-                return newSelection
-              })
-            }
-          }}
+          onOpenChange={handlePasswordResetOpenChange}
           editingUser={passwordResetUser}
           useSheet={true}
           isPasswordResetMode={true}
-          onSuccess={() => {
-            if (isMounted.current) setPasswordResetUser(null)
-            // Unselect the row on success
-            setRowSelection(prev => {
-              if (!isMounted.current) return prev
-              const newSelection = { ...prev } as Record<string, boolean>
-              delete newSelection[passwordResetUser.id]
-              return newSelection
-            })
-
-            // Show success animation
-            setTimeout(() => {
-              if (isMounted.current) {
-                setRecentlyUpdatedId(passwordResetUser.id)
-                setTimeout(() => {
-                  if (isMounted.current) setRecentlyUpdatedId(null)
-                }, 2000)
-              }
-            }, 500)
-          }}
+          onSuccess={handlePasswordResetSuccess}
         />
       )}
 
       {/* Status Toggle Confirmation */}
-      <AlertDialog open={!!statusToggleUser} onOpenChange={(open) => !open && setStatusToggleUser(null)}>
+      <AlertDialog open={!!statusToggleUser} onOpenChange={handleStatusToggleOpenChange}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
@@ -462,7 +494,7 @@ export default function UserManagement({ initialData }: UserManagementProps) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setRowSelection({})}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={handleStatusToggleCancel}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={onConfirmToggleStatus}
               className={cn(

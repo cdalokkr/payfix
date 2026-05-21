@@ -498,6 +498,7 @@ export const FormContent = memo(function FormContent({
                                                     <Input
                                                         id="mobileNo"
                                                         type="tel"
+                                                        inputMode="tel"
                                                         placeholder="1234567890"
                                                         autoComplete="tel"
                                                         {...field}
@@ -579,6 +580,7 @@ export const FormContent = memo(function FormContent({
                                                                 minAge={13}
                                                                 maxAge={120}
                                                                 asOnDate={currentDate}
+                                                                defaultAge={18}
                                                             />
                                                         </div>
                                                         {fieldState.invalid && fieldState.error && (
@@ -626,6 +628,7 @@ export const FormContent = memo(function FormContent({
                                                         <Input
                                                             id="email"
                                                             type="email"
+                                                            inputMode="email"
                                                             placeholder="user@example.com"
                                                             className={cn("pl-10", fieldState.invalid && "border-destructive")}
                                                             autoComplete="new-email"
@@ -727,6 +730,7 @@ export const FormContent = memo(function FormContent({
                                                         <Input
                                                             id="email"
                                                             type="email"
+                                                            inputMode="email"
                                                             placeholder="user@example.com"
                                                             className={cn("pl-10", fieldState.invalid && "border-destructive")}
                                                             autoComplete="email"

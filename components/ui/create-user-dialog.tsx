@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
+import { Calendar28 } from "./calendar-28";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -186,7 +187,34 @@ export default function CreateUserDialog() {
 
                   <div>
                     <Label>Date of Birth</Label>
-                    <Input type="date" {...register("dob")} />
+                    <Controller
+                      name="dob"
+                      control={form.control}
+                      render={({ field }) => (
+                        <Calendar28
+                          id="dob"
+                          value={field.value && field.value.includes('-') ? (() => {
+                            const [year, month, day] = field.value.split('-')
+                            return `${day}/${month}/${year}`
+                          })() : field.value || ""}
+                          onChange={(value) => {
+                            if (value) {
+                              const [day, month, year] = value.split('/')
+                              if (day && month && year) {
+                                field.onChange(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`)
+                              }
+                            } else {
+                              field.onChange("")
+                            }
+                          }}
+                          label=""
+                          removeSpacing={true}
+                          minAge={13}
+                          maxAge={120}
+                          defaultAge={18}
+                        />
+                      )}
+                    />
                     {errors.dob && (
                       <p className="text-sm text-red-500 mt-1">{errors.dob.message}</p>
                     )}

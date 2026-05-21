@@ -39,7 +39,7 @@ import {
   Calendar,
   History
 } from 'lucide-react'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 import { MetricCard } from '@/components/dashboard/metric-card'
@@ -88,6 +88,15 @@ export function AdminOverview({
     recentActivityDataReady,
     showSkeleton
   } = useAdminRealtimeDashboard(profile?.id || '', initialData)
+
+  const handleAddUserSuccess = useCallback(() => {
+    // onSuccess is called after 2-second delay, so also ensure forceFresh here
+    refetch({ forceFresh: true })
+  }, [refetch])
+
+  const handleAddUserRefetch = useCallback(() => {
+    refetch({ forceFresh: true })
+  }, [refetch])
 
 
 
@@ -376,13 +385,10 @@ export function AdminOverview({
         open={showAddUserSheet}
         onOpenChange={setShowAddUserSheet}
         useSheet={true}
-        onSuccess={() => {
-          // onSuccess is called after 2-second delay, so also ensure forceFresh here
-          refetch({ forceFresh: true })
-        }}
+        onSuccess={handleAddUserSuccess}
         title="Add New User"
         description="Create a new user account with proper access permissions"
-        refetch={() => refetch({ forceFresh: true })}
+        refetch={handleAddUserRefetch}
       />
 
     </div>
