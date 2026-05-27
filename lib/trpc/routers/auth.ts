@@ -516,18 +516,25 @@ export const authRouter = router({
         })
       }
 
-      // Log activity
-      await ctx.db.insert(activities).values({
-        user_id: ctx.profile?.id || ctx.user.id,
-        activity_type: 'password_change',
-        module: 'auth',
-        description: formatActivityDescription({
-          action: 'update',
-          actorRole: ctx.profile?.role || 'employee',
-          actorEmail: email,
-          module: 'auth'
-        }),
-      })
+      // Log activity - fire and forget to prevent password change flow from failing if logging fails
+      const logPasswordChangeActivity = async () => {
+        try {
+          await ctx.db.insert(activities).values({
+            user_id: ctx.profile?.id || ctx.user.id,
+            activity_type: 'profile_update',
+            module: 'auth',
+            description: formatActivityDescription({
+              action: 'update',
+              actorRole: ctx.profile?.role || 'employee',
+              actorEmail: email,
+              module: 'auth'
+            }),
+          })
+        } catch (err) {
+          console.error('[AUTH-PASSWORD-CHANGE] Background activity logging failed:', err)
+        }
+      }
+      logPasswordChangeActivity()
 
       return { success: true, userId: ctx.user.id }
     }),

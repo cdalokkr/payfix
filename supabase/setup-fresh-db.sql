@@ -31,7 +31,7 @@ EXCEPTION
 END $$;
 
 DO $$ BEGIN
-    CREATE TYPE activity_type AS ENUM ('login', 'logout', 'profile_update', 'data_view', 'data_edit', 'data_delete', 'data_create');
+    CREATE TYPE activity_type AS ENUM ('login', 'logout', 'profile_update', 'data_view', 'data_edit', 'data_delete', 'data_create', 'password_change');
 EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
