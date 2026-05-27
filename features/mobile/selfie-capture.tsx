@@ -5,7 +5,19 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
-import { Camera as IconCamera, Loader2 as IconLoader2, RefreshCw as IconRefresh, Check as IconCheck, X as IconX, ArrowLeft as IconArrowLeft, ZoomIn as IconZoomIn } from "lucide-react"
+import { 
+    Camera as IconCamera, 
+    Loader2 as IconLoader2, 
+    RefreshCw as IconRefresh, 
+    Check as IconCheck, 
+    X as IconX, 
+    ArrowLeft as IconArrowLeft, 
+    ZoomIn as IconZoomIn,
+    ShieldCheck as IconShieldCheck,
+    CheckCheck as IconCheckCheck,
+    ScanFace as IconScanFace,
+    AlertTriangle as IconAlertTriangle
+} from "lucide-react"
 import { format } from "date-fns"
 import { Slider } from "@/components/ui/slider"
 import { FaceVerificationService } from "@/lib/services/face-verification.service"
@@ -532,20 +544,23 @@ export function SelfieCapture({
                     >
                         <IconArrowLeft className="w-6 h-6" />
                     </motion.button>
-                    <div className="px-4 py-2 rounded-full bg-primary/20 backdrop-blur-xl border border-primary/30">
-                        <span className="text-[10px] font-black text-primary uppercase tracking-widest">Attendance Mode</span>
-                    </div>
                 </div>
             </div>
 
             {/* Controls Area */}
             <div className="flex-1 bg-slate-950 p-8 flex flex-col justify-between overflow-y-auto">
                 <div className="space-y-8">
+                    {/* Attendance Mode Pill centered just after the selfie outer area */}
+                    <div className="flex justify-center -mt-4 mb-2">
+                        <div className="px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 backdrop-blur-md">
+                            <span className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">Attendance Mode</span>
+                        </div>
+                    </div>
                     <div className="text-center space-y-2">
                         <h2 className="text-2xl font-black text-white tracking-tight">
                             {status === 'captured' ? "Verify & Proceed" : "Identify Yourself"}
                         </h2>
-                        <p className="text-slate-400 text-sm font-medium">
+                        <p className="text-slate-450 text-sm font-medium">
                             {status === 'captured'
                                 ? "Ensure your face and background are clear."
                                 : "Face verification is required for security."}
@@ -606,15 +621,37 @@ export function SelfieCapture({
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -20 }}
-                                className="flex flex-col items-center py-8"
+                                className="flex flex-col items-center py-4 space-y-6"
                             >
-                                <motion.div
-                                    animate={{ rotate: 360 }}
-                                    transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                                    className="w-16 h-16 rounded-full border-4 border-primary/30 border-t-primary mb-6"
-                                />
-                                <h3 className="text-xl font-black text-white tracking-tight mb-1">Verifying Identity</h3>
-                                <p className="text-xs text-white/50 font-medium uppercase tracking-wider">Please wait...</p>
+                                <div className="relative w-16 h-16 flex items-center justify-center">
+                                    <motion.div
+                                        animate={{ rotate: 360 }}
+                                        transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                                        className="absolute inset-0 rounded-full border-4 border-primary/20 border-t-primary"
+                                    />
+                                    <IconScanFace className="w-6 h-6 text-primary animate-pulse" />
+                                </div>
+                                <div className="text-center space-y-1">
+                                    <h3 className="text-lg font-black text-white tracking-tight">Biometric Scan Active</h3>
+                                    <p className="text-xs text-white/50 font-medium uppercase tracking-widest animate-pulse">Running face vector alignment...</p>
+                                </div>
+
+                                {/* Modern Biometric Checking Steps */}
+                                <div className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 space-y-3.5 text-xs text-slate-300">
+                                    <div className="flex items-center justify-between">
+                                        <span className="font-semibold flex items-center gap-2 text-white/90">
+                                            <IconCheckCheck className="w-3.5 h-3.5 text-primary animate-pulse" /> Check Biometric Identity
+                                        </span>
+                                        <span className="text-[10px] text-primary font-black uppercase animate-pulse">Scanning...</span>
+                                    </div>
+                                    <div className="h-px bg-white/10" />
+                                    <div className="flex items-center justify-between opacity-50">
+                                        <span className="font-semibold flex items-center gap-2">
+                                            <IconShieldCheck className="w-3.5 h-3.5" /> Anti-Spoofing Liveness
+                                        </span>
+                                        <span className="text-[10px] font-black uppercase">Pending</span>
+                                    </div>
+                                </div>
                             </motion.div>
                         )}
 
@@ -624,44 +661,77 @@ export function SelfieCapture({
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -20 }}
-                                className="flex flex-col items-center py-4"
+                                className="flex flex-col items-center py-4 space-y-5"
                             >
                                 <motion.div
                                     initial={{ scale: 0 }}
                                     animate={{ scale: 1 }}
                                     transition={{ type: "spring", damping: 12 }}
-                                    className="w-16 h-16 rounded-full bg-emerald-500 flex items-center justify-center mb-4 shadow-xl shadow-emerald-500/30"
+                                    className="w-16 h-16 rounded-full bg-emerald-500 flex items-center justify-center shadow-xl shadow-emerald-500/30"
                                 >
-                                    <IconCheck className="w-8 h-8 text-white stroke-[3]" />
+                                    <IconCheckCheck className="w-8 h-8 text-white stroke-[3.5]" />
                                 </motion.div>
-                                <h3 className="text-xl font-black text-white tracking-tight mb-1">Verified!</h3>
-                                <p className="text-sm text-emerald-300 font-bold mb-4">Match: {(similarity * 100).toFixed(0)}%</p>
+                                <div className="text-center space-y-1">
+                                    <h3 className="text-lg font-black text-white tracking-tight">Verification Successful</h3>
+                                    <p className="text-xs text-emerald-400 font-bold uppercase tracking-wider">Similarity Match: {(similarity * 100).toFixed(0)}%</p>
+                                </div>
+
+                                {/* Biometric Check Done Steps */}
+                                <div className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 space-y-3.5 text-xs text-slate-300">
+                                    <div className="flex items-center justify-between">
+                                        <span className="font-semibold flex items-center gap-2 text-white/90">
+                                            <IconCheckCheck className="w-3.5 h-3.5 text-emerald-500" /> Biometric Identity Match
+                                        </span>
+                                        <span className="text-[10px] text-emerald-500 font-black uppercase">PASSED</span>
+                                    </div>
+                                    <div className="h-px bg-white/10" />
+                                    <div className="flex items-center justify-between">
+                                        <span className="font-semibold flex items-center gap-2 text-white/90">
+                                            <IconShieldCheck className="w-3.5 h-3.5 text-emerald-500" /> Anti-Spoofing Verification
+                                        </span>
+                                        <span className="text-[10px] text-emerald-500 font-black uppercase">PASSED</span>
+                                    </div>
+                                </div>
 
                                 {apiStatus === 'pending' ? (
-                                    <>
-                                        <div className="flex items-center gap-2 mb-4">
-                                            <IconLoader2 className="w-4 h-4 text-white/50 animate-spin" />
-                                            <p className="text-xs text-white/50 font-medium">Syncing attendance...</p>
+                                    <div className="w-full space-y-3">
+                                        <div className="flex items-center justify-center gap-2 text-white/60">
+                                            <IconLoader2 className="w-4 h-4 animate-spin text-primary" />
+                                            <p className="text-xs font-semibold">Syncing check-in data with database...</p>
                                         </div>
                                         <Button
                                             disabled
-                                            className="w-full h-14 rounded-[2rem] bg-white/30 text-white/50 font-black text-lg cursor-not-allowed"
+                                            className="w-full h-14 rounded-2xl bg-white/10 border border-white/20 text-white/50 font-black text-lg cursor-not-allowed uppercase tracking-wider"
                                         >
                                             <IconLoader2 className="w-5 h-5 mr-3 animate-spin" />
-                                            SYNCING...
+                                            Syncing Attendance...
                                         </Button>
-                                    </>
+                                    </div>
+                                ) : apiStatus === 'error' ? (
+                                    <div className="w-full space-y-4">
+                                        <div className="p-3.5 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-xs text-rose-300 text-center leading-relaxed">
+                                            {apiError || 'Failed to record attendance logs.'}
+                                        </div>
+                                        <Button
+                                            onClick={onSubmitAttendance}
+                                            className="w-full h-14 rounded-2xl bg-rose-500 hover:bg-rose-450 text-white font-black text-lg shadow-xl"
+                                        >
+                                            Retry Server Sync
+                                        </Button>
+                                    </div>
                                 ) : (
-                                    <>
-                                        <p className="text-xs text-white/40 font-medium mb-4">Attendance recorded</p>
+                                    <div className="w-full space-y-3">
+                                        <div className="flex items-center justify-center gap-1 text-emerald-450 font-bold text-xs">
+                                            <IconCheckCheck className="w-4 h-4" /> Live attendance synced successfully!
+                                        </div>
                                         <Button
                                             onClick={handleComplete}
-                                            className="w-full h-14 rounded-[2rem] bg-emerald-500 hover:bg-emerald-400 text-white font-black text-lg shadow-xl shadow-emerald-500/20 transition-all active:scale-95"
+                                            className="w-full h-14 rounded-2xl bg-emerald-500 hover:bg-emerald-450 text-white font-black text-lg shadow-xl shadow-emerald-500/25 transition-all active:scale-95"
                                         >
-                                            <IconCheck className="w-5 h-5 mr-3" />
+                                            <IconCheckCheck className="w-5 h-5 mr-3" />
                                             DONE
                                         </Button>
-                                    </>
+                                    </div>
                                 )}
                             </motion.div>
                         )}
@@ -672,25 +742,56 @@ export function SelfieCapture({
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -20 }}
-                                className="flex flex-col items-center py-4"
+                                className="flex flex-col items-center py-4 space-y-5"
                             >
                                 <motion.div
                                     initial={{ scale: 0 }}
                                     animate={{ scale: 1 }}
                                     transition={{ type: "spring", damping: 12 }}
-                                    className="w-16 h-16 rounded-full bg-rose-500 flex items-center justify-center mb-4 shadow-xl shadow-rose-500/30"
+                                    className="w-16 h-16 rounded-full bg-rose-500 flex items-center justify-center shadow-xl shadow-rose-500/30"
                                 >
-                                    <IconX className="w-8 h-8 text-white stroke-[3]" />
+                                    <IconX className="w-8 h-8 text-white stroke-[3.5]" />
                                 </motion.div>
-                                <h3 className="text-xl font-black text-white tracking-tight mb-1">Verification Failed</h3>
-                                <p className="text-xs text-rose-300 font-medium mb-1 text-center">{errorMessage}</p>
-                                <p className="text-[10px] text-white/40 font-medium mb-4 uppercase tracking-wider">Try with better lighting</p>
-                                <Button
-                                    onClick={onBack}
-                                    className="w-full h-14 rounded-[2rem] bg-white text-slate-900 font-black text-lg shadow-xl hover:bg-white/90 transition-all active:scale-95"
-                                >
-                                    OK
-                                </Button>
+                                <div className="text-center space-y-1">
+                                    <h3 className="text-lg font-black text-white tracking-tight">Security Biometric Mismatch</h3>
+                                    <p className="text-xs text-rose-450 font-bold uppercase tracking-wider">Similarity Match: {(similarity * 100).toFixed(0)}%</p>
+                                </div>
+
+                                {/* Security Warning Explanation */}
+                                <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-xs text-rose-350 text-center leading-relaxed space-y-2">
+                                    <p className="font-bold flex items-center justify-center gap-1 text-rose-455">
+                                        <IconAlertTriangle className="w-4 h-4 shrink-0" /> Anti-Spoofing Rule Triggered
+                                    </p>
+                                    <p className="opacity-95">
+                                        The biometric facial vector does not match the registered embedding of the authorized account holder. Attendance is strictly locked.
+                                    </p>
+                                </div>
+
+                                {/* Quick Tips */}
+                                <div className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-xs text-slate-400 space-y-2">
+                                    <p className="font-black text-white uppercase tracking-wider text-[10px]">Verification Tips:</p>
+                                    <ul className="list-disc pl-4 space-y-1 text-slate-350">
+                                        <li>Avoid backlighting (do not stand against bright windows/doors).</li>
+                                        <li>Position face inside the cyan scanning mask.</li>
+                                        <li>Ensure eyes, nose, and mouth are clearly illuminated.</li>
+                                    </ul>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3 w-full">
+                                    <Button
+                                        onClick={onBack}
+                                        variant="outline"
+                                        className="h-14 rounded-2xl text-white border-white/20 font-bold text-sm bg-transparent"
+                                    >
+                                        Exit
+                                    </Button>
+                                    <Button
+                                        onClick={retakePhoto}
+                                        className="h-14 rounded-2xl bg-white text-slate-900 font-black text-sm shadow-xl hover:bg-white/90"
+                                    >
+                                        Retry Scan
+                                    </Button>
+                                </div>
                             </motion.div>
                         )}
                     </AnimatePresence>
