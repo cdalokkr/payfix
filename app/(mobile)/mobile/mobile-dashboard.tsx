@@ -216,8 +216,8 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
             className="space-y-6 pb-4"
         >
             {/* Today's Status Card */}
-            <motion.div variants={itemVars} whileTap={{ scale: 0.98 }}>
-                <div className={`relative overflow-hidden rounded-[1rem] bg-gradient-to-br ${getStatusColor()} p-4 text-white shadow-2xl shadow-primary/20 min-h-[290px] flex flex-col justify-between`}>
+            <motion.div variants={itemVars} whileTap={{ scale: 0.99 }}>
+                <div className={`relative overflow-hidden rounded-[1.5rem] bg-gradient-to-br ${getStatusColor()} p-5 text-white shadow-2xl shadow-primary/20 min-h-[290px] flex flex-col justify-between`}>
                     {/* Glass Decorations */}
                     <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full -mr-24 -mt-24 blur-2xl" />
                     <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full -ml-16 -mb-16 blur-xl" />
@@ -233,20 +233,20 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
                             {/* GPS Coordinates - Below heading (only when not loading and has coords) */}
                             {!isLocChecking && userCoords && (
                                 <motion.div
-                                    initial={{ opacity: 0, y: -5 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    className="flex items-center gap-1.5 mt-1"
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    className="inline-flex items-center gap-1.5 mt-1.5 px-2.5 py-1 rounded-full bg-white/10 dark:bg-black/25 border border-white/10 backdrop-blur-md w-fit"
                                 >
                                     {geofenceResult?.isAllowed ? (
-                                        <MapPinCheck className="w-3.5 h-3.5 text-emerald-300" />
+                                        <MapPinCheck className="w-3 h-3 text-emerald-300" />
                                     ) : (
-                                        <MapPinX className="w-3.5 h-3.5 text-orange-300" />
+                                        <MapPinX className="w-3 h-3 text-orange-300" />
                                     )}
-                                    <span className="text-xs font-bold text-white/60 tracking-tight">
-                                        {userCoords.lat.toFixed(6)}, {userCoords.lng.toFixed(6)}
+                                    <span className="text-[10px] font-black text-white/90 tracking-tight font-mono">
+                                        {userCoords.lat.toFixed(5)}, {userCoords.lng.toFixed(5)}
                                     </span>
                                 </motion.div>
-                            )}
+                             )}
                         </div>
 
                         {/* Integrated Calendar UI */}
@@ -273,7 +273,7 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
                     </div>
 
                     {/* Integrated Action Row */}
-                    <div className="mt-2 space-y-4">
+                    <motion.div layout className="mt-2 space-y-4">
                         {!isReady ? (
                             <div className="flex items-center justify-center p-8">
                                 <IconLoader2 className="w-8 h-8 animate-spin opacity-20" />
@@ -311,7 +311,7 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
                                 <p className="text-[11px] font-medium text-indigo-100/80">Scheduled Weekly Off</p>
                             </div>
                         ) : (
-                            <div className="w-full space-y-3">
+                            <motion.div layout className="w-full space-y-3">
                                 {/* Location Loading State - Centered with Zoom Animation */}
                                 {isLocChecking ? (
                                     <motion.div
@@ -326,7 +326,7 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
                                     </motion.div>
                                 ) : (
                                     <motion.div
-                                        initial={{ opacity: 0, scale: 0.9 }}
+                                        initial={{ opacity: 0, scale: 0.95 }}
                                         animate={{ opacity: 1, scale: 1 }}
                                         transition={{ duration: 0.3, ease: "easeOut" }}
                                         className="space-y-3"
@@ -417,26 +417,28 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
 
                                                 {/* Single Dynamic Clock Button */}
                                                 {!isComplete && (
-                                                    <Link
-                                                        href={`/mobile/attendance?action=${hasCheckedIn ? 'clock_out' : 'clock_in'}`}
-                                                        className={`flex items-center justify-center gap-3 w-full px-4 py-3 rounded-2xl border transition-all active:scale-95 shadow-lg
-                                                            ${hasCheckedIn
-                                                                ? 'bg-gradient-to-r from-orange-500/40 to-rose-500/40 border-orange-400/40 hover:from-orange-500/50 hover:to-rose-500/50'
-                                                                : 'bg-gradient-to-r from-emerald-500/40 to-teal-500/40 border-emerald-400/40 hover:from-emerald-500/50 hover:to-teal-500/50'}`}
-                                                    >
-                                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-lg
-                                                            ${hasCheckedIn
-                                                                ? 'bg-orange-500 shadow-orange-600/30'
-                                                                : 'bg-emerald-500 shadow-emerald-600/30'}`}>
-                                                            {hasCheckedIn
-                                                                ? <ClockArrowUp className="w-5 h-5 text-white" />
-                                                                : <ClockArrowDown className="w-5 h-5 text-white" />}
-                                                        </div>
-                                                        <span className="text-sm font-black uppercase tracking-widest text-white">
-                                                            {hasCheckedIn ? 'Mark Office Out' : 'Mark Office In'}
-                                                        </span>
-                                                        <IconArrowRight className="w-5 h-5 text-white/60 ml-auto" />
-                                                    </Link>
+                                                    <motion.div whileTap={{ scale: 0.97 }} className="w-full">
+                                                        <Link
+                                                            href={`/mobile/attendance?action=${hasCheckedIn ? 'clock_out' : 'clock_in'}`}
+                                                            className={`flex items-center justify-center gap-3 w-full px-4 py-3 rounded-2xl border transition-all shadow-lg
+                                                                ${hasCheckedIn
+                                                                    ? 'bg-gradient-to-r from-orange-500/40 to-rose-500/40 border-orange-400/40 hover:from-orange-500/50 hover:to-rose-500/50'
+                                                                    : 'bg-gradient-to-r from-emerald-500/40 to-teal-500/40 border-emerald-400/40 hover:from-emerald-500/50 hover:to-teal-500/50'}`}
+                                                        >
+                                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-lg
+                                                                ${hasCheckedIn
+                                                                    ? 'bg-orange-500 shadow-orange-600/30'
+                                                                    : 'bg-emerald-500 shadow-emerald-600/30'}`}>
+                                                                {hasCheckedIn
+                                                                    ? <ClockArrowUp className="w-5 h-5 text-white" />
+                                                                    : <ClockArrowDown className="w-5 h-5 text-white" />}
+                                                            </div>
+                                                            <span className="text-sm font-black uppercase tracking-widest text-white">
+                                                                {hasCheckedIn ? 'Mark Office Out' : 'Mark Office In'}
+                                                            </span>
+                                                            <IconArrowRight className="w-5 h-5 text-white/60 ml-auto" />
+                                                        </Link>
+                                                    </motion.div>
                                                 )}
 
                                                 {/* Attendance Complete Badge */}
@@ -454,11 +456,12 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
                                         )}
                                     </motion.div>
                                 )}
-                            </div>
+                            </motion.div>
                         )}
-                    </div>
+                    </motion.div>
                 </div>
             </motion.div>
+
 
             {/* Quick Actions Grid */}
             <motion.div variants={itemVars} className="space-y-4 pt-2">
