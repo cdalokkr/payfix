@@ -1,0 +1,1 @@
+ALTER TABLE "profiles" ADD COLUMN "face_embedding" real[];

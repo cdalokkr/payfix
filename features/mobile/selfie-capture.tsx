@@ -16,10 +16,12 @@ interface SelfieCaptureProps {
     onVerified: (result: { matched: boolean; similarity: number }) => void
     onSubmitAttendance: () => Promise<void>
     onBack?: () => void
+    warmedStream?: MediaStream | null
+    clearWarmedStream?: () => void
 }
 
 // Track whether face-api models have been loaded this session
-let modelsPreloaded = false
+let modelsPreloaded = true
 
 export interface SelfieResult {
     imageDataUrl: string
@@ -28,7 +30,15 @@ export interface SelfieResult {
     similarity: number
 }
 
-export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmitAttendance, onBack }: SelfieCaptureProps) {
+export function SelfieCapture({
+    profileImageUrl,
+    onCaptured,
+    onVerified,
+    onSubmitAttendance,
+    onBack,
+    warmedStream,
+    clearWarmedStream
+}: SelfieCaptureProps) {
     const [status, setStatus] = useState<'idle' | 'streaming' | 'captured' | 'verifying' | 'verified' | 'verify_failed' | 'error'>('idle')
     const [errorMessage, setErrorMessage] = useState<string>('')
     const [capturedImage, setCapturedImage] = useState<string | null>(null)
@@ -37,7 +47,7 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
     const [zoom, setZoom] = useState<number>(1)
     const [hasZoomSupport, setHasZoomSupport] = useState(false)
     const [similarity, setSimilarity] = useState<number>(0)
-    const [modelsReady, setModelsReady] = useState(modelsPreloaded)
+    const [modelsReady, setModelsReady] = useState(true)
     const [apiStatus, setApiStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle')
     const [apiError, setApiError] = useState<string>('')
 
@@ -70,17 +80,9 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
         }
         isInitializing.current = true
 
-        // Preload face-api models — MUST complete before selfie can be verified
-        FaceVerificationService.initialize().then(async (ready) => {
-            if (ready) {
-                modelsPreloaded = true
-                if (isMounted.current) setModelsReady(true)
-                // Also preload profile descriptor while waiting
-                if (profileImageUrl) {
-                    await FaceVerificationService.preloadProfileDescriptor(profileImageUrl).catch(() => { })
-                }
-            }
-        }).catch(() => { })
+        // Set models as preloaded instantly
+        modelsPreloaded = true
+        if (isMounted.current) setModelsReady(true)
 
         stopCamera()
         if (isMounted.current) {
@@ -88,9 +90,43 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
             setErrorMessage('')
         }
 
-        // Delay for hardware release (350ms)
-        if (retryCount === 0) {
+        // Delay for hardware release (350ms) - only if we don't have a warmed stream
+        if (retryCount === 0 && !warmedStream) {
             await new Promise(resolve => setTimeout(resolve, 350))
+        }
+
+        // Try using the pre-warmed stream
+        if (warmedStream && retryCount === 0) {
+            try {
+                streamRef.current = warmedStream
+                const videoTrack = warmedStream.getVideoTracks()[0]
+                if (videoTrack) {
+                    const capabilities = videoTrack.getCapabilities() as any
+                    if (capabilities?.zoom) {
+                        setHasZoomSupport(true)
+                    }
+                }
+
+                if (videoRef.current) {
+                    const video = videoRef.current
+                    video.srcObject = warmedStream
+                    video.setAttribute('playsinline', 'true')
+                    video.muted = true
+                    
+                    try {
+                        await video.play()
+                        if (isMounted.current) setStatus('streaming')
+                    } catch (err) {
+                        console.warn("Autoplay blocked, but setting status to streaming:", err)
+                        if (isMounted.current) setStatus('streaming')
+                    }
+                    isInitializing.current = false
+                    clearWarmedStream?.()
+                    return
+                }
+            } catch (err) {
+                console.error("Failed to use pre-warmed stream, falling back to getUserMedia:", err)
+            }
         }
 
         try {
@@ -197,9 +233,9 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
         const ctx = canvas.getContext('2d')
         if (!ctx) return
 
-        // 480×480: optimized for fast face-api.js processing on mobile
-        canvas.width = 480
-        canvas.height = 480
+        // 320×320: optimized for fast server-side processing on mobile
+        canvas.width = 320
+        canvas.height = 320
 
         const vw = video.videoWidth
         const vh = video.videoHeight
@@ -216,7 +252,7 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
         const now = new Date()
         const timestamp = format(now, "dd MMM yyyy, hh:mm:ss a")
 
-        // Draw modern timestamp pill (scaled to 480px canvas)
+        // Draw modern timestamp pill (scaled to 320px canvas)
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
         const pillWidth = 200
         const pillHeight = 28
@@ -233,7 +269,8 @@ export function SelfieCapture({ profileImageUrl, onCaptured, onVerified, onSubmi
         ctx.textAlign = 'center'
         ctx.fillText(timestamp, canvas.width / 2, pillY + 19)
 
-        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.9)
+        // Compress image to quality 0.7 for tiny payload size
+        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.7)
         setCapturedImage(imageDataUrl)
         setCapturedAt(now)
         setStatus('captured')

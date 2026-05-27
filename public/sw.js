@@ -3,14 +3,16 @@
  * Handles caching, offline functionality, and push notifications
  */
 
-const CACHE_NAME = 'payfix-attendance-v1'
-const STATIC_CACHE = 'payfix-static-v1'
-const DYNAMIC_CACHE = 'payfix-dynamic-v1'
+const CACHE_NAME = 'payfix-attendance-v2'
+const STATIC_CACHE = 'payfix-static-v2'
+const DYNAMIC_CACHE = 'payfix-dynamic-v2'
 const OFFLINE_QUEUE_NAME = 'payfix-offline-queue'
 
 // Static assets to cache
 const STATIC_ASSETS = [
     '/',
+    '/mobile',
+    '/mobile/attendance',
     '/employee',
     '/offline',
     '/manifest.json',

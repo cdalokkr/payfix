@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useCallback } from "react"
+import React, { useState, useCallback, useEffect, useRef } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -42,6 +42,45 @@ export function MobileAttendanceWizard({
     const { isPwa, isReady } = usePwaCheck()
     const [currentStep, setCurrentStep] = useState<WizardStep>('selfie')
     const [errorMessage, setErrorMessage] = useState('')
+    const [warmedStream, setWarmedStream] = useState<MediaStream | null>(null)
+    const warmedStreamRef = useRef<MediaStream | null>(null)
+
+    // Pre-warm camera stream as soon as the wizard is mounted
+    useEffect(() => {
+        let activeStream: MediaStream | null = null
+
+        const prewarm = async () => {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'user',
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 },
+                    },
+                    audio: false,
+                })
+                activeStream = stream
+                warmedStreamRef.current = stream
+                setWarmedStream(stream)
+            } catch (err) {
+                console.warn('Failed to pre-warm camera:', err)
+            }
+        }
+
+        prewarm()
+
+        return () => {
+            if (warmedStreamRef.current) {
+                warmedStreamRef.current.getTracks().forEach(track => track.stop())
+                warmedStreamRef.current = null
+            }
+        }
+    }, [])
+
+    const clearWarmedStream = useCallback(() => {
+        warmedStreamRef.current = null
+        setWarmedStream(null)
+    }, [])
 
     const utils = trpc.useUtils()
 
@@ -176,6 +215,8 @@ export function MobileAttendanceWizard({
                         onVerified={handleVerified}
                         onSubmitAttendance={handleSubmitAttendance}
                         onBack={handleBack}
+                        warmedStream={warmedStream}
+                        clearWarmedStream={clearWarmedStream}
                     />
                 )}
 
