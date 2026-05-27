@@ -12,6 +12,7 @@ import {
     LogIn as IconLogin,
     LogOut as IconLogout,
     Check as IconCheck,
+    CheckCheck as IconCheckCheck,
     AlertTriangle as IconAlertTriangle,
     ArrowRight as IconArrowRight,
     History as IconHistory,
@@ -457,7 +458,7 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
                                                 {isComplete && (
                                                     <div className="flex items-center justify-center gap-2.5 px-3 py-2 rounded-xl bg-white/10 border border-white/15 backdrop-blur-md w-full">
                                                         <div className="w-5.5 h-5.5 rounded-full bg-white flex items-center justify-center shrink-0 shadow-sm">
-                                                            <IconCheck className="w-3.5 h-3.5 text-indigo-650 stroke-[3.5]" />
+                                                            <IconCheckCheck className="w-3.5 h-3.5 text-indigo-600 stroke-[3]" />
                                                         </div>
                                                         <span className="text-[10px] font-black uppercase tracking-[0.12em] text-white">
                                                             Attendance Marked
