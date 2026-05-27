@@ -9,9 +9,10 @@ const nextConfig: NextConfig = {
     // Build CSP directives - stricter in production
     const cspDirectives = [
       "default-src 'self'",
-      // Note: 'unsafe-eval' is required in all environments because face-api.js/TensorFlow.js
-      // uses new Function() for dynamic code generation (WebGL shader compilation, WASM).
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+      // Note: 'unsafe-eval' was required by legacy face-api.js but is now removed in production for stricter security.
+      isDev
+        ? "script-src 'self' 'unsafe-eval' 'unsafe-inline'"
+        : "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
@@ -26,16 +27,6 @@ const nextConfig: NextConfig = {
     ].filter(Boolean).join('; ');
 
     return [
-      {
-        // Cache immutably — hashed filenames guarantee content uniqueness
-        source: '/_next/static/(.*)',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable',
-          },
-        ],
-      },
       {
         // Cache images for 1 day with stale-while-revalidate fallback
         source: '/images/(.*)',

@@ -348,10 +348,11 @@ export async function createOptimizedContext() {
 
   // Lazy client variable captured in closure
   let _lazySupabase: any = null;
+  let cookieStore: any = null;
 
   try {
     const t0 = performance.now();
-    const cookieStore = await cookies()
+    cookieStore = await cookies()
     const t1 = performance.now();
 
     // 1. FAST CHECK: If no auth cookies exist, skip everything
@@ -414,13 +415,13 @@ export async function createOptimizedContext() {
 
     // 2. PHASE 2 FAST PATH: Local JWT Decoding from Supabase SSR cookies
     // Supabase SSR uses cookies named like 'sb-xxxx-auth-token' or 'sb-xxxx-auth-token.0'
-    const allAuthCookies = cookieStore.getAll().filter(c => c.name.includes('-auth-token'))
+    const allAuthCookies = cookieStore.getAll().filter((c: any) => c.name.includes('-auth-token'))
 
     if (allAuthCookies.length > 0) {
       const decodedT0 = performance.now();
       try {
         // Find the "sharded" cookies (ending in .0, .1, etc.)
-        const shards = allAuthCookies.filter(c => /\.\d+$/.test(c.name));
+        const shards = allAuthCookies.filter((c: any) => /\.\d+$/.test(c.name));
 
         let authCookies: typeof allAuthCookies = [];
         if (shards.length > 0) {
@@ -432,7 +433,7 @@ export async function createOptimizedContext() {
         }
 
         // Robustly reconstruct the session string from multiple cookies if fragmented
-        const sortedCookies = authCookies.sort((a, b) => {
+        const sortedCookies = authCookies.sort((a: any, b: any) => {
           // Sort by index suffix (e.g., .0, .1, .2)
           const aMatch = a.name.match(/\.(\d+)$/);
           const bMatch = b.name.match(/\.(\d+)$/);
@@ -441,7 +442,7 @@ export async function createOptimizedContext() {
           return aIndex - bIndex;
         });
 
-        const reconstructedValue = sortedCookies.map(c => c.value).join('');
+        const reconstructedValue = sortedCookies.map((c: any) => c.value).join('');
 
         // Handle URL encoding if present
         let sessionContent = reconstructedValue;
@@ -606,6 +607,20 @@ export async function createOptimizedContext() {
     return contextResult
 
   } catch (error) {
+    // Rethrow Next.js dynamic routing errors so it handles them gracefully and switches to dynamic rendering
+    const err = error as any;
+    if (
+      err &&
+      (err.digest === 'DYNAMIC_SERVER_USAGE' ||
+       err.message?.includes('Dynamic server usage') ||
+       err.digest?.startsWith('NEXT_') ||
+       err.message?.includes('dynamic server usage') ||
+       err.message?.includes('cookies') ||
+       err.message?.includes('headers'))
+    ) {
+      throw error;
+    }
+
     const finalMetrics = endAuthTiming(metrics, {
       error: error instanceof Error ? error.message : 'Unknown error',
       userFound: false,
@@ -617,7 +632,15 @@ export async function createOptimizedContext() {
 
     return {
       get supabase() {
-        if (!_lazySupabase) _lazySupabase = createSupabaseClientSync(cookieStore as any);
+        if (!_lazySupabase) {
+          const store = cookieStore || {
+            getAll: () => [],
+            get: () => undefined,
+            set: () => {},
+            delete: () => {},
+          };
+          _lazySupabase = createSupabaseClientSync(store as any);
+        }
         return _lazySupabase;
       },
       user: null,

@@ -330,7 +330,7 @@ export class WebVitalsMonitor {
    * Initialize performance observers for detailed metrics
    */
   private initializePerformanceObservers(): void {
-    if (!('PerformanceObserver' in window)) {
+    if (typeof window === 'undefined' || !('PerformanceObserver' in window)) {
       return;
     }
 

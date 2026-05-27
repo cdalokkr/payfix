@@ -52,6 +52,20 @@ export const createContext = cache(async () => {
       }
     }
   } catch (error) {
+    // Rethrow Next.js dynamic usage and route control exceptions so Next.js knows the route is dynamic
+    const err = error as any;
+    if (
+      err &&
+      (err.digest === 'DYNAMIC_SERVER_USAGE' ||
+       err.message?.includes('Dynamic server usage') ||
+       err.digest?.startsWith('NEXT_') ||
+       err.message?.includes('dynamic server usage') ||
+       err.message?.includes('cookies') ||
+       err.message?.includes('headers'))
+    ) {
+      throw error;
+    }
+
     const duration = performance.now() - startTime
     console.error(`[AUTH-PERF] createContext #${createContextCallCount} failed:`, {
       duration,
