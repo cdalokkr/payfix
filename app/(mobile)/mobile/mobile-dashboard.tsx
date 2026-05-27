@@ -194,16 +194,14 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
     const isComplete = hasCheckedIn && hasCheckedOut
 
     const getStatusColor = () => {
-        if (isComplete) return 'from-emerald-500 to-teal-600'
+        if (isComplete) return 'from-indigo-600 via-indigo-650 to-violet-700'
         if (hasCheckedIn) return 'from-sky-500 to-blue-600'
         return 'from-purple-500 to-indigo-600'
     }
 
     // Get icon color based on status
     const getHeadingIconColor = () => {
-        if (isComplete) return 'text-emerald-200'
-        if (hasCheckedIn) return 'text-sky-200'
-        return 'text-purple-200'
+        return 'text-white'
     }
 
     const now = new Date()
@@ -217,20 +215,20 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
         >
             {/* Today's Status Card */}
             <motion.div variants={itemVars} whileTap={{ scale: 0.99 }}>
-                <div className={`relative overflow-hidden rounded-[1.5rem] bg-gradient-to-br ${getStatusColor()} p-5 text-white ${
-                    isComplete ? 'shadow-[0_15px_35px_rgba(16,185,129,0.3)]' :
-                    hasCheckedIn ? 'shadow-[0_15px_35px_rgba(14,165,233,0.3)]' :
-                    'shadow-[0_15px_35px_rgba(139,92,246,0.3)]'
-                } transition-all duration-500 border border-white/10 min-h-[290px] flex flex-col justify-between`}>
+                <div className={`relative overflow-hidden rounded-[1.5rem] bg-gradient-to-br ${getStatusColor()} p-3.5 text-white ${
+                    isComplete ? 'shadow-[0_15px_35px_rgba(99,102,241,0.25)]' :
+                    hasCheckedIn ? 'shadow-[0_15px_35px_rgba(14,165,233,0.25)]' :
+                    'shadow-[0_15px_35px_rgba(139,92,246,0.25)]'
+                } transition-all duration-500 border border-white/10 min-h-[235px] flex flex-col justify-between`}>
                     {/* Glass Decorations */}
                     <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full -mr-24 -mt-24 blur-2xl" />
                     <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full -ml-16 -mb-16 blur-xl" />
 
                     <div className="relative flex items-start justify-between gap-4">
-                        <div className="flex flex-col gap-2 py-1.5">
+                        <div className="flex flex-col gap-1.5 py-0.5">
                             {/* Today's Attendance Heading with CalendarClock icon */}
                             <div className="flex items-center gap-2">
-                                <CalendarClock className={`w-4 h-4 ${getHeadingIconColor()}`} />
+                                <CalendarClock className="w-4 h-4 text-white" />
                                 <span className="text-xs font-black uppercase tracking-[0.2em] opacity-90">Today's Attendance</span>
                             </div>
 
@@ -243,16 +241,16 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
                                 >
                                     {geofenceResult?.isAllowed ? (
                                         <div className="relative flex items-center justify-center shrink-0">
-                                            <MapPinCheck className="w-3 h-3 text-emerald-350 relative z-10" />
-                                            <span className="absolute inline-flex h-2.5 w-2.5 rounded-full bg-emerald-450 opacity-75 animate-ping" />
+                                            <MapPinCheck className="w-3 h-3 text-white relative z-10" />
+                                            <span className="absolute inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400 opacity-75 animate-ping" />
                                         </div>
                                     ) : (
                                         <div className="relative flex items-center justify-center shrink-0">
-                                            <MapPinX className="w-3 h-3 text-orange-355 relative z-10" />
+                                            <MapPinX className="w-3 h-3 text-white relative z-10" />
                                             <span className="absolute inline-flex h-2.5 w-2.5 rounded-full bg-orange-400 opacity-75 animate-ping" />
                                         </div>
                                     )}
-                                    <span className="text-[10px] font-black text-white/90 tracking-tight font-mono">
+                                    <span className="text-[10px] font-black text-white/95 tracking-tight font-mono">
                                         {userCoords.lat.toFixed(5)}, {userCoords.lng.toFixed(5)}
                                     </span>
                                 </motion.div>
@@ -264,9 +262,9 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
                             <motion.div
                                 initial={{ scale: 0.9 }}
                                 animate={{ scale: 1 }}
-                                className="flex flex-col items-center bg-white rounded-xl p-2 min-w-[70px] shadow-lg"
+                                className="flex flex-col items-center bg-white rounded-xl p-1.5 min-w-[65px] shadow-lg"
                             >
-                                <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest border-b border-rose-100 w-full text-center pb-0.5 mb-1">
+                                <span className="text-[9px] font-black text-rose-500 uppercase tracking-widest border-b border-rose-100 w-full text-center pb-0.5 mb-1">
                                     {format(now, 'MMM').toUpperCase()}
                                 </span>
                                 <div className="flex items-center justify-center gap-1">
@@ -283,7 +281,7 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
                     </div>
 
                     {/* Integrated Action Row */}
-                    <motion.div layout className="mt-2 space-y-4">
+                    <motion.div layout className="mt-1 space-y-3">
                         {!isReady ? (
                             <div className="flex items-center justify-center p-8">
                                 <IconLoader2 className="w-8 h-8 animate-spin opacity-20" />
@@ -342,25 +340,25 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
                                         className="space-y-3"
                                     >
                                         {/* Office Name Badge */}
-                                        <div className={`flex items-center gap-2 px-3 py-2 rounded-xl backdrop-blur-md border transition-all
+                                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl backdrop-blur-md border transition-all
                                             ${geofenceResult?.isAllowed
                                                 ? 'bg-emerald-500/20 border-emerald-400/30'
                                                 : 'bg-gradient-to-r from-orange-500/30 to-rose-500/30 border-orange-400/40'}`}>
                                             {geofenceResult?.isAllowed && geofenceResult.withinOffice ? (
                                                 <>
-                                                    <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 bg-emerald-400/30">
-                                                        <MapPinHouse className="w-4 h-4 text-emerald-200" />
+                                                    <div className="w-5.5 h-5.5 rounded-md flex items-center justify-center shrink-0 bg-white/20">
+                                                        <MapPinHouse className="w-3.5 h-3.5 text-white" />
                                                     </div>
-                                                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-100 bg-emerald-500/40 px-3 py-1 rounded-lg">
+                                                    <span className="text-[10px] font-black uppercase tracking-wider text-white">
                                                         {geofenceResult.withinOffice.name}
                                                     </span>
                                                 </>
                                             ) : (
                                                 <>
-                                                    <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 bg-orange-400/30">
-                                                        <MapPinOff className="w-4 h-4 text-orange-200" />
+                                                    <div className="w-5.5 h-5.5 rounded-md flex items-center justify-center shrink-0 bg-white/20">
+                                                        <MapPinOff className="w-3.5 h-3.5 text-white" />
                                                     </div>
-                                                    <span className="text-[10px] font-black uppercase tracking-wider text-orange-100">
+                                                    <span className="text-[10px] font-black uppercase tracking-wider text-white">
                                                         Outside Office Area
                                                     </span>
                                                 </>
@@ -397,29 +395,35 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
                                         ) : (
                                             <>
                                                 {/* IN / OUT Time Labels */}
-                                                <div className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-white/10 border border-white/15 backdrop-blur-sm">
-                                                    <div className="flex items-center gap-2 min-w-0">
-                                                        <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0
-                                                            ${hasCheckedIn ? 'bg-emerald-400/40' : 'bg-white/20'}`}>
-                                                            <ClockArrowDown className={`w-3.5 h-3.5 ${hasCheckedIn ? 'text-emerald-200' : 'text-white/50'}`} />
+                                                <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-white/10 border border-white/15 backdrop-blur-sm">
+                                                    <div className="flex items-center gap-1.5 min-w-0">
+                                                        <div className={`w-5.5 h-5.5 rounded-md flex items-center justify-center shrink-0
+                                                            ${hasCheckedIn ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]' : 'bg-white/10'}`}>
+                                                            <ClockArrowDown className="w-3.5 h-3.5 text-white stroke-[2.5]" />
                                                         </div>
-                                                        <span className={`text-xs font-black whitespace-nowrap tracking-tight ${hasCheckedIn ? 'text-white' : 'text-white/45'}`}>
-                                                            {todayAttendance?.check_in
-                                                                ? format(new Date(todayAttendance.check_in), 'hh:mm a')
-                                                                : '--:-- --'}
-                                                        </span>
+                                                        <div className="flex items-center gap-1 min-w-0">
+                                                            <span className="text-[10px] font-black uppercase text-white/90 tracking-wider">IN</span>
+                                                            <span className={`text-[13px] font-black whitespace-nowrap tracking-tight ${hasCheckedIn ? 'text-white' : 'text-white/40'}`}>
+                                                                {todayAttendance?.check_in
+                                                                    ? format(new Date(todayAttendance.check_in), 'hh:mm a')
+                                                                    : '--:-- --'}
+                                                            </span>
+                                                        </div>
                                                     </div>
-                                                    <div className="w-px h-6 bg-white/20 shrink-0" />
-                                                    <div className="flex items-center gap-2 min-w-0">
-                                                        <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0
-                                                            ${hasCheckedOut ? 'bg-orange-400/40' : 'bg-white/20'}`}>
-                                                            <ClockArrowUp className={`w-3.5 h-3.5 ${hasCheckedOut ? 'text-orange-200' : 'text-white/50'}`} />
+                                                    <div className="w-px h-5 bg-white/20 shrink-0" />
+                                                    <div className="flex items-center gap-1.5 min-w-0">
+                                                        <div className={`w-5.5 h-5.5 rounded-md flex items-center justify-center shrink-0
+                                                            ${hasCheckedOut ? 'bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.3)]' : 'bg-white/10'}`}>
+                                                            <ClockArrowUp className="w-3.5 h-3.5 text-white stroke-[2.5]" />
                                                         </div>
-                                                        <span className={`text-xs font-black whitespace-nowrap tracking-tight ${hasCheckedOut ? 'text-white' : 'text-white/45'}`}>
-                                                            {todayAttendance?.check_out
-                                                                ? format(new Date(todayAttendance.check_out), 'hh:mm a')
-                                                                : '--:-- --'}
-                                                        </span>
+                                                        <div className="flex items-center gap-1 min-w-0">
+                                                            <span className="text-[10px] font-black uppercase text-white/90 tracking-wider">OUT</span>
+                                                            <span className={`text-[13px] font-black whitespace-nowrap tracking-tight ${hasCheckedOut ? 'text-white' : 'text-white/40'}`}>
+                                                                {todayAttendance?.check_out
+                                                                    ? format(new Date(todayAttendance.check_out), 'hh:mm a')
+                                                                    : '--:-- --'}
+                                                            </span>
+                                                        </div>
                                                     </div>
                                                 </div>
 
@@ -451,11 +455,11 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
 
                                                 {/* Attendance Complete Badge */}
                                                 {isComplete && (
-                                                    <div className="flex items-center justify-center gap-3 px-4 py-3.5 rounded-2xl bg-white/15 border border-white/20 backdrop-blur-md">
-                                                        <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center shrink-0 shadow-md">
-                                                            <IconCheck className="w-4 h-4 text-emerald-600 stroke-[3.5]" />
+                                                    <div className="flex items-center justify-center gap-2.5 px-3 py-2 rounded-xl bg-white/10 border border-white/15 backdrop-blur-md w-full">
+                                                        <div className="w-5.5 h-5.5 rounded-full bg-white flex items-center justify-center shrink-0 shadow-sm">
+                                                            <IconCheck className="w-3.5 h-3.5 text-indigo-650 stroke-[3.5]" />
                                                         </div>
-                                                        <span className="text-xs font-black uppercase tracking-[0.15em] text-white">
+                                                        <span className="text-[10px] font-black uppercase tracking-[0.12em] text-white">
                                                             Attendance Marked
                                                         </span>
                                                     </div>
