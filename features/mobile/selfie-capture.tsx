@@ -661,65 +661,44 @@ export function SelfieCapture({
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -20 }}
-                                className="flex flex-col items-center py-4 space-y-5"
+                                className="flex flex-col items-center py-4 w-full space-y-6"
                             >
-                                <motion.div
-                                    initial={{ scale: 0 }}
-                                    animate={{ scale: 1 }}
-                                    transition={{ type: "spring", damping: 12 }}
-                                    className="w-16 h-16 rounded-full bg-emerald-500 flex items-center justify-center shadow-xl shadow-emerald-500/30"
-                                >
-                                    <IconCheckCheck className="w-8 h-8 text-white stroke-[3.5]" />
-                                </motion.div>
-                                <div className="text-center space-y-1">
-                                    <h3 className="text-lg font-black text-white tracking-tight">Verification Successful</h3>
-                                    <p className="text-xs text-emerald-400 font-bold uppercase tracking-wider">Similarity Match: {(similarity * 100).toFixed(0)}%</p>
-                                </div>
-
-                                {/* Biometric Check Done Steps */}
-                                <div className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 space-y-3.5 text-xs text-slate-300">
-                                    <div className="flex items-center justify-between">
-                                        <span className="font-semibold flex items-center gap-2 text-white/90">
-                                            <IconCheckCheck className="w-3.5 h-3.5 text-emerald-500" /> Biometric Identity Match
-                                        </span>
-                                        <span className="text-[10px] text-emerald-500 font-black uppercase">PASSED</span>
+                                {/* Compact One-Row Verification Header */}
+                                <div className="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 w-full justify-center">
+                                    <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center shrink-0 shadow-md">
+                                        <IconCheckCheck className="w-5 h-5 text-white stroke-[3.5]" />
                                     </div>
-                                    <div className="h-px bg-white/10" />
-                                    <div className="flex items-center justify-between">
-                                        <span className="font-semibold flex items-center gap-2 text-white/90">
-                                            <IconShieldCheck className="w-3.5 h-3.5 text-emerald-500" /> Anti-Spoofing Verification
-                                        </span>
-                                        <span className="text-[10px] text-emerald-500 font-black uppercase">PASSED</span>
+                                    <div className="text-left flex flex-col min-w-0">
+                                        <span className="text-sm font-black text-white">Verification Successful</span>
+                                        <span className="text-[11px] text-emerald-450 font-bold uppercase tracking-wider">Similarity Match : {(similarity * 100).toFixed(0)}%</span>
                                     </div>
                                 </div>
 
-                                {apiStatus === 'pending' ? (
-                                    <div className="w-full space-y-3">
-                                        <div className="flex items-center justify-center gap-2 text-white/60">
-                                            <IconLoader2 className="w-4 h-4 animate-spin text-primary" />
-                                            <p className="text-xs font-semibold">Syncing check-in data with database...</p>
-                                        </div>
+                                {apiStatus === 'pending' && (
+                                    <div className="w-full">
                                         <Button
                                             disabled
-                                            className="w-full h-14 rounded-2xl bg-white/10 border border-white/20 text-white/50 font-black text-lg cursor-not-allowed uppercase tracking-wider"
+                                            className="w-full h-14 rounded-2xl bg-white/10 border border-white/20 text-white/50 font-black text-lg cursor-not-allowed uppercase tracking-wider flex items-center justify-center gap-3"
                                         >
-                                            <IconLoader2 className="w-5 h-5 mr-3 animate-spin" />
+                                            <IconLoader2 className="w-5 h-5 mr-3 animate-spin text-primary shrink-0" />
                                             Syncing Attendance...
                                         </Button>
                                     </div>
-                                ) : apiStatus === 'error' ? (
-                                    <div className="w-full space-y-4">
-                                        <div className="p-3.5 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-xs text-rose-300 text-center leading-relaxed">
-                                            {apiError || 'Failed to record attendance logs.'}
-                                        </div>
+                                )}
+
+                                {apiStatus === 'error' && (
+                                    <div className="w-full">
                                         <Button
-                                            onClick={onSubmitAttendance}
-                                            className="w-full h-14 rounded-2xl bg-rose-500 hover:bg-rose-450 text-white font-black text-lg shadow-xl"
+                                            disabled
+                                            className="w-full h-14 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-500/50 font-black text-lg cursor-not-allowed uppercase tracking-wider flex items-center justify-center gap-3"
                                         >
-                                            Retry Server Sync
+                                            <IconAlertTriangle className="w-5 h-5 mr-3 text-rose-500 shrink-0" />
+                                            Sync Failed
                                         </Button>
                                     </div>
-                                ) : (
+                                )}
+
+                                {apiStatus === 'success' && (
                                     <div className="w-full space-y-3">
                                         <div className="flex items-center justify-center gap-1 text-emerald-450 font-bold text-xs">
                                             <IconCheckCheck className="w-4 h-4" /> Live attendance synced successfully!
@@ -733,6 +712,57 @@ export function SelfieCapture({
                                         </Button>
                                     </div>
                                 )}
+
+                                {/* Floating Sync Error Modal Popup */}
+                                <AnimatePresence>
+                                    {apiStatus === 'error' && (
+                                        <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-6">
+                                            <motion.div
+                                                initial={{ opacity: 0, scale: 0.95 }}
+                                                animate={{ opacity: 1, scale: 1 }}
+                                                exit={{ opacity: 0, scale: 0.95 }}
+                                                className="bg-slate-900 border border-white/10 rounded-3xl p-6 w-full max-w-xs text-center space-y-4 shadow-2xl"
+                                            >
+                                                <div className="w-12 h-12 rounded-full bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mx-auto">
+                                                    <IconAlertTriangle className="w-6 h-6 text-rose-500" />
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <h4 className="text-sm font-black text-white uppercase tracking-wider">Sync Connection Error</h4>
+                                                    <p className="text-xs text-slate-400 leading-relaxed">
+                                                        {apiError || 'Failed to record attendance logs. Please check your internet connection.'}
+                                                    </p>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2.5 pt-2">
+                                                    <Button
+                                                        onClick={() => {
+                                                            setApiStatus('idle')
+                                                            setStatus('captured') // Go back to captured state
+                                                        }}
+                                                        variant="outline"
+                                                        className="h-11 rounded-xl text-white border-white/20 font-bold text-xs bg-transparent"
+                                                    >
+                                                        Cancel
+                                                    </Button>
+                                                    <Button
+                                                        onClick={async () => {
+                                                            setApiStatus('pending')
+                                                            try {
+                                                                await onSubmitAttendance()
+                                                                setApiStatus('success')
+                                                            } catch (error) {
+                                                                setApiStatus('error')
+                                                                setApiError(error instanceof Error ? error.message : 'Failed to record attendance')
+                                                            }
+                                                        }}
+                                                        className="h-11 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-black text-xs"
+                                                    >
+                                                        Retry Sync
+                                                    </Button>
+                                                </div>
+                                            </motion.div>
+                                        </div>
+                                    )}
+                                </AnimatePresence>
                             </motion.div>
                         )}
 
@@ -755,6 +785,23 @@ export function SelfieCapture({
                                 <div className="text-center space-y-1">
                                     <h3 className="text-lg font-black text-white tracking-tight">Security Biometric Mismatch</h3>
                                     <p className="text-xs text-rose-450 font-bold uppercase tracking-wider">Similarity Match: {(similarity * 100).toFixed(0)}%</p>
+                                </div>
+
+                                {/* Biometric Check Error Steps */}
+                                <div className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 space-y-3.5 text-xs text-slate-300">
+                                    <div className="flex items-center justify-between">
+                                        <span className="font-semibold flex items-center gap-2 text-white/90">
+                                            <IconX className="w-3.5 h-3.5 text-rose-500" /> Biometric Identity Match
+                                        </span>
+                                        <span className="text-[10px] text-rose-500 font-black uppercase">FAILED</span>
+                                    </div>
+                                    <div className="h-px bg-white/10" />
+                                    <div className="flex items-center justify-between">
+                                        <span className="font-semibold flex items-center gap-2 text-white/90">
+                                            <IconAlertTriangle className="w-3.5 h-3.5 text-rose-500" /> Anti-Spoofing Verification
+                                        </span>
+                                        <span className="text-[10px] text-rose-500 font-black uppercase">FAILED</span>
+                                    </div>
                                 </div>
 
                                 {/* Security Warning Explanation */}
