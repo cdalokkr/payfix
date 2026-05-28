@@ -177,9 +177,9 @@ export async function proxy(request: NextRequest) {
     }
 
     // ============================================
-    // Mobile Device Detection for Employee Route
+    // Mobile Device Detection for Employee & Moderator Routes
     // ============================================
-    if (user && isEmployeeRoute) {
+    if (user && (isEmployeeRoute || isModeratorRoute)) {
         // Check if user wants to stay on desktop version
         const wantsDesktop = request.nextUrl.searchParams.get('desktop') === 'true'
 
@@ -188,9 +188,11 @@ export async function proxy(request: NextRequest) {
             const userAgent = request.headers.get('user-agent') || ''
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile/i.test(userAgent)
 
-            // Redirect mobile users to /mobile
+            // Redirect mobile users to /mobile, preserving search parameters
             if (isMobile && !pathname.startsWith('/mobile')) {
-                const mobileUrl = new URL('/mobile', request.url)
+                const searchParams = request.nextUrl.search ? request.nextUrl.search : ''
+                const mobileUrl = new URL('/mobile' + searchParams, request.url)
+                console.log(`[PROXY-MOBILE] Redirecting mobile user (${user.id}) from ${pathname} to ${mobileUrl.pathname}${searchParams}`)
                 return NextResponse.redirect(mobileUrl)
             }
         }
@@ -199,40 +201,51 @@ export async function proxy(request: NextRequest) {
     // Also handle /mobile route auth (uses employee check)
     const isMobileRoute = pathname.startsWith('/mobile')
     if (!user && isMobileRoute) {
+        console.warn(`[PROXY-AUTH] Redirecting unauthenticated request on mobile route ${pathname} to /login`)
         return NextResponse.redirect(new URL('/login', request.url))
     }
 
     // Status and Role-based access control for authenticated users
     if (user && (isProtectedRoute || isDeactiveAccountRoute)) {
-        const { data: profile } = await supabase
+        const { data: profile, error: profileErr } = await supabase
             .from('profiles')
             .select('role, status')
             .eq('id', user.id)
             .single()
 
+        if (profileErr) {
+            console.error(`[PROXY-DB] Profile fetch failed for authenticated user ${user.id}:`, profileErr.message)
+        }
+
         if (!profile) {
+            console.warn(`[PROXY-AUTH] Redirecting to /login because no profile was found for authenticated user: ${user.id}`)
             return NextResponse.redirect(new URL('/login', request.url))
         }
 
         // Redirect deactive users to /deactive-account
         if (profile.status === 'deactive' && !isDeactiveAccountRoute) {
+            console.warn(`[PROXY-AUTH] Redirecting deactive user (${user.id}) to /deactive-account`)
             return NextResponse.redirect(new URL('/deactive-account', request.url))
         }
 
         // Redirect active users away from /deactive-account
         if (profile.status === 'active' && isDeactiveAccountRoute) {
+            console.log(`[PROXY-AUTH] Redirecting active user (${user.id}) away from /deactive-account`)
             return NextResponse.redirect(new URL('/', request.url))
         }
 
         if (isAdminRoute && profile.role !== 'admin') {
+            console.warn(`[PROXY-AUTH] Admin route access denied for role ${profile.role}. Redirecting to /${profile.role}`)
             return NextResponse.redirect(new URL('/' + profile.role, request.url))
         }
 
         if (isModeratorRoute && profile.role !== 'moderator' && profile.role !== 'admin') {
+            console.warn(`[PROXY-AUTH] Moderator route access denied for role ${profile.role}. Redirecting to /${profile.role}`)
             return NextResponse.redirect(new URL('/' + profile.role, request.url))
         }
 
         if (isEmployeeRoute && profile.role !== 'employee') {
+            console.warn(`[PROXY-AUTH] Employee route access denied for role ${profile.role}. Redirecting to /${profile.role}`)
             return NextResponse.redirect(new URL('/' + profile.role, request.url))
         }
     }

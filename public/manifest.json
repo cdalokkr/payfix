@@ -2,7 +2,7 @@
     "name": "PayFix Attendance",
     "short_name": "Attendance",
     "description": "Employee attendance tracking with location verification",
-    "start_url": "/employee",
+    "start_url": "/mobile",
     "display": "standalone",
     "orientation": "portrait",
     "theme_color": "#0ea5e9",
@@ -66,7 +66,7 @@
             "name": "Mark Attendance",
             "short_name": "Attendance",
             "description": "Mark your daily attendance",
-            "url": "/employee?action=attendance",
+            "url": "/mobile/attendance",
             "icons": [
                 {
                     "src": "/icons/attendance-icon.png",
