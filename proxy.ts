@@ -190,10 +190,21 @@ export async function proxy(request: NextRequest) {
 
             // Redirect mobile users to /mobile, preserving search parameters
             if (isMobile && !pathname.startsWith('/mobile')) {
-                const searchParams = request.nextUrl.search ? request.nextUrl.search : ''
-                const mobileUrl = new URL('/mobile' + searchParams, request.url)
-                console.log(`[PROXY-MOBILE] Redirecting mobile user (${user.id}) from ${pathname} to ${mobileUrl.pathname}${searchParams}`)
-                return NextResponse.redirect(mobileUrl)
+                // Check if running inside PWA standalone mode (cookie written by client-side detector)
+                const isStandalonePwa = request.cookies.get('pwa_standalone')?.value === 'true'
+
+                // Employee is always redirected to mobile layout on mobile screens
+                // Moderator is ONLY redirected to mobile layout if launching the standalone PWA
+                const shouldRedirect = isEmployeeRoute || (isModeratorRoute && isStandalonePwa)
+
+                if (shouldRedirect) {
+                    const searchParams = request.nextUrl.search ? request.nextUrl.search : ''
+                    const mobileUrl = new URL('/mobile' + searchParams, request.url)
+                    console.log(`[PROXY-MOBILE] Redirecting mobile user (${user.id}) from ${pathname} to ${mobileUrl.pathname}${searchParams} (PWA standalone: ${isStandalonePwa})`)
+                    return NextResponse.redirect(mobileUrl)
+                } else if (isModeratorRoute) {
+                    console.log(`[PROXY-MOBILE] Moderator (${user.id}) on mobile browser, allowing full desktop backoffice access at ${pathname}`)
+                }
             }
         }
     }
