@@ -170,6 +170,11 @@ export function LoginForm() {
       // without introducing any artificial delay.
       prefetchPromise.catch(() => {})
 
+      // Safe hydration delay: wait 200ms to allow the browser to successfully write
+      // and flush Supabase session cookies before initiating the transition.
+      // This prevents edge middleware redirect loops on Vercel.
+      await new Promise(resolve => setTimeout(resolve, 200))
+
       try {
         // Navigate instantly
         await router.push(redirectPath)
