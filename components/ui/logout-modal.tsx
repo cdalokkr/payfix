@@ -121,7 +121,7 @@ export function LogoutModal({ isOpen, onOpenChange }: LogoutModalProps) {
           setTimeout(() => {
             console.log('[LOGOUT-MODAL] Immediate redirecting to /login')
             onOpenChange(false)
-            router.push('/login')
+            window.location.replace('/login')
           }, 450)
 
         } catch (error) {
@@ -130,7 +130,7 @@ export function LogoutModal({ isOpen, onOpenChange }: LogoutModalProps) {
           localStorage.clear()
           sessionStorage.clear()
           onOpenChange(false)
-          router.push('/login')
+          window.location.replace('/login')
         }
       }
 

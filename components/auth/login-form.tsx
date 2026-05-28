@@ -170,17 +170,15 @@ export function LoginForm() {
       // without introducing any artificial delay.
       prefetchPromise.catch(() => {})
 
-      // Safe hydration delay: wait 200ms to allow the browser to successfully write
+      // Safe hydration delay: wait 150ms to allow the browser to successfully write
       // and flush Supabase session cookies before initiating the transition.
       // This prevents edge middleware redirect loops on Vercel.
-      await new Promise(resolve => setTimeout(resolve, 200))
+      await new Promise(resolve => setTimeout(resolve, 150))
 
-      try {
-        // Navigate instantly
-        await router.push(redirectPath)
-      } catch (redirectError) {
-        window.location.href = redirectPath
-      }
+      // HIGH PERFORMANCE: Use direct window.location.replace() to force a clean,
+      // server-side validated HTTP request to the dashboard. This bypasses Next.js's
+      // client-side router cache race conditions and guarantees instant redirection on Vercel.
+      window.location.replace(redirectPath)
     },
   })
 
