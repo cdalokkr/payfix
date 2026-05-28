@@ -1,16 +1,27 @@
 "use client"
 
 import { MetricCard } from "@/components/dashboard/metric-card"
-import { Activity, BarChart3 } from "lucide-react"
+import {
+    Activity,
+    BarChart3,
+    Clock,
+    Calendar,
+    IndianRupee,
+    Ticket,
+    User,
+    Bell,
+    LogOut,
+    MapPin,
+    TrendingUp
+} from "lucide-react"
 import Link from "next/link"
 import { trpc } from "@/lib/trpc/client"
 import { ActivityLogFeed, type UserActivity } from "@/components/dashboard/activity-log-feed"
-import { format } from "date-fns"
-import { useEffect, useState } from "react"
+import { format, isValid } from "date-fns"
+import { useEffect, useState, useMemo } from "react"
 import { useProfile } from "@/lib/context/profile-context"
 import { createClient } from "@/lib/supabase/client"
-
-
+import { motion } from "framer-motion"
 
 interface ActivitiesCardProps {
     activities: UserActivity[]
@@ -20,9 +31,9 @@ interface ActivitiesCardProps {
 function ActivitiesCard({ activities, loading }: ActivitiesCardProps) {
     return (
         <MetricCard
-            className="shadow-xl"
-            gradientColor="from-primary/5 to-transparent"
-            delay={0.3}
+            className="shadow-xl border-border/40"
+            gradientColor="from-purple-500/10 to-indigo-500/5"
+            delay={0.4}
             disableHover={true}
             borderColor="border-primary/10"
             cardBgColor="bg-card/50"
@@ -45,8 +56,6 @@ function ActivitiesCard({ activities, loading }: ActivitiesCardProps) {
     )
 }
 
-
-
 export default function EmployeeDashboard({ initialData }: { initialData?: any }) {
     const [currentTime, setCurrentTime] = useState(new Date())
 
@@ -55,27 +64,58 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
         return () => clearInterval(timer)
     }, [])
 
-    // Get profile to obtain userId for real-time subscriptions
     const { profile } = useProfile()
 
-    // OPTIMIZATION: Employees don't need the heavy unified dashboard query
-    // Just fetch recent activities with a lightweight query
-    // NOTE: Use refetchOnMount: 'always' to ensure fresh data when returning to dashboard
+    // Date calculations for timezone consistency (IST GMT+5:30)
+    const localDateStr = useMemo(() => {
+        const now = new Date();
+        const istOffset = 5.5 * 60 * 60 * 1000;
+        const istDate = new Date(now.getTime() + istOffset);
+        const year = istDate.getUTCFullYear();
+        const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(istDate.getUTCDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }, []);
+
+    // 1. Fetch Today's attendance status (lightweight query)
+    const { data: todayAttendance, isLoading: todayLoading } = trpc.attendance.getMobileAttendance.useQuery(undefined, {
+        staleTime: 30000,
+        refetchOnWindowFocus: false,
+    })
+
+    // 2. Fetch Personal Leave Summary
+    const { data: leavesList, isLoading: leavesLoading } = trpc.attendance.getLeaves.useQuery(
+        { status: 'all' },
+        {
+            staleTime: 30000,
+            refetchOnWindowFocus: false,
+        }
+    )
+
+    // 3. Fetch Unread Notifications Count
+    const { data: unreadNotifications, isLoading: notificationsLoading } = trpc.notification.getUnreadCount.useQuery(undefined, {
+        staleTime: 15000,
+        refetchOnWindowFocus: false,
+    })
+
+    // 4. Fetch Last Session Data
+    const { data: sessionInfo, isLoading: sessionLoading } = trpc.profile.getLastSession.useQuery(undefined, {
+        staleTime: 60 * 1000,
+        refetchOnWindowFocus: false,
+    })
+
+    // 5. Fetch Recent Activities
     const { data: activitiesData, isLoading: activitiesLoading, refetch: refetchActivities } = trpc.admin.dashboard.getRecentActivities.useQuery(
         { limit: 10 },
         {
             staleTime: 30000,
             refetchOnWindowFocus: false,
-            refetchOnMount: 'always'  // Always refetch when returning to dashboard
+            refetchOnMount: 'always'
         }
     )
     const recentActivities = activitiesData?.data || []
-    const isLoading = activitiesLoading
 
-    // =====================================================
-    // REAL-TIME ACTIVITY UPDATES
-    // =====================================================
-    // Subscribe to activity changes for this employee
+    // Subscribe to real-time activity updates
     useEffect(() => {
         if (!profile?.id) return
 
@@ -92,7 +132,6 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                 },
                 (payload) => {
                     console.log('[EMPLOYEE-DASHBOARD] Activity change detected:', payload.eventType)
-                    // Refetch activities to update the log
                     refetchActivities()
                 }
             )
@@ -103,15 +142,115 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
         }
     }, [profile?.id, refetchActivities])
 
-    return (
+    // Format display states
+    const clockStatusText = useMemo(() => {
+        if (!todayAttendance) return 'Not Clocked In'
+        if (todayAttendance.check_in && !todayAttendance.check_out) return 'Clocked In'
+        return 'Punches Completed'
+    }, [todayAttendance])
 
+    const clockStatusColor = useMemo(() => {
+        if (!todayAttendance) return 'text-amber-600 bg-amber-500/10 border-amber-500/20'
+        if (todayAttendance.check_in && !todayAttendance.check_out) return 'text-blue-600 bg-blue-500/10 border-blue-500/20'
+        return 'text-emerald-600 bg-emerald-500/10 border-emerald-500/20'
+    }, [todayAttendance])
+
+    const totalApprovedLeaves = useMemo(() => {
+        if (!leavesList) return 0
+        return leavesList.filter(l => l.status === 'approved').length
+    }, [leavesList])
+
+    const totalPendingLeaves = useMemo(() => {
+        if (!leavesList) return 0
+        return leavesList.filter(l => l.status === 'pending').length
+    }, [leavesList])
+
+    const isDataLoading = todayLoading || leavesLoading || notificationsLoading || sessionLoading || activitiesLoading
+
+    return (
         <div className="space-y-6 gesture-friendly">
-            {/* Quick Actions Row */}
+            
+            {/* Live Metrics Row (Cohesive 4-Column Grid) */}
+            <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+                {/* Today's Punch Card */}
+                <Link href="/employee/attendance" className="block h-full">
+                    <MetricCard
+                        title="Today's Punch"
+                        value={clockStatusText}
+                        description={
+                            todayAttendance?.check_in 
+                                ? `In: ${format(new Date(todayAttendance.check_in), "HH:mm")}${todayAttendance.check_out ? ` | Out: ${format(new Date(todayAttendance.check_out), "HH:mm")}` : ''}`
+                                : 'Daily check-in required'
+                        }
+                        icon={<Clock />}
+                        loading={todayLoading}
+                        iconBgColor="bg-blue-500/15"
+                        iconColor="text-blue-600 dark:text-blue-400"
+                        borderColor="border-blue-500/10"
+                        gradientColor="from-blue-500/10 to-cyan-500/5"
+                        cardBgColor="bg-blue-50/20 dark:bg-blue-950/10"
+                        delay={0.1}
+                    />
+                </Link>
+
+                {/* Leaves Balance Card */}
+                <Link href="/employee/payroll/leaves" className="block h-full">
+                    <MetricCard
+                        title="My Leaves"
+                        value={`${totalApprovedLeaves} Approved`}
+                        description={`${totalPendingLeaves} pending approval`}
+                        icon={<Calendar />}
+                        loading={leavesLoading}
+                        iconBgColor="bg-purple-500/15"
+                        iconColor="text-purple-600 dark:text-purple-400"
+                        borderColor="border-purple-500/10"
+                        gradientColor="from-purple-500/10 to-indigo-500/5"
+                        cardBgColor="bg-purple-50/20 dark:bg-purple-950/10"
+                        delay={0.15}
+                    />
+                </Link>
+
+                {/* Alerts/Notifications Card */}
+                <MetricCard
+                    title="Unread Alerts"
+                    value={notificationsLoading ? 0 : (unreadNotifications || 0)}
+                    description="Pending unread notifications"
+                    icon={<Bell />}
+                    loading={notificationsLoading}
+                    iconBgColor="bg-amber-500/15"
+                    iconColor="text-amber-600 dark:text-amber-400"
+                    borderColor="border-amber-500/10"
+                    gradientColor="from-amber-500/10 to-red-500/5"
+                    cardBgColor="bg-amber-50/20 dark:bg-amber-950/10"
+                    delay={0.2}
+                />
+
+                {/* Session Card */}
+                <MetricCard
+                    title="Last Logout"
+                    value={
+                        sessionInfo?.lastLogout && isValid(new Date(sessionInfo.lastLogout))
+                            ? format(new Date(sessionInfo.lastLogout), "MMM dd, HH:mm")
+                            : "No recent logout"
+                    }
+                    description={`Joined: ${sessionInfo?.joinedAt ? format(new Date(sessionInfo.joinedAt), "MMM yyyy") : 'N/A'}`}
+                    icon={<LogOut />}
+                    loading={sessionLoading}
+                    iconBgColor="bg-rose-500/15"
+                    iconColor="text-rose-600 dark:text-rose-400"
+                    borderColor="border-rose-500/10"
+                    gradientColor="from-rose-500/10 to-pink-500/5"
+                    cardBgColor="bg-rose-50/20 dark:bg-rose-950/10"
+                    delay={0.25}
+                />
+            </div>
+
+            {/* Quick Actions Panel */}
             <div className="grid grid-cols-1 gap-6">
                 <MetricCard
-                    className="shadow-xl"
+                    className="shadow-xl border-border/40"
                     gradientColor="from-primary/10 to-transparent"
-                    delay={0.1}
+                    delay={0.3}
                     disableHover={true}
                     borderColor="border-primary/10"
                     cardBgColor="bg-card/50"
@@ -129,17 +268,87 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 py-2">
-                            {/* Reports Item */}
+                            {/* Attendance Clock In */}
+                            <Link
+                                href="/employee/attendance"
+                                className="flex items-center gap-3.5 p-4 rounded-2xl border border-blue-200/40 bg-blue-50/30 dark:bg-blue-500/5 hover:bg-blue-500/10 hover:border-blue-500/40 hover:shadow-lg hover:shadow-blue-500/5 transition-all duration-300 group/action cursor-pointer"
+                            >
+                                <div className="p-2.5 rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 group-hover/action:scale-115 group-hover/action:rotate-3 transition-all">
+                                    <Clock className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Clock In/Out</p>
+                                    <p className="text-sm font-black group-hover/action:text-blue-600 transition-colors">Mark Presence</p>
+                                </div>
+                            </Link>
+
+                            {/* Leaves Application */}
+                            <Link
+                                href="/employee/payroll/leaves"
+                                className="flex items-center gap-3.5 p-4 rounded-2xl border border-purple-200/40 bg-purple-50/30 dark:bg-purple-500/5 hover:bg-purple-500/10 hover:border-purple-500/40 hover:shadow-lg hover:shadow-purple-500/5 transition-all duration-300 group/action cursor-pointer"
+                            >
+                                <div className="p-2.5 rounded-xl bg-purple-100 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400 group-hover/action:scale-115 group-hover/action:-rotate-3 transition-all">
+                                    <Calendar className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Leaves</p>
+                                    <p className="text-sm font-black group-hover/action:text-purple-600 transition-colors">Apply Leave</p>
+                                </div>
+                            </Link>
+
+                            {/* Payroll Dashboard */}
+                            <Link
+                                href="/employee/payroll/dashboard"
+                                className="flex items-center gap-3.5 p-4 rounded-2xl border border-emerald-200/40 bg-emerald-50/30 dark:bg-emerald-500/5 hover:bg-emerald-500/10 hover:border-emerald-500/40 hover:shadow-lg hover:shadow-emerald-500/5 transition-all duration-300 group/action cursor-pointer"
+                            >
+                                <div className="p-2.5 rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 group-hover/action:scale-115 group-hover/action:rotate-3 transition-all">
+                                    <IndianRupee className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Pay Slips</p>
+                                    <p className="text-sm font-black group-hover/action:text-emerald-600 transition-colors">Payroll Panel</p>
+                                </div>
+                            </Link>
+
+                            {/* Support Tickets */}
+                            <Link
+                                href="/employee/tickets"
+                                className="flex items-center gap-3.5 p-4 rounded-2xl border border-amber-200/40 bg-amber-50/30 dark:bg-amber-500/5 hover:bg-amber-500/10 hover:border-amber-500/40 hover:shadow-lg hover:shadow-amber-500/5 transition-all duration-300 group/action cursor-pointer"
+                            >
+                                <div className="p-2.5 rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400 group-hover/action:scale-115 group-hover/action:-rotate-3 transition-all">
+                                    <Ticket className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Helpdesk</p>
+                                    <p className="text-sm font-black group-hover/action:text-amber-600 transition-colors">Support Tickets</p>
+                                </div>
+                            </Link>
+
+                            {/* Profile Settings */}
+                            <Link
+                                href="/employee/profile"
+                                className="flex items-center gap-3.5 p-4 rounded-2xl border border-indigo-200/40 bg-indigo-50/30 dark:bg-indigo-500/5 hover:bg-indigo-500/10 hover:border-indigo-500/40 hover:shadow-lg hover:shadow-indigo-500/5 transition-all duration-300 group/action cursor-pointer"
+                            >
+                                <div className="p-2.5 rounded-xl bg-indigo-100 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400 group-hover/action:scale-115 group-hover/action:rotate-3 transition-all">
+                                    <User className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Settings</p>
+                                    <p className="text-sm font-black group-hover/action:text-indigo-600 transition-colors">My Profile</p>
+                                </div>
+                            </Link>
+
+                            {/* Reports & Insights */}
                             <Link
                                 href="/employee/reports"
-                                className="flex items-center gap-3 p-4 rounded-2xl border border-purple-100/50 bg-purple-500/[0.08] dark:bg-purple-500/[0.08] hover:bg-purple-500/15 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10 transition-all duration-300 group/action cursor-pointer"
+                                className="flex items-center gap-3.5 p-4 rounded-2xl border border-rose-200/40 bg-rose-50/30 dark:bg-rose-500/5 hover:bg-rose-500/10 hover:border-rose-500/40 hover:shadow-lg hover:shadow-rose-500/5 transition-all duration-300 group/action cursor-pointer"
                             >
-                                <div className="p-2.5 rounded-xl bg-purple-100 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400 group-hover/action:scale-110 group-hover/action:-rotate-3 transition-transform">
+                                <div className="p-2.5 rounded-xl bg-rose-100 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400 group-hover/action:scale-115 group-hover/action:-rotate-3 transition-all">
                                     <BarChart3 className="h-5 w-5" />
                                 </div>
                                 <div>
-                                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5 font-bold">Reports</p>
-                                    <p className="text-sm font-bold group-hover/action:text-purple-600 transition-colors">Analytics</p>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Reports</p>
+                                    <p className="text-sm font-black group-hover/action:text-rose-600 transition-colors">Analytics</p>
                                 </div>
                             </Link>
                         </div>
@@ -152,4 +361,3 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
         </div>
     )
 }
-

@@ -37,13 +37,77 @@ import {
   LogIn,
   LogOut,
   Calendar,
-  History
+  History,
+  Clock,
+  Ticket,
+  Camera,
+  User,
+  Bell
 } from 'lucide-react'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Skeleton } from '@/components/ui/skeleton'
 
 import { MetricCard } from '@/components/dashboard/metric-card'
 import { ActivityLogFeed } from '@/components/dashboard/activity-log-feed'
+
+interface ProfileCardProps {
+  profile: any
+  loading: boolean
+}
+
+function ProfileCard({ profile, loading }: ProfileCardProps) {
+  return (
+    <MetricCard
+      className="shadow-xl border-border/40"
+      gradientColor="from-blue-500/10 to-cyan-500/10"
+      delay={0.1}
+      disableHover={true}
+      borderColor="border-blue-500/10"
+      cardBgColor="bg-card/50"
+    >
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center gap-2">
+          <div className="h-6 w-1 bg-blue-500 rounded-full" />
+          <h3 className="text-xl font-bold tracking-tight">Personal Profile</h3>
+        </div>
+        {loading ? (
+          <div className="space-y-4 pt-2">
+            <Skeleton className="h-4 w-3/4 rounded-full" />
+            <Skeleton className="h-4 w-1/2 rounded-full" />
+            <Skeleton className="h-4 w-2/3 rounded-full" />
+          </div>
+        ) : profile ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 pt-2">
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Full Name</p>
+              <p className="text-sm font-semibold text-foreground">{profile.full_name || 'Not set'}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Email Address</p>
+              <p className="text-sm font-semibold truncate text-foreground">{profile.email}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Access Level</p>
+              <div className="flex items-center gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                <p className="text-sm font-bold capitalize text-foreground">{profile.role}</p>
+              </div>
+            </div>
+            {profile.mobile_no && (
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Mobile Number</p>
+                <p className="text-sm font-semibold text-foreground">{profile.mobile_no}</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">Profile not found</p>
+        )}
+      </div>
+    </MetricCard>
+  )
+}
 
 export function AdminOverview({
   onLoadingChange,
@@ -56,25 +120,21 @@ export function AdminOverview({
   const pathname = usePathname()
   const previousPathnameRef = useRef<string | null>(null)
 
-  // Track if this is a return visit to the dashboard
   const [isReturnVisit, setIsReturnVisit] = useState(false)
 
-  // Get current user's profile to obtain userId for role-based real-time subscriptions
   const { profile } = useProfile()
 
-  // Get last session info
   const { data: sessionInfo, isLoading: sessionLoading } = trpc.profile.getLastSession.useQuery(undefined, {
-    staleTime: 60 * 1000, // Cache for 1 minute
+    staleTime: 60 * 1000,
   })
 
-  // Use the dashboard prefetch hook
+  const { data: unreadCount, isLoading: notificationsLoading } = trpc.notification.getUnreadCount.useQuery(undefined, {
+    staleTime: 15000,
+    refetchOnWindowFocus: false,
+  })
+
   const { clearPrefetch } = useDashboardPrefetch()
 
-  // Use the admin-specific real-time dashboard hook with the user's ID
-  // This ensures admins receive updates for:
-  // - New user registrations (profiles table)
-  // - All activity changes (activities table)
-  // - Analytics metrics changes (analytics_metrics table)
   const {
     stats,
     recentActivities,
@@ -90,7 +150,6 @@ export function AdminOverview({
   } = useAdminRealtimeDashboard(profile?.id || '', initialData)
 
   const handleAddUserSuccess = useCallback(() => {
-    // onSuccess is called after 2-second delay, so also ensure forceFresh here
     refetch({ forceFresh: true })
   }, [refetch])
 
@@ -98,9 +157,6 @@ export function AdminOverview({
     refetch({ forceFresh: true })
   }, [refetch])
 
-
-
-  // Detect route changes to reset skeleton state
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
       console.log(`[ADMIN-OVERVIEW] Hydrated. initialData: ${initialData ? 'PRESENT' : 'MISSING'}`)
@@ -112,20 +168,16 @@ export function AdminOverview({
     if (isDashboardRoute && wasOnDifferentRoute) {
       console.log('[ADMIN-OVERVIEW] Route changed to dashboard, marking as return visit')
       setIsReturnVisit(true)
-      // Clear prefetch status to ensure fresh skeleton display
       clearPrefetch()
     }
 
     previousPathnameRef.current = pathname
   }, [pathname, clearPrefetch])
 
-  // Track overall loading state for parent component
-  // Use showSkeleton to ensure skeleton shows on every visit
   useEffect(() => {
-    onLoadingChange?.(isLoading || showSkeleton)
-  }, [isLoading, showSkeleton, onLoadingChange])
+    onLoadingChange?.(isLoading || showSkeleton || notificationsLoading || sessionLoading)
+  }, [isLoading, showSkeleton, notificationsLoading, sessionLoading, onLoadingChange])
 
-  // Overall error state
   if (isError && !stats.totalUsers && !stats.totalActivities && !stats.todayActivities) {
     return (
       <div className="space-y-6">
@@ -146,73 +198,13 @@ export function AdminOverview({
   return (
     <div className="space-y-6 gesture-friendly">
 
-      {/* Quick Actions & Session Row - Two Columns */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" data-testid="quick-actions-row">
-        {/* Quick Actions Column */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <ProfileCard profile={profile || null} loading={sessionLoading} />
+
         <MetricCard
-          className="shadow-xl"
-          gradientColor="from-primary/10 to-transparent"
-          delay={0.1}
-          disableHover={true}
-          borderColor="border-primary/10"
-          cardBgColor="bg-card/50"
-        >
-          <div className="flex flex-col gap-4 h-full">
-            <div className="flex items-center gap-2">
-              <div className="h-6 w-1 bg-primary rounded-full" />
-              <h3 className="text-xl font-bold tracking-tight">Quick Actions</h3>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 py-2">
-              {/* Add User Item */}
-              <div
-                onClick={() => setShowAddUserSheet(true)}
-                className="flex items-center gap-3 p-4 rounded-2xl border border-blue-200/50 bg-blue-50/30 dark:bg-blue-500/5 hover:bg-blue-500/10 hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-500/5 transition-all duration-300 group/admin-action cursor-pointer"
-              >
-                <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-700 dark:text-blue-400 group-hover/admin-action:scale-110 group-hover/admin-action:rotate-3 transition-transform">
-                  <UserPlus className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">New User</p>
-                  <p className="text-sm font-bold group-hover/admin-action:text-primary transition-colors">Create User</p>
-                </div>
-              </div>
-
-              {/* Reports Item */}
-              <Link
-                href="/admin/reports"
-                className="flex items-center gap-3 p-4 rounded-2xl border border-orange-200/50 bg-orange-50/30 dark:bg-orange-500/5 hover:bg-orange-500/10 hover:border-orange-500/50 hover:shadow-lg hover:shadow-orange-500/5 transition-all duration-300 group/admin-action cursor-pointer"
-              >
-                <div className="p-2.5 rounded-xl bg-orange-500/10 text-orange-700 dark:text-orange-400 group-hover/admin-action:scale-110 group-hover/admin-action:-rotate-3 transition-transform">
-                  <BarChart3 className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Reports</p>
-                  <p className="text-sm font-bold group-hover/admin-action:text-primary transition-colors">Analytics</p>
-                </div>
-              </Link>
-
-              {/* Analytics Item */}
-              <Link
-                href="/admin/analytics"
-                className="flex items-center gap-3 p-4 rounded-2xl border border-purple-200/50 bg-purple-50/30 dark:bg-purple-500/5 hover:bg-purple-500/10 hover:border-purple-500/50 hover:shadow-lg hover:shadow-purple-500/5 transition-all duration-300 group/admin-action cursor-pointer"
-              >
-                <div className="p-2.5 rounded-xl bg-purple-500/10 text-purple-700 dark:text-purple-400 group-hover/admin-action:scale-110 group-hover/admin-action:rotate-3 transition-transform">
-                  <TrendingUp className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Statistics</p>
-                  <p className="text-sm font-bold group-hover/admin-action:text-primary transition-colors">Insights</p>
-                </div>
-              </Link>
-            </div>
-          </div>
-        </MetricCard>
-
-        {/* Session & Activity Summary Column */}
-        <MetricCard
-          className="shadow-xl"
+          className="shadow-xl border-border/40"
           gradientColor="from-indigo-500/10 to-purple-500/10"
-          delay={0.15}
+          delay={0.2}
           disableHover={true}
           borderColor="border-indigo-500/10"
           cardBgColor="bg-card/50"
@@ -223,46 +215,66 @@ export function AdminOverview({
               <h3 className="text-xl font-bold tracking-tight">Account Overview</h3>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-1">
-              {/* Total Activity Item */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 py-1">
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: magicCardsDataReady ? 1 : 0, y: magicCardsDataReady ? 0 : 10 }}
-                className="flex items-center gap-4 p-4 rounded-2xl border border-indigo-200/50 bg-indigo-50/30 dark:bg-indigo-500/5 hover:border-indigo-500/50 hover:shadow-md transition-all duration-300 group cursor-default"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: magicCardsDataReady ? 1 : 0, scale: magicCardsDataReady ? 1 : 0.95 }}
+                className="flex items-center gap-3.5 p-4 rounded-2xl border border-purple-200/40 bg-purple-50/30 dark:bg-purple-500/5 hover:shadow-md transition-all duration-300 group cursor-default"
               >
-                <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 group-hover:scale-110 transition-transform">
+                <div className="p-2.5 rounded-xl bg-purple-500/10 text-purple-700 dark:text-purple-400 group-hover:scale-110 transition-transform">
                   <Activity className="h-5 w-5" />
                 </div>
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Total Activity</p>
-                  <p className="text-lg font-bold tabular-nums">
+                  <div>
                     {showSkeleton || !magicCardsDataReady ? (
                       <span className="h-5 w-12 bg-muted animate-pulse rounded block" />
                     ) : (
-                      stats.totalActivities
+                      <p className="text-lg font-bold tabular-nums text-foreground">{stats.totalActivities}</p>
                     )}
-                  </p>
+                  </div>
                 </div>
               </motion.div>
 
-              {/* Last Logout Item */}
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: magicCardsDataReady ? 1 : 0, y: magicCardsDataReady ? 0 : 10 }}
-                className="flex items-center gap-4 p-4 rounded-2xl border border-pink-200/50 bg-pink-50/30 dark:bg-pink-500/5 hover:border-pink-500/50 hover:shadow-md transition-all duration-300 group cursor-default"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: magicCardsDataReady ? 1 : 0, scale: magicCardsDataReady ? 1 : 0.95 }}
+                className="flex items-center gap-3.5 p-4 rounded-2xl border border-amber-200/40 bg-amber-50/30 dark:bg-amber-500/5 hover:shadow-md transition-all duration-300 group cursor-default"
+              >
+                <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-400 group-hover:scale-110 transition-transform">
+                  <Bell className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Alerts</p>
+                  <div>
+                    {notificationsLoading ? (
+                      <div className="h-5 w-12 bg-muted animate-pulse rounded" />
+                    ) : (
+                      <p className="text-lg font-bold tabular-nums text-foreground">{unreadCount || 0}</p>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: magicCardsDataReady ? 1 : 0, scale: magicCardsDataReady ? 1 : 0.95 }}
+                className="flex items-center gap-3.5 p-4 rounded-2xl border border-pink-200/40 bg-pink-50/30 dark:bg-pink-500/5 hover:shadow-md transition-all duration-300 group cursor-default"
               >
                 <div className="p-2.5 rounded-xl bg-pink-500/10 text-pink-700 dark:text-pink-400 group-hover:scale-110 transition-transform">
                   <LogOut className="h-5 w-5" />
                 </div>
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Last Logout</p>
-                  <p className="text-sm font-bold truncate">
+                  <div>
                     {sessionLoading || !magicCardsDataReady ? (
                       <span className="h-5 w-24 bg-muted animate-pulse rounded block" />
                     ) : (
-                      sessionInfo?.lastLogout && isValid(new Date(sessionInfo.lastLogout)) ? format(new Date(sessionInfo.lastLogout), "MMM dd, HH:mm") : "None"
+                      <p className="text-sm font-bold truncate text-foreground">
+                        {sessionInfo?.lastLogout && isValid(new Date(sessionInfo.lastLogout)) ? format(new Date(sessionInfo.lastLogout), "MMM dd, HH:mm") : "None"}
+                      </p>
                     )}
-                  </p>
+                  </div>
                 </div>
               </motion.div>
             </div>
@@ -270,8 +282,140 @@ export function AdminOverview({
         </MetricCard>
       </div>
 
+      {/* Expanded Quick Actions Grid (Cohesive Full-Width Layout) */}
+      <div className="grid grid-cols-1 gap-6" data-testid="quick-actions-row">
+        <MetricCard
+          className="shadow-xl border-border/40"
+          gradientColor="from-primary/10 to-transparent"
+          delay={0.3}
+          disableHover={true}
+          borderColor="border-primary/10"
+          cardBgColor="bg-card/50"
+        >
+          <div className="flex flex-col gap-4 h-full">
+            <div className="flex items-center gap-2">
+              <div className="h-6 w-1 bg-primary rounded-full" />
+              <h3 className="text-xl font-bold tracking-tight">Quick Actions</h3>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 py-2">
+              {/* Add User Item */}
+              <div
+                onClick={() => setShowAddUserSheet(true)}
+                className="flex items-center gap-3.5 p-4 rounded-2xl border border-blue-200/40 bg-blue-50/30 dark:bg-blue-500/5 hover:bg-blue-500/10 hover:border-blue-500/40 hover:shadow-lg hover:shadow-blue-500/5 transition-all duration-300 group/admin-action cursor-pointer"
+              >
+                <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-700 dark:text-blue-400 group-hover/admin-action:scale-115 group-hover/admin-action:rotate-3 transition-all">
+                  <UserPlus className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">New User</p>
+                  <p className="text-sm font-black group-hover/admin-action:text-primary transition-colors">Create User</p>
+                </div>
+              </div>
+
+              {/* Attendance Logs */}
+              <Link
+                href="/admin/payroll/attendance"
+                className="flex items-center gap-3.5 p-4 rounded-2xl border border-amber-200/40 bg-amber-50/30 dark:bg-amber-500/5 hover:bg-amber-500/10 hover:border-amber-500/40 hover:shadow-lg hover:shadow-amber-500/5 transition-all duration-300 group/admin-action cursor-pointer"
+              >
+                <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-400 group-hover/admin-action:scale-115 group-hover/admin-action:rotate-3 transition-all">
+                  <Clock className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Logs</p>
+                  <p className="text-sm font-black group-hover/admin-action:text-primary transition-colors">Attendance</p>
+                </div>
+              </Link>
+
+              {/* Leave Requests */}
+              <Link
+                href="/admin/payroll/leaves"
+                className="flex items-center gap-3.5 p-4 rounded-2xl border border-purple-200/40 bg-purple-50/30 dark:bg-purple-500/5 hover:bg-purple-500/10 hover:border-purple-500/40 hover:shadow-lg hover:shadow-purple-500/5 transition-all duration-300 group/admin-action cursor-pointer"
+              >
+                <div className="p-2.5 rounded-xl bg-purple-500/10 text-purple-700 dark:text-purple-400 group-hover/admin-action:scale-115 group-hover/admin-action:-rotate-3 transition-all">
+                  <Calendar className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Approvals</p>
+                  <p className="text-sm font-black group-hover/admin-action:text-primary transition-colors">Leave Requests</p>
+                </div>
+              </Link>
+
+              {/* Photo Approvals */}
+              <Link
+                href="/admin/photo-approvals"
+                className="flex items-center gap-3.5 p-4 rounded-2xl border border-emerald-200/40 bg-emerald-50/30 dark:bg-emerald-500/5 hover:bg-emerald-500/10 hover:border-emerald-500/40 hover:shadow-lg hover:shadow-emerald-500/5 transition-all duration-300 group/admin-action cursor-pointer"
+              >
+                <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 group-hover/admin-action:scale-115 group-hover/admin-action:rotate-3 transition-all">
+                  <Camera className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Verification</p>
+                  <p className="text-sm font-black group-hover/admin-action:text-primary transition-colors">Photo Approvals</p>
+                </div>
+              </Link>
+
+              {/* Support Helpdesk */}
+              <Link
+                href="/admin/tickets"
+                className="flex items-center gap-3.5 p-4 rounded-2xl border border-indigo-200/40 bg-indigo-50/30 dark:bg-indigo-500/5 hover:bg-indigo-500/10 hover:border-indigo-500/40 hover:shadow-lg hover:shadow-indigo-500/5 transition-all duration-300 group/admin-action cursor-pointer"
+              >
+                <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 group-hover/admin-action:scale-115 group-hover/admin-action:-rotate-3 transition-all">
+                  <Ticket className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Helpdesk</p>
+                  <p className="text-sm font-black group-hover/admin-action:text-primary transition-colors">Support Tickets</p>
+                </div>
+              </Link>
+
+              {/* Client Manager */}
+              <Link
+                href="/admin/clients"
+                className="flex items-center gap-3.5 p-4 rounded-2xl border border-pink-200/40 bg-pink-50/30 dark:bg-pink-500/5 hover:bg-pink-500/10 hover:border-pink-500/40 hover:shadow-lg hover:shadow-pink-500/5 transition-all duration-300 group/admin-action cursor-pointer"
+              >
+                <div className="p-2.5 rounded-xl bg-pink-500/10 text-pink-700 dark:text-pink-400 group-hover/admin-action:scale-115 group-hover/admin-action:rotate-3 transition-all">
+                  <Briefcase className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Business</p>
+                  <p className="text-sm font-black group-hover/admin-action:text-primary transition-colors">Client Manager</p>
+                </div>
+              </Link>
+
+              {/* Reports Item */}
+              <Link
+                href="/admin/reports"
+                className="flex items-center gap-3.5 p-4 rounded-2xl border border-orange-200/40 bg-orange-50/30 dark:bg-orange-500/5 hover:bg-orange-500/10 hover:border-orange-500/40 hover:shadow-lg hover:shadow-orange-500/5 transition-all duration-300 group/admin-action cursor-pointer"
+              >
+                <div className="p-2.5 rounded-xl bg-orange-500/10 text-orange-700 dark:text-orange-400 group-hover/admin-action:scale-115 group-hover/admin-action:-rotate-3 transition-all">
+                  <BarChart3 className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Reports</p>
+                  <p className="text-sm font-black group-hover/admin-action:text-primary transition-colors">Analytics Panel</p>
+                </div>
+              </Link>
+
+              {/* Analytics Item */}
+              <Link
+                href="/admin/analytics"
+                className="flex items-center gap-3.5 p-4 rounded-2xl border border-purple-200/40 bg-purple-50/30 dark:bg-purple-500/5 hover:bg-purple-500/10 hover:border-purple-500/40 hover:shadow-lg hover:shadow-purple-500/5 transition-all duration-300 group/admin-action cursor-pointer"
+              >
+                <div className="p-2.5 rounded-xl bg-purple-500/10 text-purple-700 dark:text-purple-400 group-hover/admin-action:scale-115 group-hover/admin-action:rotate-3 transition-all">
+                  <TrendingUp className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Statistics</p>
+                  <p className="text-sm font-black group-hover/admin-action:text-primary transition-colors">Insights & Trends</p>
+                </div>
+              </Link>
+            </div>
+          </div>
+        </MetricCard>
+      </div>
+
       {/* Critical Metrics - Compact Grid */}
-      {/* Use showSkeleton to ensure skeleton shows on every page visit, not just initial load */}
       <div data-testid="critical-metrics" className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         <Link href="/admin/users" className="block h-full">
           <MetricCard
@@ -349,7 +493,6 @@ export function AdminOverview({
       </div>
 
       {/* Recent Activities - Compact */}
-      {/* Use showSkeleton to ensure skeleton shows on every page visit */}
       <div data-testid="detailed-content">
         <MetricCard
           className="shadow-xl"
