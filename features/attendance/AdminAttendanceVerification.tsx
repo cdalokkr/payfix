@@ -40,8 +40,8 @@ export function AdminAttendanceVerification() {
     const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false)
     const [selectedRecord, setSelectedRecord] = useState<any>(null)
     const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({})
-    // Default to current date (IST) and pending status for faster, relevant loading
-    const [statusFilter, setStatusFilter] = useState('pending')
+    // Default to current date (IST) and all statuses for full logging visibility
+    const [statusFilter, setStatusFilter] = useState('all')
     const [dateFilter, setDateFilter] = useState<DateRange | undefined>({
         from: new Date(),
         to: new Date()
@@ -67,7 +67,7 @@ export function AdminAttendanceVerification() {
     // Queries with real-time friendly settings - staleTime: 0 ensures immediate refetch on invalidation
     const { data: attendance, isLoading, isFetching, refetch: refetchAttendance } = trpc.attendance.getAttendance.useQuery(
         {
-            mode: !dateFilter ? 'default' : 'all',
+            mode: 'all',
             startDate: dateFilter?.from ? format(dateFilter.from, 'yyyy-MM-dd') : undefined,
             endDate: dateFilter?.to ? format(dateFilter.to, 'yyyy-MM-dd') : undefined,
         },

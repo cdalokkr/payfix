@@ -47,7 +47,7 @@ export function createAttendanceColumns({
                     className="h-4.5 w-4.5 rounded-sm border border-muted-foreground/50 data-[state=checked]:border-primary"
                 />
             ),
-            size: 40,
+            size: 30,
         },
         {
             accessorKey: "profile.full_name",
@@ -63,7 +63,7 @@ export function createAttendanceColumns({
                 <DataTableColumnHeader column={column} title="Email ID" />
             ),
             cell: ({ row }) => <span className="text-xs text-muted-foreground font-medium truncate block">{row.original.profile?.email || 'N/A'}</span>,
-            size: 280,
+            size: 220,
         },
         {
             accessorKey: "date",
@@ -94,7 +94,7 @@ export function createAttendanceColumns({
                     </div>
                 ) : <span className="text-muted-foreground/30 text-[10px]">--:--</span>
             },
-            size: 58,
+            size: 55,
         },
         {
             accessorKey: "check_out",
@@ -109,7 +109,7 @@ export function createAttendanceColumns({
                     </div>
                 ) : <span className="text-muted-foreground/30 text-[10px]">--:--</span>
             },
-            size: 58,
+            size: 55,
         },
         {
             accessorKey: "working_hours",
@@ -122,7 +122,7 @@ export function createAttendanceColumns({
                     </Badge>
                 ) : <span className="text-muted-foreground/30 text-[10px]">--</span>
             },
-            size: 44,
+            size: 40,
         },
         {
             id: "extra_hours",
@@ -130,47 +130,24 @@ export function createAttendanceColumns({
             cell: ({ row }) => {
                 const workingHours = row.original.working_hours as number
                 const dateStr = row.original.date as string
-
+ 
                 if (!workingHours) return <span className="text-muted-foreground/30 text-[10px]">--</span>
-
+ 
                 const dayOfWeek = new Date(dateStr).getDay()
                 const scheduledHours = scheduledHoursMap[dayOfWeek] ?? 9
                 const extraHours = workingHours - scheduledHours
-
+ 
                 if (extraHours <= 0) return <span className="text-muted-foreground/30 text-[10px]">--</span>
-
+ 
                 const displayValue = `+${extraHours.toFixed(1)}h`
-
+ 
                 return (
                     <span className="font-black tabular-nums text-[10px] text-emerald-600">
                         {displayValue}
                     </span>
                 )
             },
-            size: 44,
-        },
-        {
-            accessorKey: "source",
-            header: "Src",
-            cell: ({ row }) => {
-                const source = (row.getValue("source") as string) || 'mobile';
-                let icon = '📱';
-                if (source === 'biometric') icon = '☝️';
-                if (source === 'bulk') icon = '📁';
-                if (source === 'manual') icon = '✍️';
-                
-                return (
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger className="cursor-help">
-                                <span className="text-[13px]">{icon}</span>
-                            </TooltipTrigger>
-                            <TooltipContent className="capitalize">{source}</TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                )
-            },
-            size: 38,
+            size: 40,
         },
         {
             accessorKey: "status",
@@ -199,7 +176,7 @@ export function createAttendanceColumns({
                     </div>
                 )
             },
-            size: 62,
+            size: 60,
         },
         {
             id: "actions",
@@ -207,7 +184,7 @@ export function createAttendanceColumns({
             cell: ({ row }) => {
                 const record = row.original
                 const isPending = record.status === 'pending'
-
+ 
                 return (
                     <div className="flex items-center justify-end gap-1">
                         <TooltipProvider>
@@ -256,7 +233,7 @@ export function createAttendanceColumns({
                     </div>
                 )
             },
-            size: 80,
+            size: 75,
         },
     ]
 }

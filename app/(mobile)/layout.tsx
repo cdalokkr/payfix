@@ -31,8 +31,8 @@ export default async function MobileLayout({
         redirect('/login')
     }
 
-    // Only employees can use mobile app
-    if (profile.role !== 'employee') {
+    // Only employees and moderators can use mobile app
+    if (profile.role !== 'employee' && profile.role !== 'moderator') {
         redirect(`/${profile.role}`)
     }
 
