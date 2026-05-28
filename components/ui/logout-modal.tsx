@@ -100,26 +100,29 @@ export function LogoutModal({ isOpen, onOpenChange }: LogoutModalProps) {
             }
           })()
 
-          // Map messages to shorter intervals for better UX feel
+          // Eagerly prefetch login route so final redirection is instant
+          router.prefetch('/login')
+
+          // Map messages to shorter intervals for better UX feel (reduced from 400ms to 80ms)
           setCurrentMessageIndex(1) // Clearing data
-          await new Promise(resolve => setTimeout(resolve, 400))
+          await new Promise(resolve => setTimeout(resolve, 80))
 
           setCurrentMessageIndex(3) // Cleanup
           await Promise.all([logoutPromise, cleanupPromise])
 
-          setCurrentMessageIndex(5) // Finalizing
-          await new Promise(resolve => setTimeout(resolve, 300))
+          setCurrentMessageIndex(5) // Finalizing (reduced from 300ms to 80ms)
+          await new Promise(resolve => setTimeout(resolve, 80))
 
           // All steps complete - show success
           setIsSuccess(true)
           setContentLoading(false)
 
-          // Immediate redirect after success animation
+          // Crisp, professional transition after success animation (reduced from 1200ms to 450ms)
           setTimeout(() => {
             console.log('[LOGOUT-MODAL] Immediate redirecting to /login')
             onOpenChange(false)
             router.push('/login')
-          }, 1200)
+          }, 450)
 
         } catch (error) {
           console.error('[LOGOUT-MODAL] Logout failed, forcing redirect:', error)

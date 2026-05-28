@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -32,6 +32,14 @@ export function LoginForm() {
   const [asyncState, setAsyncState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [authError, setAuthError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({})
+
+  // Eagerly prefetch next page bundle chunks so client-side navigation feels instant
+  useEffect(() => {
+    router.prefetch('/admin')
+    router.prefetch('/moderator')
+    router.prefetch('/employee')
+    router.prefetch('/mobile')
+  }, [router])
 
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
@@ -92,7 +100,7 @@ export function LoginForm() {
         warning: data?.warning
       })
 
-      // OPTIMIZED: Start prefetch IMMEDIATELY for admin/moderator (don't wait for anything)
+      // OPTIMIZED: Start prefetch IMMEDIATELY for admin/moderator in the background (don't wait for anything)
       const prefetchPromise = data?.profile?.role !== 'employee'
         ? prefetch().catch(err => {
           console.warn('[LoginForm] Prefetch failed, dashboard will fetch on load:', err)
@@ -156,15 +164,14 @@ export function LoginForm() {
         }
       }
 
-      // OPTIMIZED: Wait longer for prefetch (800ms instead of 300ms) so dashboard has data ready
-      // This trades a tiny perceived delay for a significantly faster dashboard render
-      await Promise.race([
-        prefetchPromise,
-        new Promise(resolve => setTimeout(resolve, 800)) // Max 800ms wait for admin prefetch
-      ])
+      // HIGH PERFORMANCE: Navigate eagerly without waiting for prefetch.
+      // Since dashboard pages are server-prefetch enabled, they will pull data immediately on load.
+      // Doing the prefetch in the background allows the browser to resolve assets during navigation
+      // without introducing any artificial delay.
+      prefetchPromise.catch(() => {})
 
       try {
-        // Navigate after prefetch (or timeout)
+        // Navigate instantly
         await router.push(redirectPath)
       } catch (redirectError) {
         window.location.href = redirectPath
