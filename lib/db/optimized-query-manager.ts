@@ -187,7 +187,7 @@ export class OptimizedQueryManager {
                 return db.select().from(attendance)
                   .where(and(
                     eq(attendance.profile_id, profileId!),
-                    gte(attendance.date, sql`${yesterdayStr}`)
+                    gte(attendance.date, yesterdayStr)
                   ));
               })(),
               db.select().from(officeSettings).limit(1),
@@ -213,8 +213,8 @@ export class OptimizedQueryManager {
             return {
               ...cached,
               attendance: {
-                todayRecord: records.find(r => normalizeDate(r.date) === targetDate),
-                pendingRecord: records.filter(r => !r.check_out).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0],
+                todayRecord: records.find(r => normalizeDate(r.date) === targetDate) || null,
+                pendingRecord: records.filter(r => !r.check_out).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0] || null,
                 settings: (settingsData as any[])[0] || null,
                 closures: (closuresData as any[]) || []
               }
@@ -319,7 +319,7 @@ export class OptimizedQueryManager {
           return db.select().from(attendance)
             .where(and(
               eq(attendance.profile_id, profileId!),
-              gte(attendance.date, sql`${yesterdayStr}`)
+              gte(attendance.date, yesterdayStr)
             ));
         })() : Promise.resolve([]),
 
@@ -382,8 +382,8 @@ export class OptimizedQueryManager {
 
           const records = attendanceData as any[];
           return {
-            todayRecord: records.find(r => normalizeDate(r.date) === targetDate),
-            pendingRecord: records.filter(r => !r.check_out).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0],
+            todayRecord: records.find(r => normalizeDate(r.date) === targetDate) || null,
+            pendingRecord: records.filter(r => !r.check_out).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0] || null,
             settings: (settingsData as any[])[0] || null,
             closures: (closuresData as any[]) || []
           };

@@ -21,12 +21,13 @@ import {
 import { format } from "date-fns"
 import { Slider } from "@/components/ui/slider"
 import { FaceVerificationService } from "@/lib/services/face-verification.service"
+import { OfflineSyncService } from "@/lib/services/offline-sync.service"
 
 interface SelfieCaptureProps {
     profileImageUrl: string | null
     onCaptured: (result: SelfieResult) => void
     onVerified: (result: { matched: boolean; similarity: number }) => void
-    onSubmitAttendance: () => Promise<void>
+    onSubmitAttendance: (selfie?: string) => Promise<void>
     onBack?: () => void
     warmedStream?: MediaStream | null
     clearWarmedStream?: () => void
@@ -301,6 +302,29 @@ export function SelfieCapture({
         // Start verification
         setStatus('verifying')
 
+        // Check if offline
+        const isOffline = OfflineSyncService.isOffline()
+        if (isOffline) {
+            console.log('[SELFIE] Client is offline, bypassing server verification and saving locally')
+            setSimilarity(1.0)
+            setStatus('verified')
+            setApiStatus('pending')
+            try {
+                await onSubmitAttendance(capturedImage)
+                setApiStatus('success')
+                // Optimistically succeed after a tiny visual delay
+                setTimeout(() => {
+                    if (isMounted.current) {
+                        onVerified({ matched: true, similarity: 1.0 })
+                    }
+                }, 500)
+            } catch (error) {
+                setApiStatus('error')
+                setApiError('Failed to record attendance locally')
+            }
+            return
+        }
+
         if (!profileImageUrl) {
             setStatus('verify_failed')
             setErrorMessage('No profile photo found. Please upload a profile photo first.')
@@ -329,7 +353,7 @@ export function SelfieCapture({
             setApiStatus('pending')
 
             try {
-                await onSubmitAttendance()
+                await onSubmitAttendance(capturedImage)
                 setApiStatus('success')
             } catch (error) {
                 setApiStatus('error')
@@ -342,7 +366,7 @@ export function SelfieCapture({
                 : 'Verification failed. Please try again.'
             setErrorMessage(msg)
         }
-    }, [capturedImage, capturedAt, profileImageUrl, onSubmitAttendance])
+    }, [capturedImage, capturedAt, profileImageUrl, onSubmitAttendance, onVerified])
 
     const handleComplete = useCallback(() => {
         if (apiStatus === 'success') {
@@ -747,7 +771,7 @@ export function SelfieCapture({
                                                         onClick={async () => {
                                                             setApiStatus('pending')
                                                             try {
-                                                                await onSubmitAttendance()
+                                                                await onSubmitAttendance(capturedImage || undefined)
                                                                 setApiStatus('success')
                                                             } catch (error) {
                                                                 setApiStatus('error')

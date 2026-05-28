@@ -6,6 +6,7 @@
 import { db } from '@/lib/db'
 import { officeLocations } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
+import { SmartCache } from '@/lib/cache/smart-cache'
 
 // Haversine formula to calculate distance between two coordinates
 function haversineDistance(
@@ -60,10 +61,7 @@ export const GeofenceService = {
      * Get all active office locations
      */
     async getActiveLocations(): Promise<OfficeLocation[]> {
-        const locations = await db
-            .select()
-            .from(officeLocations)
-            .where(eq(officeLocations.is_active, true))
+        const locations = await SmartCache.getOfficeLocationsCached()
 
         return locations.map((loc) => ({
             id: loc.id,
@@ -175,6 +173,9 @@ export const GeofenceService = {
             })
             .returning()
 
+        // Invalidate locations cache namespace
+        SmartCache.invalidateLocations()
+
         return {
             id: location.id,
             name: location.name,
@@ -219,6 +220,9 @@ export const GeofenceService = {
 
         if (!location) return null
 
+        // Invalidate locations cache namespace
+        SmartCache.invalidateLocations()
+
         return {
             id: location.id,
             name: location.name,
@@ -230,14 +234,16 @@ export const GeofenceService = {
         }
     },
 
-    /**
-     * Delete office location (admin only)
-     */
     async deleteLocation(id: string): Promise<boolean> {
         const result = await db
             .delete(officeLocations)
             .where(eq(officeLocations.id, id))
             .returning({ id: officeLocations.id })
+
+        if (result.length > 0) {
+            // Invalidate locations cache namespace
+            SmartCache.invalidateLocations()
+        }
 
         return result.length > 0
     },

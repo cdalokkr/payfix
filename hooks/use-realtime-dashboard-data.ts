@@ -700,6 +700,18 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
     didIncrement = true
     console.log(`👥 Channel ${channelName} subscribers: ${subscriberCount - 1} -> ${subscriberCount} (new channel)`)
 
+    // Clean up any existing channel with the same name from Supabase's internal client state to avoid "after subscribe" errors
+    try {
+      const channels = supabase.getChannels()
+      const existingInternalChannel = channels.find(ch => ch.topic === channelName || ch.topic === `realtime:${channelName}`)
+      if (existingInternalChannel) {
+        console.log(`🧹 Found existing internal channel ${channelName} in Supabase client cache, removing...`)
+        supabase.removeChannel(existingInternalChannel)
+      }
+    } catch (e) {
+      console.warn('[REALTIME] Failed to clean up cached Supabase channel:', e)
+    }
+
     // Create a new channel since none exists
     console.log(`🆕 Creating new channel: ${channelName}`)
     let channel = supabase.channel(channelName)

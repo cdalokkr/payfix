@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { OfflineSyncService } from '@/lib/services/offline-sync.service'
 
 /**
  * PWA Register Component
@@ -73,6 +74,16 @@ export function PWARegister() {
 
     // Handle online/offline status
     useEffect(() => {
+        // Register cross-browser fallback IndexedDB background sync
+        OfflineSyncService.registerBackgroundSync()
+
+        // Sync any cached punches immediately on load if online
+        if (navigator.onLine) {
+            OfflineSyncService.syncQueuedPunches().catch((err) => {
+                console.error('[PWA-REGISTER] Initial sync failed:', err)
+            })
+        }
+
         const handleOnline = () => {
             toast.success('You are back online!')
             // Trigger sync

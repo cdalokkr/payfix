@@ -19,6 +19,7 @@ import { trpc } from "@/lib/trpc/client"
 import { SelfieCapture, type SelfieResult } from "./selfie-capture"
 import { format } from "date-fns"
 import { usePwaCheck } from "@/hooks/use-pwa-check"
+import { OfflineSyncService } from "@/lib/services/offline-sync.service"
 
 type WizardStep = 'selfie' | 'submitting' | 'complete' | 'error'
 
@@ -105,10 +106,10 @@ export function MobileAttendanceWizard({
     }, [])
 
     // This is called by SelfieCapture to submit attendance in parallel with verification
-    const handleSubmitAttendance = useCallback(async () => {
+    const handleSubmitAttendance = useCallback(async (selfie?: string) => {
         const localDate = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Kolkata' })
 
-        let coords = {}
+        let coords: { latitude: number | null; longitude: number | null } = { latitude: null, longitude: null }
         if (action === 'clock_in') {
             try {
                 if ('geolocation' in navigator) {
@@ -130,16 +131,43 @@ export function MobileAttendanceWizard({
             }
         }
 
-        if (action === 'clock_in') {
-            await clockIn.mutateAsync({
+        const isOffline = OfflineSyncService.isOffline()
+        if (isOffline) {
+            console.log('[WIZARD] Client is offline, queuing punch directly in IndexedDB')
+            await OfflineSyncService.queuePunch({
+                action,
                 localDate,
-                isExtraDay: false,
-                ...coords
+                latitude: coords.latitude,
+                longitude: coords.longitude,
+                selfie: selfie || null
             })
-        } else {
-            await clockOut.mutateAsync({
+            toast.success("Connection unavailable. Punched successfully offline!")
+            return
+        }
+
+        try {
+            if (action === 'clock_in') {
+                await clockIn.mutateAsync({
+                    localDate,
+                    isExtraDay: false,
+                    latitude: coords.latitude || undefined,
+                    longitude: coords.longitude || undefined
+                })
+            } else {
+                await clockOut.mutateAsync({
+                    localDate,
+                })
+            }
+        } catch (err) {
+            console.warn('[WIZARD] Server post failed, falling back to IndexedDB local queue:', err)
+            await OfflineSyncService.queuePunch({
+                action,
                 localDate,
+                latitude: coords.latitude,
+                longitude: coords.longitude,
+                selfie: selfie || null
             })
+            toast.success("Server connection lost. Saved offline successfully!")
         }
 
         // Invalidate cache for real-time update

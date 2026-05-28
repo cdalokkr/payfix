@@ -7,9 +7,11 @@ import { TRPCError } from '@trpc/server'
 import { attendance, profiles, leaves, officeSettings, officeClosures, activities, notifications } from '@/lib/db/schema'
 import { eq, and, gte, lte, desc, sql, inArray, or } from 'drizzle-orm'
 import { AttendanceService } from '@/lib/services/attendance.service'
+import { LeavesService } from '@/lib/services/leaves.service'
 import { invalidateDashboardCache } from './admin-dashboard-optimized'
 import { broadcastServerEvent } from '@/lib/events/server-broadcaster'
 import { getLocalDateIST } from '@/lib/utils/date-utils'
+import { SmartCache } from '@/lib/cache/smart-cache'
 
 export const attendanceRouter = router({
     // --- ATTENDANCE ---
@@ -327,30 +329,18 @@ export const attendanceRouter = router({
             status: z.enum(['pending', 'approved', 'rejected', 'all']).default('all'),
         }))
         .query(async ({ ctx, input }) => {
-            let whereClause = []
-
-            if (ctx.profile.role === 'employee') {
-                whereClause.push(eq(leaves.profile_id, ctx.profile.id))
-            } else if (input.profileId) {
-                whereClause.push(eq(leaves.profile_id, input.profileId))
+            try {
+                return await LeavesService.getLeaves({
+                    profileId: ctx.profile.role === 'employee' ? ctx.profile.id : input.profileId,
+                    role: ctx.profile.role,
+                    status: input.status
+                })
+            } catch (err: any) {
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: err.message || 'Failed to retrieve leave records'
+                })
             }
-
-            if (input.status !== 'all') {
-                whereClause.push(eq(leaves.status, input.status))
-            }
-
-            return await ctx.db.query.leaves.findMany({
-                where: and(...whereClause),
-                with: {
-                    profile: {
-                        columns: {
-                            email: true,
-                            full_name: true
-                        }
-                    }
-                },
-                orderBy: [desc(leaves.created_at)]
-            })
         }),
 
     applyLeave: protectedProcedure
@@ -363,20 +353,22 @@ export const attendanceRouter = router({
             reason: z.string().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
-            const [data] = await ctx.db.insert(leaves).values({
-                profile_id: ctx.profile.id,
-                leave_type: input.leaveType,
-                start_date: input.startDate,
-                end_date: input.endDate,
-                is_half_day: input.isHalfDay ?? false,
-                half_day_period: input.halfDayPeriod,
-                reason: input.reason,
-                status: 'pending'
-            }).returning()
-
-            if (!data) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to apply for leave' })
-
-            return data
+            try {
+                return await LeavesService.applyLeave({
+                    profileId: ctx.profile.id,
+                    leaveType: input.leaveType,
+                    startDate: input.startDate,
+                    endDate: input.endDate,
+                    isHalfDay: input.isHalfDay,
+                    halfDayPeriod: input.halfDayPeriod,
+                    reason: input.reason
+                })
+            } catch (err: any) {
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: err.message || 'Failed to apply for leave'
+                })
+            }
         }),
 
     approveLeave: moderatorProcedure
@@ -386,23 +378,26 @@ export const attendanceRouter = router({
             remarks: z.string().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
-            const [data] = await ctx.db.update(leaves).set({
-                status: input.status,
-                remarks: input.remarks,
-                approved_by: ctx.profile.id,
-                updated_at: new Date()
-            }).where(eq(leaves.id, input.id)).returning()
-
-            if (!data) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to approve leave' })
-
-            return data
+            try {
+                return await LeavesService.approveLeave({
+                    id: input.id,
+                    status: input.status,
+                    remarks: input.remarks,
+                    approvedBy: ctx.profile.id
+                })
+            } catch (err: any) {
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: err.message || 'Failed to approve leave'
+                })
+            }
         }),
 
     // --- SETTINGS ---
 
     getOfficeSettings: protectedProcedure
-        .query(async ({ ctx }) => {
-            const data = await ctx.db.query.officeSettings.findFirst()
+        .query(async () => {
+            const data = await SmartCache.getOfficeSettingsCached()
             if (!data) throw new TRPCError({ code: 'NOT_FOUND', message: 'Office settings not found' })
             return data
         }),
@@ -433,14 +428,15 @@ export const attendanceRouter = router({
             }).where(eq(officeSettings.id, current.id)).returning()
 
             if (!data) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to update settings' })
+            
+            // Invalidate settings cache namespace
+            SmartCache.invalidateSettings()
             return data
         }),
 
     getOfficeClosures: protectedProcedure
-        .query(async ({ ctx }) => {
-            return await ctx.db.query.officeClosures.findMany({
-                orderBy: [desc(officeClosures.date)]
-            })
+        .query(async () => {
+            return await SmartCache.getOfficeClosuresCached()
         }),
 
     addOfficeClosure: adminProcedure
@@ -469,6 +465,9 @@ export const attendanceRouter = router({
             }).returning()
 
             if (!data) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to add closure' })
+            
+            // Invalidate closures cache namespace
+            SmartCache.invalidateClosures()
             return data
         }),
 
@@ -476,6 +475,8 @@ export const attendanceRouter = router({
         .input(z.object({ id: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
             await ctx.db.delete(officeClosures).where(eq(officeClosures.id, input.id))
+            // Invalidate closures cache namespace
+            SmartCache.invalidateClosures()
             return { success: true }
         }),
 
@@ -498,7 +499,7 @@ export const attendanceRouter = router({
             })
 
             // Get office settings for extra hours calculation
-            const settings = await ctx.db.query.officeSettings.findFirst()
+            const settings = await SmartCache.getOfficeSettingsCached()
             const defaultCheckIn = settings?.default_check_in || '10:00:00'
             const defaultCheckOut = settings?.default_check_out || '19:00:00'
 

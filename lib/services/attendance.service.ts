@@ -2,6 +2,7 @@ import { db } from '@/lib/db'
 import { attendance, activities, officeSettings, officeClosures, officeLocations } from '@/lib/db/schema'
 import { eq, and, gte, lte, desc, sql, inArray } from 'drizzle-orm'
 import { throwAppError } from '@/lib/errors/app-errors'
+import { SmartCache } from '@/lib/cache/smart-cache'
 import { getLocalDateIST, getLocalTimeIST12Hour } from '@/lib/utils/date-utils'
 
 export class AttendanceService {
@@ -96,8 +97,8 @@ export class AttendanceService {
         const today = localDate || getLocalDateIST()
         const dayOfWeek = new Date(today).getDay()
 
-        const settings = await db.query.officeSettings.findFirst()
-        const closures = await db.query.officeClosures.findMany()
+        const settings = await SmartCache.getOfficeSettingsCached()
+        const closures = await SmartCache.getOfficeClosuresCached()
 
         const isOffDay = settings?.off_days?.includes(dayOfWeek)
         const isHoliday = closures?.some(c => c.date === today)
@@ -127,9 +128,7 @@ export class AttendanceService {
         let locationName: string | null = null
 
         // Get active office locations (for potential validation)
-        const activeLocations = await db.query.officeLocations.findMany({
-            where: eq(officeLocations.is_active, true)
-        })
+        const activeLocations = await SmartCache.getOfficeLocationsCached()
 
         if (latitude && longitude) {
             try {

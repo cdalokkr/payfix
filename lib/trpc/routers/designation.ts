@@ -6,12 +6,11 @@ import { eq, and, desc, count } from 'drizzle-orm'
 import { designationSchema } from '@/lib/validations/auth'
 import { formatActivityDescription, ChangedField } from '@/lib/utils/activity-logger'
 import { invalidateDashboardCache } from './admin-dashboard-optimized'
+import { SmartCache } from '@/lib/cache/smart-cache'
 
 export const designationRouter = router({
-    getDesignations: adminProcedure.query(async ({ ctx }) => {
-        const data = await ctx.db.query.designations.findMany({
-            orderBy: [desc(designations.name)]
-        })
+    getDesignations: adminProcedure.query(async () => {
+        const data = await SmartCache.getDesignationsCached()
         return (data || []).map(d => ({
             ...d,
             created_at: d.created_at ? d.created_at.toISOString() : null,
@@ -54,6 +53,8 @@ export const designationRouter = router({
 
             // Invalidate dashboard cache to ensure fresh activity data
             invalidateDashboardCache()
+            // Invalidate designations cache namespace
+            SmartCache.invalidateDesignations()
 
             return {
                 ...data,
@@ -116,6 +117,9 @@ export const designationRouter = router({
                 invalidateDashboardCache()
             }
 
+            // Invalidate designations cache namespace
+            SmartCache.invalidateDesignations()
+
             return {
                 ...data,
                 created_at: data.created_at ? data.created_at.toISOString() : null,
@@ -170,6 +174,9 @@ export const designationRouter = router({
                 // Invalidate dashboard cache to ensure fresh activity data
                 invalidateDashboardCache()
             }
+
+            // Invalidate designations cache namespace
+            SmartCache.invalidateDesignations()
 
             return { success: true }
         }),

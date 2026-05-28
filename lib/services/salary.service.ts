@@ -11,6 +11,7 @@ import {
 } from '@/lib/db/schema'
 import { eq, and, gte, lte, desc, sql, inArray, or, ne } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
+import { SmartCache } from '@/lib/cache/smart-cache'
 
 const MONTH_NAMES = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -352,7 +353,7 @@ export class SalaryService {
         })
 
         // Get office settings for working hours calculation
-        const settings = await db.query.officeSettings.findFirst()
+        const settings = await SmartCache.getOfficeSettingsCached()
         const defaultCheckIn = settings?.default_check_in || '10:00:00'
         const defaultCheckOut = settings?.default_check_out || '19:00:00'
         const offDays = (settings?.off_days as number[] | null) || [0] // Default Sunday off
