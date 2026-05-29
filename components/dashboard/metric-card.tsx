@@ -24,6 +24,7 @@ export interface MetricCardProps {
         positive?: boolean
     }
     disableHover?: boolean
+    padding?: string
 }
 
 export function MetricCardSkeleton({ title, description, icon, iconBgColor, iconColor, borderColor, gradientColor, cardBgColor }: {
@@ -77,7 +78,8 @@ export function MetricCard({
     children,
     className,
     trend,
-    disableHover = false
+    disableHover = false,
+    padding = "p-4"
 }: MetricCardProps) {
     const [isHovered, setIsHovered] = useState(false)
 
@@ -156,7 +158,7 @@ export function MetricCard({
                 <div className="absolute inset-0 opacity-[0.03] pointer-events-none mix-blend-overlay bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
 
                 {/* Content Wrapper */}
-                <div className="relative z-10 h-full p-4 flex flex-col">
+                <div className={cn("relative z-10 h-full flex flex-col", padding)}>
                     {(title || icon || description) && (
                         <div className="flex justify-between items-start mb-2">
                             <div className="space-y-1">

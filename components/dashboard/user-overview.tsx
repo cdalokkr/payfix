@@ -132,7 +132,7 @@ export function UserOverview({
                 </div>
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Logs</p>
-                  <p className="text-sm font-black group-hover/mod-action:text-primary transition-colors">Attendance</p>
+                  <p className="text-sm font-semibold group-hover/mod-action:font-black group-hover/mod-action:text-primary transition-all duration-300">Attendance</p>
                 </div>
               </Link>
 
@@ -146,7 +146,7 @@ export function UserOverview({
                 </div>
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Approvals</p>
-                  <p className="text-sm font-black group-hover/mod-action:text-primary transition-colors">Leave requests</p>
+                  <p className="text-sm font-semibold group-hover/mod-action:font-black group-hover/mod-action:text-primary transition-all duration-300">Leave requests</p>
                 </div>
               </Link>
 
@@ -160,7 +160,7 @@ export function UserOverview({
                 </div>
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Verification</p>
-                  <p className="text-sm font-black group-hover/mod-action:text-primary transition-colors">Photo Approvals</p>
+                  <p className="text-sm font-semibold group-hover/mod-action:font-black group-hover/mod-action:text-primary transition-all duration-300">Photo Approvals</p>
                 </div>
               </Link>
 
@@ -174,7 +174,7 @@ export function UserOverview({
                 </div>
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Helpdesk</p>
-                  <p className="text-sm font-black group-hover/mod-action:text-primary transition-colors">Support Tickets</p>
+                  <p className="text-sm font-semibold group-hover/mod-action:font-black group-hover/mod-action:text-primary transition-all duration-300">Support Tickets</p>
                 </div>
               </Link>
 
@@ -188,7 +188,7 @@ export function UserOverview({
                 </div>
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Business</p>
-                  <p className="text-sm font-black group-hover/mod-action:text-primary transition-colors">Client Manager</p>
+                  <p className="text-sm font-semibold group-hover/mod-action:font-black group-hover/mod-action:text-primary transition-all duration-300">Client Manager</p>
                 </div>
               </Link>
 
@@ -202,7 +202,7 @@ export function UserOverview({
                 </div>
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Settings</p>
-                  <p className="text-sm font-black group-hover/mod-action:text-primary transition-colors">My Profile</p>
+                  <p className="text-sm font-semibold group-hover/mod-action:font-black group-hover/mod-action:text-primary transition-all duration-300">My Profile</p>
                 </div>
               </Link>
 
@@ -216,7 +216,7 @@ export function UserOverview({
                 </div>
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Reports</p>
-                  <p className="text-sm font-black group-hover/mod-action:text-primary transition-colors">Analytics Panel</p>
+                  <p className="text-sm font-semibold group-hover/mod-action:font-black group-hover/mod-action:text-primary transition-all duration-300">Analytics Panel</p>
                 </div>
               </Link>
 
@@ -230,7 +230,7 @@ export function UserOverview({
                 </div>
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Statistics</p>
-                  <p className="text-sm font-black group-hover/mod-action:text-primary transition-colors">Insights & Trends</p>
+                  <p className="text-sm font-semibold group-hover/mod-action:font-black group-hover/mod-action:text-primary transition-all duration-300">Insights & Trends</p>
                 </div>
               </Link>
             </div>

@@ -278,7 +278,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                                 </div>
                                 <div>
                                     <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Clock In/Out</p>
-                                    <p className="text-sm font-black group-hover/action:text-blue-600 transition-colors">Mark Presence</p>
+                                    <p className="text-sm font-semibold group-hover/action:font-black group-hover/action:text-blue-600 transition-all duration-300">Mark Presence</p>
                                 </div>
                             </Link>
 
@@ -292,7 +292,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                                 </div>
                                 <div>
                                     <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Leaves</p>
-                                    <p className="text-sm font-black group-hover/action:text-purple-600 transition-colors">Apply Leave</p>
+                                    <p className="text-sm font-semibold group-hover/action:font-black group-hover/action:text-purple-600 transition-all duration-300">Apply Leave</p>
                                 </div>
                             </Link>
 
@@ -306,7 +306,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                                 </div>
                                 <div>
                                     <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Pay Slips</p>
-                                    <p className="text-sm font-black group-hover/action:text-emerald-600 transition-colors">Payroll Panel</p>
+                                    <p className="text-sm font-semibold group-hover/action:font-black group-hover/action:text-emerald-600 transition-all duration-300">Payroll Panel</p>
                                 </div>
                             </Link>
 
@@ -320,7 +320,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                                 </div>
                                 <div>
                                     <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Helpdesk</p>
-                                    <p className="text-sm font-black group-hover/action:text-amber-600 transition-colors">Support Tickets</p>
+                                    <p className="text-sm font-semibold group-hover/action:font-black group-hover/action:text-amber-600 transition-all duration-300">Support Tickets</p>
                                 </div>
                             </Link>
 
@@ -334,7 +334,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                                 </div>
                                 <div>
                                     <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Settings</p>
-                                    <p className="text-sm font-black group-hover/action:text-indigo-600 transition-colors">My Profile</p>
+                                    <p className="text-sm font-semibold group-hover/action:font-black group-hover/action:text-indigo-600 transition-all duration-300">My Profile</p>
                                 </div>
                             </Link>
 
@@ -348,7 +348,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                                 </div>
                                 <div>
                                     <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Reports</p>
-                                    <p className="text-sm font-black group-hover/action:text-rose-600 transition-colors">Analytics</p>
+                                    <p className="text-sm font-semibold group-hover/action:font-black group-hover/action:text-rose-600 transition-all duration-300">Analytics</p>
                                 </div>
                             </Link>
                         </div>

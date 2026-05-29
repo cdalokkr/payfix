@@ -144,7 +144,7 @@ export function AdminOverview({
 
 
       {/* Critical Metrics - Compact Grid at Very Top */}
-      <div data-testid="critical-metrics" className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+      <div data-testid="critical-metrics" className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         <Link href="/admin/users" className="block h-full">
           <MetricCard
             title="Total Users"
@@ -158,6 +158,7 @@ export function AdminOverview({
             gradientColor="from-blue-500/10 to-blue-500/5"
             cardBgColor="bg-blue-50/50 dark:bg-blue-950/20"
             delay={0.2}
+            padding="p-3 sm:p-3.5"
           />
         </Link>
 
@@ -173,6 +174,7 @@ export function AdminOverview({
           gradientColor="from-amber-500/10 to-amber-500/5"
           cardBgColor="bg-amber-50/50 dark:bg-amber-950/20"
           delay={0.3}
+          padding="p-3 sm:p-3.5"
         />
 
         <MetricCard
@@ -187,6 +189,7 @@ export function AdminOverview({
           gradientColor="from-purple-500/10 to-purple-500/5"
           cardBgColor="bg-purple-50/50 dark:bg-purple-950/20"
           delay={0.4}
+          padding="p-3 sm:p-3.5"
         />
 
         {stats.employeeCount > 0 ? (
@@ -202,6 +205,7 @@ export function AdminOverview({
             gradientColor="from-emerald-500/10 to-emerald-500/5"
             cardBgColor="bg-emerald-50/50 dark:bg-emerald-950/20"
             delay={0.5}
+            padding="p-3 sm:p-3.5"
           />
         ) : (
           <MetricCard
@@ -216,6 +220,7 @@ export function AdminOverview({
             gradientColor="from-green-500/10 to-green-500/5"
             cardBgColor="bg-green-50/50 dark:bg-green-950/20"
             delay={0.5}
+            padding="p-3 sm:p-3.5"
           />
         )}
       </div>
@@ -247,7 +252,7 @@ export function AdminOverview({
                 </div>
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">New User</p>
-                  <p className="text-sm font-black group-hover/admin-action:text-primary transition-colors">Create User</p>
+                  <p className="text-sm font-semibold group-hover/admin-action:font-black group-hover/admin-action:text-primary transition-all duration-300">Create User</p>
                 </div>
               </div>
 
@@ -261,7 +266,7 @@ export function AdminOverview({
                 </div>
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Logs</p>
-                  <p className="text-sm font-black group-hover/admin-action:text-primary transition-colors">Attendance</p>
+                  <p className="text-sm font-semibold group-hover/admin-action:font-black group-hover/admin-action:text-primary transition-all duration-300">Attendance</p>
                 </div>
               </Link>
 
@@ -275,7 +280,7 @@ export function AdminOverview({
                 </div>
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Approvals</p>
-                  <p className="text-sm font-black group-hover/admin-action:text-primary transition-colors">Leave Requests</p>
+                  <p className="text-sm font-semibold group-hover/admin-action:font-black group-hover/admin-action:text-primary transition-all duration-300">Leave Requests</p>
                 </div>
               </Link>
 
@@ -289,7 +294,7 @@ export function AdminOverview({
                 </div>
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Verification</p>
-                  <p className="text-sm font-black group-hover/admin-action:text-primary transition-colors">Photo Approvals</p>
+                  <p className="text-sm font-semibold group-hover/admin-action:font-black group-hover/admin-action:text-primary transition-all duration-300">Photo Approvals</p>
                 </div>
               </Link>
 
@@ -303,7 +308,7 @@ export function AdminOverview({
                 </div>
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Helpdesk</p>
-                  <p className="text-sm font-black group-hover/admin-action:text-primary transition-colors">Support Tickets</p>
+                  <p className="text-sm font-semibold group-hover/admin-action:font-black group-hover/admin-action:text-primary transition-all duration-300">Support Tickets</p>
                 </div>
               </Link>
 
@@ -317,7 +322,7 @@ export function AdminOverview({
                 </div>
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Business</p>
-                  <p className="text-sm font-black group-hover/admin-action:text-primary transition-colors">Client Manager</p>
+                  <p className="text-sm font-semibold group-hover/admin-action:font-black group-hover/admin-action:text-primary transition-all duration-300">Client Manager</p>
                 </div>
               </Link>
 
@@ -331,7 +336,7 @@ export function AdminOverview({
                 </div>
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Reports</p>
-                  <p className="text-sm font-black group-hover/admin-action:text-primary transition-colors">Analytics Panel</p>
+                  <p className="text-sm font-semibold group-hover/admin-action:font-black group-hover/admin-action:text-primary transition-all duration-300">Analytics Panel</p>
                 </div>
               </Link>
 
@@ -345,7 +350,7 @@ export function AdminOverview({
                 </div>
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Statistics</p>
-                  <p className="text-sm font-black group-hover/admin-action:text-primary transition-colors">Insights & Trends</p>
+                  <p className="text-sm font-semibold group-hover/admin-action:font-black group-hover/admin-action:text-primary transition-all duration-300">Insights & Trends</p>
                 </div>
               </Link>
             </div>

@@ -109,15 +109,15 @@ export function ActivityLogFeed({
 
     if (isLoading) {
         return (
-            <div className={cn("space-y-3", className)}>
+            <div className={cn("space-y-2.5", className)}>
                 {[...Array(skeletonCount)].map((_, i) => (
                     <div
                         key={i}
-                        className="flex items-start space-x-4 p-4 rounded-xl bg-muted/20 border border-border/40 animate-pulse"
+                        className="flex items-start space-x-3 p-2.5 sm:p-3 rounded-xl bg-muted/20 border border-border/40 animate-pulse"
                         style={{ animationDelay: `${i * 100}ms` }}
                     >
                         {/* Icon Skeleton */}
-                        <div className="mt-0.5 p-2 rounded-lg bg-muted/50 flex-shrink-0">
+                        <div className="mt-0.5 p-1.5 rounded-lg bg-muted/50 flex-shrink-0">
                             <div className="h-5 w-5 rounded bg-muted-foreground/10" />
                         </div>
 
@@ -160,7 +160,7 @@ export function ActivityLogFeed({
     }
 
     return (
-        <div className={cn("space-y-3", className)}>
+        <div className={cn("space-y-2.5", className)}>
             <AnimatePresence mode="sync">
                 {displayActivities.map((activity, index) => {
                     const Icon = getActivityIcon(activity.activity_type)
@@ -179,14 +179,14 @@ export function ActivityLogFeed({
                                 scale: { type: "spring", stiffness: 400, damping: 25 }
                             }}
                             className={cn(
-                                "flex items-start gap-4 p-4 rounded-xl border transition-all duration-300",
+                                "flex items-start gap-3 p-2.5 sm:p-3 rounded-xl border transition-all duration-300",
                                 "bg-background/40 hover:bg-background/80 group hover:shadow-md",
                                 colorClass.split(' ').find(c => c.startsWith('border-')) || "border-border",
                                 innerClassName
                             )}
                         >
                             <div className={cn(
-                                "mt-0.5 p-2 rounded-lg shadow-sm transition-transform duration-300 group-hover:scale-110 flex-shrink-0",
+                                "mt-0.5 p-1.5 rounded-lg shadow-sm transition-transform duration-300 group-hover:scale-110 flex-shrink-0",
                                 colorClass.split(' ').filter(c => c.startsWith('bg-') || c.startsWith('text-')).join(' ')
                             )}>
                                 <Icon className="h-5 w-5" />
