@@ -75,7 +75,7 @@ export const DesignationFormContent = memo(function DesignationFormContent({
     if (isDeleteMode) {
         return (
             <div className={cn("px-4 sm:px-6 lg:px-6 py-4 space-y-6", className)}>
-                <Card className="w-full max-w-2xl mx-auto bg-white shadow-lg border-2 border-destructive/20 rounded-lg">
+                <Card className="w-full max-w-2xl mx-auto bg-card dark:bg-zinc-900/90 text-card-foreground shadow-lg border-2 border-destructive/20 rounded-lg">
                     <CardContent className="p-4">
                         {/* General Error Display */}
                         <AnimatePresence>
@@ -104,11 +104,11 @@ export const DesignationFormContent = memo(function DesignationFormContent({
 
                             {/* Designation Details Section */}
                             <Accordion type="multiple" defaultValue={["designation-details"]} className="space-y-4">
-                                <AccordionItem value="designation-details" className="border border-destructive/60 rounded-lg overflow-hidden bg-white last:border-b">
-                                    <AccordionTrigger className="px-4 py-3 bg-destructive/5 hover:bg-destructive/10 hover:no-underline">
+                                <AccordionItem value="designation-details" className="border border-destructive/60 rounded-lg overflow-hidden bg-white dark:bg-zinc-950/40 last:border-b">
+                                    <AccordionTrigger className="px-4 py-3 bg-destructive/5 dark:bg-destructive/10 hover:bg-destructive/10 dark:hover:bg-destructive/20 hover:no-underline">
                                         <div className="flex items-center gap-3">
-                                            <Briefcase className="h-5 w-5 text-destructive/80" />
-                                            <span className="text-destructive/90 font-medium">Designation Details</span>
+                                            <Briefcase className="h-5 w-5 text-destructive/80 dark:text-red-400" />
+                                            <span className="text-destructive/90 dark:text-red-400 font-medium">Designation Details</span>
                                         </div>
                                     </AccordionTrigger>
                                     <AccordionContent className="px-4 pb-4 pt-4">
@@ -162,7 +162,7 @@ export const DesignationFormContent = memo(function DesignationFormContent({
         <div className={cn("p-4 space-y-6", className)}>
             <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                    <Card className="w-full bg-white shadow-lg border-2 border-border/60 rounded-lg">
+                    <Card className="w-full bg-card dark:bg-zinc-900/90 text-card-foreground shadow-lg border-2 border-border/60 dark:border-zinc-800 rounded-lg">
                         <CardContent className="p-4">
                             {/* General Error Display */}
                             <AnimatePresence>
@@ -179,22 +179,22 @@ export const DesignationFormContent = memo(function DesignationFormContent({
                             </AnimatePresence>
 
                             {/* Designation Details Section */}
-                            <Accordion type="multiple" defaultValue={["designation-details"]} className="bg-white/80 backdrop-blur-sm border rounded-lg overflow-hidden mb-6">
+                            <Accordion type="multiple" defaultValue={["designation-details"]} className="bg-white/80 dark:bg-zinc-950/40 backdrop-blur-sm border dark:border-zinc-800 rounded-lg overflow-hidden mb-6">
                                 <AccordionItem value="designation-details" className="border-b-0">
                                     <AccordionTrigger className={cn(
                                         "px-4 py-3 hover:no-underline transition-colors",
                                         isEditMode
-                                            ? "bg-purple-50 hover:bg-purple-100"
-                                            : "bg-blue-50 hover:bg-blue-100"
+                                            ? "bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/20 dark:hover:bg-purple-950/40"
+                                            : "bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/20 dark:hover:bg-blue-950/40"
                                     )}>
                                         <div className="flex items-center gap-3">
                                             <Briefcase className={cn(
                                                 "h-5 w-5",
-                                                isEditMode ? "text-purple-600" : "text-blue-600"
+                                                isEditMode ? "text-purple-600 dark:text-purple-400" : "text-blue-600 dark:text-blue-400"
                                             )} />
                                             <span className={cn(
                                                 "font-medium",
-                                                isEditMode ? "text-purple-900" : "text-blue-900"
+                                                isEditMode ? "text-purple-900 dark:text-purple-200" : "text-blue-900 dark:text-blue-200"
                                             )}>Designation Details</span>
                                         </div>
                                     </AccordionTrigger>

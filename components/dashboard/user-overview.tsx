@@ -30,63 +30,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 
-interface ProfileCardProps {
-  profile: Profile | null
-  loading: boolean
-}
 
-function ProfileCard({ profile, loading }: ProfileCardProps) {
-  return (
-    <MetricCard
-      className="shadow-xl border-border/40"
-      gradientColor="from-blue-500/10 to-cyan-500/10"
-      delay={0.1}
-      disableHover={true}
-      borderColor="border-blue-500/10"
-      cardBgColor="bg-card/50"
-    >
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center gap-2">
-          <div className="h-6 w-1 bg-blue-500 rounded-full" />
-          <h3 className="text-xl font-bold tracking-tight">Personal Profile</h3>
-        </div>
-        {loading ? (
-          <div className="space-y-4 pt-2">
-            <Skeleton className="h-4 w-3/4 rounded-full" />
-            <Skeleton className="h-4 w-1/2 rounded-full" />
-            <Skeleton className="h-4 w-2/3 rounded-full" />
-          </div>
-        ) : profile ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 pt-2">
-            <div className="space-y-1">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Full Name</p>
-              <p className="text-sm font-semibold text-foreground">{profile.full_name || 'Not set'}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Email Address</p>
-              <p className="text-sm font-semibold truncate text-foreground">{profile.email}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Access Level</p>
-              <div className="flex items-center gap-2">
-                <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-                <p className="text-sm font-bold capitalize text-foreground">{profile.role}</p>
-              </div>
-            </div>
-            {profile.mobile_no && (
-              <div className="space-y-1">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Mobile Number</p>
-                <p className="text-sm font-semibold text-foreground">{profile.mobile_no}</p>
-              </div>
-            )}
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">Profile not found</p>
-        )}
-      </div>
-    </MetricCard>
-  )
-}
 
 interface ActivitiesCardProps {
   activities: UserActivity[]
@@ -159,97 +103,7 @@ export function UserOverview({
     <div className="space-y-6 gesture-friendly">
 
       
-      {/* Metrics & Profile Section - Two Columns */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Personal Profile Info */}
-        <ProfileCard profile={profile || null} loading={sessionLoading} />
 
-        {/* Session Stats Overview */}
-        <MetricCard
-          className="shadow-xl border-border/40"
-          gradientColor="from-indigo-500/10 to-purple-500/10"
-          delay={0.2}
-          disableHover={true}
-          borderColor="border-indigo-500/10"
-          cardBgColor="bg-card/50"
-        >
-          <div className="flex flex-col gap-4 h-full">
-            <div className="flex items-center gap-2">
-              <div className="h-6 w-1 bg-indigo-500 rounded-full" />
-              <h3 className="text-xl font-bold tracking-tight">Account Overview</h3>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 py-1">
-              {/* Total Activities */}
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: isDataReady ? 1 : 0, scale: isDataReady ? 1 : 0.95 }}
-                className="flex items-center gap-3.5 p-4 rounded-2xl border border-purple-200/40 bg-purple-50/30 dark:bg-purple-500/5 hover:shadow-md transition-all duration-300 group cursor-default"
-              >
-                <div className="p-2.5 rounded-xl bg-purple-500/10 text-purple-700 dark:text-purple-400 group-hover:scale-110 transition-transform">
-                  <History className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Activities</p>
-                  <div>
-                    {sessionLoading ? (
-                      <div className="h-5 w-12 bg-muted animate-pulse rounded" />
-                    ) : (
-                      <p className="text-lg font-bold tabular-nums text-foreground">{sessionInfo?.totalActivities || 0}</p>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Unread Alerts */}
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: isDataReady ? 1 : 0, scale: isDataReady ? 1 : 0.95 }}
-                className="flex items-center gap-3.5 p-4 rounded-2xl border border-amber-200/40 bg-amber-50/30 dark:bg-amber-500/5 hover:shadow-md transition-all duration-300 group cursor-default"
-              >
-                <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-400 group-hover:scale-110 transition-transform">
-                  <Bell className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Alerts</p>
-                  <div>
-                    {notificationsLoading ? (
-                      <div className="h-5 w-12 bg-muted animate-pulse rounded" />
-                    ) : (
-                      <p className="text-lg font-bold tabular-nums text-foreground">{unreadCount || 0}</p>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Last Logout */}
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: isDataReady ? 1 : 0, scale: isDataReady ? 1 : 0.95 }}
-                className="flex items-center gap-3.5 p-4 rounded-2xl border border-pink-200/40 bg-pink-50/30 dark:bg-pink-500/5 hover:shadow-md transition-all duration-300 group cursor-default"
-              >
-                <div className="p-2.5 rounded-xl bg-pink-500/10 text-pink-700 dark:text-pink-400 group-hover:scale-110 transition-transform">
-                  <LogOut className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Last Logout</p>
-                  <div>
-                    {sessionLoading ? (
-                      <div className="h-5 w-24 bg-muted animate-pulse rounded" />
-                    ) : (
-                      <p className="text-sm font-bold truncate text-foreground">
-                        {sessionInfo?.lastLogout && isValid(new Date(sessionInfo.lastLogout)) 
-                          ? format(new Date(sessionInfo.lastLogout), "MMM dd, HH:mm") 
-                          : "None"}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
-            </div>
-          </div>
-        </MetricCard>
-      </div>
 
       {/* Expanded Quick Actions Grid (Cohesive Full-Width Layout) */}
       <div className="grid grid-cols-1 gap-6">
@@ -271,9 +125,9 @@ export function UserOverview({
               {/* Attendance Logs */}
               <Link
                 href="/moderator/payroll/attendance"
-                className="flex items-center gap-3.5 p-4 rounded-2xl border border-blue-200/40 bg-blue-50/30 dark:bg-blue-500/5 hover:bg-blue-500/10 hover:border-blue-500/40 hover:shadow-lg hover:shadow-blue-500/5 transition-all duration-300 group/mod-action cursor-pointer"
+                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-blue-200/40 bg-blue-50/30 dark:bg-blue-500/5 hover:bg-blue-500/10 hover:border-blue-500/40 hover:shadow-lg hover:shadow-blue-500/5 transition-all duration-300 group/mod-action cursor-pointer"
               >
-                <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-700 dark:text-blue-400 group-hover/mod-action:scale-115 group-hover/mod-action:rotate-3 transition-all">
+                <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-700 dark:text-blue-400 group-hover/mod-action:scale-115 group-hover/mod-action:rotate-3 transition-all">
                   <Clock className="h-5 w-5" />
                 </div>
                 <div>
@@ -285,9 +139,9 @@ export function UserOverview({
               {/* Leave Requests */}
               <Link
                 href="/moderator/payroll/leaves"
-                className="flex items-center gap-3.5 p-4 rounded-2xl border border-purple-200/40 bg-purple-50/30 dark:bg-purple-500/5 hover:bg-purple-500/10 hover:border-purple-500/40 hover:shadow-lg hover:shadow-purple-500/5 transition-all duration-300 group/mod-action cursor-pointer"
+                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-purple-200/40 bg-purple-50/30 dark:bg-purple-500/5 hover:bg-purple-500/10 hover:border-purple-500/40 hover:shadow-lg hover:shadow-purple-500/5 transition-all duration-300 group/mod-action cursor-pointer"
               >
-                <div className="p-2.5 rounded-xl bg-purple-500/10 text-purple-700 dark:text-purple-400 group-hover/mod-action:scale-115 group-hover/mod-action:-rotate-3 transition-all">
+                <div className="p-1.5 rounded-lg bg-purple-500/10 text-purple-700 dark:text-purple-400 group-hover/mod-action:scale-115 group-hover/mod-action:-rotate-3 transition-all">
                   <Calendar className="h-5 w-5" />
                 </div>
                 <div>
@@ -299,9 +153,9 @@ export function UserOverview({
               {/* Photo Approvals */}
               <Link
                 href="/moderator/photo-approvals"
-                className="flex items-center gap-3.5 p-4 rounded-2xl border border-emerald-200/40 bg-emerald-50/30 dark:bg-emerald-500/5 hover:bg-emerald-500/10 hover:border-emerald-500/40 hover:shadow-lg hover:shadow-emerald-500/5 transition-all duration-300 group/mod-action cursor-pointer"
+                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-emerald-200/40 bg-emerald-50/30 dark:bg-emerald-500/5 hover:bg-emerald-500/10 hover:border-emerald-500/40 hover:shadow-lg hover:shadow-emerald-500/5 transition-all duration-300 group/mod-action cursor-pointer"
               >
-                <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 group-hover/mod-action:scale-115 group-hover/mod-action:rotate-3 transition-all">
+                <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 group-hover/mod-action:scale-115 group-hover/mod-action:rotate-3 transition-all">
                   <Camera className="h-5 w-5" />
                 </div>
                 <div>
@@ -313,9 +167,9 @@ export function UserOverview({
               {/* Support Helpdesk */}
               <Link
                 href="/moderator/tickets"
-                className="flex items-center gap-3.5 p-4 rounded-2xl border border-amber-200/40 bg-amber-50/30 dark:bg-amber-500/5 hover:bg-amber-500/10 hover:border-amber-500/40 hover:shadow-lg hover:shadow-amber-500/5 transition-all duration-300 group/mod-action cursor-pointer"
+                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-amber-200/40 bg-amber-50/30 dark:bg-amber-500/5 hover:bg-amber-500/10 hover:border-amber-500/40 hover:shadow-lg hover:shadow-amber-500/5 transition-all duration-300 group/mod-action cursor-pointer"
               >
-                <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-400 group-hover/mod-action:scale-115 group-hover/mod-action:-rotate-3 transition-all">
+                <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 group-hover/mod-action:scale-115 group-hover/mod-action:-rotate-3 transition-all">
                   <Ticket className="h-5 w-5" />
                 </div>
                 <div>
@@ -327,9 +181,9 @@ export function UserOverview({
               {/* Client Manager */}
               <Link
                 href="/moderator/clients"
-                className="flex items-center gap-3.5 p-4 rounded-2xl border border-pink-200/40 bg-pink-50/30 dark:bg-pink-500/5 hover:bg-pink-500/10 hover:border-pink-500/40 hover:shadow-lg hover:shadow-pink-500/5 transition-all duration-300 group/mod-action cursor-pointer"
+                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-pink-200/40 bg-pink-50/30 dark:bg-pink-500/5 hover:bg-pink-500/10 hover:border-pink-500/40 hover:shadow-lg hover:shadow-pink-500/5 transition-all duration-300 group/mod-action cursor-pointer"
               >
-                <div className="p-2.5 rounded-xl bg-pink-500/10 text-pink-700 dark:text-pink-400 group-hover/mod-action:scale-115 group-hover/mod-action:rotate-3 transition-all">
+                <div className="p-1.5 rounded-lg bg-pink-500/10 text-pink-700 dark:text-pink-400 group-hover/mod-action:scale-115 group-hover/mod-action:rotate-3 transition-all">
                   <Briefcase className="h-5 w-5" />
                 </div>
                 <div>
@@ -341,9 +195,9 @@ export function UserOverview({
               {/* Settings Profile */}
               <Link
                 href="/moderator/profile"
-                className="flex items-center gap-3.5 p-4 rounded-2xl border border-indigo-200/40 bg-indigo-50/30 dark:bg-indigo-500/5 hover:bg-indigo-500/10 hover:border-indigo-500/40 hover:shadow-lg hover:shadow-indigo-500/5 transition-all duration-300 group/mod-action cursor-pointer"
+                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-indigo-200/40 bg-indigo-50/30 dark:bg-indigo-500/5 hover:bg-indigo-500/10 hover:border-indigo-500/40 hover:shadow-lg hover:shadow-indigo-500/5 transition-all duration-300 group/mod-action cursor-pointer"
               >
-                <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 group-hover/mod-action:scale-115 group-hover/mod-action:-rotate-3 transition-all">
+                <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 group-hover/mod-action:scale-115 group-hover/mod-action:-rotate-3 transition-all">
                   <User className="h-5 w-5" />
                 </div>
                 <div>
@@ -355,9 +209,9 @@ export function UserOverview({
               {/* Analytics Insights */}
               <Link
                 href="/moderator/reports"
-                className="flex items-center gap-3.5 p-4 rounded-2xl border border-orange-200/40 bg-orange-50/30 dark:bg-orange-500/5 hover:bg-orange-500/10 hover:border-orange-500/40 hover:shadow-lg hover:shadow-orange-500/5 transition-all duration-300 group/mod-action cursor-pointer"
+                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-orange-200/40 bg-orange-50/30 dark:bg-orange-500/5 hover:bg-orange-500/10 hover:border-orange-500/40 hover:shadow-lg hover:shadow-orange-500/5 transition-all duration-300 group/mod-action cursor-pointer"
               >
-                <div className="p-2.5 rounded-xl bg-orange-500/10 text-orange-700 dark:text-orange-400 group-hover/mod-action:scale-115 group-hover/mod-action:rotate-3 transition-all">
+                <div className="p-1.5 rounded-lg bg-orange-500/10 text-orange-700 dark:text-orange-400 group-hover/mod-action:scale-115 group-hover/mod-action:rotate-3 transition-all">
                   <BarChart3 className="h-5 w-5" />
                 </div>
                 <div>
@@ -369,9 +223,9 @@ export function UserOverview({
               {/* Statistics Panel */}
               <Link
                 href="/moderator/analytics"
-                className="flex items-center gap-3.5 p-4 rounded-2xl border border-teal-200/40 bg-teal-50/30 dark:bg-teal-500/5 hover:bg-teal-500/10 hover:border-teal-500/40 hover:shadow-lg hover:shadow-teal-500/5 transition-all duration-300 group/mod-action cursor-pointer"
+                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-teal-200/40 bg-teal-50/30 dark:bg-teal-500/5 hover:bg-teal-500/10 hover:border-teal-500/40 hover:shadow-lg hover:shadow-teal-500/5 transition-all duration-300 group/mod-action cursor-pointer"
               >
-                <div className="p-2.5 rounded-xl bg-teal-500/10 text-teal-700 dark:text-teal-400 group-hover/mod-action:scale-115 group-hover/mod-action:-rotate-3 transition-all">
+                <div className="p-1.5 rounded-lg bg-teal-500/10 text-teal-700 dark:text-teal-400 group-hover/mod-action:scale-115 group-hover/mod-action:-rotate-3 transition-all">
                   <TrendingUp className="h-5 w-5" />
                 </div>
                 <div>

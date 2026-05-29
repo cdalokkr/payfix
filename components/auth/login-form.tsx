@@ -215,10 +215,10 @@ export function LoginForm() {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="p-4 rounded-xl bg-red-50 border border-red-200"
+            className="p-4 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30"
             role="alert"
           >
-            <div className="flex items-center gap-3 text-red-600">
+            <div className="flex items-center gap-3 text-red-600 dark:text-red-400">
               <AlertCircle className="h-5 w-5 flex-shrink-0" />
               <span className="text-sm font-medium">{authError}</span>
             </div>
@@ -236,7 +236,7 @@ export function LoginForm() {
             <FieldGroup className="space-y-4">
               {/* Email Field */}
               <Field data-invalid={!!fieldErrors.email || !!form.formState.errors.email}>
-                <FieldLabel htmlFor="email" className="text-gray-700 font-medium ml-1">Email Address</FieldLabel>
+                <FieldLabel htmlFor="email" className="text-gray-700 dark:text-zinc-300 font-medium ml-1">Email Address</FieldLabel>
                 <div className="relative group/input">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within/input:text-primary text-primary">
                     <Mail className="h-5 w-5" />
@@ -245,7 +245,7 @@ export function LoginForm() {
                     id="email"
                     type="email"
                     placeholder="name@company.com"
-                    className="pl-12 h-12 bg-white border-gray-200 text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all rounded-xl shadow-sm"
+                    className="pl-12 h-12 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100 placeholder:text-gray-400 dark:placeholder:text-zinc-500 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all rounded-xl shadow-sm"
                     autoComplete="email"
                     disabled={isLoading || form.formState.isSubmitting}
                     {...form.register('email')}
@@ -270,7 +270,7 @@ export function LoginForm() {
               {/* Password Field */}
               <Field data-invalid={!!fieldErrors.password || !!form.formState.errors.password}>
                 <div className="flex items-center justify-between ml-1">
-                  <FieldLabel htmlFor="password" className="text-gray-700 font-medium">Password</FieldLabel>
+                  <FieldLabel htmlFor="password" className="text-gray-700 dark:text-zinc-300 font-medium">Password</FieldLabel>
                   <button type="button" className="text-xs text-blue-600 hover:text-blue-500 transition-colors font-semibold">Forgot?</button>
                 </div>
                 <div className="relative group/input">
@@ -280,7 +280,7 @@ export function LoginForm() {
                   <PasswordInput
                     id="password"
                     placeholder="••••••••"
-                    className="pl-12 h-12 bg-white border-gray-200 text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all rounded-xl shadow-sm"
+                    className="pl-12 h-12 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100 placeholder:text-gray-400 dark:placeholder:text-zinc-500 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all rounded-xl shadow-sm"
                     autoComplete="current-password"
                     disabled={isLoading || form.formState.isSubmitting}
                     {...form.register('password')}
@@ -326,7 +326,7 @@ export function LoginForm() {
       {/* Additional Info */}
       <div className="text-center pt-2">
         <p className="text-xs text-gray-500">
-          Need an account? <span className="text-blue-400 font-semibold cursor-pointer hover:underline">Contact Support</span>
+          Need an account? <span className="text-blue-600 dark:text-blue-400 font-semibold cursor-pointer hover:underline">Contact Support</span>
         </p>
       </div>
     </div>

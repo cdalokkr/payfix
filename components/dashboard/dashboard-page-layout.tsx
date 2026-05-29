@@ -1,6 +1,18 @@
+"use client"
+
 import React from 'react'
+import { usePathname } from 'next/navigation'
+import { Fragment } from 'react'
 import { cn } from '@/lib/utils'
 import { PageHeading } from '@/components/ui/page-heading'
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb'
 
 interface DashboardPageLayoutProps {
   /**
@@ -40,22 +52,69 @@ export function DashboardPageLayout({
   className,
   headerAction
 }: DashboardPageLayoutProps) {
+  const pathname = usePathname()
+
+  // Generate breadcrumb from pathname
+  const breadcrumbs = React.useMemo(() => {
+    if (!pathname) return []
+    const parts = pathname.split('/').filter(Boolean)
+    return parts.map((part, index) => {
+      let name = part.charAt(0).toUpperCase() + part.slice(1).replace(/-/g, ' ');
+      if (['Admin', 'Moderator', 'Employee', 'Dashboard'].includes(name)) {
+        name = 'Dashboard';
+      }
+
+      return {
+        name,
+        href: '/' + parts.slice(0, index + 1).join('/'),
+        isLast: index === parts.length - 1
+      }
+    })
+  }, [pathname])
+
   return (
     <div className="dashboard-wrapper">
       {(heading || description || headerAction) && (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          {(heading || description) && (
-            <PageHeading
-              heading={heading || ''}
-              description={description}
-              className="mb-0"
-            />
+        <div className="flex flex-col gap-2 mb-6">
+          {/* Breadcrumbs at the top of page content */}
+          {breadcrumbs.length > 0 && (
+            <Breadcrumb className="mb-1">
+              <BreadcrumbList>
+                {breadcrumbs.map((crumb, index) => (
+                  <Fragment key={crumb.href}>
+                    {index > 0 && <BreadcrumbSeparator className="text-muted-foreground/30" />}
+                    <BreadcrumbItem>
+                      {crumb.isLast ? (
+                        <BreadcrumbPage className="font-semibold text-foreground tracking-tight">{crumb.name}</BreadcrumbPage>
+                      ) : (
+                        <BreadcrumbLink
+                          href={crumb.href}
+                          className="text-muted-foreground hover:text-foreground transition-colors text-sm"
+                        >
+                          {crumb.name}
+                        </BreadcrumbLink>
+                      )}
+                    </BreadcrumbItem>
+                  </Fragment>
+                ))}
+              </BreadcrumbList>
+            </Breadcrumb>
           )}
-          {headerAction && (
-            <div className="flex-shrink-0">
-              {headerAction}
-            </div>
-          )}
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            {(heading || description) && (
+              <PageHeading
+                heading={heading || ''}
+                description={description}
+                className="mb-0"
+              />
+            )}
+            {headerAction && (
+              <div className="flex-shrink-0">
+                {headerAction}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

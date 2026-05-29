@@ -113,7 +113,7 @@ export const FormContent = memo(function FormContent({
     if (isDeleteMode) {
         return (
             <div className={cn("px-4 sm:px-6 lg:px-6", useSheet ? "pb-4" : "py-4", "space-y-6")}>
-                <Card className={cn("w-full max-w-2xl mx-auto bg-white shadow-lg border-2 border-destructive/20 rounded-lg", className)}>
+                <Card className={cn("w-full max-w-2xl mx-auto bg-card dark:bg-zinc-900/90 text-card-foreground shadow-lg border-2 border-destructive/20 rounded-lg", className)}>
                     <CardContent className="p-4">
                         {/* General Error Display */}
                         <AnimatePresence>
@@ -142,11 +142,11 @@ export const FormContent = memo(function FormContent({
 
                             {/* Personal Information Section */}
                             <Accordion type="multiple" defaultValue={["personal-info", "account-credentials", "access-permissions"]} className="space-y-4">
-                                <AccordionItem value="personal-info" className="border border-destructive/60 rounded-lg overflow-hidden bg-white last:border-b">
-                                    <AccordionTrigger className="px-4 py-3 bg-destructive/5 hover:bg-destructive/10 hover:no-underline">
+                                <AccordionItem value="personal-info" className="border border-destructive/60 rounded-lg overflow-hidden bg-white dark:bg-zinc-950/40 last:border-b">
+                                    <AccordionTrigger className="px-4 py-3 bg-destructive/5 dark:bg-destructive/10 hover:bg-destructive/10 dark:hover:bg-destructive/20 hover:no-underline">
                                         <div className="flex items-center gap-3">
-                                            <User className="h-5 w-5 text-destructive/80" />
-                                            <span className="text-destructive/90 font-medium">Personal Information</span>
+                                            <User className="h-5 w-5 text-destructive/80 dark:text-red-400" />
+                                            <span className="text-destructive/90 dark:text-red-400 font-medium">Personal Information</span>
                                         </div>
                                     </AccordionTrigger>
                                     <AccordionContent className="px-4 pb-4 pt-4">
@@ -171,11 +171,11 @@ export const FormContent = memo(function FormContent({
                                     </AccordionContent>
                                 </AccordionItem>
 
-                                <AccordionItem value="account-credentials" className="border border-destructive/60 rounded-lg overflow-hidden bg-white last:border-b">
-                                    <AccordionTrigger className="px-4 py-3 bg-destructive/5 hover:bg-destructive/10 hover:no-underline">
+                                <AccordionItem value="account-credentials" className="border border-destructive/60 rounded-lg overflow-hidden bg-white dark:bg-zinc-950/40 last:border-b">
+                                    <AccordionTrigger className="px-4 py-3 bg-destructive/5 dark:bg-destructive/10 hover:bg-destructive/10 dark:hover:bg-destructive/20 hover:no-underline">
                                         <div className="flex items-center gap-3">
-                                            <Mail className="h-5 w-5 text-destructive/80" />
-                                            <span className="text-destructive/90 font-medium">Account Credentials</span>
+                                            <Mail className="h-5 w-5 text-destructive/80 dark:text-red-400" />
+                                            <span className="text-destructive/90 dark:text-red-400 font-medium">Account Credentials</span>
                                         </div>
                                     </AccordionTrigger>
                                     <AccordionContent className="px-4 pb-4 pt-4">
@@ -183,11 +183,11 @@ export const FormContent = memo(function FormContent({
                                     </AccordionContent>
                                 </AccordionItem>
 
-                                <AccordionItem value="access-permissions" className="border border-destructive/60 rounded-lg overflow-hidden bg-white last:border-b">
-                                    <AccordionTrigger className="px-4 py-3 bg-destructive/5 hover:bg-destructive/10 hover:no-underline">
+                                <AccordionItem value="access-permissions" className="border border-destructive/60 rounded-lg overflow-hidden bg-white dark:bg-zinc-950/40 last:border-b">
+                                    <AccordionTrigger className="px-4 py-3 bg-destructive/5 dark:bg-destructive/10 hover:bg-destructive/10 dark:hover:bg-destructive/20 hover:no-underline">
                                         <div className="flex items-center gap-3">
-                                            <Shield className="h-5 w-5 text-destructive/80" />
-                                            <span className="text-destructive/90 font-medium">Access & Permissions</span>
+                                            <Shield className="h-5 w-5 text-destructive/80 dark:text-red-400" />
+                                            <span className="text-destructive/90 dark:text-red-400 font-medium">Access & Permissions</span>
                                         </div>
                                     </AccordionTrigger>
                                     <AccordionContent className="px-4 pb-4 pt-4">
@@ -237,7 +237,7 @@ export const FormContent = memo(function FormContent({
     if (isPasswordResetMode) {
         return (
             <div className={cn("px-4 sm:px-6 lg:px-6", useSheet ? "pb-4" : "py-4", "space-y-6")}>
-                <Card className={cn("w-full max-w-2xl mx-auto bg-white shadow-lg border-2 border-amber-500/20 rounded-lg", className)}>
+                <Card className={cn("w-full max-w-2xl mx-auto bg-card dark:bg-zinc-900/90 text-card-foreground shadow-lg border-2 border-amber-500/20 rounded-lg", className)}>
                     <CardContent className="p-4">
                         {/* General Error Display */}
                         <AnimatePresence>
@@ -255,11 +255,11 @@ export const FormContent = memo(function FormContent({
 
                         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6" noValidate>
                             {/* User details summary */}
-                            <div className="bg-amber-50 border border-amber-100 rounded-lg p-4 flex items-start gap-3">
-                                <User className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+                            <div className="bg-amber-50 dark:bg-amber-950/10 border border-amber-100 dark:border-amber-900/20 rounded-lg p-4 flex items-start gap-3">
+                                <User className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
                                 <div className="space-y-3 w-full">
                                     <div className="space-y-1">
-                                        <p className="text-sm font-medium text-amber-900">Resetting Password For</p>
+                                        <p className="text-sm font-medium text-amber-900 dark:text-amber-200">Resetting Password For</p>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
                                             <ReadOnlyField label="User" value={`${values.firstName} ${values.lastName}`} />
                                             <ReadOnlyField label="Email" value={values.email} />
@@ -269,14 +269,14 @@ export const FormContent = memo(function FormContent({
                             </div>
 
                             {/* Password Fields */}
-                            <Accordion type="multiple" defaultValue={["new-password"]} className="bg-white/80 backdrop-blur-sm rounded-lg border">
+                            <Accordion type="multiple" defaultValue={["new-password"]} className="bg-white/80 dark:bg-zinc-950/40 backdrop-blur-sm rounded-lg border dark:border-zinc-800">
                                 <AccordionItem value="new-password" className="border-b-0">
                                     <AccordionTrigger className={cn(
-                                        "px-4 py-3 rounded-t-lg hover:no-underline transition-colors bg-amber-50 hover:bg-amber-100"
+                                        "px-4 py-3 rounded-t-lg hover:no-underline transition-colors bg-amber-50 dark:bg-amber-950/20 hover:bg-amber-100 dark:hover:bg-amber-950/40"
                                     )}>
                                         <div className="flex items-center gap-3">
-                                            <Lock className="h-5 w-5 text-amber-600" />
-                                            <span className="font-medium text-amber-900">New Credentials</span>
+                                            <Lock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                                            <span className="font-medium text-amber-900 dark:text-amber-200">New Credentials</span>
                                         </div>
                                     </AccordionTrigger>
                                     <AccordionContent className="px-4 pb-4 pt-4 space-y-4">
@@ -364,7 +364,7 @@ export const FormContent = memo(function FormContent({
 
     return (
         <div className={cn("px-4 sm:px-6 lg:px-6", useSheet ? "pb-4" : "py-4", "space-y-6")}>
-            <Card className={cn("w-full max-w-2xl mx-auto bg-white shadow-lg border-2 border-border/60 rounded-lg", className)}>
+            <Card className={cn("w-full max-w-2xl mx-auto bg-card dark:bg-zinc-900/90 text-card-foreground shadow-lg border-2 border-border/60 dark:border-zinc-800 rounded-lg", className)}>
                 <CardContent className="p-4">
                     {/* General Error Display */}
                     <AnimatePresence>
@@ -382,22 +382,22 @@ export const FormContent = memo(function FormContent({
 
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6" noValidate>
                         {/* Personal Information Section */}
-                        <Accordion type="multiple" defaultValue={["personal-info"]} className="bg-white/80 backdrop-blur-sm rounded-lg border">
+                        <Accordion type="multiple" defaultValue={["personal-info"]} className="bg-white/80 dark:bg-zinc-950/40 backdrop-blur-sm rounded-lg border dark:border-zinc-800">
                             <AccordionItem value="personal-info" className="border-b-0">
                                 <AccordionTrigger className={cn(
                                     "px-4 py-3 rounded-t-lg hover:no-underline transition-colors",
                                     isEditMode
-                                        ? "bg-purple-50 hover:bg-purple-100"
-                                        : "bg-blue-50 hover:bg-blue-100"
+                                        ? "bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/20 dark:hover:bg-purple-950/40"
+                                        : "bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/20 dark:hover:bg-blue-950/40"
                                 )}>
                                     <div className="flex items-center gap-3">
                                         <User className={cn(
                                             "h-5 w-5",
-                                            isEditMode ? "text-purple-600" : "text-blue-600"
+                                            isEditMode ? "text-purple-600 dark:text-purple-400" : "text-blue-600 dark:text-blue-400"
                                         )} />
                                         <span className={cn(
                                             "font-medium",
-                                            isEditMode ? "text-purple-900" : "text-blue-900"
+                                            isEditMode ? "text-purple-900 dark:text-purple-200" : "text-blue-900 dark:text-blue-200"
                                         )}>Personal Information</span>
                                     </div>
                                 </AccordionTrigger>
@@ -597,22 +597,22 @@ export const FormContent = memo(function FormContent({
 
                         {/* Account Credentials Section - Only show in create mode */}
                         {!isEditMode && (
-                            <Accordion type="multiple" defaultValue={["account-credentials"]} className="bg-white/80 backdrop-blur-sm rounded-lg border">
+                            <Accordion type="multiple" defaultValue={["account-credentials"]} className="bg-white/80 dark:bg-zinc-950/40 backdrop-blur-sm rounded-lg border dark:border-zinc-800">
                                 <AccordionItem value="account-credentials" className="border-b-0">
                                     <AccordionTrigger className={cn(
                                         "px-4 py-3 rounded-t-lg hover:no-underline transition-colors",
                                         isEditMode
-                                            ? "bg-purple-50 hover:bg-purple-100"
-                                            : "bg-blue-50 hover:bg-blue-100"
+                                            ? "bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/20 dark:hover:bg-purple-950/40"
+                                            : "bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/20 dark:hover:bg-blue-950/40"
                                     )}>
                                         <div className="flex items-center gap-3">
                                             <Mail className={cn(
                                                 "h-5 w-5",
-                                                isEditMode ? "text-purple-600" : "text-blue-600"
+                                                isEditMode ? "text-purple-600 dark:text-purple-400" : "text-blue-600 dark:text-blue-400"
                                             )} />
                                             <span className={cn(
                                                 "font-medium",
-                                                isEditMode ? "text-purple-900" : "text-blue-900"
+                                                isEditMode ? "text-purple-900 dark:text-purple-200" : "text-blue-900 dark:text-blue-200"
                                             )}>Account Credentials</span>
                                         </div>
                                     </AccordionTrigger>
@@ -699,22 +699,22 @@ export const FormContent = memo(function FormContent({
 
                         {/* Email section for edit mode */}
                         {isEditMode && (
-                            <Accordion type="multiple" defaultValue={["account-credentials"]} className="bg-white/80 backdrop-blur-sm rounded-lg border">
+                            <Accordion type="multiple" defaultValue={["account-credentials"]} className="bg-white/80 dark:bg-zinc-950/40 backdrop-blur-sm rounded-lg border dark:border-zinc-800">
                                 <AccordionItem value="account-credentials" className="border-b-0">
                                     <AccordionTrigger className={cn(
                                         "px-4 py-3 rounded-t-lg hover:no-underline transition-colors",
                                         isEditMode
-                                            ? "bg-purple-50 hover:bg-purple-100"
-                                            : "bg-blue-50 hover:bg-blue-100"
+                                            ? "bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/20 dark:hover:bg-purple-950/40"
+                                            : "bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/20 dark:hover:bg-blue-950/40"
                                     )}>
                                         <div className="flex items-center gap-3">
                                             <Mail className={cn(
                                                 "h-5 w-5",
-                                                isEditMode ? "text-purple-600" : "text-blue-600"
+                                                isEditMode ? "text-purple-600 dark:text-purple-400" : "text-blue-600 dark:text-blue-400"
                                             )} />
                                             <span className={cn(
                                                 "font-medium",
-                                                isEditMode ? "text-purple-900" : "text-blue-900"
+                                                isEditMode ? "text-purple-900 dark:text-purple-200" : "text-blue-900 dark:text-blue-200"
                                             )}>Email Address</span>
                                         </div>
                                     </AccordionTrigger>
@@ -751,22 +751,22 @@ export const FormContent = memo(function FormContent({
 
                         {/* Access & Permissions Section - Hide in Profile Mode */}
                         {!isProfileMode && (
-                            <Accordion type="multiple" defaultValue={["access-permissions"]} className="bg-white/80 backdrop-blur-sm rounded-lg border">
+                            <Accordion type="multiple" defaultValue={["access-permissions"]} className="bg-white/80 dark:bg-zinc-950/40 backdrop-blur-sm rounded-lg border dark:border-zinc-800">
                                 <AccordionItem value="access-permissions" className="border-b-0">
                                     <AccordionTrigger className={cn(
                                         "px-4 py-3 rounded-t-lg hover:no-underline transition-colors",
                                         isEditMode
-                                            ? "bg-purple-50 hover:bg-purple-100"
-                                            : "bg-blue-50 hover:bg-blue-100"
+                                            ? "bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/20 dark:hover:bg-purple-950/40"
+                                            : "bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/20 dark:hover:bg-blue-950/40"
                                     )}>
                                         <div className="flex items-center gap-3">
                                             <Shield className={cn(
                                                 "h-5 w-5",
-                                                isEditMode ? "text-purple-600" : "text-blue-600"
+                                                isEditMode ? "text-purple-600 dark:text-purple-400" : "text-blue-600 dark:text-blue-400"
                                             )} />
                                             <span className={cn(
                                                 "font-medium",
-                                                isEditMode ? "text-purple-900" : "text-blue-900"
+                                                isEditMode ? "text-purple-900 dark:text-purple-200" : "text-blue-900 dark:text-blue-200"
                                             )}>Access & Permissions</span>
                                         </div>
                                     </AccordionTrigger>
@@ -850,17 +850,17 @@ export const FormContent = memo(function FormContent({
                                         <AccordionTrigger className={cn(
                                             "px-4 py-3 rounded-t-lg hover:no-underline transition-colors",
                                             isEditMode
-                                                ? "bg-purple-50 hover:bg-purple-100"
-                                                : "bg-blue-50 hover:bg-blue-100"
+                                                ? "bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/20 dark:hover:bg-purple-950/40"
+                                                : "bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/20 dark:hover:bg-blue-950/40"
                                         )}>
                                             <div className="flex items-center gap-3">
                                                 <Shield className={cn(
                                                     "h-5 w-5",
-                                                    isEditMode ? "text-purple-600" : "text-blue-600"
+                                                    isEditMode ? "text-purple-600 dark:text-purple-400" : "text-blue-600 dark:text-blue-400"
                                                 )} />
                                                 <span className={cn(
                                                     "font-medium",
-                                                    isEditMode ? "text-purple-900" : "text-blue-900"
+                                                    isEditMode ? "text-purple-900 dark:text-purple-200" : "text-blue-900 dark:text-blue-200"
                                                 )}>Allowed Modules</span>
                                             </div>
                                         </AccordionTrigger>
