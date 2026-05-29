@@ -47,7 +47,7 @@ function addSecurityHeaders(response: NextResponse, request: NextRequest): NextR
 
     // Prevent caching of authenticated pages
     const pathname = request.nextUrl.pathname
-    if (pathname.startsWith('/admin') || pathname.startsWith('/moderator') || pathname.startsWith('/employee') || pathname.startsWith('/dashboard')) {
+    if (pathname.startsWith('/admin') || pathname.startsWith('/moderator') || pathname.startsWith('/employee') || pathname.startsWith('/mobile') || pathname.startsWith('/dashboard')) {
         response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
         response.headers.set('Pragma', 'no-cache')
         response.headers.set('Expires', '0')
@@ -139,6 +139,23 @@ export async function proxy(request: NextRequest) {
 
     const { data: { user } } = await supabase.auth.getUser()
 
+    // Helper to perform redirects while preserving session cookies
+    const redirectWithCookies = (url: string | URL) => {
+        const redirectResponse = NextResponse.redirect(new URL(url, request.url))
+        response.cookies.getAll().forEach(cookie => {
+            redirectResponse.cookies.set(cookie.name, cookie.value, {
+                path: cookie.path,
+                domain: cookie.domain,
+                maxAge: cookie.maxAge,
+                expires: cookie.expires,
+                secure: cookie.secure,
+                httpOnly: cookie.httpOnly,
+                sameSite: cookie.sameSite,
+            })
+        })
+        return redirectResponse
+    }
+
     // Protected routes
     // Protected routes based on role prefixes
     const isAdminRoute = pathname.startsWith('/admin')
@@ -152,7 +169,7 @@ export async function proxy(request: NextRequest) {
 
     // Redirect to login if not authenticated on a protected route
     if (!user && isProtectedRoute) {
-        return NextResponse.redirect(new URL('/login', request.url))
+        return redirectWithCookies('/login')
     }
 
     // Redirect authenticated users from login page to their dashboard
@@ -165,14 +182,14 @@ export async function proxy(request: NextRequest) {
             .single()
 
         if (profile?.role === 'admin') {
-            return NextResponse.redirect(new URL('/admin', request.url))
+            return redirectWithCookies('/admin')
         } else if (profile?.role === 'moderator') {
-            return NextResponse.redirect(new URL('/moderator', request.url))
+            return redirectWithCookies('/moderator')
         } else if (profile?.role === 'employee') {
-            return NextResponse.redirect(new URL('/employee', request.url))
+            return redirectWithCookies('/employee')
         } else {
             // Fallback to moderator dashboard for unknown roles
-            return NextResponse.redirect(new URL('/moderator', request.url))
+            return redirectWithCookies('/moderator')
         }
     }
 
@@ -201,7 +218,7 @@ export async function proxy(request: NextRequest) {
                     const searchParams = request.nextUrl.search ? request.nextUrl.search : ''
                     const mobileUrl = new URL('/mobile' + searchParams, request.url)
                     console.log(`[PROXY-MOBILE] Redirecting mobile user (${user.id}) from ${pathname} to ${mobileUrl.pathname}${searchParams} (PWA standalone: ${isStandalonePwa})`)
-                    return NextResponse.redirect(mobileUrl)
+                    return redirectWithCookies(mobileUrl)
                 } else if (isModeratorRoute) {
                     console.log(`[PROXY-MOBILE] Moderator (${user.id}) on mobile browser, allowing full desktop backoffice access at ${pathname}`)
                 }
@@ -213,7 +230,7 @@ export async function proxy(request: NextRequest) {
     const isMobileRoute = pathname.startsWith('/mobile')
     if (!user && isMobileRoute) {
         console.warn(`[PROXY-AUTH] Redirecting unauthenticated request on mobile route ${pathname} to /login`)
-        return NextResponse.redirect(new URL('/login', request.url))
+        return redirectWithCookies('/login')
     }
 
     // Status and Role-based access control for authenticated users
@@ -230,34 +247,34 @@ export async function proxy(request: NextRequest) {
 
         if (!profile) {
             console.warn(`[PROXY-AUTH] Redirecting to /login because no profile was found for authenticated user: ${user.id}`)
-            return NextResponse.redirect(new URL('/login', request.url))
+            return redirectWithCookies('/login')
         }
 
         // Redirect deactive users to /deactive-account
         if (profile.status === 'deactive' && !isDeactiveAccountRoute) {
             console.warn(`[PROXY-AUTH] Redirecting deactive user (${user.id}) to /deactive-account`)
-            return NextResponse.redirect(new URL('/deactive-account', request.url))
+            return redirectWithCookies('/deactive-account')
         }
 
         // Redirect active users away from /deactive-account
         if (profile.status === 'active' && isDeactiveAccountRoute) {
             console.log(`[PROXY-AUTH] Redirecting active user (${user.id}) away from /deactive-account`)
-            return NextResponse.redirect(new URL('/', request.url))
+            return redirectWithCookies('/')
         }
 
         if (isAdminRoute && profile.role !== 'admin') {
             console.warn(`[PROXY-AUTH] Admin route access denied for role ${profile.role}. Redirecting to /${profile.role}`)
-            return NextResponse.redirect(new URL('/' + profile.role, request.url))
+            return redirectWithCookies('/' + profile.role)
         }
 
         if (isModeratorRoute && profile.role !== 'moderator' && profile.role !== 'admin') {
             console.warn(`[PROXY-AUTH] Moderator route access denied for role ${profile.role}. Redirecting to /${profile.role}`)
-            return NextResponse.redirect(new URL('/' + profile.role, request.url))
+            return redirectWithCookies('/' + profile.role)
         }
 
         if (isEmployeeRoute && profile.role !== 'employee') {
             console.warn(`[PROXY-AUTH] Employee route access denied for role ${profile.role}. Redirecting to /${profile.role}`)
-            return NextResponse.redirect(new URL('/' + profile.role, request.url))
+            return redirectWithCookies('/' + profile.role)
         }
     }
 
