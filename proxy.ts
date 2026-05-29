@@ -197,8 +197,11 @@ export async function proxy(request: NextRequest) {
     // Mobile Device Detection for Employee & Moderator Routes
     // ============================================
     if (user && (isEmployeeRoute || isModeratorRoute)) {
-        // Check if user wants to stay on desktop version
-        const wantsDesktop = request.nextUrl.searchParams.get('desktop') === 'true'
+        const paramDesktop = request.nextUrl.searchParams.get('desktop')
+        const cookieDesktop = request.cookies.get('desktop_mode')?.value
+
+        // Wants desktop if param is explicitly 'true' or (param is not 'false' and cookie is 'true')
+        const wantsDesktop = paramDesktop === 'true' || (paramDesktop !== 'false' && cookieDesktop === 'true')
 
         if (!wantsDesktop) {
             // Detect mobile devices via User-Agent

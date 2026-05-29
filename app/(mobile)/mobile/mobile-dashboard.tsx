@@ -34,7 +34,8 @@ import {
     CircleCheckBig,
     IndianRupee,
     Receipt,
-    TicketCheck
+    TicketCheck,
+    Briefcase
 } from "lucide-react"
 import { usePwaCheck } from "@/hooks/use-pwa-check"
 import { isDefaultAvatar } from "@/lib/utils/avatar-helper"
@@ -474,6 +475,35 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
                     </motion.div>
                 </div>
             </motion.div>
+
+            {/* Moderator/Admin View Switcher Card */}
+            {(profile.role === 'moderator' || profile.role === 'admin') && (
+                <motion.div variants={itemVars} whileTap={{ scale: 0.99 }}>
+                    <Card className="rounded-[2rem] border-indigo-500/20 bg-indigo-50/50 dark:bg-indigo-950/10 shadow-[0_4px_20px_rgba(99,102,241,0.05)] border overflow-hidden">
+                        <CardContent className="p-4 flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center shrink-0">
+                                <Briefcase className="w-5.5 h-5.5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="font-black text-xs text-indigo-900 dark:text-indigo-200 uppercase tracking-tight">Management Access</p>
+                                <p className="text-[10px] text-indigo-700/80 dark:text-indigo-500/80 font-medium truncate">
+                                    You can access the full admin backoffice
+                                </p>
+                            </div>
+                            <Button 
+                                size="sm" 
+                                className="rounded-xl text-[10px] font-black bg-indigo-600 hover:bg-indigo-500 text-white shrink-0 shadow-sm"
+                                onClick={() => {
+                                    document.cookie = `desktop_mode=true; path=/; max-age=31536000; SameSite=Lax; ${window.location.protocol === 'https:' ? 'Secure' : ''}`
+                                    window.location.replace(profile.role === 'admin' ? '/admin' : '/moderator')
+                                }}
+                            >
+                                Open Backoffice
+                            </Button>
+                        </CardContent>
+                    </Card>
+                </motion.div>
+            )}
 
 
             {/* Quick Actions Grid */}
