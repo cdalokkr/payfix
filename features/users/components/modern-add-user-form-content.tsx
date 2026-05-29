@@ -113,8 +113,14 @@ export const FormContent = memo(function FormContent({
     if (isDeleteMode) {
         return (
             <div className={cn("px-4 sm:px-6 lg:px-6", useSheet ? "pb-4" : "py-4", "space-y-6")}>
-                <Card className={cn("w-full max-w-2xl mx-auto bg-card dark:bg-zinc-900/90 text-card-foreground shadow-lg border-2 border-destructive/20 rounded-lg", className)}>
-                    <CardContent className="p-4">
+                <Card className={cn(
+                    "w-full max-w-2xl mx-auto text-card-foreground",
+                    useSheet
+                        ? "border-0 shadow-none bg-transparent dark:bg-transparent"
+                        : "bg-card dark:bg-zinc-900/90 shadow-lg border-2 border-destructive/20 rounded-lg",
+                    className
+                )}>
+                    <CardContent className={useSheet ? "p-0" : "p-4"}>
                         {/* General Error Display */}
                         <AnimatePresence>
                             {submitError && (
@@ -237,8 +243,14 @@ export const FormContent = memo(function FormContent({
     if (isPasswordResetMode) {
         return (
             <div className={cn("px-4 sm:px-6 lg:px-6", useSheet ? "pb-4" : "py-4", "space-y-6")}>
-                <Card className={cn("w-full max-w-2xl mx-auto bg-card dark:bg-zinc-900/90 text-card-foreground shadow-lg border-2 border-amber-500/20 rounded-lg", className)}>
-                    <CardContent className="p-4">
+                <Card className={cn(
+                    "w-full max-w-2xl mx-auto text-card-foreground",
+                    useSheet
+                        ? "border-0 shadow-none bg-transparent dark:bg-transparent"
+                        : "bg-card dark:bg-zinc-900/90 shadow-lg border-2 border-amber-500/20 rounded-lg",
+                    className
+                )}>
+                    <CardContent className={useSheet ? "p-0" : "p-4"}>
                         {/* General Error Display */}
                         <AnimatePresence>
                             {submitError && (
@@ -364,8 +376,14 @@ export const FormContent = memo(function FormContent({
 
     return (
         <div className={cn("px-4 sm:px-6 lg:px-6", useSheet ? "pb-4" : "py-4", "space-y-6")}>
-            <Card className={cn("w-full max-w-2xl mx-auto bg-card dark:bg-zinc-900/90 text-card-foreground shadow-lg border-2 border-border/60 dark:border-zinc-800 rounded-lg", className)}>
-                <CardContent className="p-4">
+            <Card className={cn(
+                "w-full max-w-2xl mx-auto text-card-foreground",
+                useSheet
+                    ? "border-0 shadow-none bg-transparent dark:bg-transparent"
+                    : "bg-card dark:bg-zinc-900/90 shadow-lg border-2 border-border/60 dark:border-zinc-800 rounded-lg",
+                className
+            )}>
+                <CardContent className={useSheet ? "p-0" : "p-4"}>
                     {/* General Error Display */}
                     <AnimatePresence>
                         {submitError && (
