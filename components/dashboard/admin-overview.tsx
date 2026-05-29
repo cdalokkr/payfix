@@ -197,6 +197,38 @@ export function AdminOverview({
 
   return (
     <div className="space-y-6 gesture-friendly">
+      {/* Mobile Screen View Switcher Banner */}
+      <div className="block lg:hidden">
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-4 rounded-2xl bg-gradient-to-r from-blue-500/10 to-indigo-500/10 border border-blue-500/20 shadow-md shadow-blue-500/5"
+        >
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-blue-500/10 text-blue-700 dark:text-blue-400 shrink-0">
+                <Briefcase className="h-5 w-5" />
+              </div>
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-wider text-blue-800 dark:text-blue-300">Mobile Browser Detected</h4>
+                <p className="text-[11px] font-medium text-muted-foreground mt-0.5">
+                  You are viewing the backoffice. Switch to Mobile Attendance to clock in/out.
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              className="rounded-xl text-[10px] font-black bg-blue-600 hover:bg-blue-500 text-white shrink-0 shadow-sm w-full sm:w-auto"
+              onClick={() => {
+                document.cookie = `desktop_mode=false; path=/; max-age=31536000; SameSite=Lax; ${window.location.protocol === 'https:' ? 'Secure' : ''}`
+                window.location.replace('/mobile')
+              }}
+            >
+              Switch to Attendance
+            </Button>
+          </div>
+        </motion.div>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ProfileCard profile={profile || null} loading={sessionLoading} />

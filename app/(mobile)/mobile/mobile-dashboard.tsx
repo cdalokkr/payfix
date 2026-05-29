@@ -48,6 +48,7 @@ interface MobileDashboardProps {
         email: string
         sex: string | null
         avatar_status: string | null
+        role: string
     }
     todayAttendance: {
         id: string
@@ -477,7 +478,7 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
             </motion.div>
 
             {/* Moderator/Admin View Switcher Card */}
-            {(profile.role === 'moderator' || profile.role === 'admin') && (
+            {(profile.role === 'moderator' || profile.role === 'admin') && !isPwa && (
                 <motion.div variants={itemVars} whileTap={{ scale: 0.99 }}>
                     <Card className="rounded-[2rem] border-indigo-500/20 bg-indigo-50/50 dark:bg-indigo-950/10 shadow-[0_4px_20px_rgba(99,102,241,0.05)] border overflow-hidden">
                         <CardContent className="p-4 flex items-center gap-3">

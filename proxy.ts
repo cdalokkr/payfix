@@ -199,9 +199,10 @@ export async function proxy(request: NextRequest) {
     if (user && (isEmployeeRoute || isModeratorRoute)) {
         const paramDesktop = request.nextUrl.searchParams.get('desktop')
         const cookieDesktop = request.cookies.get('desktop_mode')?.value
+        const isStandalonePwa = request.cookies.get('pwa_standalone')?.value === 'true'
 
-        // Wants desktop if param is explicitly 'true' or (param is not 'false' and cookie is 'true')
-        const wantsDesktop = paramDesktop === 'true' || (paramDesktop !== 'false' && cookieDesktop === 'true')
+        // Wants desktop if param is explicitly 'true' or (param is not 'false' and cookie is 'true'), BUT only if NOT in PWA standalone mode
+        const wantsDesktop = !isStandalonePwa && (paramDesktop === 'true' || (paramDesktop !== 'false' && cookieDesktop === 'true'))
 
         if (!wantsDesktop) {
             // Detect mobile devices via User-Agent
@@ -210,9 +211,6 @@ export async function proxy(request: NextRequest) {
 
             // Redirect mobile users to /mobile, preserving search parameters
             if (isMobile && !pathname.startsWith('/mobile')) {
-                // Check if running inside PWA standalone mode (cookie written by client-side detector)
-                const isStandalonePwa = request.cookies.get('pwa_standalone')?.value === 'true'
-
                 // Employee is always redirected to mobile layout on mobile screens
                 // Moderator is ONLY redirected to mobile layout if launching the standalone PWA
                 const shouldRedirect = isEmployeeRoute || (isModeratorRoute && isStandalonePwa)
@@ -223,7 +221,7 @@ export async function proxy(request: NextRequest) {
                     console.log(`[PROXY-MOBILE] Redirecting mobile user (${user.id}) from ${pathname} to ${mobileUrl.pathname}${searchParams} (PWA standalone: ${isStandalonePwa})`)
                     return redirectWithCookies(mobileUrl)
                 } else if (isModeratorRoute) {
-                    console.log(`[PROXY-MOBILE] Moderator (${user.id}) on mobile browser, allowing full desktop backoffice access at ${pathname}`)
+                    console.log(`[PROXY-MOBILE] Moderator (${user.id}) on mobile browser, allowing full desktop backoffice access at ${pathname} (wantsDesktop: ${wantsDesktop})`)
                 }
             }
         }

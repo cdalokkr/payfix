@@ -23,7 +23,7 @@ export default async function MobilePage() {
 
     const { data: profile } = await supabase
         .from('profiles')
-        .select('id, full_name, avatar_url, email, sex, avatar_status')
+        .select('id, full_name, avatar_url, email, sex, avatar_status, role')
         .eq('id', user!.id)
         .single()
 
