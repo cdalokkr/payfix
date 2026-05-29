@@ -27,7 +27,13 @@ interface QueryCache {
 }
 
 // Global query cache
-const queryCache = new Map<string, QueryCache>()
+// Linked to globalThis to share database query caches across Next.js cross-bundle contexts (Server Components and Route Handlers)
+const globalForQuery = globalThis as unknown as {
+  queryCache?: Map<string, QueryCache>
+}
+
+const queryCache = globalForQuery.queryCache ?? new Map<string, QueryCache>()
+globalForQuery.queryCache = queryCache
 const CACHE_TTL_DEFAULT = 30 * 1000 // 30 seconds
 const MAX_CACHE_SIZE = 100
 

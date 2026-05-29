@@ -132,12 +132,20 @@ interface SessionCache {
 }
 
 // Global session cache (memory-based for performance)
-// Map<cookieHash, SessionCache>
-const sessionCache = new Map<string, SessionCache>()
-// Map<userId, cookieHash> for invalidation support
-const userToHashCache = new Map<string, string>()
-// Map<userId, SessionCache> for direct userId lookups (post-login optimization)
-const userIdSessionCache = new Map<string, SessionCache>()
+// Linked to globalThis to share caches across Next.js cross-bundle contexts (Server Components and Route Handlers)
+const globalForAuth = globalThis as unknown as {
+  sessionCache?: Map<string, SessionCache>
+  userToHashCache?: Map<string, string>
+  userIdSessionCache?: Map<string, SessionCache>
+}
+
+const sessionCache = globalForAuth.sessionCache ?? new Map<string, SessionCache>()
+const userToHashCache = globalForAuth.userToHashCache ?? new Map<string, string>()
+const userIdSessionCache = globalForAuth.userIdSessionCache ?? new Map<string, SessionCache>()
+
+globalForAuth.sessionCache = sessionCache
+globalForAuth.userToHashCache = userToHashCache
+globalForAuth.userIdSessionCache = userIdSessionCache
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 const CONTEXT_CACHE_PREFIX = 'ctx:'
 

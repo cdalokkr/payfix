@@ -36,7 +36,7 @@ export default async function MobilePage() {
         .select('id, check_in, check_out, status, date')
         .eq('profile_id', user!.id)
         .eq('date', today)
-        .single()
+        .maybeSingle()
 
     console.log('[MOBILE-PAGE] Attendance result:', todayAttendance ? `found for ${todayAttendance.date}` : 'none', 'error:', error?.message)
 

@@ -654,7 +654,9 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
     }
 
     if (!userId) {
-      console.warn('⚠️ No userId provided for real-time subscriptions')
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[REALTIME] Skipping realtime subscription: No userId provided (logged out)')
+      }
       return
     }
 
