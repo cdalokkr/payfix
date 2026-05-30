@@ -244,6 +244,32 @@ export const attendanceRouter = router({
                 remarks: input.remarks
             }, result.profile_id)
 
+            // Insert notification for the employee
+            const isApproved = input.status === 'verified'
+            const notifyTitle = isApproved ? 'Attendance Approved' : 'Attendance Rejected'
+            const notifyMessage = `Your attendance record for ${result.date} has been ${isApproved ? 'approved' : 'rejected'}${input.remarks ? `: "${input.remarks}"` : ''} by ${ctx.profile.full_name || ctx.profile.email}.`
+
+            try {
+                await ctx.db.insert(notifications).values({
+                    user_id: result.profile_id,
+                    title: notifyTitle,
+                    message: notifyMessage,
+                    type: 'attendance_approval',
+                    link: '/mobile/history'
+                })
+
+                // Broadcast notification to the specific employee
+                broadcastServerEvent('new_notification', {
+                    title: notifyTitle,
+                    message: notifyMessage,
+                    type: 'attendance_approval',
+                    link: '/mobile/history',
+                    targetUserId: result.profile_id
+                }, result.profile_id)
+            } catch (err) {
+                console.error('[verifyAttendance] Failed to send notification:', err)
+            }
+
             return result
         }),
 

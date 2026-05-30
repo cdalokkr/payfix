@@ -15,7 +15,7 @@ const navItems = [
     },
     {
         title: "Attendance",
-        href: "/employee/attendance",
+        href: "/employee/attendance-history",
         icon: CalendarCheck,
     },
     {

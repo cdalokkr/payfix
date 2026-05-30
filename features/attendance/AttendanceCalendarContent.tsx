@@ -5,6 +5,7 @@ import { Calendar as ShadcnCalendar, CalendarDayButton } from "@/components/ui/c
 import { cn } from "@/lib/utils"
 import { motion } from "framer-motion"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Loader2 } from "lucide-react"
 
 interface AttendanceCalendarContentProps {
     currentMonth: Date
@@ -18,6 +19,7 @@ interface AttendanceCalendarContentProps {
     setSelectedDate: (date: Date | undefined) => void
     today: Date
     monthStart: Date
+    isLoading?: boolean
 }
 
 export function AttendanceCalendarContent({
@@ -31,10 +33,16 @@ export function AttendanceCalendarContent({
     selectedDate,
     setSelectedDate,
     today,
-    monthStart
+    monthStart,
+    isLoading
 }: AttendanceCalendarContentProps) {
     return (
-        <div className="flex flex-col w-full h-full">
+        <div className="flex flex-col w-full h-full relative">
+            {isLoading && (
+                <div className="absolute inset-0 bg-background/50 backdrop-blur-xs flex items-center justify-center z-30 rounded-2xl animate-in fade-in duration-200">
+                    <Loader2 className="size-10 animate-spin text-primary" />
+                </div>
+            )}
             <TooltipProvider>
                 <ShadcnCalendar
                     mode="single"
@@ -125,21 +133,23 @@ export function AttendanceCalendarContent({
                                                     ? "border-primary shadow-xl shadow-primary/40 z-20 bg-primary"
                                                     : record?.status === 'verified'
                                                         ? "border-green-500/50 bg-green-500/10 text-green-700 hover:bg-green-500/20 hover:border-green-500/70 z-10"
-                                                        : record?.check_in && record?.check_out
-                                                            ? "border-primary/50 bg-primary/10 text-primary hover:bg-primary/20 hover:border-primary/70 z-10"
-                                                            : record?.check_in
-                                                                ? "border-green-500/50 bg-green-500/10 text-green-700 hover:bg-green-500/20 hover:border-green-500/70"
-                                                                : modifiers.leave
-                                                                    ? "border-orange-500/50 bg-orange-500/10 text-orange-700 hover:bg-orange-500/20 hover:border-orange-500/70"
-                                                                    : modifiers.holiday
-                                                                        ? "border-blue-500/50 bg-blue-500/10 text-blue-700 hover:bg-blue-500/20 hover:border-blue-500/70"
-                                                                        : modifiers.offDay
-                                                                            ? "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted/50 hover:text-foreground hover:border-muted-foreground/30"
-                                                                            : modifiers.absent
-                                                                                ? "border-red-500/30 bg-red-500/10 text-red-700 hover:bg-red-500/20 hover:border-red-500/50"
-                                                                                : isToday
-                                                                                    ? "border-primary bg-primary/20 text-primary z-10 shadow-lg shadow-primary/5"
-                                                                                    : "bg-muted/20 border-muted/20 hover:bg-muted/30 hover:border-muted/40"
+                                                        : record?.status === 'rejected'
+                                                            ? "border-rose-500/50 bg-rose-500/15 text-rose-700 hover:bg-rose-500/25 hover:border-rose-500/70 z-10 line-through decoration-rose-500 decoration-2"
+                                                            : record?.check_in && record?.check_out
+                                                                ? "border-primary/50 bg-primary/10 text-primary hover:bg-primary/20 hover:border-primary/70 z-10"
+                                                                : record?.check_in
+                                                                    ? "border-green-500/50 bg-green-500/10 text-green-700 hover:bg-green-500/20 hover:border-green-500/70"
+                                                                    : modifiers.leave
+                                                                        ? "border-orange-500/50 bg-orange-500/10 text-orange-700 hover:bg-orange-500/20 hover:border-orange-500/70"
+                                                                        : modifiers.holiday
+                                                                            ? "border-blue-500/50 bg-blue-500/10 text-blue-700 hover:bg-blue-500/20 hover:border-blue-500/70"
+                                                                            : modifiers.offDay
+                                                                                ? "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted/50 hover:text-foreground hover:border-muted-foreground/30"
+                                                                                : modifiers.absent
+                                                                                    ? "border-red-500/30 bg-red-500/10 text-red-700 hover:bg-red-500/20 hover:border-red-500/50"
+                                                                                    : isToday
+                                                                                        ? "border-primary bg-primary/20 text-primary z-10 shadow-lg shadow-primary/5"
+                                                                                        : "bg-muted/20 border-muted/20 hover:bg-muted/30 hover:border-muted/40"
                                             )}
                                         >
                                             <motion.div
@@ -211,9 +221,10 @@ export function AttendanceCalendarContent({
                 />
             </TooltipProvider>
 
-            <div className="mt-8 px-4 py-4 bg-muted/20 border-y rounded-xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-[10px] font-black uppercase text-center">
+            <div className="mt-8 px-4 py-4 bg-muted/20 border-y rounded-xl grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 text-[10px] font-black uppercase text-center">
                 <div className="flex items-center gap-2 text-primary bg-primary/10 p-1.5 rounded-lg border border-primary/20 shadow-sm"><div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" /> Marked (Pending)</div>
                 <div className="flex items-center gap-2 text-green-700 bg-green-500/10 p-1.5 rounded-lg border border-green-500/20 shadow-sm"><div className="h-1.5 w-1.5 rounded-full bg-green-500" /> Present (Verified)</div>
+                <div className="flex items-center gap-2 text-rose-750 bg-rose-500/15 p-1.5 rounded-lg border border-rose-500/35 shadow-sm line-through decoration-rose-500"><div className="h-1.5 w-1.5 rounded-full bg-rose-500" /> Rejected</div>
                 <div className="flex items-center gap-2 text-orange-700 bg-orange-500/10 p-1.5 rounded-lg border border-orange-500/20 shadow-sm"><div className="h-1.5 w-1.5 rounded-full bg-orange-500" /> Leave (Approved)</div>
                 <div className="flex items-center gap-2 text-red-700 bg-red-500/10 p-1.5 rounded-lg border border-red-500/20 shadow-sm"><div className="h-1.5 w-1.5 rounded-full bg-red-500" /> Absent (Missed)</div>
                 <div className="flex items-center gap-2 text-blue-700 bg-blue-500/10 p-1.5 rounded-lg border border-blue-500/20 shadow-sm"><div className="h-1.5 w-1.5 rounded-full bg-blue-500" /> Holidays</div>

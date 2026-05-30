@@ -62,8 +62,11 @@ export function MobileHistoryClient({ profile }: { profile: any }) {
 
     // Fetch tRPC data for current month
     const { data: attendance = [], isLoading: isAttendanceLoading } = trpc.attendance.getAttendance.useQuery({
+        profileId: profile?.id,
         startDate: format(monthStart, 'yyyy-MM-dd'),
         endDate: format(monthEnd, 'yyyy-MM-dd')
+    }, {
+        enabled: !!profile?.id
     })
 
     const { data: leaves = [], isLoading: isLeavesLoading } = trpc.attendance.getLeaves.useQuery({
@@ -110,7 +113,7 @@ export function MobileHistoryClient({ profile }: { profile: any }) {
                    (isBefore(day, end) || isSameDay(day, end))
         })
 
-        let status: 'present' | 'pending_verification' | 'absent' | 'leave' | 'holiday' | 'off_day' | 'future' = 'future'
+        let status: 'present' | 'pending_verification' | 'rejected' | 'absent' | 'leave' | 'holiday' | 'off_day' | 'future' = 'future'
 
         if (isAfter(day, today)) {
             status = 'future'
@@ -121,6 +124,8 @@ export function MobileHistoryClient({ profile }: { profile: any }) {
         } else if (record) {
             if (record.status === 'verified') {
                 status = 'present'
+            } else if (record.status === 'rejected') {
+                status = 'rejected'
             } else {
                 status = 'pending_verification'
             }
@@ -143,6 +148,8 @@ export function MobileHistoryClient({ profile }: { profile: any }) {
     // Stats compiled for current month (up to today)
     const stats = useMemo(() => {
         let present = 0
+        let pending = 0
+        let rejected = 0
         let absent = 0
         let leavesCount = 0
         let holidays = 0
@@ -153,6 +160,10 @@ export function MobileHistoryClient({ profile }: { profile: any }) {
             const info = getDateInfo(day)
             if (info.status === 'present') {
                 present++
+            } else if (info.status === 'pending_verification') {
+                pending++
+            } else if (info.status === 'rejected') {
+                rejected++
             } else if (info.status === 'absent') {
                 absent++
             } else if (info.status === 'leave') {
@@ -162,7 +173,7 @@ export function MobileHistoryClient({ profile }: { profile: any }) {
             }
         })
 
-        return { present, absent, leaves: leavesCount, holidays }
+        return { present, pending, rejected, absent, leaves: leavesCount, holidays }
     }, [attendanceMap, leaves, closures, settings, currentMonth])
 
     const handlePrevMonth = () => {
@@ -232,23 +243,35 @@ export function MobileHistoryClient({ profile }: { profile: any }) {
                     </button>
                 </div>
 
-                {/* Stats row */}
-                <div className="grid grid-cols-4 gap-2">
-                    <div className="bg-emerald-500/10 dark:bg-emerald-500/5 border border-emerald-500/10 rounded-2xl p-2.5 text-center flex flex-col justify-center">
-                        <span className="text-[9px] uppercase font-bold text-emerald-600 dark:text-emerald-500">Present</span>
-                        <span className="text-lg font-black text-emerald-600 dark:text-emerald-500 leading-tight mt-0.5">{stats.present}d</span>
+                {/* Stats Row */}
+                <div className="space-y-2">
+                    <div className="grid grid-cols-3 gap-2">
+                        <div className="bg-emerald-500/10 dark:bg-emerald-500/5 border border-emerald-500/15 rounded-2xl p-3 text-center flex flex-col justify-center shadow-xs transition-all duration-200 hover:scale-[1.02]">
+                            <span className="text-[9px] uppercase font-black tracking-wider text-emerald-600 dark:text-emerald-400">Present</span>
+                            <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 leading-tight mt-0.5">{stats.present}d</span>
+                        </div>
+                        <div className="bg-rose-500/10 dark:bg-rose-500/5 border border-rose-500/15 rounded-2xl p-3 text-center flex flex-col justify-center shadow-xs transition-all duration-200 hover:scale-[1.02]">
+                            <span className="text-[9px] uppercase font-black tracking-wider text-rose-600 dark:text-rose-455">Absent</span>
+                            <span className="text-xl font-black text-rose-600 dark:text-rose-500 leading-tight mt-0.5">{stats.absent}d</span>
+                        </div>
+                        <div className="bg-indigo-500/10 dark:bg-indigo-500/5 border border-indigo-500/15 rounded-2xl p-3 text-center flex flex-col justify-center shadow-xs transition-all duration-200 hover:scale-[1.02]">
+                            <span className="text-[9px] uppercase font-black tracking-wider text-indigo-600 dark:text-indigo-400">Leaves</span>
+                            <span className="text-xl font-black text-indigo-600 dark:text-indigo-400 leading-tight mt-0.5">{stats.leaves}d</span>
+                        </div>
                     </div>
-                    <div className="bg-rose-500/10 dark:bg-rose-500/5 border border-rose-500/10 rounded-2xl p-2.5 text-center flex flex-col justify-center">
-                        <span className="text-[9px] uppercase font-bold text-rose-600 dark:text-rose-500">Absent</span>
-                        <span className="text-lg font-black text-rose-600 dark:text-rose-500 leading-tight mt-0.5">{stats.absent}d</span>
-                    </div>
-                    <div className="bg-indigo-500/10 dark:bg-indigo-500/5 border border-indigo-500/10 rounded-2xl p-2.5 text-center flex flex-col justify-center">
-                        <span className="text-[9px] uppercase font-bold text-indigo-600 dark:text-indigo-500">Leaves</span>
-                        <span className="text-lg font-black text-indigo-600 dark:text-indigo-500 leading-tight mt-0.5">{stats.leaves}d</span>
-                    </div>
-                    <div className="bg-slate-500/10 dark:bg-slate-500/5 border border-slate-500/10 rounded-2xl p-2.5 text-center flex flex-col justify-center">
-                        <span className="text-[9px] uppercase font-bold text-slate-500 dark:text-slate-400">Holidays</span>
-                        <span className="text-lg font-black text-slate-500 dark:text-slate-400 leading-tight mt-0.5">{stats.holidays}d</span>
+                    <div className="grid grid-cols-3 gap-2">
+                        <div className="bg-slate-500/10 dark:bg-slate-500/5 border border-slate-500/15 rounded-2xl p-2.5 text-center flex flex-col justify-center shadow-xs transition-all duration-200 hover:scale-[1.02]">
+                            <span className="text-[9px] uppercase font-black tracking-wider text-slate-550 dark:text-slate-400">Holidays</span>
+                            <span className="text-sm font-extrabold text-slate-600 dark:text-slate-400 leading-tight mt-0.5">{stats.holidays}d</span>
+                        </div>
+                        <div className="bg-amber-500/10 dark:bg-amber-500/5 border border-amber-500/15 rounded-2xl p-2.5 text-center flex flex-col justify-center shadow-xs transition-all duration-200 hover:scale-[1.02]">
+                            <span className="text-[9px] uppercase font-black tracking-wider text-amber-600 dark:text-amber-400">Awaiting</span>
+                            <span className="text-sm font-extrabold text-amber-600 dark:text-amber-400 leading-tight mt-0.5">{stats.pending}d</span>
+                        </div>
+                        <div className="bg-red-500/10 dark:bg-red-500/5 border border-red-500/15 rounded-2xl p-2.5 text-center flex flex-col justify-center shadow-xs transition-all duration-200 hover:scale-[1.02]">
+                            <span className="text-[9px] uppercase font-black tracking-wider text-red-600 dark:text-red-400">Rejected</span>
+                            <span className="text-sm font-extrabold text-red-650 dark:text-red-400 leading-tight mt-0.5">{stats.rejected}d</span>
+                        </div>
                     </div>
                 </div>
 
@@ -283,19 +306,21 @@ export function MobileHistoryClient({ profile }: { profile: any }) {
                             let borderClass = isSelected ? "ring-2 ring-primary ring-offset-2 dark:ring-offset-slate-900" : ""
                             
                             if (info.status === 'present') {
-                                bgClass = "bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400"
+                                bgClass = "bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 shadow-xs"
                             } else if (info.status === 'pending_verification') {
-                                bgClass = "bg-amber-500/15 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400"
+                                bgClass = "bg-amber-500/15 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/25 animate-pulse"
+                            } else if (info.status === 'rejected') {
+                                bgClass = "bg-rose-500/15 dark:bg-rose-500/25 text-rose-700 dark:text-rose-455 border border-rose-500/30 line-through decoration-rose-500 decoration-2"
                             } else if (info.status === 'absent') {
-                                bgClass = "bg-rose-500/10 dark:bg-rose-500/20 text-rose-700 dark:text-rose-400"
+                                bgClass = "bg-rose-500/5 dark:bg-rose-500/10 text-rose-600/70 dark:text-rose-500/60 border border-rose-500/10"
                             } else if (info.status === 'leave') {
-                                bgClass = "bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-455"
+                                bgClass = "bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-400 border border-indigo-500/20"
                             } else if (info.status === 'holiday') {
-                                bgClass = "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+                                bgClass = "bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border border-slate-200/40 dark:border-slate-800/40"
                             } else if (info.status === 'off_day') {
-                                bgClass = "text-slate-400 dark:text-slate-600"
+                                bgClass = "text-slate-400/80 dark:text-slate-650 bg-slate-50/50 dark:bg-slate-900/30"
                             } else if (info.status === 'future') {
-                                bgClass = "text-slate-300 dark:text-slate-700"
+                                bgClass = "text-slate-300 dark:text-slate-800"
                             }
 
                             if (!isCurrentMonth) {
@@ -325,7 +350,15 @@ export function MobileHistoryClient({ profile }: { profile: any }) {
                             <span>Present</span>
                         </div>
                         <div className="flex items-center gap-1">
-                            <span className="w-2.5 h-2.5 rounded-full bg-rose-500/20 border border-rose-500/30" />
+                            <span className="w-2.5 h-2.5 rounded-full bg-amber-500/25 border border-amber-500/40" />
+                            <span>Awaiting</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                            <span className="w-2.5 h-2.5 rounded-full bg-rose-500/25 border border-rose-500/40 line-through" />
+                            <span>Rejected</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                            <span className="w-2.5 h-2.5 rounded-full bg-rose-500/10 border border-rose-500/20" />
                             <span>Absent</span>
                         </div>
                         <div className="flex items-center gap-1">
@@ -333,7 +366,7 @@ export function MobileHistoryClient({ profile }: { profile: any }) {
                             <span>Leave</span>
                         </div>
                         <div className="flex items-center gap-1">
-                            <span className="w-2.5 h-2.5 rounded-full bg-slate-100 dark:bg-slate-800" />
+                            <span className="w-2.5 h-2.5 rounded-full bg-slate-150 dark:bg-slate-800 border border-slate-200 dark:border-slate-850" />
                             <span>Holiday</span>
                         </div>
                     </div>
@@ -399,8 +432,13 @@ export function MobileHistoryClient({ profile }: { profile: any }) {
                                                         Awaiting
                                                     </Badge>
                                                 )}
+                                                {info.status === 'rejected' && (
+                                                    <Badge className="bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25 shadow-none font-bold uppercase text-[9px] tracking-wider">
+                                                        Rejected
+                                                    </Badge>
+                                                )}
                                                 {info.status === 'absent' && (
-                                                    <Badge className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 shadow-none font-bold uppercase text-[9px] tracking-wider">
+                                                    <Badge className="bg-rose-500/10 text-rose-600 dark:text-rose-455 border border-rose-500/20 shadow-none font-bold uppercase text-[9px] tracking-wider">
                                                         Absent
                                                     </Badge>
                                                 )}

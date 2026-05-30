@@ -6,9 +6,15 @@ import { Badge } from "@/components/ui/badge"
 import { trpc } from "@/lib/trpc/client"
 import { format } from "date-fns"
 import { Clock, Calendar } from "lucide-react"
+import { useProfile } from "@/lib/context/profile-context"
 
 export function AttendanceHistory() {
-    const { data: history, isLoading } = trpc.attendance.getAttendance.useQuery({})
+    const { profile } = useProfile()
+    const { data: history, isLoading } = trpc.attendance.getAttendance.useQuery({
+        profileId: profile?.id
+    }, {
+        enabled: !!profile?.id
+    })
 
     if (isLoading) return <div>Loading history...</div>
 

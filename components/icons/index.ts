@@ -32,6 +32,7 @@ import {
   // Payroll & Salary icons
   Banknote,
   CalendarCheck,
+  CalendarDays,
   CalendarOff,
   IndianRupee,
   HandCoins,
@@ -80,6 +81,7 @@ export const Icons: Record<string, React.ElementType> = {
   // Payroll & Salary icons
   Banknote,
   CalendarCheck,
+  CalendarDays,
   CalendarOff,
   IndianRupee,
   HandCoins,

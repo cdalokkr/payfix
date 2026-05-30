@@ -8,8 +8,10 @@ import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
+import { useProfile } from "@/lib/context/profile-context"
 
 export function DailyAttendanceCard({ className }: { className?: string }) {
+    const { profile } = useProfile()
     const utils = trpc.useUtils()
     const todayStr = format(new Date(), 'yyyy-MM-dd')
 
@@ -19,8 +21,11 @@ export function DailyAttendanceCard({ className }: { className?: string }) {
     const yesterdayStr = format(yesterday, 'yyyy-MM-dd')
 
     const { data: attendance, isLoading } = trpc.attendance.getAttendance.useQuery({
+        profileId: profile?.id,
         startDate: yesterdayStr,
         endDate: todayStr
+    }, {
+        enabled: !!profile?.id
     })
 
     const { data: settings } = trpc.attendance.getOfficeSettings.useQuery()

@@ -89,13 +89,46 @@ export async function POST(request: NextRequest) {
     }
 }
 
-// ==========================================
-// Excel Value Converters
-// ==========================================
+/**
+ * Helper to parse a time string in 12-hour or 24-hour format into standard HH:MM (24-hour).
+ * Supports: "9:59", "18:00", "09:59 AM", "9:59AM", "6:00 PM", "6:00PM", "06:00 PM".
+ */
+function parseTimeString(str: string): string {
+    const cleanStr = str.trim().toUpperCase()
+
+    // 12-hour format match: e.g., "09:59 AM", "9:59AM", "6:00 PM", "6:00PM"
+    const match12 = cleanStr.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)$/)
+    if (match12) {
+        let hours = parseInt(match12[1], 10)
+        const minutes = match12[2]
+        const ampm = match12[4]
+
+        if (ampm === 'PM' && hours < 12) {
+            hours += 12
+        } else if (ampm === 'AM' && hours === 12) {
+            hours = 0
+        }
+
+        return `${String(hours).padStart(2, '0')}:${minutes}`
+    }
+
+    // 24-hour format match: e.g., "18:00", "09:59", "9:59", "18:00:00"
+    const match24 = cleanStr.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/)
+    if (match24) {
+        const hours = parseInt(match24[1], 10)
+        const minutes = match24[2]
+        if (hours >= 0 && hours < 24) {
+            return `${String(hours).padStart(2, '0')}:${minutes}`
+        }
+    }
+
+    return str
+}
 
 /**
  * Normalize an Excel date cell to YYYY-MM-DD string.
  * Handles: Date objects (cellDates:true), serial numbers, ISO strings, YYYY-MM-DD strings.
+ * Uses local getters to extract exact values entered in Excel.
  */
 function normalizeExcelDate(value: any): string | null {
     if (value == null || value === '') return null
@@ -144,7 +177,8 @@ function normalizeExcelDate(value: any): string | null {
 
 /**
  * Normalize an Excel time cell to HH:MM string.
- * Handles: decimal fractions (0.4167 = 10:00), Date objects, "HH:MM" strings, "HH:MM:SS" strings.
+ * Handles: decimal fractions (0.4167 = 10:00), Date objects, "HH:MM" strings, 12-hour strings, "HH:MM:SS" strings.
+ * Uses local getters to extract exact values entered in Excel.
  */
 function normalizeExcelTime(value: any): string {
     if (value == null || value === '') return ''
@@ -158,10 +192,10 @@ function normalizeExcelTime(value: any): string {
 
     const str = String(value).trim()
 
-    // Already HH:MM or HH:MM:SS format
-    if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(str)) {
-        const parts = str.split(':')
-        return `${parts[0].padStart(2, '0')}:${parts[1]}`
+    // Parse string via our helper supporting 12-hour and 24-hour formats
+    const parsedTime = parseTimeString(str)
+    if (/^\d{2}:\d{2}$/.test(parsedTime)) {
+        return parsedTime
     }
 
     // Excel time as decimal fraction (0.0 to 1.0)
@@ -243,15 +277,10 @@ async function processDailyUpload(
         const checkIn = normalizeExcelTime(rawCheckIn)
         const checkOut = normalizeExcelTime(rawCheckOut)
 
-        if (!checkIn && !checkOut) {
-            skippedRows++
-            continue
-        }
-
         records.push({
             profileId: profile.id,
             date: normalizedDate,
-            checkIn: checkIn || '10:00',
+            checkIn: checkIn || '',
             checkOut: checkOut || '',
             isHalfDay: isHalfDayStr === 'Y' || isHalfDayStr === 'YES',
             remarks: remarks || undefined

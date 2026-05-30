@@ -76,6 +76,11 @@ export function DataTable<TData, TValue>({
             rowSelection,
             columnFilters,
         },
+        initialState: {
+            pagination: {
+                pageSize: hidePagination ? 10000 : 10,
+            },
+        },
         enableRowSelection: true,
         onRowSelectionChange: setRowSelection,
         onSortingChange: setSorting,

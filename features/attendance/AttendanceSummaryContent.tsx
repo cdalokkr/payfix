@@ -1,6 +1,6 @@
 "use client"
 
-import { format, getDay } from "date-fns"
+import { format, getDay, startOfMonth, endOfMonth, eachDayOfInterval, parseISO, isWithinInterval } from "date-fns"
 import { DataTable } from "@/components/ui/data-table"
 import { ColumnDef } from "@tanstack/react-table"
 import { Badge } from "@/components/ui/badge"
@@ -28,6 +28,9 @@ interface AttendanceSummaryContentProps {
     attendance?: any[]
     isLoading: boolean
     settings?: OfficeSettings | null
+    closures?: any[]
+    leaves?: any[]
+    currentMonth: Date
 }
 
 // Helper to calculate scheduled hours from time strings
@@ -42,7 +45,10 @@ function calculateScheduledHours(checkIn: string, checkOut: string): number {
 export function AttendanceSummaryContent({
     attendance,
     isLoading,
-    settings
+    settings,
+    closures = [],
+    leaves = [],
+    currentMonth
 }: AttendanceSummaryContentProps) {
     // Calculate scheduled hours for each day of the week
     const scheduledHoursMap = useMemo(() => {
@@ -73,26 +79,158 @@ export function AttendanceSummaryContent({
         return map
     }, [settings])
 
+    // Compile records for the entire month
+    const compiledRecords = useMemo(() => {
+        if (!currentMonth) return []
+        
+        const monthStart = startOfMonth(currentMonth)
+        const monthEnd = endOfMonth(currentMonth)
+        
+        const daysList = eachDayOfInterval({
+            start: monthStart,
+            end: monthEnd
+        }).reverse()
+
+        // Map database attendance records by localized date string for immediate lookup
+        const recordMap = new Map<string, any>()
+        attendance?.forEach(r => {
+            const dateStr = typeof r.date === 'string' ? r.date.split('T')[0] : format(new Date(r.date), 'yyyy-MM-dd')
+            recordMap.set(dateStr, r)
+        })
+
+        return daysList.map(day => {
+            const dateStr = format(day, 'yyyy-MM-dd')
+            
+            // Check if there is a DB record
+            const record = recordMap.get(dateStr)
+            if (record) {
+                return {
+                    ...record,
+                    type: 'attendance',
+                    date: dateStr
+                }
+            }
+
+            const dayOfWeek = day.getDay()
+            const isOffDay = settings?.off_days?.includes(dayOfWeek)
+
+            const holiday = closures?.find(c => c.date === dateStr)
+            if (holiday) {
+                return {
+                    date: dateStr,
+                    type: 'holiday',
+                    status: 'holiday',
+                    holidayName: holiday.reason || 'Holiday',
+                    check_in: null,
+                    check_out: null,
+                    working_hours: 0,
+                    is_half_day: false
+                }
+            }
+
+            const leave = leaves?.find(l => {
+                const start = parseISO(l.start_date)
+                const end = parseISO(l.end_date)
+                return isWithinInterval(day, { start, end })
+            })
+            if (leave) {
+                return {
+                    date: dateStr,
+                    type: 'leave',
+                    status: 'leave',
+                    leaveType: leave.leave_type || 'Leave',
+                    check_in: null,
+                    check_out: null,
+                    working_hours: 0,
+                    is_half_day: leave.is_half_day || false
+                }
+            }
+
+            if (isOffDay) {
+                return {
+                    date: dateStr,
+                    type: 'offDay',
+                    status: 'offDay',
+                    check_in: null,
+                    check_out: null,
+                    working_hours: 0,
+                    is_half_day: false
+                }
+            }
+
+            const todayStr = format(new Date(), 'yyyy-MM-dd')
+            const isPast = dateStr < todayStr
+
+            if (isPast) {
+                return {
+                    date: dateStr,
+                    type: 'absent',
+                    status: 'absent',
+                    check_in: null,
+                    check_out: null,
+                    working_hours: 0,
+                    is_half_day: false
+                }
+            }
+
+            // Future date
+            return {
+                date: dateStr,
+                type: 'future',
+                status: 'future',
+                check_in: null,
+                check_out: null,
+                working_hours: 0,
+                is_half_day: false
+            }
+        })
+    }, [attendance, currentMonth, settings, closures, leaves])
+
     const columns: ColumnDef<any>[] = [
         {
             accessorKey: "date",
             header: "Date",
-            cell: ({ row }) => format(new Date(row.getValue("date")), "MMM dd, yyyy"),
+            cell: ({ row }) => {
+                const dStr = row.getValue("date") as string
+                const parts = dStr.split('-').map(Number)
+                if (parts.length === 3) {
+                    const localDate = new Date(parts[0], parts[1] - 1, parts[2])
+                    return format(localDate, "MMM dd, yyyy")
+                }
+                return format(new Date(dStr), "MMM dd, yyyy")
+            },
         },
-
         {
             accessorKey: "check_in",
             header: "In",
-            cell: ({ row }) => row.getValue("check_in")
-                ? format(new Date(row.getValue("check_in")), "hh:mm a")
-                : "-",
+            cell: ({ row }) => {
+                const val = row.getValue("check_in")
+                if (!val) {
+                    const type = row.original.type
+                    if (type === 'holiday') return <span className="text-blue-500/70 font-bold text-[9px] tracking-wide uppercase">Holiday</span>
+                    if (type === 'leave') return <span className="text-orange-500/70 font-bold text-[9px] tracking-wide uppercase">Leave</span>
+                    if (type === 'offDay') return <span className="text-slate-450 font-black text-[9px] tracking-wide uppercase">Weekly Off</span>
+                    if (type === 'absent') return <span className="text-rose-500/70 font-bold text-[9px] tracking-wide uppercase">Absent</span>
+                    return "-"
+                }
+                return format(new Date(val as string), "hh:mm a")
+            },
         },
         {
             accessorKey: "check_out",
             header: "Out",
-            cell: ({ row }) => row.getValue("check_out")
-                ? format(new Date(row.getValue("check_out")), "hh:mm a")
-                : "-",
+            cell: ({ row }) => {
+                const val = row.getValue("check_out")
+                if (!val) {
+                    const type = row.original.type
+                    if (type === 'holiday') return <span className="text-blue-500/70 font-bold text-[9px] tracking-wide uppercase">Holiday</span>
+                    if (type === 'leave') return <span className="text-orange-500/70 font-bold text-[9px] tracking-wide uppercase">Leave</span>
+                    if (type === 'offDay') return <span className="text-slate-450 font-black text-[9px] tracking-wide uppercase">Weekly Off</span>
+                    if (type === 'absent') return <span className="text-rose-500/70 font-bold text-[9px] tracking-wide uppercase">Absent</span>
+                    return "-"
+                }
+                return format(new Date(val as string), "hh:mm a")
+            },
         },
         {
             accessorKey: "status",
@@ -103,13 +241,18 @@ export function AttendanceSummaryContent({
                     <Badge
                         variant="secondary"
                         className={cn(
-                            "capitalize font-black text-[9px] px-1.5 h-3.5",
+                            "capitalize font-black text-[9px] px-1.5 h-3.5 whitespace-nowrap",
                             status === 'verified' && "bg-green-500/10 text-green-700 border-green-500/20",
                             status === 'pending' && "bg-amber-500/10 text-amber-700 border-amber-500/20",
-                            status === 'rejected' && "bg-red-500/10 text-red-700 border-red-500/20"
+                            status === 'rejected' && "bg-red-500/10 text-red-700 border-red-500/20",
+                            status === 'holiday' && "bg-blue-500/10 text-blue-700 border-blue-500/20",
+                            status === 'leave' && "bg-orange-500/10 text-orange-700 border-orange-500/20",
+                            status === 'offDay' && "bg-slate-500/10 text-slate-700 border-slate-500/20",
+                            status === 'absent' && "bg-red-500/10 text-red-700 border-red-500/20",
+                            status === 'future' && "bg-muted text-muted-foreground/60 border-muted"
                         )}
                     >
-                        {status}
+                        {status === 'offDay' ? 'Weekly Off' : status === 'future' ? '-' : status}
                     </Badge>
                 )
             },
@@ -118,7 +261,18 @@ export function AttendanceSummaryContent({
             id: "attendance_type",
             header: "Type",
             cell: ({ row }) => {
+                const type = row.original.type
                 const isHalfDay = row.original.is_half_day
+                
+                if (type !== 'attendance' && type !== 'leave') return "-"
+                if (type === 'leave') {
+                    return (
+                        <Badge variant="outline" className="text-[9px] h-3.5 bg-orange-500/5 border-orange-500/20 text-orange-600 font-bold px-1.5 whitespace-nowrap">
+                            {isHalfDay ? "Half Day Leave" : "Full Day Leave"}
+                        </Badge>
+                    )
+                }
+                
                 return isHalfDay ? (
                     <Badge variant="outline" className="text-[9px] h-3.5 bg-amber-500/5 border-amber-500/20 text-amber-600 font-bold px-1.5 whitespace-nowrap">
                         Half Day
@@ -170,7 +324,6 @@ export function AttendanceSummaryContent({
     ]
 
     const isMobile = useIsMobile()
-    const records = attendance || []
 
     if (isMobile) {
         if (isLoading) {
@@ -183,7 +336,7 @@ export function AttendanceSummaryContent({
             )
         }
 
-        if (records.length === 0) {
+        if (compiledRecords.length === 0) {
             return (
                 <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                     <CalendarDays className="size-12 opacity-10 mb-4" />
@@ -194,7 +347,7 @@ export function AttendanceSummaryContent({
 
         return (
             <div className="space-y-3 px-1 py-1">
-                {records.map((record, idx) => {
+                {compiledRecords.map((record, idx) => {
                     const status = record.status as string
                     const isHalfDay = record.is_half_day
                     const workingHours = record.working_hours as number
@@ -213,20 +366,29 @@ export function AttendanceSummaryContent({
                                         <Badge
                                             variant="secondary"
                                             className={cn(
-                                                "capitalize font-black text-[9px] px-1.5 h-3.5",
+                                                "capitalize font-black text-[9px] px-1.5 h-3.5 whitespace-nowrap",
                                                 status === 'verified' && "bg-green-500/10 text-green-700 border-green-500/20",
                                                 status === 'pending' && "bg-amber-500/10 text-amber-700 border-amber-500/20",
-                                                status === 'rejected' && "bg-red-500/10 text-red-700 border-red-500/20"
+                                                status === 'rejected' && "bg-red-500/10 text-red-700 border-red-500/20",
+                                                status === 'holiday' && "bg-blue-500/10 text-blue-700 border-blue-500/20",
+                                                status === 'leave' && "bg-orange-500/10 text-orange-700 border-orange-500/20",
+                                                status === 'offDay' && "bg-slate-500/10 text-slate-700 border-slate-500/20",
+                                                status === 'absent' && "bg-red-500/10 text-red-700 border-red-500/20",
+                                                status === 'future' && "bg-muted text-muted-foreground/60 border-muted"
                                             )}
                                         >
-                                            {status}
+                                            {status === 'offDay' ? 'Weekly Off' : status === 'future' ? '-' : status}
                                         </Badge>
-                                        <Badge variant="outline" className={cn(
-                                            "text-[9px] h-3.5 font-bold px-1.5",
-                                            isHalfDay ? "bg-amber-500/5 border-amber-500/20 text-amber-600" : "bg-blue-500/5 border-blue-500/20 text-blue-600"
-                                        )}>
-                                            {isHalfDay ? "Half Day" : "Full Day"}
-                                        </Badge>
+                                        {(status === 'verified' || status === 'pending' || status === 'rejected' || status === 'leave') && (
+                                            <Badge variant="outline" className={cn(
+                                                "text-[9px] h-3.5 font-bold px-1.5 whitespace-nowrap",
+                                                status === 'leave' 
+                                                    ? "bg-orange-500/5 border-orange-500/20 text-orange-600"
+                                                    : isHalfDay ? "bg-amber-500/5 border-amber-500/20 text-amber-600" : "bg-blue-500/5 border-blue-500/20 text-blue-600"
+                                            )}>
+                                                {status === 'leave' ? (isHalfDay ? "Half Day Leave" : "Full Day Leave") : isHalfDay ? "Half Day" : "Full Day"}
+                                            </Badge>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="text-right">
@@ -249,7 +411,12 @@ export function AttendanceSummaryContent({
                                     <div className="flex flex-col">
                                         <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Check In</span>
                                         <span className="text-xs font-semibold tabular-nums">
-                                            {record.check_in ? format(new Date(record.check_in), "hh:mm a") : "--:-- --"}
+                                            {record.check_in ? format(new Date(record.check_in), "hh:mm a") : (
+                                                record.type === 'holiday' ? "HOLIDAY" :
+                                                record.type === 'leave' ? "LEAVE" :
+                                                record.type === 'offDay' ? "OFF DAY" :
+                                                record.type === 'absent' ? "ABSENT" : "--:-- --"
+                                            )}
                                         </span>
                                     </div>
                                 </div>
@@ -260,7 +427,12 @@ export function AttendanceSummaryContent({
                                     <div className="flex flex-col">
                                         <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Check Out</span>
                                         <span className="text-xs font-semibold tabular-nums">
-                                            {record.check_out ? format(new Date(record.check_out), "hh:mm a") : "--:-- --"}
+                                            {record.check_out ? format(new Date(record.check_out), "hh:mm a") : (
+                                                record.type === 'holiday' ? "HOLIDAY" :
+                                                record.type === 'leave' ? "LEAVE" :
+                                                record.type === 'offDay' ? "OFF DAY" :
+                                                record.type === 'absent' ? "ABSENT" : "--:-- --"
+                                            )}
                                         </span>
                                     </div>
                                 </div>
@@ -276,7 +448,7 @@ export function AttendanceSummaryContent({
         <div className="w-full overflow-hidden [&_th]:px-2 [&_td]:px-2 [&_th:first-child]:pl-4 [&_td:first-child]:pl-4 [&_th:last-child]:pr-4 [&_td:last-child]:pr-4 [&_td]:text-xs [&_th]:text-[10px] [&_th]:uppercase [&_th]:tracking-wider">
             <DataTable
                 columns={columns}
-                data={records}
+                data={compiledRecords}
                 isLoading={isLoading}
                 hidePagination={true}
                 emptyIcon={<CalendarDays className="size-10 text-muted-foreground/20" />}

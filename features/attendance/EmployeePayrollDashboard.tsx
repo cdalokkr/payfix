@@ -29,8 +29,11 @@ export function EmployeePayrollDashboard() {
     lastWeek.setDate(lastWeek.getDate() - 7)
 
     const { data: attendance, isLoading: attendanceLoading, isFetching: attendanceFetching } = trpc.attendance.getAttendance.useQuery({
+        profileId: profile?.id,
         startDate: format(lastWeek, 'yyyy-MM-dd'),
         endDate: format(new Date(), 'yyyy-MM-dd')
+    }, {
+        enabled: !!profile?.id
     })
 
     const { data: leaves, isLoading: leavesLoading, isFetching: leavesFetching } = trpc.attendance.getLeaves.useQuery({
@@ -203,7 +206,7 @@ export function EmployeePayrollDashboard() {
                                 <CardDescription>View your attendance history and mark daily status</CardDescription>
                             </CardHeader>
                             <CardContent>
-                                <Link href="/employee/attendance">
+                                <Link href="/employee/attendance-history">
                                     <Button variant="outline" className="w-full group/btn font-semibold">
                                         Manage Attendance <Clock className="ml-2 h-4 w-4 group-hover/btn:rotate-12 transition-transform" />
                                     </Button>

@@ -53,8 +53,11 @@ export function AttendanceDashboard() {
     const monthEnd = endOfMonth(currentMonth)
 
     const { data: attendance, isLoading: isAttendanceLoading, isFetching: isAttendanceFetching } = trpc.attendance.getAttendance.useQuery({
+        profileId: profile?.id,
         startDate: format(monthStart, 'yyyy-MM-dd'),
         endDate: format(monthEnd, 'yyyy-MM-dd')
+    }, {
+        enabled: !!profile?.id
     })
 
     const { data: leaves } = trpc.attendance.getLeaves.useQuery({
@@ -333,6 +336,7 @@ export function AttendanceDashboard() {
                         setSelectedDate={setSelectedDate}
                         today={today}
                         monthStart={monthStart}
+                        isLoading={isAttendanceLoading || isAttendanceFetching}
                     />
                 </CardShell>
 
@@ -346,8 +350,11 @@ export function AttendanceDashboard() {
                     <div className="px-4 py-2">
                         <AttendanceSummaryContent
                             attendance={attendance}
-                            isLoading={isAttendanceLoading}
+                            isLoading={isAttendanceLoading || isAttendanceFetching}
                             settings={settings}
+                            closures={closures}
+                            leaves={leaves}
+                            currentMonth={currentMonth}
                         />
                     </div>
                 </CardShell>

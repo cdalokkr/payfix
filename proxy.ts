@@ -273,7 +273,7 @@ export async function proxy(request: NextRequest) {
             return redirectWithCookies('/' + profile.role)
         }
 
-        if (isEmployeeRoute && profile.role !== 'employee') {
+        if (isEmployeeRoute && profile.role !== 'employee' && profile.role !== 'moderator' && profile.role !== 'admin') {
             console.warn(`[PROXY-AUTH] Employee route access denied for role ${profile.role}. Redirecting to /${profile.role}`)
             return redirectWithCookies('/' + profile.role)
         }

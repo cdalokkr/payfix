@@ -1,5 +1,5 @@
 import { db } from '@/lib/db'
-import { attendance, activities, officeSettings, officeClosures, officeLocations } from '@/lib/db/schema'
+import { attendance, activities, officeSettings, officeClosures, officeLocations, notifications } from '@/lib/db/schema'
 import { eq, and, gte, lte, desc, sql, inArray } from 'drizzle-orm'
 import { throwAppError } from '@/lib/errors/app-errors'
 import { SmartCache } from '@/lib/cache/smart-cache'
@@ -360,17 +360,17 @@ export class AttendanceService {
         }
 
         if (checkIn) {
-            const [h, m] = checkIn.split(':')
-            const dateObj = new Date(recordDate)
-            dateObj.setHours(parseInt(h, 10), parseInt(m, 10), 0, 0)
-            updateData.check_in = dateObj
+            const parts = checkIn.split(':')
+            const h = parts[0].padStart(2, '0')
+            const m = (parts[1] || '00').padStart(2, '0')
+            updateData.check_in = new Date(`${recordDate}T${h}:${m}:00+05:30`)
         }
 
         if (checkOut) {
-            const [h, m] = checkOut.split(':')
-            const dateObj = new Date(recordDate)
-            dateObj.setHours(parseInt(h, 10), parseInt(m, 10), 0, 0)
-            updateData.check_out = dateObj
+            const parts = checkOut.split(':')
+            const h = parts[0].padStart(2, '0')
+            const m = (parts[1] || '00').padStart(2, '0')
+            updateData.check_out = new Date(`${recordDate}T${h}:${m}:00+05:30`)
         }
 
         updateData.source = 'manual'
@@ -419,61 +419,192 @@ export class AttendanceService {
         let skipped = 0
         const errors: string[] = []
 
-        for (const record of records) {
-            try {
-                // Check if record already exists for this employee+date
-                const existing = await db.query.attendance.findFirst({
-                    where: and(
-                        eq(attendance.profile_id, record.profileId),
-                        eq(attendance.date, record.date)
-                    ),
-                    columns: { id: true }
-                })
+        try {
+            // Pre-fetch office settings and closures for holiday & weekly-off detection
+            const settings = await SmartCache.getOfficeSettingsCached()
+            const closures = await SmartCache.getOfficeClosuresCached()
+            const offDays = settings?.off_days || [0]
+            const holidaysSet = new Set(closures?.map(c => c.date) || [])
 
-                if (existing) {
-                    skipped++
-                    continue
-                }
+            for (const record of records) {
+                try {
+                    // Check if date is Sunday (off day) or Holiday
+                    const dateObjForDay = new Date(record.date)
+                    const dayOfWeek = dateObjForDay.getDay()
+                    const isOffDay = offDays.includes(dayOfWeek)
+                    const isHoliday = holidaysSet.has(record.date)
+                    const isExtraDay = (isOffDay || isHoliday) ? true : false
 
-                // Build check_in and check_out timestamps
-                let checkInDate: Date | null = null
-                let checkOutDate: Date | null = null
+                    // Build check_in and check_out timestamps
+                    let checkInDate: Date | null = null
+                    let checkOutDate: Date | null = null
 
-                if (record.checkIn) {
-                    const parts = record.checkIn.split(':')
-                    const h = parseInt(parts[0], 10)
-                    const m = parseInt(parts[1] || '0', 10)
-                    if (!isNaN(h) && !isNaN(m)) {
-                        checkInDate = new Date(record.date + 'T00:00:00')
-                        checkInDate.setHours(h, m, 0, 0)
+                    if (record.checkIn) {
+                        const parts = record.checkIn.split(':')
+                        const h = parts[0].padStart(2, '0')
+                        const m = (parts[1] || '00').padStart(2, '0')
+                        checkInDate = new Date(`${record.date}T${h}:${m}:00+05:30`)
                     }
-                }
 
-                if (record.checkOut) {
-                    const parts = record.checkOut.split(':')
-                    const h = parseInt(parts[0], 10)
-                    const m = parseInt(parts[1] || '0', 10)
-                    if (!isNaN(h) && !isNaN(m)) {
-                        checkOutDate = new Date(record.date + 'T00:00:00')
-                        checkOutDate.setHours(h, m, 0, 0)
+                    if (record.checkOut) {
+                        const parts = record.checkOut.split(':')
+                        const h = parts[0].padStart(2, '0')
+                        const m = (parts[1] || '00').padStart(2, '0')
+                        checkOutDate = new Date(`${record.date}T${h}:${m}:00+05:30`)
                     }
+
+                    // Check if record already exists for this employee+date
+                    const existing = await db.query.attendance.findFirst({
+                        where: and(
+                            eq(attendance.profile_id, record.profileId),
+                            eq(attendance.date, record.date)
+                        ),
+                        columns: { id: true }
+                    })
+
+                    // Handle blank row check-in/out times (Absent/Holiday/Leave fallback)
+                    if (!checkInDate && !checkOutDate) {
+                        if (existing) {
+                            // Delete record so calendar/history falls back to Sunday/Holiday/Leave/Absent
+                            await db.delete(attendance).where(eq(attendance.id, existing.id))
+                            
+                            // Insert notification for the employee
+                            const notifyMessage = `Your attendance record for ${record.date} has been cleared via bulk upload by ${uploaderName}.`
+                            try {
+                                await db.insert(notifications).values({
+                                    user_id: record.profileId,
+                                    title: 'Attendance Cleared',
+                                    message: notifyMessage,
+                                    type: 'attendance_clear',
+                                    link: '/mobile/history'
+                                })
+
+                                // Broadcast server event for real-time history reload
+                                const { broadcastServerEvent } = await import('@/lib/events/server-broadcaster')
+                                broadcastServerEvent('attendance_update', {
+                                    action: 'bulk-clear',
+                                    employeeId: record.profileId,
+                                    date: record.date
+                                }, record.profileId)
+
+                                broadcastServerEvent('new_notification', {
+                                    title: 'Attendance Cleared',
+                                    message: notifyMessage,
+                                    type: 'attendance_clear',
+                                    link: '/mobile/history',
+                                    targetUserId: record.profileId
+                                }, record.profileId)
+                            } catch (notifyErr) {
+                                console.error('Failed to notify employee in bulk clear:', notifyErr)
+                            }
+
+                            inserted++
+                        } else {
+                            skipped++
+                        }
+                        continue
+                    }
+
+                    // Handle update logic
+                    if (existing) {
+                        // Update existing record with new times and reset status to pending for re-verification
+                        await db.update(attendance).set({
+                            check_in: checkInDate,
+                            check_out: checkOutDate,
+                            source: 'bulk',
+                            status: 'pending', // Requires re-verification
+                            is_half_day: record.isHalfDay,
+                            is_extra_day: isExtraDay, // Sunday/holiday extra working day
+                            remarks: record.remarks || `Bulk updated by ${uploaderName}`,
+                            updated_at: new Date()
+                        }).where(eq(attendance.id, existing.id))
+
+                        // Insert notification for the employee
+                        const notifyMessage = `Your attendance record for ${record.date} has been updated via bulk upload by ${uploaderName}.`
+                        try {
+                            await db.insert(notifications).values({
+                                    user_id: record.profileId,
+                                    title: 'Attendance Updated',
+                                    message: notifyMessage,
+                                    type: 'attendance_update',
+                                    link: '/mobile/history'
+                            })
+
+                            // Broadcast server event for real-time history reload
+                            const { broadcastServerEvent } = await import('@/lib/events/server-broadcaster')
+                            broadcastServerEvent('attendance_update', {
+                                action: 'bulk-update',
+                                employeeId: record.profileId,
+                                date: record.date,
+                                remarks: record.remarks || `Bulk updated by ${uploaderName}`
+                            }, record.profileId)
+
+                            broadcastServerEvent('new_notification', {
+                                title: 'Attendance Updated',
+                                message: notifyMessage,
+                                type: 'attendance_update',
+                                link: '/mobile/history',
+                                targetUserId: record.profileId
+                            }, record.profileId)
+                        } catch (notifyErr) {
+                            console.error('Failed to notify employee in bulk update:', notifyErr)
+                        }
+
+                        inserted++
+                        continue
+                    }
+
+                    // Handle creation logic
+                    await db.insert(attendance).values({
+                        profile_id: record.profileId,
+                        date: record.date,
+                        check_in: checkInDate,
+                        check_out: checkOutDate,
+                        status: 'pending',
+                        source: 'bulk',
+                        is_half_day: record.isHalfDay,
+                        is_extra_day: isExtraDay, // Sunday/holiday extra working day
+                        remarks: record.remarks || `Bulk uploaded by ${uploaderName}`,
+                    })
+
+                    // Insert notification for the employee
+                    const notifyMessage = `New attendance record for ${record.date} has been created via bulk upload by ${uploaderName}.`
+                    try {
+                        await db.insert(notifications).values({
+                            user_id: record.profileId,
+                            title: 'Attendance Created',
+                            message: notifyMessage,
+                            type: 'attendance_create',
+                            link: '/mobile/history'
+                        })
+
+                        // Broadcast server event for real-time history reload
+                        const { broadcastServerEvent } = await import('@/lib/events/server-broadcaster')
+                        broadcastServerEvent('attendance_update', {
+                            action: 'bulk-create',
+                            employeeId: record.profileId,
+                            date: record.date,
+                            remarks: record.remarks || `Bulk uploaded by ${uploaderName}`
+                        }, record.profileId)
+
+                        broadcastServerEvent('new_notification', {
+                            title: 'Attendance Created',
+                            message: notifyMessage,
+                            type: 'attendance_create',
+                            link: '/mobile/history',
+                            targetUserId: record.profileId
+                        }, record.profileId)
+                    } catch (notifyErr) {
+                        console.error('Failed to notify employee in bulk insert:', notifyErr)
+                    }
+
+                    inserted++
+                } catch (err: any) {
+                    errors.push(`Failed to insert/update record for date ${record.date}: ${err.message}`)
                 }
-
-                await db.insert(attendance).values({
-                    profile_id: record.profileId,
-                    date: record.date,
-                    check_in: checkInDate,
-                    check_out: checkOutDate,
-                    status: 'pending',
-                    source: 'bulk',
-                    is_half_day: record.isHalfDay,
-                    remarks: record.remarks || `Bulk uploaded by ${uploaderName}`,
-                })
-
-                inserted++
-            } catch (err: any) {
-                errors.push(`Failed to insert record for date ${record.date}: ${err.message}`)
             }
+        } catch (setupErr: any) {
+            errors.push(`General setup error in daily bulk upload: ${setupErr.message}`)
         }
 
         // Log activity

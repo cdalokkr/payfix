@@ -314,6 +314,13 @@ export const moderatorNavItems: NavGroup[] = [
         moduleId: "profile",
         description: "Your profile and account settings"
       },
+      {
+        title: "Attendance History",
+        href: "/employee/attendance-history",
+        icon: "CalendarDays",
+        moduleId: "attendance",
+        description: "View your personal attendance history"
+      },
     ]
   }
 ];
@@ -345,8 +352,8 @@ export const employeeNavItems: NavGroup[] = [
         description: "Your payroll overview"
       },
       {
-        title: "Attendance",
-        href: "/employee/attendance",
+        title: "Attendance History",
+        href: "/employee/attendance-history",
         icon: "CalendarCheck",
         moduleId: "attendance",
         description: "Mark attendance and view history"

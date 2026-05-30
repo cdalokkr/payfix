@@ -260,7 +260,7 @@ export const PushNotificationService = {
                 type: 'attendance_verification',
                 status,
                 date,
-                link: '/employee/attendance',
+                link: '/employee/attendance-history',
             },
         })
 

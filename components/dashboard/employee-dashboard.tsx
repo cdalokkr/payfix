@@ -173,7 +173,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
             {/* Live Metrics Row (Cohesive 4-Column Grid) */}
             <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
                 {/* Today's Punch Card */}
-                <Link href="/employee/attendance" className="block h-full">
+                <Link href="/employee/attendance-history" className="block h-full">
                     <MetricCard
                         title="Today's Punch"
                         value={clockStatusText}
@@ -270,7 +270,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 py-2">
                             {/* Attendance Clock In */}
                             <Link
-                                href="/employee/attendance"
+                                href="/employee/attendance-history"
                                 className="flex items-center gap-2.5 p-2.5 rounded-xl border border-blue-200/40 bg-blue-50/30 dark:bg-blue-500/5 hover:bg-blue-500/10 hover:border-blue-500/40 hover:shadow-lg hover:shadow-blue-500/5 transition-all duration-300 group/action cursor-pointer"
                             >
                                 <div className="p-1.5 rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 group-hover/action:scale-115 group-hover/action:rotate-3 transition-all">
