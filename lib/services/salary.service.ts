@@ -781,7 +781,8 @@ export class SalaryService {
         year,
         records,
         uploadedBy,
-        uploaderName
+        uploaderName,
+        preview = false
     }: {
         month: number
         year: number
@@ -796,63 +797,159 @@ export class SalaryService {
         }>
         uploadedBy: string
         uploaderName: string
-    }): Promise<{ inserted: number, updated: number, skipped: number, errors: string[] }> {
+        preview?: boolean
+    }): Promise<{
+        inserted: number
+        updated: number
+        skipped: number
+        errors: string[]
+        toInsert?: number
+        toUpdate?: number
+        previewDetails?: Array<{
+            profileId: string
+            action: 'Insert' | 'Update' | 'Skip'
+            details: string
+            reason?: string
+        }>
+    }> {
         let inserted = 0
         let updated = 0
         let skipped = 0
         const errors: string[] = []
+        const previewDetails: Array<{
+            profileId: string
+            action: 'Insert' | 'Update' | 'Skip'
+            details: string
+            reason?: string
+        }> = []
 
-        for (const record of records) {
-            try {
-                // Check if summary already exists for this employee+month+year
-                const existing = await db.query.monthlyAttendanceSummary.findFirst({
+        try {
+            const profileIds = [...new Set(records.map(r => r.profileId))]
+
+            // Fetch existing summaries in a single bulk query
+            const existingMap = new Map<string, any>()
+            if (profileIds.length > 0) {
+                const existingSummaries = await db.query.monthlyAttendanceSummary.findMany({
                     where: and(
-                        eq(monthlyAttendanceSummary.profile_id, record.profileId),
+                        inArray(monthlyAttendanceSummary.profile_id, profileIds),
                         eq(monthlyAttendanceSummary.month, month),
                         eq(monthlyAttendanceSummary.year, year)
                     )
                 })
+                for (const s of existingSummaries) {
+                    existingMap.set(s.profile_id, s)
+                }
+            }
 
-                if (existing) {
-                    if (existing.status === 'draft') {
-                        // Update existing draft
-                        await db.update(monthlyAttendanceSummary).set({
+            const summariesToInsert: any[] = []
+            const summariesToUpdate: Array<{ id: string; values: any }> = []
+
+            for (const record of records) {
+                try {
+                    const existing = existingMap.get(record.profileId)
+
+                    if (existing) {
+                        if (existing.status === 'draft') {
+                            summariesToUpdate.push({
+                                id: existing.id,
+                                values: {
+                                    total_working_days: record.totalWorkingDays,
+                                    total_present_days: record.totalPresent,
+                                    total_half_days: record.totalHalfDays,
+                                    total_absent_days: record.totalAbsent,
+                                    total_leaves: record.totalLeaves,
+                                    total_working_hours: record.totalWorkingHours?.toFixed(2) || '0',
+                                    updated_at: new Date(),
+                                }
+                            })
+                            updated++
+                            if (preview) {
+                                previewDetails.push({
+                                    profileId: record.profileId,
+                                    action: 'Update',
+                                    details: `Present: ${record.totalPresent}, Absent: ${record.totalAbsent}, Leave: ${record.totalLeaves}, Half Day: ${record.totalHalfDays}, Working Days: ${record.totalWorkingDays}${record.totalWorkingHours ? `, Hours: ${record.totalWorkingHours}` : ''}`
+                                })
+                            }
+                        } else {
+                            // Already processed (set_for_salary or payslip_generated) — skip
+                            skipped++
+                            if (preview) {
+                                previewDetails.push({
+                                    profileId: record.profileId,
+                                    action: 'Skip',
+                                    details: '',
+                                    reason: `Existing record status is ${existing.status} (already processed/salary generated)`
+                                })
+                            }
+                        }
+                    } else {
+                        summariesToInsert.push({
+                            profile_id: record.profileId,
+                            month,
+                            year,
                             total_working_days: record.totalWorkingDays,
                             total_present_days: record.totalPresent,
                             total_half_days: record.totalHalfDays,
                             total_absent_days: record.totalAbsent,
                             total_leaves: record.totalLeaves,
                             total_working_hours: record.totalWorkingHours?.toFixed(2) || '0',
-                            updated_at: new Date(),
-                        }).where(eq(monthlyAttendanceSummary.id, existing.id))
-                        updated++
-                    } else {
-                        // Already processed (set_for_salary or payslip_generated) — skip
-                        skipped++
+                            status: 'draft',
+                        })
+                        inserted++
+                        if (preview) {
+                            previewDetails.push({
+                                profileId: record.profileId,
+                                action: 'Insert',
+                                details: `Present: ${record.totalPresent}, Absent: ${record.totalAbsent}, Leave: ${record.totalLeaves}, Half Day: ${record.totalHalfDays}, Working Days: ${record.totalWorkingDays}${record.totalWorkingHours ? `, Hours: ${record.totalWorkingHours}` : ''}`
+                            })
+                        }
                     }
-                } else {
-                    // Insert new draft
-                    await db.insert(monthlyAttendanceSummary).values({
-                        profile_id: record.profileId,
-                        month,
-                        year,
-                        total_working_days: record.totalWorkingDays,
-                        total_present_days: record.totalPresent,
-                        total_half_days: record.totalHalfDays,
-                        total_absent_days: record.totalAbsent,
-                        total_leaves: record.totalLeaves,
-                        total_working_hours: record.totalWorkingHours?.toFixed(2) || '0',
-                        status: 'draft',
-                    })
-                    inserted++
+                } catch (err: any) {
+                    errors.push(`Failed to process record for profile ${record.profileId}: ${err.message}`)
+                    if (preview) {
+                        previewDetails.push({
+                            profileId: record.profileId,
+                            action: 'Skip',
+                            details: '',
+                            reason: err.message || 'Validation error'
+                        })
+                    }
                 }
-            } catch (err: any) {
-                errors.push(`Failed to process record for profile ${record.profileId}: ${err.message}`)
             }
+
+            // If preview mode, return predicted insertion and update numbers instantly without writing anything
+            if (preview) {
+                return {
+                    inserted: 0,
+                    updated: 0,
+                    skipped,
+                    errors,
+                    toInsert: summariesToInsert.length,
+                    toUpdate: summariesToUpdate.length,
+                    previewDetails
+                }
+            }
+
+            // Run insertions and updates inside a single database transaction
+            if (summariesToInsert.length > 0 || summariesToUpdate.length > 0) {
+                await db.transaction(async (tx) => {
+                    if (summariesToInsert.length > 0) {
+                        await tx.insert(monthlyAttendanceSummary).values(summariesToInsert)
+                    }
+                    if (summariesToUpdate.length > 0) {
+                        for (const update of summariesToUpdate) {
+                            await tx.update(monthlyAttendanceSummary).set(update.values).where(eq(monthlyAttendanceSummary.id, update.id))
+                        }
+                    }
+                })
+            }
+
+        } catch (setupErr: any) {
+            errors.push(`General setup error in monthly bulk upload: ${setupErr.message}`)
         }
 
         // Log activity
-        if (inserted > 0 || updated > 0) {
+        if (!preview && (inserted > 0 || updated > 0)) {
             const { activities } = await import('@/lib/db/schema')
             await db.insert(activities).values({
                 user_id: uploadedBy,

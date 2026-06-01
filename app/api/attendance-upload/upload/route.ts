@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
         const type = formData.get('type') as string
         const month = parseInt(formData.get('month') as string || '0')
         const year = parseInt(formData.get('year') as string || '0')
+        const preview = formData.get('preview') === 'true'
 
         if (!file) {
             return NextResponse.json({ error: 'No file provided' }, { status: 400 })
@@ -63,20 +64,24 @@ export async function POST(request: NextRequest) {
         const dataRows = rawData.slice(1).filter(row => row.some(cell => cell !== undefined && cell !== ''))
 
         // Build email-to-profile map
-        const allProfiles = await db.query.profiles.findMany({
-            where: eq(profiles.status, 'active'),
-            columns: { id: true, email: true, full_name: true }
+        const allProfiles = await db.select({
+            id: profiles.id,
+            email: profiles.email,
+            full_name: profiles.full_name
         })
+        .from(profiles)
+        .where(eq(profiles.status, 'active'))
+        
         const emailToProfile = new Map(allProfiles.map(p => [p.email.toLowerCase(), p]))
 
         if (type === 'daily') {
-            const result = await processDailyUpload(dataRows, emailToProfile, profile.id, profile.full_name || 'Admin')
+            const result = await processDailyUpload(dataRows, emailToProfile, profile.id, profile.full_name || 'Admin', preview)
             return NextResponse.json(result)
         } else {
             if (!month || !year) {
                 return NextResponse.json({ error: 'Month and year are required for monthly upload' }, { status: 400 })
             }
-            const result = await processMonthlyUpload(dataRows, emailToProfile, month, year, profile.id, profile.full_name || 'Admin')
+            const result = await processMonthlyUpload(dataRows, emailToProfile, month, year, profile.id, profile.full_name || 'Admin', preview)
             return NextResponse.json(result)
         }
 
@@ -226,7 +231,8 @@ async function processDailyUpload(
     rows: any[][],
     emailMap: Map<string, { id: string; email: string; full_name: string | null }>,
     uploadedBy: string,
-    uploaderName: string
+    uploaderName: string,
+    preview: boolean
 ) {
     const records: Array<{
         profileId: string
@@ -238,6 +244,13 @@ async function processDailyUpload(
     }> = []
     const errors: string[] = []
     let skippedRows = 0
+    const skippedRecords: Array<{
+        rowNum: number
+        employeeName: string
+        email: string
+        date?: string
+        reason: string
+    }> = []
 
     for (let i = 0; i < rows.length; i++) {
         const row = rows[i]
@@ -253,23 +266,42 @@ async function processDailyUpload(
 
         if (!email) {
             skippedRows++
+            skippedRecords.push({
+                rowNum,
+                employeeName: String(row[1] || 'Unknown').trim(),
+                email: '',
+                date: String(row[4] || ''),
+                reason: 'Empty email cell'
+            })
             continue
         }
 
         const profile = emailMap.get(email)
         if (!profile) {
-            errors.push(`Row ${rowNum}: Employee "${email}" not found`)
+            const errReason = `Employee profile not found for email "${email}"`
+            errors.push(`Row ${rowNum}: ${errReason}`)
+            skippedRecords.push({
+                rowNum,
+                employeeName: String(row[1] || 'Unknown').trim(),
+                email,
+                date: String(row[4] || ''),
+                reason: errReason
+            })
             continue
         }
 
         // Normalize date from any Excel format
         const normalizedDate = normalizeExcelDate(rawDate)
         if (!normalizedDate) {
-            if (rawDate == null || rawDate === '') {
-                errors.push(`Row ${rowNum}: Missing date for ${email}`)
-            } else {
-                errors.push(`Row ${rowNum}: Invalid date "${rawDate}" for ${email}`)
-            }
+            const dateReason = (rawDate == null || rawDate === '') ? 'Missing date value' : `Invalid date value "${rawDate}"`
+            errors.push(`Row ${rowNum}: ${dateReason} for ${email}`)
+            skippedRecords.push({
+                rowNum,
+                employeeName: profile.full_name || 'Unknown',
+                email,
+                date: String(rawDate || ''),
+                reason: dateReason
+            })
             continue
         }
 
@@ -291,8 +323,60 @@ async function processDailyUpload(
     const result = await AttendanceService.bulkUploadDailyAttendance({
         records,
         uploadedBy,
-        uploaderName
+        uploaderName,
+        preview
     })
+
+    if (preview) {
+        const verifiedRecords: Array<{
+            employeeName: string
+            email: string
+            date: string
+            action: 'Insert' | 'Update' | 'Clear'
+            details: string
+        }> = []
+
+        if (result.previewDetails) {
+            for (const detail of result.previewDetails) {
+                const prof = emailMap.get(detail.profileId) || [...emailMap.values()].find(p => p.id === detail.profileId)
+                const employeeName = prof?.full_name || 'Unknown'
+                const email = prof?.email || ''
+
+                if (detail.action === 'Skip') {
+                    skippedRecords.push({
+                        rowNum: 0,
+                        employeeName,
+                        email,
+                        date: detail.date,
+                        reason: detail.reason || 'Bypassed'
+                    })
+                } else {
+                    verifiedRecords.push({
+                        employeeName,
+                        email,
+                        date: detail.date,
+                        action: detail.action,
+                        details: detail.details
+                    })
+                }
+            }
+        }
+
+        // Sort verified and skipped records to be clean
+        verifiedRecords.sort((a, b) => a.employeeName.localeCompare(b.employeeName) || a.date.localeCompare(b.date))
+        skippedRecords.sort((a, b) => a.rowNum - b.rowNum || a.employeeName.localeCompare(b.employeeName))
+
+        return {
+            preview: true,
+            toInsert: result.toInsert,
+            toUpdate: result.toUpdate,
+            toDelete: result.toDelete,
+            skipped: result.skipped + skippedRows,
+            errors: [...errors, ...result.errors],
+            verifiedRecords,
+            skippedRecords
+        }
+    }
 
     return {
         success: result.inserted,
@@ -307,7 +391,8 @@ async function processMonthlyUpload(
     month: number,
     year: number,
     uploadedBy: string,
-    uploaderName: string
+    uploaderName: string,
+    preview: boolean
 ) {
     const records: Array<{
         profileId: string
@@ -320,6 +405,12 @@ async function processMonthlyUpload(
     }> = []
     const errors: string[] = []
     let skippedRows = 0
+    const skippedRecords: Array<{
+        rowNum: number
+        employeeName: string
+        email: string
+        reason: string
+    }> = []
 
     for (let i = 0; i < rows.length; i++) {
         const row = rows[i]
@@ -336,18 +427,37 @@ async function processMonthlyUpload(
 
         if (!email) {
             skippedRows++
+            skippedRecords.push({
+                rowNum,
+                employeeName: String(row[1] || 'Unknown').trim(),
+                email: '',
+                reason: 'Empty email cell'
+            })
             continue
         }
 
         const profile = emailMap.get(email)
         if (!profile) {
-            errors.push(`Row ${rowNum}: Employee "${email}" not found`)
+            const errReason = `Employee profile not found for email "${email}"`
+            errors.push(`Row ${rowNum}: ${errReason}`)
+            skippedRecords.push({
+                rowNum,
+                employeeName: String(row[1] || 'Unknown').trim(),
+                email,
+                reason: errReason
+            })
             continue
         }
 
         // Skip rows where all numeric fields are 0/empty
         if (totalWorkingDays === 0 && totalPresent === 0 && totalAbsent === 0) {
             skippedRows++
+            skippedRecords.push({
+                rowNum,
+                employeeName: profile.full_name || 'Unknown',
+                email,
+                reason: 'All numeric attendance stats are zero'
+            })
             continue
         }
 
@@ -368,8 +478,56 @@ async function processMonthlyUpload(
         year,
         records,
         uploadedBy,
-        uploaderName
+        uploaderName,
+        preview
     })
+
+    if (preview) {
+        const verifiedRecords: Array<{
+            employeeName: string
+            email: string
+            action: 'Insert' | 'Update'
+            details: string
+        }> = []
+
+        if (result.previewDetails) {
+            for (const detail of result.previewDetails) {
+                const prof = emailMap.get(detail.profileId) || [...emailMap.values()].find(p => p.id === detail.profileId)
+                const employeeName = prof?.full_name || 'Unknown'
+                const email = prof?.email || ''
+
+                if (detail.action === 'Skip') {
+                    skippedRecords.push({
+                        rowNum: 0,
+                        employeeName,
+                        email,
+                        reason: detail.reason || 'Bypassed'
+                    })
+                } else {
+                    verifiedRecords.push({
+                        employeeName,
+                        email,
+                        action: detail.action,
+                        details: detail.details
+                    })
+                }
+            }
+        }
+
+        // Sort records cleanly
+        verifiedRecords.sort((a, b) => a.employeeName.localeCompare(b.employeeName))
+        skippedRecords.sort((a, b) => a.rowNum - b.rowNum || a.employeeName.localeCompare(b.employeeName))
+
+        return {
+            preview: true,
+            toInsert: result.toInsert,
+            toUpdate: result.toUpdate,
+            skipped: result.skipped + skippedRows,
+            errors: [...errors, ...result.errors],
+            verifiedRecords,
+            skippedRecords
+        }
+    }
 
     return {
         success: result.inserted + result.updated,

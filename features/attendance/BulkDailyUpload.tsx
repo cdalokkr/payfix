@@ -2,12 +2,12 @@
 
 import React, { useState } from "react"
 import {
-    Sheet,
-    SheetContent,
-    SheetHeader,
-    SheetTitle,
-    SheetDescription,
-} from "@/components/ui/sheet"
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+} from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import {
     Select,
@@ -42,9 +42,27 @@ interface BulkDailyUploadProps {
 }
 
 type UploadResult = {
-    success: number
+    preview?: boolean
+    success?: number
     skipped: number
     errors: string[]
+    toInsert?: number
+    toUpdate?: number
+    toDelete?: number
+    verifiedRecords?: Array<{
+        employeeName: string
+        email: string
+        date: string
+        action: 'Insert' | 'Update' | 'Clear'
+        details: string
+    }>
+    skippedRecords?: Array<{
+        rowNum: number
+        employeeName: string
+        email: string
+        date?: string
+        reason: string
+    }>
 } | null
 
 export function BulkDailyUpload({ isOpen, onOpenChange }: BulkDailyUploadProps) {
@@ -64,6 +82,7 @@ export function BulkDailyUpload({ isOpen, onOpenChange }: BulkDailyUploadProps) 
     const [selectedFile, setSelectedFile] = useState<File | null>(null)
     const [uploadResult, setUploadResult] = useState<UploadResult>(null)
     const [dragOver, setDragOver] = useState(false)
+    const [activeTab, setActiveTab] = useState<'verified' | 'skipped'>('verified')
 
     const utils = trpc.useUtils()
 
@@ -108,6 +127,7 @@ export function BulkDailyUpload({ isOpen, onOpenChange }: BulkDailyUploadProps) 
         }
         setSelectedFile(file)
         setUploadResult(null)
+        setActiveTab('verified')
     }
 
     const handleDrop = (e: React.DragEvent) => {
@@ -117,11 +137,11 @@ export function BulkDailyUpload({ isOpen, onOpenChange }: BulkDailyUploadProps) 
         if (file) handleFileSelect(file)
     }
 
-    const handleUpload = async () => {
+    const handleUpload = async (isConfirm = false) => {
         if (!selectedFile) return
 
         setIsUploading(true)
-        setUploadResult(null)
+        if (!isConfirm) setUploadResult(null)
 
         try {
             const formData = new FormData()
@@ -129,6 +149,7 @@ export function BulkDailyUpload({ isOpen, onOpenChange }: BulkDailyUploadProps) 
             formData.append('type', 'daily')
             formData.append('month', String(month))
             formData.append('year', String(year))
+            formData.append('preview', String(!isConfirm))
 
             const response = await fetch('/api/attendance-upload/upload', {
                 method: 'POST',
@@ -143,12 +164,15 @@ export function BulkDailyUpload({ isOpen, onOpenChange }: BulkDailyUploadProps) 
 
             setUploadResult(result)
 
-            if (result.success > 0) {
-                toast.success(`${result.success} records uploaded successfully`)
-                // Invalidate attendance queries so the verification table refreshes
-                utils.attendance.getAttendance.invalidate()
-            } else if (result.skipped > 0 && result.success === 0) {
-                toast.warning('No new records uploaded — all rows were duplicates or empty')
+            if (!isConfirm) {
+                toast.info('Preview generated. Please confirm details below.')
+            } else {
+                if (result.success > 0) {
+                    toast.success(`${result.success} records uploaded successfully`)
+                    utils.attendance.getAttendance.invalidate()
+                } else if (result.skipped > 0 && result.success === 0) {
+                    toast.warning('No new records uploaded — all rows were duplicates or empty')
+                }
             }
         } catch (error: any) {
             toast.error(error.message || 'Upload failed')
@@ -177,29 +201,29 @@ export function BulkDailyUpload({ isOpen, onOpenChange }: BulkDailyUploadProps) 
     }
 
     return (
-        <Sheet open={isOpen} onOpenChange={handleClose}>
-            <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
-                <SheetHeader className="pb-2">
-                    <SheetTitle className="flex items-center gap-2 text-lg">
+        <Dialog open={isOpen} onOpenChange={handleClose}>
+            <DialogContent className="w-full sm:max-w-4xl max-h-[90vh] overflow-y-auto p-6">
+                <DialogHeader className="pb-4 border-b border-border/50">
+                    <DialogTitle className="flex items-center gap-2 text-lg">
                         <div className="p-1.5 rounded-lg bg-primary/10">
                             <Upload className="h-4 w-4 text-primary" />
                         </div>
                         Bulk Daily Upload
-                    </SheetTitle>
-                    <SheetDescription>
+                    </DialogTitle>
+                    <DialogDescription>
                         Upload daily attendance records for all employees via Excel sheet.
-                    </SheetDescription>
-                </SheetHeader>
+                    </DialogDescription>
+                </DialogHeader>
 
-                <div className="space-y-6 px-4 pb-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                     {/* Step 1: Download Template */}
-                    <div className="space-y-3">
+                    <div className="flex flex-col space-y-3">
                         <div className="flex items-center gap-2">
                             <span className="flex items-center justify-center h-6 w-6 rounded-full bg-primary text-primary-foreground text-xs font-bold">1</span>
                             <h3 className="font-semibold text-sm">Download Template</h3>
                         </div>
 
-                        <div className="p-3 rounded-xl bg-muted/30 border border-border/50 space-y-3">
+                        <div className="p-4 rounded-xl bg-muted/30 border border-border/50 space-y-4 flex-1 flex flex-col justify-between min-h-[210px]">
                             <div className="flex items-center gap-2">
                                 <Select value={String(month)} onValueChange={(val) => setMonth(Number(val))}>
                                     <SelectTrigger className="w-[130px] h-9 rounded-lg text-xs">
@@ -223,9 +247,8 @@ export function BulkDailyUpload({ isOpen, onOpenChange }: BulkDailyUploadProps) 
                                 <Select value={String(year)} onValueChange={(val) => {
                                     const newYear = Number(val)
                                     setYear(newYear)
-                                    // If changing year makes current month selection invalid, reset it
                                     if (isMonthDisabled(month, newYear)) {
-                                        setMonth(1) // Usually fallback to Jan, or let the user fix it. But simpler to reset to last valid month
+                                        setMonth(1)
                                         if (newYear === currentDate.getFullYear()) {
                                             setMonth(Math.max(1, currentDate.getMonth()))
                                         }
@@ -236,7 +259,7 @@ export function BulkDailyUpload({ isOpen, onOpenChange }: BulkDailyUploadProps) 
                                     </SelectTrigger>
                                     <SelectContent>
                                         {Array.from({ length: 5 }, (_, i) => currentDate.getFullYear() - 2 + i)
-                                            .filter(y => y <= currentDate.getFullYear()) // Don't show future years
+                                            .filter(y => y <= currentDate.getFullYear())
                                             .map(y => (
                                                 <SelectItem key={y} value={String(y)}>{y}</SelectItem>
                                             ))}
@@ -269,127 +292,267 @@ export function BulkDailyUpload({ isOpen, onOpenChange }: BulkDailyUploadProps) 
                         </div>
                     </div>
 
-                    {/* Step 2: Upload */}
-                    <div className="space-y-3">
+                    {/* Step 2: Upload Filled Sheet */}
+                    <div className="flex flex-col space-y-3">
                         <div className="flex items-center gap-2">
                             <span className="flex items-center justify-center h-6 w-6 rounded-full bg-primary text-primary-foreground text-xs font-bold">2</span>
                             <h3 className="font-semibold text-sm">Upload Filled Sheet</h3>
                         </div>
 
-                        {/* File Drop Zone */}
-                        <div
-                            className={cn(
-                                "relative rounded-xl border-2 border-dashed transition-all duration-200 cursor-pointer",
-                                dragOver
-                                    ? "border-primary bg-primary/5 scale-[1.01]"
-                                    : selectedFile
-                                        ? "border-emerald-500/30 bg-emerald-500/5"
-                                        : "border-border/50 bg-muted/20 hover:border-muted-foreground/30 hover:bg-muted/30"
-                            )}
-                            onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-                            onDragLeave={() => setDragOver(false)}
-                            onDrop={handleDrop}
-                            onClick={() => {
-                                const input = document.createElement('input')
-                                input.type = 'file'
-                                input.accept = '.xlsx,.xls'
-                                input.onchange = (e: any) => {
-                                    const file = e.target.files?.[0]
-                                    if (file) handleFileSelect(file)
-                                }
-                                input.click()
-                            }}
-                        >
-                            <div className="flex flex-col items-center py-6 px-4 text-center">
-                                {selectedFile ? (
+                        <div className="p-4 rounded-xl bg-muted/30 border border-border/50 flex-1 flex flex-col justify-between gap-3 min-h-[210px]">
+                            {/* File Drop Zone */}
+                            <div
+                                className={cn(
+                                    "relative rounded-xl border-2 border-dashed transition-all duration-200 cursor-pointer flex-1 flex flex-col justify-center min-h-[90px]",
+                                    dragOver
+                                        ? "border-primary bg-primary/5 scale-[1.01]"
+                                        : selectedFile
+                                            ? "border-emerald-500/30 bg-emerald-500/5"
+                                            : "border-border/50 bg-background/50 hover:border-muted-foreground/30 hover:bg-background"
+                                )}
+                                onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+                                onDragLeave={() => setDragOver(false)}
+                                onDrop={handleDrop}
+                                onClick={() => {
+                                    const input = document.createElement('input')
+                                    input.type = 'file'
+                                    input.accept = '.xlsx,.xls'
+                                    input.onchange = (e: any) => {
+                                        const file = e.target.files?.[0]
+                                        if (file) handleFileSelect(file)
+                                    }
+                                    input.click()
+                                }}
+                            >
+                                <div className="flex flex-col items-center py-3 px-4 text-center">
+                                    {selectedFile ? (
+                                        <>
+                                            <FileSpreadsheet className="h-7 w-7 text-emerald-500 mb-1" />
+                                            <p className="text-xs font-medium text-foreground truncate max-w-[200px]">{selectedFile.name}</p>
+                                            <p className="text-[10px] text-muted-foreground mt-0.5">
+                                                {(selectedFile.size / 1024).toFixed(1)} KB
+                                            </p>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="mt-1 h-6 text-[10px] text-muted-foreground py-0"
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    setSelectedFile(null)
+                                                    setUploadResult(null)
+                                                }}
+                                            >
+                                                <X className="h-3 w-3 mr-1" />
+                                                Remove
+                                            </Button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <FileUp className="h-7 w-7 text-muted-foreground/40 mb-1" />
+                                            <p className="text-xs font-medium text-muted-foreground">
+                                                Drop your Excel file here
+                                            </p>
+                                            <p className="text-[10px] text-muted-foreground/75 mt-0.5">
+                                                or click to browse • .xlsx only
+                                            </p>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Upload Button */}
+                            <Button
+                                className="w-full gap-2 rounded-xl h-10 mt-auto shrink-0"
+                                onClick={() => handleUpload(uploadResult?.preview === true)}
+                                disabled={!selectedFile || isUploading}
+                            >
+                                {isUploading ? (
                                     <>
-                                        <FileSpreadsheet className="h-8 w-8 text-emerald-500 mb-2" />
-                                        <p className="text-sm font-medium text-foreground">{selectedFile.name}</p>
-                                        <p className="text-[11px] text-muted-foreground mt-0.5">
-                                            {(selectedFile.size / 1024).toFixed(1)} KB
-                                        </p>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="mt-2 h-7 text-xs text-muted-foreground"
-                                            onClick={(e) => {
-                                                e.stopPropagation()
-                                                setSelectedFile(null)
-                                                setUploadResult(null)
-                                            }}
-                                        >
-                                            <X className="h-3 w-3 mr-1" />
-                                            Remove
-                                        </Button>
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        Processing...
+                                    </>
+                                ) : uploadResult?.preview === true ? (
+                                    <>
+                                        <CheckCircle2 className="h-4 w-4" />
+                                        Confirm & Save to Database
                                     </>
                                 ) : (
                                     <>
-                                        <FileUp className="h-8 w-8 text-muted-foreground/40 mb-2" />
-                                        <p className="text-sm font-medium text-muted-foreground">
-                                            Drop your Excel file here
-                                        </p>
-                                        <p className="text-[11px] text-muted-foreground/70 mt-0.5">
-                                            or click to browse • .xlsx only
-                                        </p>
+                                        <Upload className="h-4 w-4" />
+                                        Generate Upload Preview
                                     </>
                                 )}
-                            </div>
+                            </Button>
                         </div>
-
-                        {/* Upload Button */}
-                        <Button
-                            className="w-full gap-2 rounded-xl h-10"
-                            onClick={handleUpload}
-                            disabled={!selectedFile || isUploading}
-                        >
-                            {isUploading ? (
-                                <>
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                    Processing...
-                                </>
-                            ) : (
-                                <>
-                                    <Upload className="h-4 w-4" />
-                                    Upload & Process
-                                </>
-                            )}
-                        </Button>
                     </div>
+                </div>
 
-                    {/* Upload Result */}
-                    {uploadResult && (
-                        <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                {/* Preview / Results Panel (Below Option 1 & 2) */}
+                <div className="mt-6 border-t border-border/50 pt-6">
+                    {uploadResult ? (
+                        <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
                             <div className="flex items-center gap-2">
-                                <span className="flex items-center justify-center h-6 w-6 rounded-full bg-emerald-500 text-white text-xs font-bold">✓</span>
-                                <h3 className="font-semibold text-sm">Upload Results</h3>
+                                <span className={cn(
+                                    "flex items-center justify-center h-6 w-6 rounded-full text-white text-xs font-bold",
+                                    uploadResult.preview ? "bg-blue-500" : "bg-emerald-500"
+                                )}>
+                                    {uploadResult.preview ? "ℹ" : "✓"}
+                                </span>
+                                <h3 className="font-semibold text-sm">
+                                    {uploadResult.preview ? "Upload Preview Report" : "Upload Success Results"}
+                                </h3>
                             </div>
 
-                            <div className="p-3 rounded-xl border border-border/50 bg-card space-y-2">
-                                <div className="grid grid-cols-2 gap-2">
-                                    <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-500/5">
-                                        <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                                        <div>
-                                            <p className="text-xs text-muted-foreground">Inserted</p>
-                                            <p className="text-sm font-bold text-emerald-600">{uploadResult.success}</p>
+                            <div className={cn(
+                                "p-4 rounded-xl border space-y-4 bg-card",
+                                uploadResult.preview ? "border-blue-500/20 bg-blue-500/5" : "border-emerald-500/20 bg-emerald-500/5"
+                            )}>
+                                {uploadResult.preview ? (
+                                    <>
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                            <div className="flex items-center gap-2.5 p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/10">
+                                                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                                                <div>
+                                                    <p className="text-[10px] text-muted-foreground">To Insert</p>
+                                                    <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{uploadResult.toInsert || 0}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2.5 p-3 rounded-lg bg-indigo-500/5 border border-indigo-500/10">
+                                                <Upload className="h-4 w-4 text-indigo-500" />
+                                                <div>
+                                                    <p className="text-[10px] text-muted-foreground">To Update</p>
+                                                    <p className="text-sm font-bold text-indigo-600 dark:text-indigo-400">{uploadResult.toUpdate || 0}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2.5 p-3 rounded-lg bg-rose-500/5 border border-rose-500/10">
+                                                <X className="h-4 w-4 text-rose-500" />
+                                                <div>
+                                                    <p className="text-[10px] text-muted-foreground">To Clear</p>
+                                                    <p className="text-sm font-bold text-rose-600 dark:text-rose-400">{uploadResult.toDelete || 0}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2.5 p-3 rounded-lg bg-amber-500/5 border border-amber-500/10">
+                                                <AlertCircle className="h-4 w-4 text-amber-500" />
+                                                <div>
+                                                    <p className="text-[10px] text-muted-foreground">Skipped</p>
+                                                    <p className="text-sm font-bold text-amber-600 dark:text-amber-400">{uploadResult.skipped || 0}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex border-b border-border/50 mt-4 mb-2">
+                                            <button
+                                                type="button"
+                                                className={cn(
+                                                    "pb-2 px-3 text-xs font-semibold border-b-2 transition-colors",
+                                                    activeTab === 'verified'
+                                                        ? "border-primary text-primary"
+                                                        : "border-transparent text-muted-foreground hover:text-foreground"
+                                                )}
+                                                onClick={() => setActiveTab('verified')}
+                                            >
+                                                Verified ({uploadResult.verifiedRecords?.length || 0})
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className={cn(
+                                                    "pb-2 px-3 text-xs font-semibold border-b-2 transition-colors",
+                                                    activeTab === 'skipped'
+                                                        ? "border-amber-500 text-amber-600 dark:text-amber-400"
+                                                        : "border-transparent text-muted-foreground hover:text-foreground"
+                                                )}
+                                                onClick={() => setActiveTab('skipped')}
+                                            >
+                                                Skipped & Errors ({uploadResult.skippedRecords?.length || 0})
+                                            </button>
+                                        </div>
+
+                                        {activeTab === 'verified' && (
+                                            <div className="max-h-[300px] overflow-y-auto border border-border/50 rounded-lg bg-muted/10 divide-y divide-border/30">
+                                                {(!uploadResult.verifiedRecords || uploadResult.verifiedRecords.length === 0) ? (
+                                                    <p className="p-4 text-xs text-center text-muted-foreground">No verified records ready for upload.</p>
+                                                ) : (
+                                                    uploadResult.verifiedRecords.map((rec, i) => (
+                                                        <div key={i} className="p-2 flex items-center justify-between text-xs hover:bg-muted/30 transition-colors">
+                                                            <div className="space-y-0.5 min-w-0 pr-2">
+                                                                <p className="font-semibold text-foreground truncate">{rec.employeeName}</p>
+                                                                <p className="text-[10px] text-muted-foreground truncate">{rec.email}</p>
+                                                                <p className="text-[10px] font-medium text-muted-foreground/80">{rec.date}</p>
+                                                            </div>
+                                                            <div className="text-right shrink-0 space-y-1">
+                                                                <span className={cn(
+                                                                    "inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider",
+                                                                    rec.action === 'Insert'
+                                                                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                                                                        : rec.action === 'Update'
+                                                                            ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20"
+                                                                            : "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20"
+                                                                )}>
+                                                                    {rec.action}
+                                                                </span>
+                                                                <p className="text-[10px] text-muted-foreground">{rec.details}</p>
+                                                            </div>
+                                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {activeTab === 'skipped' && (
+                                            <div className="max-h-[300px] overflow-y-auto border border-border/50 rounded-lg bg-muted/10 divide-y divide-border/30">
+                                                {(!uploadResult.skippedRecords || uploadResult.skippedRecords.length === 0) ? (
+                                                    <p className="p-4 text-xs text-center text-muted-foreground">No skipped records or errors found.</p>
+                                                ) : (
+                                                    uploadResult.skippedRecords.map((rec, i) => (
+                                                        <div key={i} className="p-2 flex flex-col gap-0.5 text-xs hover:bg-muted/30 transition-colors">
+                                                            <div className="flex items-center justify-between font-semibold">
+                                                                <span className="truncate text-foreground max-w-[200px]">{rec.employeeName || 'Blank Row'}</span>
+                                                                {rec.rowNum > 0 && (
+                                                                    <span className="text-[10px] px-1.5 py-0.5 bg-muted border border-border rounded font-mono">
+                                                                        Row {rec.rowNum}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            {rec.email && <p className="text-[10px] text-muted-foreground truncate">{rec.email}</p>}
+                                                            <div className="flex items-center gap-1.5 mt-0.5">
+                                                                {rec.date && <span className="text-[10px] font-medium text-muted-foreground shrink-0">{rec.date} •</span>}
+                                                                <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium leading-relaxed">
+                                                                    {rec.reason}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    <div className="grid grid-cols-2 gap-3 max-w-md mx-auto">
+                                        <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/10">
+                                            <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                                            <div>
+                                                <p className="text-xs text-muted-foreground">Inserted</p>
+                                                <p className="text-base font-bold text-emerald-600 dark:text-emerald-400">{uploadResult.success || 0}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-500/5 border border-amber-500/10">
+                                            <AlertCircle className="h-5 w-5 text-amber-500" />
+                                            <div>
+                                                <p className="text-xs text-muted-foreground">Skipped</p>
+                                                <p className="text-base font-bold text-amber-600 dark:text-amber-400">{uploadResult.skipped || 0}</p>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-2 p-2 rounded-lg bg-amber-500/5">
-                                        <AlertCircle className="h-4 w-4 text-amber-500" />
-                                        <div>
-                                            <p className="text-xs text-muted-foreground">Skipped</p>
-                                            <p className="text-sm font-bold text-amber-600">{uploadResult.skipped}</p>
-                                        </div>
-                                    </div>
-                                </div>
+                                )}
 
                                 {uploadResult.errors.length > 0 && (
-                                    <div className="mt-2 p-2 rounded-lg bg-rose-500/5 border border-rose-500/10">
-                                        <p className="text-[11px] font-medium text-rose-600 mb-1">
+                                    <div className="mt-2 p-3 rounded-lg bg-rose-500/5 border border-rose-500/10">
+                                        <p className="text-xs font-semibold text-rose-600 mb-1">
                                             Errors ({uploadResult.errors.length}):
                                         </p>
-                                        <div className="max-h-32 overflow-y-auto space-y-0.5">
+                                        <div className="max-h-24 overflow-y-auto space-y-1">
                                             {uploadResult.errors.slice(0, 10).map((err, i) => (
-                                                <p key={i} className="text-[10px] text-rose-500/80">{err}</p>
+                                                <p key={i} className="text-[10px] text-rose-500/80 leading-normal">{err}</p>
                                             ))}
                                             {uploadResult.errors.length > 10 && (
                                                 <p className="text-[10px] text-rose-500/60 italic">
@@ -401,9 +564,19 @@ export function BulkDailyUpload({ isOpen, onOpenChange }: BulkDailyUploadProps) 
                                 )}
                             </div>
                         </div>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center p-8 rounded-xl border border-dashed border-border/60 bg-muted/5 min-h-[180px] text-center">
+                            <div className="p-3 rounded-full bg-blue-500/5 text-blue-500 mb-2 border border-blue-500/10 animate-pulse">
+                                <FileSpreadsheet className="h-5 w-5" />
+                            </div>
+                            <h4 className="text-sm font-semibold text-foreground">Upload Preview Report</h4>
+                            <p className="text-xs text-muted-foreground max-w-[420px] mt-1 leading-relaxed">
+                                Fill in the template, select the file, and click <strong>&quot;Generate Upload Preview&quot;</strong> to inspect verified records and skip anomalies before saving.
+                            </p>
+                        </div>
                     )}
                 </div>
-            </SheetContent>
-        </Sheet>
+            </DialogContent>
+        </Dialog>
     )
 }

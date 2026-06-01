@@ -402,7 +402,8 @@ export class AttendanceService {
     static async bulkUploadDailyAttendance({
         records,
         uploadedBy,
-        uploaderName
+        uploaderName,
+        preview = false
     }: {
         records: Array<{
             profileId: string
@@ -414,10 +415,32 @@ export class AttendanceService {
         }>
         uploadedBy: string
         uploaderName: string
-    }): Promise<{ inserted: number, skipped: number, errors: string[] }> {
+        preview?: boolean
+    }): Promise<{
+        inserted: number
+        skipped: number
+        errors: string[]
+        toInsert?: number
+        toUpdate?: number
+        toDelete?: number
+        previewDetails?: Array<{
+            profileId: string
+            date: string
+            action: 'Insert' | 'Update' | 'Clear' | 'Skip'
+            details: string
+            reason?: string
+        }>
+    }> {
         let inserted = 0
         let skipped = 0
         const errors: string[] = []
+        const previewDetails: Array<{
+            profileId: string
+            date: string
+            action: 'Insert' | 'Update' | 'Clear' | 'Skip'
+            details: string
+            reason?: string
+        }> = []
 
         try {
             // Pre-fetch office settings and closures for holiday & weekly-off detection
@@ -425,6 +448,45 @@ export class AttendanceService {
             const closures = await SmartCache.getOfficeClosuresCached()
             const offDays = settings?.off_days || [0]
             const holidaysSet = new Set(closures?.map(c => c.date) || [])
+
+            const profileIds = [...new Set(records.map(r => r.profileId))]
+            const dates = [...new Set(records.map(r => r.date))]
+
+            // Fetch all existing attendance records for the profile IDs and dates in a single query with strict column projection
+            const existingMap = new Map<string, any>()
+            if (profileIds.length > 0 && dates.length > 0) {
+                const existingRecords = await db.select({
+                    id: attendance.id,
+                    profile_id: attendance.profile_id,
+                    date: attendance.date
+                })
+                .from(attendance)
+                .where(and(
+                    inArray(attendance.profile_id, profileIds),
+                    inArray(attendance.date, dates)
+                ))
+                for (const r of existingRecords) {
+                    existingMap.set(`${r.profile_id}_${r.date}`, r)
+                }
+            }
+
+            const recordsToUpsert: any[] = []
+            const idsToDelete: string[] = []
+            const notificationsToInsert: any[] = []
+            const broadcastTasks: Array<{
+                employeeId: string
+                message: string
+                title: string
+                type: string
+                action: string
+            }> = []
+
+            // Track changes by employee to send exactly 1 consolidated notification and event per employee
+            const employeeStats = new Map<string, {
+                insertedCount: number
+                updatedCount: number
+                clearedCount: number
+            }>()
 
             for (const record of records) {
                 try {
@@ -453,156 +515,213 @@ export class AttendanceService {
                         checkOutDate = new Date(`${record.date}T${h}:${m}:00+05:30`)
                     }
 
-                    // Check if record already exists for this employee+date
-                    const existing = await db.query.attendance.findFirst({
-                        where: and(
-                            eq(attendance.profile_id, record.profileId),
-                            eq(attendance.date, record.date)
-                        ),
-                        columns: { id: true }
-                    })
+                    const existing = existingMap.get(`${record.profileId}_${record.date}`)
 
                     // Handle blank row check-in/out times (Absent/Holiday/Leave fallback)
                     if (!checkInDate && !checkOutDate) {
                         if (existing) {
-                            // Delete record so calendar/history falls back to Sunday/Holiday/Leave/Absent
-                            await db.delete(attendance).where(eq(attendance.id, existing.id))
-                            
-                            // Insert notification for the employee
-                            const notifyMessage = `Your attendance record for ${record.date} has been cleared via bulk upload by ${uploaderName}.`
-                            try {
-                                await db.insert(notifications).values({
-                                    user_id: record.profileId,
-                                    title: 'Attendance Cleared',
-                                    message: notifyMessage,
-                                    type: 'attendance_clear',
-                                    link: '/mobile/history'
-                                })
+                            idsToDelete.push(existing.id)
 
-                                // Broadcast server event for real-time history reload
-                                const { broadcastServerEvent } = await import('@/lib/events/server-broadcaster')
-                                broadcastServerEvent('attendance_update', {
-                                    action: 'bulk-clear',
-                                    employeeId: record.profileId,
-                                    date: record.date
-                                }, record.profileId)
-
-                                broadcastServerEvent('new_notification', {
-                                    title: 'Attendance Cleared',
-                                    message: notifyMessage,
-                                    type: 'attendance_clear',
-                                    link: '/mobile/history',
-                                    targetUserId: record.profileId
-                                }, record.profileId)
-                            } catch (notifyErr) {
-                                console.error('Failed to notify employee in bulk clear:', notifyErr)
-                            }
+                            const stats = employeeStats.get(record.profileId) || { insertedCount: 0, updatedCount: 0, clearedCount: 0 }
+                            stats.clearedCount++
+                            employeeStats.set(record.profileId, stats)
 
                             inserted++
+                            if (preview) {
+                                previewDetails.push({
+                                    profileId: record.profileId,
+                                    date: record.date,
+                                    action: 'Clear',
+                                    details: 'Check-in and Check-out blank, existing log will be deleted'
+                                })
+                            }
                         } else {
                             skipped++
+                            if (preview) {
+                                previewDetails.push({
+                                    profileId: record.profileId,
+                                    date: record.date,
+                                    action: 'Skip',
+                                    details: '',
+                                    reason: 'Blank check-in and check-out times'
+                                })
+                            }
                         }
                         continue
                     }
 
-                    // Handle update logic
-                    if (existing) {
-                        // Update existing record with new times and reset status to pending for re-verification
-                        await db.update(attendance).set({
-                            check_in: checkInDate,
-                            check_out: checkOutDate,
-                            source: 'bulk',
-                            status: 'pending', // Requires re-verification
-                            is_half_day: record.isHalfDay,
-                            is_extra_day: isExtraDay, // Sunday/holiday extra working day
-                            remarks: record.remarks || `Bulk updated by ${uploaderName}`,
-                            updated_at: new Date()
-                        }).where(eq(attendance.id, existing.id))
-
-                        // Insert notification for the employee
-                        const notifyMessage = `Your attendance record for ${record.date} has been updated via bulk upload by ${uploaderName}.`
-                        try {
-                            await db.insert(notifications).values({
-                                    user_id: record.profileId,
-                                    title: 'Attendance Updated',
-                                    message: notifyMessage,
-                                    type: 'attendance_update',
-                                    link: '/mobile/history'
-                            })
-
-                            // Broadcast server event for real-time history reload
-                            const { broadcastServerEvent } = await import('@/lib/events/server-broadcaster')
-                            broadcastServerEvent('attendance_update', {
-                                action: 'bulk-update',
-                                employeeId: record.profileId,
-                                date: record.date,
-                                remarks: record.remarks || `Bulk updated by ${uploaderName}`
-                            }, record.profileId)
-
-                            broadcastServerEvent('new_notification', {
-                                title: 'Attendance Updated',
-                                message: notifyMessage,
-                                type: 'attendance_update',
-                                link: '/mobile/history',
-                                targetUserId: record.profileId
-                            }, record.profileId)
-                        } catch (notifyErr) {
-                            console.error('Failed to notify employee in bulk update:', notifyErr)
-                        }
-
-                        inserted++
-                        continue
-                    }
-
-                    // Handle creation logic
-                    await db.insert(attendance).values({
+                    // For high speed, we collect everything into a single bulk upsert list
+                    recordsToUpsert.push({
                         profile_id: record.profileId,
                         date: record.date,
                         check_in: checkInDate,
                         check_out: checkOutDate,
-                        status: 'pending',
+                        status: 'pending', // Requires re-verification
                         source: 'bulk',
                         is_half_day: record.isHalfDay,
                         is_extra_day: isExtraDay, // Sunday/holiday extra working day
                         remarks: record.remarks || `Bulk uploaded by ${uploaderName}`,
+                        updated_at: new Date()
                     })
 
-                    // Insert notification for the employee
-                    const notifyMessage = `New attendance record for ${record.date} has been created via bulk upload by ${uploaderName}.`
-                    try {
-                        await db.insert(notifications).values({
-                            user_id: record.profileId,
-                            title: 'Attendance Created',
-                            message: notifyMessage,
-                            type: 'attendance_create',
-                            link: '/mobile/history'
-                        })
-
-                        // Broadcast server event for real-time history reload
-                        const { broadcastServerEvent } = await import('@/lib/events/server-broadcaster')
-                        broadcastServerEvent('attendance_update', {
-                            action: 'bulk-create',
-                            employeeId: record.profileId,
-                            date: record.date,
-                            remarks: record.remarks || `Bulk uploaded by ${uploaderName}`
-                        }, record.profileId)
-
-                        broadcastServerEvent('new_notification', {
-                            title: 'Attendance Created',
-                            message: notifyMessage,
-                            type: 'attendance_create',
-                            link: '/mobile/history',
-                            targetUserId: record.profileId
-                        }, record.profileId)
-                    } catch (notifyErr) {
-                        console.error('Failed to notify employee in bulk insert:', notifyErr)
+                    const stats = employeeStats.get(record.profileId) || { insertedCount: 0, updatedCount: 0, clearedCount: 0 }
+                    if (existing) {
+                        stats.updatedCount++
+                    } else {
+                        stats.insertedCount++
                     }
+                    employeeStats.set(record.profileId, stats)
 
                     inserted++
+                    if (preview) {
+                        previewDetails.push({
+                            profileId: record.profileId,
+                            date: record.date,
+                            action: existing ? 'Update' : 'Insert',
+                            details: `Check-In: ${record.checkIn || 'None'}, Check-Out: ${record.checkOut || 'None'}${record.isHalfDay ? ' (Half Day)' : ''}`
+                        })
+                    }
                 } catch (err: any) {
-                    errors.push(`Failed to insert/update record for date ${record.date}: ${err.message}`)
+                    errors.push(`Failed to prepare record for date ${record.date}: ${err.message}`)
+                    if (preview) {
+                        previewDetails.push({
+                            profileId: record.profileId,
+                            date: record.date,
+                            action: 'Skip',
+                            details: '',
+                            reason: err.message || 'Validation error'
+                        })
+                    }
                 }
             }
+
+            // If preview mode, return predicted insertion, update, and deletion numbers instantly without writing anything
+            if (preview) {
+                const toInsertCount = recordsToUpsert.filter(r => !existingMap.has(`${r.profile_id}_${r.date}`)).length
+                const toUpdateCount = recordsToUpsert.filter(r => existingMap.has(`${r.profile_id}_${r.date}`)).length
+                return {
+                    inserted: 0,
+                    skipped: skipped,
+                    errors,
+                    toInsert: toInsertCount,
+                    toUpdate: toUpdateCount,
+                    toDelete: idsToDelete.length,
+                    previewDetails
+                }
+            }
+
+            // Generate exactly ONE consolidated notification and broadcast task per employee
+            for (const [employeeId, stats] of employeeStats.entries()) {
+                const totalChanges = stats.insertedCount + stats.updatedCount + stats.clearedCount
+                if (totalChanges === 0) continue
+
+                let notifyMessage = ''
+                let title = 'Attendance Uploaded'
+                let type = 'attendance_update'
+
+                if (stats.clearedCount > 0 && stats.insertedCount === 0 && stats.updatedCount === 0) {
+                    notifyMessage = `Your attendance records for ${stats.clearedCount} days have been cleared via bulk upload by ${uploaderName}.`
+                    title = 'Attendance Cleared'
+                    type = 'attendance_clear'
+                } else if (stats.insertedCount > 0 && stats.updatedCount === 0 && stats.clearedCount === 0) {
+                    notifyMessage = `New attendance records for ${stats.insertedCount} days have been created via bulk upload by ${uploaderName}.`
+                    title = 'Attendance Created'
+                    type = 'attendance_create'
+                } else {
+                    notifyMessage = `Your attendance records have been updated for ${totalChanges} days via bulk upload by ${uploaderName}.`
+                }
+
+                notificationsToInsert.push({
+                    user_id: employeeId,
+                    title,
+                    message: notifyMessage,
+                    type,
+                    link: '/mobile/history'
+                })
+
+                broadcastTasks.push({
+                    employeeId,
+                    message: notifyMessage,
+                    title,
+                    type,
+                    action: 'bulk-update-complete'
+                })
+            }
+
+            // Run all database operations inside a single database transaction
+            if (idsToDelete.length > 0 || recordsToUpsert.length > 0 || notificationsToInsert.length > 0) {
+                await db.transaction(async (tx) => {
+                    if (idsToDelete.length > 0) {
+                        await tx.delete(attendance).where(inArray(attendance.id, idsToDelete))
+                    }
+                    if (recordsToUpsert.length > 0) {
+                        await tx.insert(attendance)
+                            .values(recordsToUpsert)
+                            .onConflictDoUpdate({
+                                target: [attendance.profile_id, attendance.date],
+                                set: {
+                                    check_in: sql`EXCLUDED.check_in`,
+                                    check_out: sql`EXCLUDED.check_out`,
+                                    source: sql`EXCLUDED.source`,
+                                    status: sql`EXCLUDED.status`,
+                                    is_half_day: sql`EXCLUDED.is_half_day`,
+                                    is_extra_day: sql`EXCLUDED.is_extra_day`,
+                                    remarks: sql`EXCLUDED.remarks`,
+                                    updated_at: sql`EXCLUDED.updated_at`
+                                }
+                            })
+                    }
+                    if (notificationsToInsert.length > 0) {
+                        await tx.insert(notifications).values(notificationsToInsert)
+                    }
+                })
+            }
+
+            // Trigger background broadcasts asynchronously without blocking the main HTTP execution thread
+            if (broadcastTasks.length > 0) {
+                setImmediate(() => {
+                    (async () => {
+                        try {
+                            const { broadcastServerEvent } = await import('@/lib/events/server-broadcaster')
+                            
+                            // If there are many employees affected, broadcast a single dashboard_sync event
+                            // instead of hundreds of individual employee events to prevent socket connection exhaustion and rate limits.
+                            if (broadcastTasks.length > 5) {
+                                console.log(`[SERVER-BROADCAST] Large bulk upload (${broadcastTasks.length} employees). Broadcasting single dashboard_sync event.`)
+                                await broadcastServerEvent('dashboard_sync', {
+                                    action: 'bulk-upload-complete',
+                                    message: `Bulk upload completed for ${broadcastTasks.length} employees.`,
+                                    timestamp: new Date().toISOString()
+                                })
+                            } else {
+                                // Run the few broadcasts sequentially in background to avoid concurrent connection spikes
+                                for (const task of broadcastTasks) {
+                                    try {
+                                        await broadcastServerEvent('attendance_update', {
+                                            action: 'bulk-update-complete',
+                                            employeeId: task.employeeId,
+                                            message: task.message
+                                        }, task.employeeId)
+
+                                        await broadcastServerEvent('new_notification', {
+                                            title: task.title,
+                                            message: task.message,
+                                            type: task.type,
+                                            link: '/mobile/history',
+                                            targetUserId: task.employeeId
+                                        }, task.employeeId)
+                                    } catch (taskErr) {
+                                        console.error(`Failed to broadcast for employee ${task.employeeId}:`, taskErr)
+                                    }
+                                }
+                            }
+                        } catch (broadcastErr) {
+                            console.error('Failed to broadcast in background:', broadcastErr)
+                        }
+                    })()
+                })
+            }
+
         } catch (setupErr: any) {
             errors.push(`General setup error in daily bulk upload: ${setupErr.message}`)
         }
