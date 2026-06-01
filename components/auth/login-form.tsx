@@ -100,9 +100,9 @@ export function LoginForm() {
         warning: data?.warning
       })
 
-      // OPTIMIZED: Start prefetch IMMEDIATELY for admin/moderator in the background (don't wait for anything)
+      // Start prefetch in the background after 50ms to allow the browser to write auth cookies successfully
       const prefetchPromise = data?.profile?.role !== 'employee'
-        ? prefetch().catch(err => {
+        ? new Promise(resolve => setTimeout(resolve, 50)).then(() => prefetch()).catch(err => {
           console.warn('[LoginForm] Prefetch failed, dashboard will fetch on load:', err)
         })
         : Promise.resolve()
@@ -152,13 +152,19 @@ export function LoginForm() {
           console.warn('[LoginForm] Failed to store profile in storage:', storageError)
         }
 
+        // Detect mobile device and PWA standalone mode client-side to short-circuit redirects
+        const isMobileDevice = typeof window !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile/i.test(navigator.userAgent)
+        const isPwaStandalone = typeof window !== 'undefined' && (window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true)
+
         // Role-based redirect
         if (data.profile.role === 'admin') {
           redirectPath = '/admin'
         } else if (data.profile.role === 'moderator') {
-          redirectPath = '/moderator'
+          // Moderator is only redirected to mobile layout if launching standalone PWA
+          redirectPath = (isMobileDevice && isPwaStandalone) ? '/mobile' : '/moderator'
         } else if (data.profile.role === 'employee') {
-          redirectPath = '/employee'
+          // Employee is always redirected to mobile layout on mobile screens
+          redirectPath = isMobileDevice ? '/mobile' : '/employee'
         } else {
           redirectPath = '/moderator'
         }

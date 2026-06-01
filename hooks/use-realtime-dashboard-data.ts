@@ -549,33 +549,52 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
   // Server-side cache invalidation mutation for forcing fresh data
   const invalidateCacheMutation = trpc.admin.dashboard.invalidateCache.useMutation()
 
+  // Refs for debouncing/deduplicating refetches
+  const lastRefetchTimeRef = useRef<number>(0)
+  const pendingRefetchPromiseRef = useRef<Promise<any> | null>(null)
+
   // Manual refresh function that ensures fresh data by invalidating server cache first
   // This is critical for cross-browser updates where the server cache might return stale data
   const refetch = useCallback(async (options?: { forceFresh?: boolean }) => {
-    console.log(`[REALTIME] Dashboard refresh triggered${options?.forceFresh ? ' (FORCE FRESH)' : ''}`)
+    const now = Date.now()
+    // Deduplicate concurrent calls within 500ms
+    if (now - lastRefetchTimeRef.current < 500 && pendingRefetchPromiseRef.current) {
+      console.log('[REALTIME] Deduplicating concurrent dashboard refetch')
+      return pendingRefetchPromiseRef.current
+    }
+    lastRefetchTimeRef.current = now
 
-    // If forceFresh is requested, we MUST invalidate the server cache first
-    // This overcomes any race conditions or stale cache layers
-    if (options?.forceFresh) {
-      try {
-        const result = await invalidateCacheMutation.mutateAsync({ reason: 'force-fresh-refresh' })
-        console.log(`[REALTIME] Server cache invalidated (Force). Version: ${result.cacheVersion}, Entries cleared: ${result.invalidatedCount}`)
-      } catch (e) {
-        console.warn('[REALTIME] Server cache invalidation failed during force-fresh:', e)
+    const performRefetch = async () => {
+      console.log(`[REALTIME] Dashboard refresh triggered${options?.forceFresh ? ' (FORCE FRESH)' : ''}`)
+
+      // If forceFresh is requested, we MUST invalidate the server cache first
+      // This overcomes any race conditions or stale cache layers
+      if (options?.forceFresh) {
+        try {
+          const result = await invalidateCacheMutation.mutateAsync({ reason: 'force-fresh-refresh' })
+          console.log(`[REALTIME] Server cache invalidated (Force). Version: ${result.cacheVersion}, Entries cleared: ${result.invalidatedCount}`)
+        } catch (e) {
+          console.warn('[REALTIME] Server cache invalidation failed during force-fresh:', e)
+        }
+      } else {
+        // Non-blocking invalidation for standard refreshes
+        invalidateCacheMutation.mutate({ reason: 'realtime-refresh' })
       }
-    } else {
-      // Non-blocking invalidation for standard refreshes
-      invalidateCacheMutation.mutate({ reason: 'realtime-refresh' })
+
+      // Now refetch everything by invalidating caches
+      // Use invalidate() to ensure all mounted components using these queries are updated.
+      // This automatically triggers active queries (like getUnifiedDashboardData) to refetch.
+      const invPromise = utils.admin.dashboard.getUnifiedDashboardData.invalidate()
+      utils.attendance.invalidate()
+      return invPromise
     }
 
-    // Now refetch everything
-    // Use invalidate() to ensure all mounted components using these queries are updated
-    utils.admin.dashboard.getUnifiedDashboardData.invalidate()
-    utils.attendance.invalidate()
-
-    // Also call the specific refetch for this hook's data
-    return trpcRefetch()
-  }, [trpcRefetch, invalidateCacheMutation, utils])
+    const promise = performRefetch().finally(() => {
+      pendingRefetchPromiseRef.current = null
+    })
+    pendingRefetchPromiseRef.current = promise
+    return promise
+  }, [invalidateCacheMutation, utils])
 
   // Ref to track if component is mounted (for handling React Strict Mode)
   const isMountedRef = useRef(true)

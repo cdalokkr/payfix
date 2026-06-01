@@ -13,10 +13,12 @@ import { trpc } from '@/lib/trpc/client'
  * This ensures cached dashboard data stays fresh while maintaining
  * 10-minute cache TTL for performance.
  */
-export function useDashboardCacheInvalidation() {
+export function useDashboardCacheInvalidation(disabled = false) {
     const utils = trpc.useUtils()
 
     useEffect(() => {
+        if (disabled) return
+
         const supabase = createClient()
 
         // Subscribe to profiles table changes (new users, role changes)

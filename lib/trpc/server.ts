@@ -13,12 +13,12 @@ let createContextCallCount = 0
 const authCallTimes: number[] = []
 const MAX_AUTH_TIMES = 100
 
-export const createContext = cache(async () => {
+export const createContext = async (opts?: { req: Request }) => {
   createContextCallCount++
   const startTime = performance.now()
 
   try {
-    const context = await createOptimizedContext()
+    const context = await createOptimizedContext(opts?.req)
 
     // Record timing for performance monitoring
     const duration = performance.now() - startTime
@@ -86,7 +86,7 @@ export const createContext = cache(async () => {
       }
     }
   }
-})
+}
 
 export type Context = Awaited<ReturnType<typeof createContext>>
 

@@ -247,18 +247,27 @@ export class OptimizedQueryManager {
       // because they don't see these global metrics in their dashboard
       const shouldFetchGlobalStats = !profileId
 
-      const combinedStatsQuery = shouldFetchGlobalStats
+      const profilesStatsQuery = shouldFetchGlobalStats
         ? db.execute(sql`
             SELECT 
-              (SELECT count(*) FROM profiles WHERE role = 'employee'::user_role) as employee_count,
-              (SELECT count(*) FROM profiles WHERE role = 'moderator'::user_role) as moderator_count,
-              (SELECT count(*) FROM profiles WHERE role = 'admin'::user_role) as admin_count,
-              (SELECT count(*) FROM activities) as total_activities,
-              (SELECT count(*) FROM activities WHERE created_at >= ${todayStart.toISOString()}::timestamp) as today_activities,
-              (SELECT count(DISTINCT user_id) FROM activities WHERE created_at >= ${sevenDaysAgo.toISOString()}::timestamp) as active_users
+              count(*) FILTER (WHERE role = 'employee'::user_role) as employee_count,
+              count(*) FILTER (WHERE role = 'moderator'::user_role) as moderator_count,
+              count(*) FILTER (WHERE role = 'admin'::user_role) as admin_count
+            FROM profiles
           `)
         : Promise.resolve([{
-          employee_count: 0, moderator_count: 0, admin_count: 0,
+          employee_count: 0, moderator_count: 0, admin_count: 0
+        }] as any)
+
+      const activitiesStatsQuery = shouldFetchGlobalStats
+        ? db.execute(sql`
+            SELECT 
+              count(*) as total_activities,
+              count(*) FILTER (WHERE created_at >= ${todayStart.toISOString()}::timestamp) as today_activities,
+              count(DISTINCT user_id) FILTER (WHERE created_at >= ${sevenDaysAgo.toISOString()}::timestamp) as active_users
+            FROM activities
+          `)
+        : Promise.resolve([{
           total_activities: 0, today_activities: 0, active_users: 0
         }] as any)
 
@@ -266,15 +275,19 @@ export class OptimizedQueryManager {
       const shouldFetchAttendance = !!profileId
 
       const [
-        combinedStats,
+        profilesStats,
+        activitiesStats,
         analyticsData,
         recentActivities,
         attendanceData,
         settingsData,
         closuresData
       ] = await Promise.all([
-        // 1. OPTIMIZED: Single combined stats query
-        combinedStatsQuery,
+        // 1a. OPTIMIZED: Concurrent profiles stats query
+        profilesStatsQuery,
+
+        // 1b. OPTIMIZED: Concurrent activities stats query
+        activitiesStatsQuery,
 
         // 2. Analytics data (TimeSeries) - SKIP for specific profile requests
         shouldFetchGlobalStats
@@ -336,14 +349,15 @@ export class OptimizedQueryManager {
         shouldFetchAttendance ? db.select().from(officeClosures).where(gte(officeClosures.date, sql`CURRENT_DATE`)) : Promise.resolve([])
       ])
 
-      // Extract combined stats (result is array with single row)
-      const stats = (combinedStats as any)?.[0] || {}
-      const employeeCount = Number(stats.employee_count || 0)
-      const moderatorCount = Number(stats.moderator_count || 0)
-      const adminCount = Number(stats.admin_count || 0)
-      const totalActivitiesCount = Number(stats.total_activities || 0)
-      const todayActivitiesCount = Number(stats.today_activities || 0)
-      const activeUsersCount = Number(stats.active_users || 0)
+      // Extract stats from concurrent queries
+      const pStats = (profilesStats as any)?.[0] || {}
+      const aStats = (activitiesStats as any)?.[0] || {}
+      const employeeCount = Number(pStats.employee_count || 0)
+      const moderatorCount = Number(pStats.moderator_count || 0)
+      const adminCount = Number(pStats.admin_count || 0)
+      const totalActivitiesCount = Number(aStats.total_activities || 0)
+      const todayActivitiesCount = Number(aStats.today_activities || 0)
+      const activeUsersCount = Number(aStats.active_users || 0)
 
 
 

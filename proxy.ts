@@ -57,6 +57,41 @@ function addSecurityHeaders(response: NextResponse, request: NextRequest): NextR
 }
 
 // ============================================
+// Proxy Session Cache for Performance Optimization
+// ============================================
+interface ProxySession {
+    user: any
+    profile: any
+    expiresAt: number
+}
+
+const proxySessionCache = new Map<string, ProxySession>()
+const PROXY_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
+// Generate a fast pure-JS hash of the auth cookies to avoid Node crypto dependency in Edge runtime
+function getProxyCookieHash(request: NextRequest): string {
+    try {
+        const allCookies = request.cookies.getAll()
+        const authCookies = allCookies
+            .filter(c => c.name.includes('-auth-token'))
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map(c => `${c.name}=${c.value}`)
+            .join(';')
+
+        if (!authCookies) return ''
+
+        // DJB2 hash of the auth cookies string
+        let hash = 5381
+        for (let i = 0; i < authCookies.length; i++) {
+            hash = (hash * 33) ^ authCookies.charCodeAt(i)
+        }
+        return (hash >>> 0).toString(16)
+    } catch {
+        return ''
+    }
+}
+
+// ============================================
 // Main Proxy Function
 // ============================================
 export async function proxy(request: NextRequest) {
@@ -137,8 +172,6 @@ export async function proxy(request: NextRequest) {
         }
     )
 
-    const { data: { user } } = await supabase.auth.getUser()
-
     // Helper to perform redirects while preserving session cookies
     const redirectWithCookies = (url: string | URL) => {
         const redirectResponse = NextResponse.redirect(new URL(url, request.url))
@@ -156,16 +189,59 @@ export async function proxy(request: NextRequest) {
         return redirectResponse
     }
 
-    // Protected routes
     // Protected routes based on role prefixes
     const isAdminRoute = pathname.startsWith('/admin')
     const isModeratorRoute = pathname.startsWith('/moderator')
     const isEmployeeRoute = pathname.startsWith('/employee')
-    // Any dashboard-related route is considered a protected route
     const isProtectedRoute = isAdminRoute || isModeratorRoute || isEmployeeRoute
 
     const isLoginRoute = pathname === '/login'
     const isDeactiveAccountRoute = pathname === '/deactive-account'
+
+    // Optimized resolution with memory caching to bypass slow Supabase network calls
+    const cookieHash = getProxyCookieHash(request)
+    let cached = cookieHash ? proxySessionCache.get(cookieHash) : null
+
+    if (cached && Date.now() > cached.expiresAt) {
+        proxySessionCache.delete(cookieHash)
+        cached = null
+    }
+
+    let user: any = null
+    let profile: any = null
+
+    if (cached) {
+        user = cached.user
+        profile = cached.profile
+        if (process.env.NODE_ENV === 'development') {
+            console.log(`[PROXY-CACHE] Hit for hash ${cookieHash.substring(0, 8)}... (role: ${profile?.role})`)
+        }
+    } else {
+        const tStart = performance.now()
+        const { data: authData } = await supabase.auth.getUser()
+        user = authData?.user || null
+
+        if (user) {
+            // Fetch profile for role checks
+            const { data: dbProfile } = await supabase
+                .from('profiles')
+                .select('role, status')
+                .eq('id', user.id)
+                .single()
+            profile = dbProfile
+
+            if (cookieHash) {
+                proxySessionCache.set(cookieHash, {
+                    user,
+                    profile,
+                    expiresAt: Date.now() + PROXY_CACHE_TTL
+                })
+                if (process.env.NODE_ENV === 'development') {
+                    console.log(`[PROXY-CACHE] Set for user ${user.id} (hash: ${cookieHash.substring(0, 8)}... took ${(performance.now() - tStart).toFixed(2)}ms)`)
+                }
+            }
+        }
+    }
 
     // Redirect to login if not authenticated on a protected route
     if (!user && isProtectedRoute) {
@@ -174,13 +250,6 @@ export async function proxy(request: NextRequest) {
 
     // Redirect authenticated users from login page to their dashboard
     if (user && isLoginRoute) {
-        // Fetch user profile to determine role for proper dashboard redirect
-        const { data: profile } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', user.id)
-            .single()
-
         if (profile?.role === 'admin') {
             return redirectWithCookies('/admin')
         } else if (profile?.role === 'moderator') {
@@ -236,16 +305,6 @@ export async function proxy(request: NextRequest) {
 
     // Status and Role-based access control for authenticated users
     if (user && (isProtectedRoute || isDeactiveAccountRoute)) {
-        const { data: profile, error: profileErr } = await supabase
-            .from('profiles')
-            .select('role, status')
-            .eq('id', user.id)
-            .single()
-
-        if (profileErr) {
-            console.error(`[PROXY-DB] Profile fetch failed for authenticated user ${user.id}:`, profileErr.message)
-        }
-
         if (!profile) {
             console.warn(`[PROXY-AUTH] Redirecting to /login because no profile was found for authenticated user: ${user.id}`)
             return redirectWithCookies('/login')

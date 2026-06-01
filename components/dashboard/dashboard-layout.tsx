@@ -201,8 +201,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     retryDelay: 1000,
   })
 
-  // Enable real-time cache invalidation for dashboard data
-  useDashboardCacheInvalidation()
+  // Enable real-time cache invalidation for dashboard data (disabled for managers as their hook already handles it)
+  useDashboardCacheInvalidation(profile?.role === 'admin' || profile?.role === 'moderator' || storedProfile?.role === 'admin' || storedProfile?.role === 'moderator')
 
   // Memoize the setContentLoading callback to prevent unnecessary re-renders
   const handleLoadingChange = useCallback((loading: boolean) => {

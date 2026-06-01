@@ -94,6 +94,18 @@ function decodeSupabaseToken(token: string): string | null {
   }
 }
 
+function parseCookieHeader(cookieHeader: string): Array<{ name: string; value: string }> {
+  if (!cookieHeader) return []
+  return cookieHeader.split(';').map(pair => {
+    const idx = pair.indexOf('=')
+    if (idx === -1) return { name: pair.trim(), value: '' }
+    return {
+      name: pair.substring(0, idx).trim(),
+      value: pair.substring(idx + 1).trim()
+    }
+  })
+}
+
 // Performance monitoring interface
 interface AuthPerformanceMetrics {
   startTime: number
@@ -350,7 +362,7 @@ async function preloadProfile(profileId: string): Promise<Profile | null> {
 }
 
 // Optimized context creation with async session management
-export async function createOptimizedContext() {
+export async function createOptimizedContext(req?: Request) {
   const metrics = startAuthTiming()
   createContextCallCount++
 
@@ -360,14 +372,44 @@ export async function createOptimizedContext() {
 
   try {
     const t0 = performance.now();
-    cookieStore = await cookies()
-    const t1 = performance.now();
+    let authHeader: string | null = null;
+    let t1 = t0;
+
+    if (req && req.method === 'GET') {
+      const cookieHeader = req.headers.get('cookie') || ''
+      console.log('[AUTH-DEBUG] cookieHeader from req:', cookieHeader ? `${cookieHeader.substring(0, 100)}... [len:${cookieHeader.length}]` : 'EMPTY')
+      const parsed = parseCookieHeader(cookieHeader)
+      authHeader = req.headers.get('authorization')
+      cookieStore = {
+        getAll: () => parsed,
+        get: (name: string) => {
+          const match = parsed.find(c => c.name === name)
+          return match ? { name, value: match.value } : undefined
+        },
+        set: (name: string, value: string, options?: any) => {
+          // Read-only path, mutations handled separately or silently ignored
+        }
+      } as any;
+      t1 = performance.now();
+    } else {
+      cookieStore = await cookies()
+      t1 = performance.now();
+    }
 
     // 1. FAST CHECK: If no auth cookies exist, skip everything
-    const cookieHash = await getCookieHash(cookieStore)
-    const headerStore = await headers()
-    const authHeader = headerStore.get('authorization')
-    const hasBearerToken = authHeader?.startsWith('Bearer ')
+    const allCookies = cookieStore.getAll()
+    const hasAuthCookie = allCookies.some((c: any) => c.name.includes('-auth-token'))
+
+    let cookieHash = ''
+    if (hasAuthCookie) {
+      cookieHash = await getCookieHash(cookieStore)
+    }
+
+    if (!req || req.method !== 'GET') {
+      const headerStore = await headers()
+      authHeader = headerStore.get('authorization')
+    }
+    const hasBearerToken = authHeader ? authHeader.startsWith('Bearer ') : false
     const t2 = performance.now();
 
     if (process.env.NODE_ENV === 'development') {
