@@ -366,6 +366,7 @@ export class SalaryService {
             totalWorkingHours: number
             totalExtraHours: number
             extraDays: number
+            source?: string
         },
         tx?: any
     ) {
@@ -383,7 +384,8 @@ export class SalaryService {
                 total_extra_hours: metrics.totalExtraHours.toFixed(2),
                 salary_breakdown: {
                     ...currentBD,
-                    extra_days: metrics.extraDays || 0
+                    extra_days: metrics.extraDays || 0,
+                    source: metrics.source || currentBD.source || 'compiled'
                 },
                 updated_at: new Date(),
             }).where(eq(monthlyAttendanceSummary.id, existingSummary.id)).returning()
@@ -487,6 +489,7 @@ export class SalaryService {
                 advance_recovery: advanceTotal,
                 take_home: Number(actualTakeHome.toFixed(2)),
                 carry_forward: Number(carryForwardAmount.toFixed(2)),
+                source: metrics.source || (existingSummary.salary_breakdown as any)?.source || 'compiled'
             }
 
             // Update summary with new metrics and recalculated payslip
@@ -654,6 +657,18 @@ export class SalaryService {
         const results = []
 
         for (const employee of employees) {
+            // Check if summary already exists for this month in memory
+            const existingSummary = allExistingSummaries.find(s => s.profile_id === employee.id)
+
+            // If we are doing bulk compile (profileId is omitted) and existing has source === 'excel_upload', skip!
+            if (!profileId && existingSummary) {
+                const existingBD = existingSummary.salary_breakdown as Record<string, any> | null
+                if (existingBD?.source === 'excel_upload') {
+                    results.push(existingSummary)
+                    continue
+                }
+            }
+
             // Filter attendance records in memory
             const records = allAttendanceRecords.filter(r => r.profile_id === employee.id)
 
@@ -674,6 +689,15 @@ export class SalaryService {
                 }
             }
 
+            // Add explicit leaves from attendance records (excluding those already in the leaves table to avoid double-counting)
+            const explicitLeaves = records.filter(r => r.status === 'leave')
+            for (const el of explicitLeaves) {
+                const hasLeaveTable = employeeLeaves.some(l => el.date >= l.start_date && el.date <= l.end_date)
+                if (!hasLeaveTable) {
+                    leaveDays += el.is_half_day ? 0.5 : 1
+                }
+            }
+
             // Classify attendance records
             const verifiedRecords = records.filter(r => r.check_in && (r.status === 'verified' || r.status === 'pending'))
 
@@ -690,28 +714,54 @@ export class SalaryService {
             const presentDays = regularRecords.filter(r => !r.is_half_day).length
             const halfDays = regularRecords.filter(r => r.is_half_day).length
             const extraDays = extraRecords.length
-            const absentDays = Math.max(0, requiredWorkingDays - presentDays - halfDays - Math.floor(leaveDays))
+
+            // Count explicit absents: count records explicitly marked as 'absent', OR records that have no check-in/out and are verified/pending but are not on off-days, holidays, or leaves.
+            const explicitAbsents = records.filter(r => {
+                if (r.status === 'absent') return true
+                if (!r.check_in && !r.check_out) {
+                    const dateObj = new Date(r.date)
+                    const dayOfWeek = dateObj.getDay()
+                    const isWeeklyOff = offDays.includes(dayOfWeek) || r.status === 'weekly_off'
+                    const isHoliday = closureDates.has(r.date) || r.status === 'holiday'
+                    const hasLeave = employeeLeaves.some(l => r.date >= l.start_date && r.date <= l.end_date) || r.status === 'leave'
+                    if (!isWeeklyOff && !isHoliday && !hasLeave) {
+                        return true
+                    }
+                }
+                return false
+            }).length
+            
+            // Count inferred absents on required working days that have no attendance record AND no leave record
+            let inferredAbsents = 0
+            for (let d = 1; d <= lastDay; d++) {
+                const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+                const dateObj = new Date(year, month - 1, d)
+                const dayOfWeek = dateObj.getDay()
+                
+                if (!offDays.includes(dayOfWeek) && !closureDates.has(dateStr)) {
+                    const hasRecord = records.some(r => r.date === dateStr)
+                    const hasLeave = employeeLeaves.some(l => {
+                        const start = l.start_date
+                        const end = l.end_date
+                        return dateStr >= start && dateStr <= end
+                    })
+                    
+                    if (!hasRecord && !hasLeave) {
+                        inferredAbsents++
+                    }
+                }
+            }
+            const absentDays = explicitAbsents + inferredAbsents
 
             const totalWorkingHours = verifiedRecords.reduce((sum, r) => sum + (Number(r.working_hours) || 0), 0)
             // Extra hours are based on full days + half days * 0.5 scheduled hours
             const totalExtraHours = Math.max(0, totalWorkingHours - ((presentDays + halfDays * 0.5) * scheduledHoursPerDay))
 
-            // Check if summary already exists for this month in memory
-            const existingSummary = allExistingSummaries.find(s => s.profile_id === employee.id)
-
             if (existingSummary) {
                 const existingBD = existingSummary.salary_breakdown as Record<string, any> | null
                 const existingExtraDays = existingBD?.extra_days || 0
 
-                const hasChanges =
-                    existingSummary.total_working_days !== totalWorkingDays ||
-                    existingSummary.total_present_days !== presentDays ||
-                    existingSummary.total_absent_days !== absentDays ||
-                    existingSummary.total_half_days !== halfDays ||
-                    existingSummary.total_leaves !== Math.round(leaveDays) ||
-                    existingExtraDays !== extraDays ||
-                    Number(existingSummary.total_working_hours) !== Number(totalWorkingHours.toFixed(2)) ||
-                    Number(existingSummary.total_extra_hours) !== Number(totalExtraHours.toFixed(2))
+                const hasChanges = true
 
                 if (hasChanges) {
                     const updated = await this.updateAndRecalculateSummary(existingSummary, {
@@ -722,7 +772,8 @@ export class SalaryService {
                         leaveDays: Math.round(leaveDays),
                         totalWorkingHours,
                         totalExtraHours,
-                        extraDays
+                        extraDays,
+                        source: 'compiled'
                     })
                     results.push(updated)
                 } else {
@@ -740,7 +791,7 @@ export class SalaryService {
                     total_leaves: Math.round(leaveDays),
                     total_working_hours: totalWorkingHours.toFixed(2),
                     total_extra_hours: totalExtraHours.toFixed(2),
-                    salary_breakdown: { extra_days: extraDays },
+                    salary_breakdown: { extra_days: extraDays, source: 'compiled' },
                     status: 'draft',
                 }).returning()
                 results.push(newSummary)
@@ -1081,7 +1132,7 @@ export class SalaryService {
             totalHalfDays: number
             totalAbsent: number
             totalLeaves: number
-            totalWorkingHours?: number
+            extraDays: number
         }>
         uploadedBy: string
         uploaderName: string
@@ -1138,16 +1189,13 @@ export class SalaryService {
                     const existing = existingMap.get(record.profileId)
 
                     if (existing) {
-                        const hasChanges =
-                            existing.total_working_days !== record.totalWorkingDays ||
-                            existing.total_present_days !== record.totalPresent ||
-                            existing.total_half_days !== record.totalHalfDays ||
-                            existing.total_absent_days !== record.totalAbsent ||
-                            existing.total_leaves !== record.totalLeaves ||
-                            Number(existing.total_working_hours) !== Number(record.totalWorkingHours?.toFixed(2) || '0')
+                        const existingBD = existing.salary_breakdown as Record<string, any> | null
+                        const existingExtraDays = existingBD?.extra_days || 0
+                        const hasChanges = true
 
                         if (hasChanges) {
                             if (existing.status === 'draft' || existing.status === 'set_for_salary') {
+                                const currentBD = (existing.salary_breakdown as Record<string, any>) || {}
                                 summariesToUpdate.push({
                                     id: existing.id,
                                     values: {
@@ -1156,7 +1204,11 @@ export class SalaryService {
                                         total_half_days: record.totalHalfDays,
                                         total_absent_days: record.totalAbsent,
                                         total_leaves: record.totalLeaves,
-                                        total_working_hours: record.totalWorkingHours?.toFixed(2) || '0',
+                                        salary_breakdown: {
+                                            ...currentBD,
+                                            extra_days: record.extraDays,
+                                            source: 'excel_upload'
+                                        },
                                         updated_at: new Date(),
                                     }
                                 })
@@ -1165,7 +1217,7 @@ export class SalaryService {
                                     previewDetails.push({
                                         profileId: record.profileId,
                                         action: 'Update',
-                                        details: `Present: ${record.totalPresent}, Absent: ${record.totalAbsent}, Leave: ${record.totalLeaves}, Half Day: ${record.totalHalfDays}, Working Days: ${record.totalWorkingDays}${record.totalWorkingHours ? `, Hours: ${record.totalWorkingHours}` : ''}`
+                                        details: `Present: ${record.totalPresent}, Absent: ${record.totalAbsent}, Leave: ${record.totalLeaves}, Half Day: ${record.totalHalfDays}, Working Days: ${record.totalWorkingDays}, Extra Days: ${record.extraDays}`
                                     })
                                 }
                             } else if (existing.status === 'payslip_generated') {
@@ -1178,7 +1230,7 @@ export class SalaryService {
                                     previewDetails.push({
                                         profileId: record.profileId,
                                         action: 'Update',
-                                        details: `Present: ${record.totalPresent}, Absent: ${record.totalAbsent}, Leave: ${record.totalLeaves}, Half Day: ${record.totalHalfDays}, Working Days: ${record.totalWorkingDays}${record.totalWorkingHours ? `, Hours: ${record.totalWorkingHours}` : ''} (Recalculating Payslip)`
+                                        details: `Present: ${record.totalPresent}, Absent: ${record.totalAbsent}, Leave: ${record.totalLeaves}, Half Day: ${record.totalHalfDays}, Working Days: ${record.totalWorkingDays}, Extra Days: ${record.extraDays} (Recalculating Payslip)`
                                     })
                                 }
                             }
@@ -1203,7 +1255,7 @@ export class SalaryService {
                             total_half_days: record.totalHalfDays,
                             total_absent_days: record.totalAbsent,
                             total_leaves: record.totalLeaves,
-                            total_working_hours: record.totalWorkingHours?.toFixed(2) || '0',
+                            salary_breakdown: { extra_days: record.extraDays, source: 'excel_upload' },
                             status: 'draft',
                         })
                         inserted++
@@ -1211,7 +1263,7 @@ export class SalaryService {
                             previewDetails.push({
                                 profileId: record.profileId,
                                 action: 'Insert',
-                                details: `Present: ${record.totalPresent}, Absent: ${record.totalAbsent}, Leave: ${record.totalLeaves}, Half Day: ${record.totalHalfDays}, Working Days: ${record.totalWorkingDays}${record.totalWorkingHours ? `, Hours: ${record.totalWorkingHours}` : ''}`
+                                details: `Present: ${record.totalPresent}, Absent: ${record.totalAbsent}, Leave: ${record.totalLeaves}, Half Day: ${record.totalHalfDays}, Working Days: ${record.totalWorkingDays}, Extra Days: ${record.extraDays}`
                             })
                         }
                     }
@@ -1262,9 +1314,10 @@ export class SalaryService {
                                     halfDays: item.record.totalHalfDays,
                                     absentDays: item.record.totalAbsent,
                                     leaveDays: item.record.totalLeaves,
-                                    totalWorkingHours: item.record.totalWorkingHours || 0,
+                                    totalWorkingHours: 0,
                                     totalExtraHours: 0,
-                                    extraDays: (item.existing.salary_breakdown as any)?.extra_days || 0
+                                    extraDays: item.record.extraDays,
+                                    source: 'excel_upload'
                                 },
                                 tx
                             )

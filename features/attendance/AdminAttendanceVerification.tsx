@@ -249,6 +249,16 @@ export function AdminAttendanceVerification() {
 
     const filteredAttendance = useMemo(() => {
         return attendance?.filter(record => {
+            // Exclude weekly off, holiday, leave, and absent records from verification table
+            if (
+                record.status === 'weekly_off' ||
+                record.status === 'holiday' ||
+                record.status === 'leave' ||
+                record.status === 'absent'
+            ) {
+                return false
+            }
+
             const matchesSearch = !searchTerm ||
                 record.profile?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 record.profile?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||

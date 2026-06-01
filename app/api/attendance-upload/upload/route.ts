@@ -240,6 +240,7 @@ async function processDailyUpload(
         checkIn: string
         checkOut: string
         isHalfDay: boolean
+        status?: string
         remarks?: string
     }> = []
     const errors: string[] = []
@@ -256,13 +257,14 @@ async function processDailyUpload(
         const row = rows[i]
         const rowNum = i + 2 // 1-indexed + header
 
-        // Columns: Sr, Employee Name, Email, Designation, Date, Check-In, Check-Out, Is Half Day, Remarks
+        // Columns: Sr, Employee Name, Email, Designation, Date, Check-In, Check-Out, Is Half Day, Day Status, Remarks
         const email = String(row[2] || '').trim().toLowerCase()
         const rawDate = row[4]
         const rawCheckIn = row[5]
         const rawCheckOut = row[6]
         const isHalfDayStr = String(row[7] || '').trim().toUpperCase()
-        const remarks = String(row[8] || '').trim()
+        const dayStatusStr = String(row[8] || '').trim().toLowerCase()
+        const remarks = String(row[9] || '').trim()
 
         if (!email) {
             skippedRows++
@@ -273,6 +275,25 @@ async function processDailyUpload(
                 date: String(row[4] || ''),
                 reason: 'Empty email cell'
             })
+            continue
+        }
+
+        // Skip untouched pre-filled rows to prevent deleting existing DB records
+        const checkInFilled = rawCheckIn !== undefined && String(rawCheckIn).trim() !== ''
+        const checkOutFilled = rawCheckOut !== undefined && String(rawCheckOut).trim() !== ''
+        const dayStatusFilled = dayStatusStr !== ''
+
+        if (!checkInFilled && !checkOutFilled && !dayStatusFilled) {
+            skippedRows++
+            if (preview) {
+                skippedRecords.push({
+                    rowNum,
+                    employeeName: String(row[1] || 'Unknown').trim(),
+                    email,
+                    date: String(rawDate || ''),
+                    reason: 'Untouched row'
+                })
+            }
             continue
         }
 
@@ -306,8 +327,23 @@ async function processDailyUpload(
         }
 
         // Normalize times from any Excel format
-        const checkIn = normalizeExcelTime(rawCheckIn)
-        const checkOut = normalizeExcelTime(rawCheckOut)
+        let checkIn = normalizeExcelTime(rawCheckIn)
+        let checkOut = normalizeExcelTime(rawCheckOut)
+        let status: string | undefined = undefined
+
+        const hasTimes = checkIn !== '' || checkOut !== ''
+
+        if (hasTimes) {
+            status = undefined
+        } else {
+            if (dayStatusStr === 'absent' || dayStatusStr === 'leave') {
+                status = dayStatusStr
+            } else if (dayStatusStr === 'weekly off' || dayStatusStr === 'weekly_off') {
+                status = 'weekly_off'
+            } else if (dayStatusStr === 'holiday') {
+                status = 'holiday'
+            }
+        }
 
         records.push({
             profileId: profile.id,
@@ -315,6 +351,7 @@ async function processDailyUpload(
             checkIn: checkIn || '',
             checkOut: checkOut || '',
             isHalfDay: isHalfDayStr === 'Y' || isHalfDayStr === 'YES',
+            status,
             remarks: remarks || undefined
         })
     }
@@ -401,7 +438,7 @@ async function processMonthlyUpload(
         totalHalfDays: number
         totalAbsent: number
         totalLeaves: number
-        totalWorkingHours?: number
+        extraDays: number
     }> = []
     const errors: string[] = []
     let skippedRows = 0
@@ -416,14 +453,16 @@ async function processMonthlyUpload(
         const row = rows[i]
         const rowNum = i + 2
 
-        // Columns: Sr, Employee Name, Email, Designation, Total Working Days, Total Present, Total Half Days, Total Absent, Total Leaves, Total Working Hours
+        // Columns: Sr, Employee Name, Email, Designation, Total Present, Total Half Days, Total Absent, Total Leaves, Extra Days
         const email = String(row[2] || '').trim().toLowerCase()
-        const totalWorkingDays = Number(row[4]) || 0
-        const totalPresent = Number(row[5]) || 0
-        const totalHalfDays = Number(row[6]) || 0
-        const totalAbsent = Number(row[7]) || 0
-        const totalLeaves = Number(row[8]) || 0
-        const totalWorkingHours = Number(row[9]) || undefined
+        const totalPresent = Number(row[4]) || 0
+        const totalHalfDays = Number(row[5]) || 0
+        const totalAbsent = Number(row[6]) || 0
+        const totalLeaves = Number(row[7]) || 0
+        const extraDays = Number(row[8]) || 0
+
+        // Default working days to calendar days
+        const totalWorkingDays = new Date(year, month, 0).getDate()
 
         if (!email) {
             skippedRows++
@@ -450,7 +489,7 @@ async function processMonthlyUpload(
         }
 
         // Skip rows where all numeric fields are 0/empty
-        if (totalWorkingDays === 0 && totalPresent === 0 && totalAbsent === 0) {
+        if (totalPresent === 0 && totalAbsent === 0 && totalHalfDays === 0 && totalLeaves === 0 && extraDays === 0) {
             skippedRows++
             skippedRecords.push({
                 rowNum,
@@ -468,7 +507,7 @@ async function processMonthlyUpload(
             totalHalfDays,
             totalAbsent,
             totalLeaves,
-            totalWorkingHours,
+            extraDays,
         })
     }
 

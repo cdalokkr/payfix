@@ -292,9 +292,9 @@ export function BulkMonthlySummaryUpload({
                             <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/10">
                                 <Info className="h-3.5 w-3.5 text-amber-500 mt-0.5 shrink-0" />
                                 <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                    This template has one row per employee. Fill in <strong>Total Working Days</strong>,{" "}
-                                    <strong>Present</strong>, <strong>Absent</strong>, <strong>Half Days</strong>,{" "}
-                                    <strong>Leaves</strong>, and <strong>Hours</strong>. Records go directly to the monthly
+                                    This template has one row per employee. Fill in <strong>Present</strong>,{" "}
+                                    <strong>Absent</strong>, <strong>Half Days</strong>, <strong>Leaves</strong>, and{" "}
+                                    <strong>Extra Days</strong>. Calendar days will default as total working days. Records go directly to the monthly
                                     summary table as drafts — bypassing daily verification.
                                 </p>
                             </div>

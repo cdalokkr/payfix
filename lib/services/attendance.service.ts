@@ -1,5 +1,5 @@
 import { db } from '@/lib/db'
-import { attendance, activities, officeSettings, officeClosures, officeLocations, notifications } from '@/lib/db/schema'
+import { attendance, activities, officeSettings, officeClosures, officeLocations, notifications, leaves } from '@/lib/db/schema'
 import { eq, and, gte, lte, desc, sql, inArray } from 'drizzle-orm'
 import { throwAppError } from '@/lib/errors/app-errors'
 import { SmartCache } from '@/lib/cache/smart-cache'
@@ -411,6 +411,7 @@ export class AttendanceService {
             checkIn: string       // "HH:MM"
             checkOut: string      // "HH:MM" or empty
             isHalfDay: boolean
+            status?: string       // "absent", "leave", etc.
             remarks?: string
         }>
         uploadedBy: string
@@ -452,6 +453,27 @@ export class AttendanceService {
             const profileIds = [...new Set(records.map(r => r.profileId))]
             const dates = [...new Set(records.map(r => r.date))]
 
+            // Fetch all existing leave records for the profile IDs and dates in a single query with strict column projection
+            const existingLeaves: any[] = []
+            if (profileIds.length > 0 && dates.length > 0) {
+                const minDate = dates.reduce((a, b) => a < b ? a : b)
+                const maxDate = dates.reduce((a, b) => a > b ? a : b)
+                const fetchedLeaves = await db.select({
+                    id: leaves.id,
+                    profile_id: leaves.profile_id,
+                    start_date: leaves.start_date,
+                    end_date: leaves.end_date,
+                    status: leaves.status
+                })
+                .from(leaves)
+                .where(and(
+                    inArray(leaves.profile_id, profileIds),
+                    gte(leaves.end_date, minDate),
+                    lte(leaves.start_date, maxDate)
+                ))
+                existingLeaves.push(...fetchedLeaves)
+            }
+
             // Fetch all existing attendance records for the profile IDs and dates in a single query with strict column projection
             const existingMap = new Map<string, any>()
             if (profileIds.length > 0 && dates.length > 0) {
@@ -473,6 +495,9 @@ export class AttendanceService {
             const recordsToUpsert: any[] = []
             const idsToDelete: string[] = []
             const notificationsToInsert: any[] = []
+            const leavesToInsert: any[] = []
+            const leaveIdsToDelete: string[] = []
+            const leavesToUpdate: Array<{ id: string; values: any }> = []
             const broadcastTasks: Array<{
                 employeeId: string
                 message: string
@@ -517,8 +542,51 @@ export class AttendanceService {
 
                     const existing = existingMap.get(`${record.profileId}_${record.date}`)
 
-                    // Handle blank row check-in/out times (Absent/Holiday/Leave fallback)
-                    if (!checkInDate && !checkOutDate) {
+                    // --- Leaves Sync Logic ---
+                    const matchedLeave = existingLeaves.find(l => 
+                        l.profile_id === record.profileId && 
+                        record.date >= l.start_date && 
+                        record.date <= l.end_date
+                    )
+
+                    if (record.status === 'leave') {
+                        if (matchedLeave) {
+                            if (matchedLeave.start_date === record.date && matchedLeave.end_date === record.date) {
+                                leavesToUpdate.push({
+                                    id: matchedLeave.id,
+                                    values: {
+                                        status: 'approved',
+                                        is_half_day: record.isHalfDay,
+                                        remarks: record.remarks || `Daily attendance leave override updated by Excel upload`,
+                                        approved_by: uploadedBy,
+                                        updated_at: new Date()
+                                    }
+                                })
+                            }
+                        } else {
+                            leavesToInsert.push({
+                                profile_id: record.profileId,
+                                leave_type: record.isHalfDay ? 'Half Day Leave' : 'Casual Leave',
+                                start_date: record.date,
+                                end_date: record.date,
+                                is_half_day: record.isHalfDay,
+                                reason: record.remarks || `Daily attendance leave override via Excel upload`,
+                                status: 'approved',
+                                remarks: record.remarks || `Daily attendance leave override via Excel upload by ${uploaderName}`,
+                                approved_by: uploadedBy,
+                                created_at: new Date(),
+                                updated_at: new Date()
+                            })
+                        }
+                    } else {
+                        // If daily status is not leave, check if there's a single-day leave on this exact date to remove
+                        if (matchedLeave && matchedLeave.start_date === record.date && matchedLeave.end_date === record.date) {
+                            leaveIdsToDelete.push(matchedLeave.id)
+                        }
+                    }
+
+                    // Handle blank row check-in/out times (Absent/Holiday/Leave/Weekly Off/Holiday fallback)
+                    if (!checkInDate && !checkOutDate && record.status !== 'absent' && record.status !== 'leave' && record.status !== 'weekly_off' && record.status !== 'holiday') {
                         if (existing) {
                             idsToDelete.push(existing.id)
 
@@ -556,7 +624,7 @@ export class AttendanceService {
                         date: record.date,
                         check_in: checkInDate,
                         check_out: checkOutDate,
-                        status: 'pending', // Requires re-verification
+                        status: record.status || 'pending', // 'absent', 'leave', or 'pending'
                         source: 'bulk',
                         is_half_day: record.isHalfDay,
                         is_extra_day: isExtraDay, // Sunday/holiday extra working day
@@ -578,7 +646,9 @@ export class AttendanceService {
                             profileId: record.profileId,
                             date: record.date,
                             action: existing ? 'Update' : 'Insert',
-                            details: `Check-In: ${record.checkIn || 'None'}, Check-Out: ${record.checkOut || 'None'}${record.isHalfDay ? ' (Half Day)' : ''}`
+                            details: record.status === 'absent' || record.status === 'leave' || record.status === 'weekly_off' || record.status === 'holiday'
+                                ? `Marked Explicit ${record.status.toUpperCase()}`
+                                : `Check-In: ${record.checkIn || 'None'}, Check-Out: ${record.checkOut || 'None'}${record.isHalfDay ? ' (Half Day)' : ''}`
                         })
                     }
                 } catch (err: any) {
@@ -649,7 +719,14 @@ export class AttendanceService {
             }
 
             // Run all database operations inside a single database transaction
-            if (idsToDelete.length > 0 || recordsToUpsert.length > 0 || notificationsToInsert.length > 0) {
+            if (
+                idsToDelete.length > 0 || 
+                recordsToUpsert.length > 0 || 
+                notificationsToInsert.length > 0 ||
+                leavesToInsert.length > 0 ||
+                leaveIdsToDelete.length > 0 ||
+                leavesToUpdate.length > 0
+            ) {
                 await db.transaction(async (tx) => {
                     if (idsToDelete.length > 0) {
                         await tx.delete(attendance).where(inArray(attendance.id, idsToDelete))
@@ -673,6 +750,15 @@ export class AttendanceService {
                     }
                     if (notificationsToInsert.length > 0) {
                         await tx.insert(notifications).values(notificationsToInsert)
+                    }
+                    if (leaveIdsToDelete.length > 0) {
+                        await tx.delete(leaves).where(inArray(leaves.id, leaveIdsToDelete))
+                    }
+                    if (leavesToInsert.length > 0) {
+                        await tx.insert(leaves).values(leavesToInsert)
+                    }
+                    for (const item of leavesToUpdate) {
+                        await tx.update(leaves).set(item.values).where(eq(leaves.id, item.id))
                     }
                 })
             }
