@@ -340,6 +340,215 @@ export class SalaryService {
         return { success: true }
     }
 
+    /** Update a monthly summary and recalculate its payslip if already generated */
+    static async updateAndRecalculateSummary(
+        existingSummary: {
+            id: string
+            profile_id: string
+            month: number
+            year: number
+            status: string
+            total_working_days?: number
+            total_present_days?: number
+            total_absent_days?: number
+            total_half_days?: number
+            total_leaves?: number
+            total_working_hours?: string | null
+            total_extra_hours?: string | null
+        },
+        metrics: {
+            totalWorkingDays: number
+            presentDays: number
+            halfDays: number
+            absentDays: number
+            leaveDays: number
+            totalWorkingHours: number
+            totalExtraHours: number
+        },
+        tx?: any
+    ) {
+        const client = tx || db
+
+        if (existingSummary.status === 'draft' || existingSummary.status === 'set_for_salary') {
+            const [updated] = await client.update(monthlyAttendanceSummary).set({
+                total_working_days: metrics.totalWorkingDays,
+                total_present_days: metrics.presentDays,
+                total_absent_days: metrics.absentDays,
+                total_half_days: metrics.halfDays,
+                total_leaves: metrics.leaveDays,
+                total_working_hours: metrics.totalWorkingHours.toFixed(2),
+                total_extra_hours: metrics.totalExtraHours.toFixed(2),
+                updated_at: new Date(),
+            }).where(eq(monthlyAttendanceSummary.id, existingSummary.id)).returning()
+            return updated
+        }
+
+        if (existingSummary.status === 'payslip_generated') {
+            // Get applicable salary setup
+            const salarySetup = await this.getActiveSalaryForPeriod(
+                existingSummary.profile_id,
+                existingSummary.month,
+                existingSummary.year
+            )
+
+            if (!salarySetup) {
+                // Skip/fallback if no setup
+                const [updated] = await client.update(monthlyAttendanceSummary).set({
+                    total_working_days: metrics.totalWorkingDays,
+                    total_present_days: metrics.presentDays,
+                    total_absent_days: metrics.absentDays,
+                    total_half_days: metrics.halfDays,
+                    total_leaves: metrics.leaveDays,
+                    total_working_hours: metrics.totalWorkingHours.toFixed(2),
+                    total_extra_hours: metrics.totalExtraHours.toFixed(2),
+                    updated_at: new Date(),
+                }).where(eq(monthlyAttendanceSummary.id, existingSummary.id)).returning()
+                return updated
+            }
+
+            const basic = Number(salarySetup.basic_salary) || 0
+            const hra = Number(salarySetup.hra) || 0
+            const da = Number(salarySetup.da) || 0
+            const ta = Number(salarySetup.ta) || 0
+            const special = Number(salarySetup.special_allowance) || 0
+            const incentiveAmt = Number(salarySetup.incentive) || 0
+            const otherDeductions = Number(salarySetup.other_deductions) || 0
+
+            const grossSalary = basic + hra + da + ta + special + incentiveAmt
+            const totalWorkingDaysVal = metrics.totalWorkingDays || 1
+            const absentDaysVal = metrics.absentDays || 0
+            const halfDaysVal = metrics.halfDays || 0
+
+            // Pro-rate absence deduction
+            const perDayRate = grossSalary / totalWorkingDaysVal
+            const absenceDeduction = (absentDaysVal * perDayRate) + (halfDaysVal * 0.5 * perDayRate)
+
+            const netSalary = grossSalary - absenceDeduction - otherDeductions
+
+            // Get pending advances + adjusted advances for this target month/year
+            const pendingAdvances = await client.select({
+                total: sql<string>`COALESCE(SUM(${employeeAdvances.amount}::numeric), 0)`,
+            }).from(employeeAdvances).where(and(
+                eq(employeeAdvances.profile_id, existingSummary.profile_id),
+                or(
+                    eq(employeeAdvances.status, 'pending'),
+                    and(
+                        eq(employeeAdvances.status, 'adjusted'),
+                        eq(employeeAdvances.adjusted_in_month, existingSummary.month),
+                        eq(employeeAdvances.adjusted_in_year, existingSummary.year)
+                    )
+                )
+            ))
+            const advanceTotal = Number(pendingAdvances[0]?.total || '0')
+
+            const rawTakeHome = netSalary - advanceTotal
+
+            // Handle negative take-home: carry forward deficit as next-month advance
+            const isNegative = rawTakeHome < 0
+            const carryForwardAmount = isNegative ? Math.abs(rawTakeHome) : 0
+            const actualTakeHome = isNegative ? 0 : rawTakeHome
+
+            const salaryBreakdown = {
+                basic_salary: basic,
+                hra,
+                da,
+                ta,
+                special_allowance: special,
+                incentive: incentiveAmt,
+                gross_salary: grossSalary,
+                total_working_days: totalWorkingDaysVal,
+                absent_days: absentDaysVal,
+                half_days: halfDaysVal,
+                per_day_rate: Number(perDayRate.toFixed(2)),
+                absence_deduction: Number(absenceDeduction.toFixed(2)),
+                other_deductions: otherDeductions,
+                net_salary: Number(netSalary.toFixed(2)),
+                advance_recovery: advanceTotal,
+                take_home: Number(actualTakeHome.toFixed(2)),
+                carry_forward: Number(carryForwardAmount.toFixed(2)),
+            }
+
+            // Update summary with new metrics and recalculated payslip
+            const [updated] = await client.update(monthlyAttendanceSummary).set({
+                total_working_days: metrics.totalWorkingDays,
+                total_present_days: metrics.presentDays,
+                total_absent_days: metrics.absentDays,
+                total_half_days: metrics.halfDays,
+                total_leaves: metrics.leaveDays,
+                total_working_hours: metrics.totalWorkingHours.toFixed(2),
+                total_extra_hours: metrics.totalExtraHours.toFixed(2),
+                gross_salary: grossSalary.toFixed(2),
+                absence_deduction: absenceDeduction.toFixed(2),
+                net_salary: netSalary.toFixed(2),
+                advance_recovery: advanceTotal.toFixed(2),
+                take_home: actualTakeHome.toFixed(2),
+                salary_breakdown: salaryBreakdown,
+                updated_at: new Date(),
+            }).where(eq(monthlyAttendanceSummary.id, existingSummary.id)).returning()
+
+            // Update advances status
+            if (advanceTotal > 0) {
+                await client.update(employeeAdvances).set({
+                    status: 'adjusted',
+                    adjusted_in_month: existingSummary.month,
+                    adjusted_in_year: existingSummary.year,
+                }).where(and(
+                    eq(employeeAdvances.profile_id, existingSummary.profile_id),
+                    or(
+                        eq(employeeAdvances.status, 'pending'),
+                        and(
+                            eq(employeeAdvances.status, 'adjusted'),
+                            eq(employeeAdvances.adjusted_in_month, existingSummary.month),
+                            eq(employeeAdvances.adjusted_in_year, existingSummary.year)
+                        )
+                    )
+                ))
+            } else {
+                await client.update(employeeAdvances).set({
+                    status: 'pending',
+                    adjusted_in_month: null,
+                    adjusted_in_year: null,
+                }).where(and(
+                    eq(employeeAdvances.profile_id, existingSummary.profile_id),
+                    eq(employeeAdvances.status, 'adjusted'),
+                    eq(employeeAdvances.adjusted_in_month, existingSummary.month),
+                    eq(employeeAdvances.adjusted_in_year, existingSummary.year)
+                ))
+            }
+
+            // Delete the existing carry-forward advance for this month/year first to prevent duplicate carry-forward
+            const carryForwardParticulars = `Salary deficit carry-forward from ${MONTH_NAMES[existingSummary.month - 1]} ${existingSummary.year} payslip`
+            await client.delete(employeeAdvances).where(and(
+                eq(employeeAdvances.profile_id, existingSummary.profile_id),
+                eq(employeeAdvances.particulars, carryForwardParticulars)
+            ))
+
+            // Create new carry-forward if negative take-home
+            if (isNegative && carryForwardAmount > 0) {
+                let nextMonth = existingSummary.month + 1
+                let nextYear = existingSummary.year
+                if (nextMonth > 12) {
+                    nextMonth = 1
+                    nextYear += 1
+                }
+                const advanceDate = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`
+
+                await client.insert(employeeAdvances).values({
+                    profile_id: existingSummary.profile_id,
+                    date: advanceDate,
+                    amount: carryForwardAmount.toFixed(2),
+                    particulars: carryForwardParticulars,
+                    status: 'pending',
+                    created_by: existingSummary.profile_id,
+                })
+            }
+
+            return updated
+        }
+
+        return existingSummary
+    }
+
     // ==========================================
     // MONTHLY ATTENDANCE COMPILATION
     // ==========================================
@@ -441,18 +650,25 @@ export class SalaryService {
             })
 
             if (existingSummary) {
-                // Only update if still in draft
-                if (existingSummary.status === 'draft') {
-                    const [updated] = await db.update(monthlyAttendanceSummary).set({
-                        total_working_days: totalWorkingDays,
-                        total_present_days: presentDays,
-                        total_absent_days: Math.round(absentDays),
-                        total_half_days: halfDays,
-                        total_leaves: Math.round(leaveDays),
-                        total_working_hours: totalWorkingHours.toFixed(2),
-                        total_extra_hours: totalExtraHours.toFixed(2),
-                        updated_at: new Date(),
-                    }).where(eq(monthlyAttendanceSummary.id, existingSummary.id)).returning()
+                const hasChanges =
+                    existingSummary.total_working_days !== totalWorkingDays ||
+                    existingSummary.total_present_days !== presentDays ||
+                    existingSummary.total_absent_days !== Math.round(absentDays) ||
+                    existingSummary.total_half_days !== halfDays ||
+                    existingSummary.total_leaves !== Math.round(leaveDays) ||
+                    Number(existingSummary.total_working_hours) !== Number(totalWorkingHours.toFixed(2)) ||
+                    Number(existingSummary.total_extra_hours) !== Number(totalExtraHours.toFixed(2))
+
+                if (hasChanges) {
+                    const updated = await this.updateAndRecalculateSummary(existingSummary, {
+                        totalWorkingDays,
+                        presentDays,
+                        halfDays,
+                        absentDays: Math.round(absentDays),
+                        leaveDays: Math.round(leaveDays),
+                        totalWorkingHours,
+                        totalExtraHours
+                    })
                     results.push(updated)
                 } else {
                     results.push(existingSummary)
@@ -822,6 +1038,7 @@ export class SalaryService {
             details: string
             reason?: string
         }> = []
+        const summariesToRecalculate: Array<{ existing: any; record: any }> = []
 
         try {
             const profileIds = [...new Set(records.map(r => r.profileId))]
@@ -849,36 +1066,58 @@ export class SalaryService {
                     const existing = existingMap.get(record.profileId)
 
                     if (existing) {
-                        if (existing.status === 'draft') {
-                            summariesToUpdate.push({
-                                id: existing.id,
-                                values: {
-                                    total_working_days: record.totalWorkingDays,
-                                    total_present_days: record.totalPresent,
-                                    total_half_days: record.totalHalfDays,
-                                    total_absent_days: record.totalAbsent,
-                                    total_leaves: record.totalLeaves,
-                                    total_working_hours: record.totalWorkingHours?.toFixed(2) || '0',
-                                    updated_at: new Date(),
-                                }
-                            })
-                            updated++
-                            if (preview) {
-                                previewDetails.push({
-                                    profileId: record.profileId,
-                                    action: 'Update',
-                                    details: `Present: ${record.totalPresent}, Absent: ${record.totalAbsent}, Leave: ${record.totalLeaves}, Half Day: ${record.totalHalfDays}, Working Days: ${record.totalWorkingDays}${record.totalWorkingHours ? `, Hours: ${record.totalWorkingHours}` : ''}`
+                        const hasChanges =
+                            existing.total_working_days !== record.totalWorkingDays ||
+                            existing.total_present_days !== record.totalPresent ||
+                            existing.total_half_days !== record.totalHalfDays ||
+                            existing.total_absent_days !== record.totalAbsent ||
+                            existing.total_leaves !== record.totalLeaves ||
+                            Number(existing.total_working_hours) !== Number(record.totalWorkingHours?.toFixed(2) || '0')
+
+                        if (hasChanges) {
+                            if (existing.status === 'draft' || existing.status === 'set_for_salary') {
+                                summariesToUpdate.push({
+                                    id: existing.id,
+                                    values: {
+                                        total_working_days: record.totalWorkingDays,
+                                        total_present_days: record.totalPresent,
+                                        total_half_days: record.totalHalfDays,
+                                        total_absent_days: record.totalAbsent,
+                                        total_leaves: record.totalLeaves,
+                                        total_working_hours: record.totalWorkingHours?.toFixed(2) || '0',
+                                        updated_at: new Date(),
+                                    }
                                 })
+                                updated++
+                                if (preview) {
+                                    previewDetails.push({
+                                        profileId: record.profileId,
+                                        action: 'Update',
+                                        details: `Present: ${record.totalPresent}, Absent: ${record.totalAbsent}, Leave: ${record.totalLeaves}, Half Day: ${record.totalHalfDays}, Working Days: ${record.totalWorkingDays}${record.totalWorkingHours ? `, Hours: ${record.totalWorkingHours}` : ''}`
+                                    })
+                                }
+                            } else if (existing.status === 'payslip_generated') {
+                                summariesToRecalculate.push({
+                                    existing,
+                                    record
+                                })
+                                updated++
+                                if (preview) {
+                                    previewDetails.push({
+                                        profileId: record.profileId,
+                                        action: 'Update',
+                                        details: `Present: ${record.totalPresent}, Absent: ${record.totalAbsent}, Leave: ${record.totalLeaves}, Half Day: ${record.totalHalfDays}, Working Days: ${record.totalWorkingDays}${record.totalWorkingHours ? `, Hours: ${record.totalWorkingHours}` : ''} (Recalculating Payslip)`
+                                    })
+                                }
                             }
                         } else {
-                            // Already processed (set_for_salary or payslip_generated) — skip
                             skipped++
                             if (preview) {
                                 previewDetails.push({
                                     profileId: record.profileId,
                                     action: 'Skip',
                                     details: '',
-                                    reason: `Existing record status is ${existing.status} (already processed/salary generated)`
+                                    reason: `Existing record status is ${existing.status} and has no changes`
                                 })
                             }
                         }
@@ -925,13 +1164,13 @@ export class SalaryService {
                     skipped,
                     errors,
                     toInsert: summariesToInsert.length,
-                    toUpdate: summariesToUpdate.length,
+                    toUpdate: summariesToUpdate.length + summariesToRecalculate.length,
                     previewDetails
                 }
             }
 
             // Run insertions and updates inside a single database transaction
-            if (summariesToInsert.length > 0 || summariesToUpdate.length > 0) {
+            if (summariesToInsert.length > 0 || summariesToUpdate.length > 0 || summariesToRecalculate.length > 0) {
                 await db.transaction(async (tx) => {
                     if (summariesToInsert.length > 0) {
                         await tx.insert(monthlyAttendanceSummary).values(summariesToInsert)
@@ -939,6 +1178,23 @@ export class SalaryService {
                     if (summariesToUpdate.length > 0) {
                         for (const update of summariesToUpdate) {
                             await tx.update(monthlyAttendanceSummary).set(update.values).where(eq(monthlyAttendanceSummary.id, update.id))
+                        }
+                    }
+                    if (summariesToRecalculate.length > 0) {
+                        for (const item of summariesToRecalculate) {
+                            await this.updateAndRecalculateSummary(
+                                item.existing,
+                                {
+                                    totalWorkingDays: item.record.totalWorkingDays,
+                                    presentDays: item.record.totalPresent,
+                                    halfDays: item.record.totalHalfDays,
+                                    absentDays: item.record.totalAbsent,
+                                    leaveDays: item.record.totalLeaves,
+                                    totalWorkingHours: item.record.totalWorkingHours || 0,
+                                    totalExtraHours: 0
+                                },
+                                tx
+                            )
                         }
                     }
                 })
