@@ -169,9 +169,19 @@ export const salaryRouter = router({
         .input(z.object({
             month: z.number().min(1).max(12),
             year: z.number().min(2020).max(2100),
+            profileId: z.string().uuid().optional(),
         }))
         .mutation(async ({ input }) => {
-            return await SalaryService.compileMonthlyAttendance(input.month, input.year)
+            return await SalaryService.compileMonthlyAttendance(input.month, input.year, input.profileId)
+        }),
+
+    getActiveEmployeesForCompilation: moderatorProcedure
+        .query(async () => {
+            return await db.query.profiles.findMany({
+                where: eq(profiles.status, 'active'),
+                columns: { id: true, full_name: true, email: true },
+                orderBy: [profiles.full_name]
+            })
         }),
 
     getMonthlySummaries: moderatorProcedure

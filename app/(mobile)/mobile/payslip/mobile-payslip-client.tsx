@@ -131,13 +131,26 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
         { label: 'TA', amount: breakdown.ta },
         { label: 'Special Allowance', amount: breakdown.special_allowance },
         { label: 'Incentive', amount: breakdown.incentive },
+        ...(Number(breakdown.extra_day_payment) > 0 ? [{ label: 'Extra Days Payment', amount: breakdown.extra_day_payment }] : []),
     ].filter(e => Number(e.amount) > 0) : []
 
     const deductionItems = breakdown ? [
-        { label: 'Absence Deduction', amount: breakdown.absence_deduction },
+        ...(breakdown.absent_deduction !== undefined
+            ? [
+                { 
+                    label: `Absent Deduction${Number(breakdown.absent_deduction_multiplier) > 1 ? ` (${breakdown.absent_deduction_multiplier}x)` : ''}`, 
+                    amount: breakdown.absent_deduction 
+                },
+                { label: 'Half Day Deduction', amount: breakdown.half_day_deduction },
+                { label: 'Leave Deduction', amount: breakdown.leave_deduction || 0 },
+              ]
+            : [
+                { label: 'Absence Deduction', amount: breakdown.absence_deduction }
+              ]
+        ),
         { label: 'Other Deductions', amount: breakdown.other_deductions },
         ...(Number(breakdown.advance_recovery) > 0 ? [{ label: 'Advance Recovery', amount: breakdown.advance_recovery }] : []),
-    ].filter(e => Number(e.amount) > 0) : []
+    ].filter(e => Number(e.amount) > 0 || ['Absent Deduction', 'Half Day Deduction', 'Leave Deduction'].some(lbl => e.label.startsWith(lbl))) : []
 
     const totalEarnings = earningsItems.reduce((s, e) => s + Number(e.amount || 0), 0)
     const totalDeductions = deductionItems.reduce((s, e) => s + Number(e.amount || 0), 0)
@@ -166,10 +179,12 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
             autoTable(doc, {
                 startY: 40,
                 body: [
-                    ['Employee Name', profile.full_name || '—', 'Working Days', bd?.total_working_days || '—'],
+                    ['Employee Name', profile.full_name || '—', 'Month Days', bd?.total_working_days || '—'],
                     ['Designation', profile.designation?.name || '—', 'Present Days', slip.total_present_days || '—'],
-                    ['Email', profile.email || '—', 'Absent Days', bd?.absent_days || '—'],
+                    ['Email', profile.email || '—', 'Half Days', bd?.half_days || '0'],
                     ['Month / Year', `${monthName} ${slip.year}`, 'Leaves', slip.total_leaves || '—'],
+                    ['Status', 'Generated', 'Absent Days', bd?.absent_days || '—'],
+                    ['', '', 'Extra Days', bd?.extra_days || '0'],
                 ],
                 theme: 'grid',
                 styles: { fontSize: 9, cellPadding: 3 },
@@ -186,13 +201,26 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                 { label: 'TA', amount: bd.ta },
                 { label: 'Special Allowance', amount: bd.special_allowance },
                 { label: 'Incentive', amount: bd.incentive },
+                ...(Number(bd.extra_day_payment) > 0 ? [{ label: 'Extra Days Payment', amount: bd.extra_day_payment }] : []),
             ].filter(ev => Number(ev.amount) > 0) : [];
             
             const dItems = bd ? [
-                { label: 'Absence Deduction', amount: bd.absence_deduction },
+                ...(bd.absent_deduction !== undefined
+                    ? [
+                        { 
+                            label: `Absent Deduction${Number(bd.absent_deduction_multiplier) > 1 ? ` (${bd.absent_deduction_multiplier}x)` : ''}`, 
+                            amount: bd.absent_deduction 
+                        },
+                        { label: 'Half Day Deduction', amount: bd.half_day_deduction },
+                        { label: 'Leave Deduction', amount: bd.leave_deduction || 0 },
+                      ]
+                    : [
+                        { label: 'Absence Deduction', amount: bd.absence_deduction }
+                      ]
+                ),
                 { label: 'Other Deductions', amount: bd.other_deductions },
                 ...(Number(bd.advance_recovery) > 0 ? [{ label: 'Advance Recovery', amount: bd.advance_recovery }] : []),
-            ].filter(ev => Number(ev.amount) > 0) : [];
+            ].filter(ev => Number(ev.amount) > 0 || ['Absent Deduction', 'Half Day Deduction', 'Leave Deduction'].some(lbl => ev.label.startsWith(lbl))) : [];
             
             const tEarn = eItems.reduce((s, ev) => s + Number(ev.amount || 0), 0);
             const tDed = dItems.reduce((s, ev) => s + Number(ev.amount || 0), 0);
@@ -392,7 +420,16 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                                     { label: 'Incentive', amount: bd.incentive },
                                 ].filter(e => Number(e.amount) > 0) : []
                                 const cardDeductions = bd ? [
-                                    { label: 'Absence Ded.', amount: bd.absence_deduction },
+                                    ...(bd.absent_deduction !== undefined
+                                        ? [
+                                            { label: 'Absent Ded.', amount: bd.absent_deduction },
+                                            { label: 'Half Day Ded.', amount: bd.half_day_deduction },
+                                            { label: 'Leave Ded.', amount: bd.leave_deduction || 0 },
+                                          ]
+                                        : [
+                                            { label: 'Absence Ded.', amount: bd.absence_deduction }
+                                          ]
+                                    ),
                                     { label: 'Other Ded.', amount: bd.other_deductions },
                                     ...(Number(bd.advance_recovery) > 0 ? [{ label: 'Adv. Recovery', amount: bd.advance_recovery }] : []),
                                 ].filter(e => Number(e.amount) > 0) : []
@@ -433,22 +470,30 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                                         </div>
 
                                         {/* Attendance Stats */}
-                                        <div className="grid grid-cols-4 gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
-                                            <div className="text-center">
-                                                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Working</div>
-                                                <div className="text-[13px] font-bold text-slate-700 dark:text-slate-300">{bd?.total_working_days ?? slip.total_working_days ?? '—'}</div>
+                                        <div className="grid grid-cols-6 gap-1 pt-3 border-t border-slate-100 dark:border-slate-800 text-center">
+                                            <div>
+                                                <div className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">Month</div>
+                                                <div className="text-[11px] font-bold text-slate-700 dark:text-slate-300">{bd?.total_working_days ?? slip.total_working_days ?? '—'}</div>
                                             </div>
-                                            <div className="text-center">
-                                                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Absent</div>
-                                                <div className="text-[13px] font-bold text-rose-600">{bd?.absent_days ?? slip.total_absent_days ?? '—'}</div>
+                                            <div>
+                                                <div className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">Present</div>
+                                                <div className="text-[11px] font-bold text-emerald-600">{slip.total_present_days ?? '—'}</div>
                                             </div>
-                                            <div className="text-center">
-                                                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Leave</div>
-                                                <div className="text-[13px] font-bold text-amber-600">{slip.total_leaves ?? '—'}</div>
+                                            <div>
+                                                <div className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">Half</div>
+                                                <div className="text-[11px] font-bold text-orange-500">{bd?.half_days ?? slip.total_half_days ?? '—'}</div>
                                             </div>
-                                            <div className="text-center">
-                                                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Present</div>
-                                                <div className="text-[13px] font-bold text-emerald-600">{slip.total_present_days ?? '—'}</div>
+                                            <div>
+                                                <div className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">Leave</div>
+                                                <div className="text-[11px] font-bold text-blue-600">{slip.total_leaves ?? '—'}</div>
+                                            </div>
+                                            <div>
+                                                <div className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">Absent</div>
+                                                <div className="text-[11px] font-bold text-rose-600">{bd?.absent_days ?? slip.total_absent_days ?? '—'}</div>
+                                            </div>
+                                            <div>
+                                                <div className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">Extra</div>
+                                                <div className="text-[11px] font-bold text-amber-600">{bd?.extra_days ?? '0'}</div>
                                             </div>
                                         </div>
 
@@ -554,27 +599,44 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                                 <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 space-y-2 border border-slate-100 dark:border-slate-800">
                                     <div className="flex justify-between text-[13px]">
                                         <span className="text-slate-500 font-medium">Name</span>
-                                        <span className="font-bold">{payslipDetail.profile?.full_name || '—'}</span>
+                                        <span className="font-bold text-slate-800 dark:text-slate-200">{payslipDetail.profile?.full_name || '—'}</span>
                                     </div>
                                     <div className="flex justify-between text-[13px]">
                                         <span className="text-slate-500 font-medium">Designation</span>
-                                        <span className="font-bold">{payslipDetail.profile?.designation?.name || '—'}</span>
+                                        <span className="font-bold text-slate-800 dark:text-slate-200">{payslipDetail.profile?.designation?.name || '—'}</span>
                                     </div>
-                                    <div className="flex justify-between text-[13px]">
-                                        <span className="text-slate-500 font-medium">Working Days</span>
-                                        <span className="font-bold">{breakdown.total_working_days}</span>
-                                    </div>
-                                    <div className="flex justify-between text-[13px]">
-                                        <span className="text-slate-500 font-medium">Present</span>
-                                        <span className="font-bold text-emerald-600">{payslipDetail.total_present_days}</span>
-                                    </div>
-                                    <div className="flex justify-between text-[13px]">
-                                        <span className="text-slate-500 font-medium">Absent</span>
-                                        <span className="font-bold text-rose-600">{breakdown.absent_days}</span>
-                                    </div>
-                                    <div className="flex justify-between text-[13px]">
-                                        <span className="text-slate-500 font-medium">Leaves</span>
-                                        <span className="font-bold">{payslipDetail.total_leaves}</span>
+                                </div>
+
+                                {/* Attendance Stats Grid */}
+                                <div>
+                                    <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 px-1">
+                                        Attendance Summary
+                                    </h3>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <div className="bg-slate-50/50 dark:bg-slate-900/30 border border-slate-100 dark:border-slate-800/50 p-2.5 rounded-xl text-center flex flex-col justify-between min-h-[75px]">
+                                            <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider min-h-[24px] flex items-center justify-center leading-tight">Month Days</span>
+                                            <span className="text-sm font-black text-slate-700 dark:text-slate-300 mt-auto block">{breakdown.total_working_days}</span>
+                                        </div>
+                                        <div className="bg-slate-50/50 dark:bg-slate-900/30 border border-slate-100 dark:border-slate-800/50 p-2.5 rounded-xl text-center flex flex-col justify-between min-h-[75px]">
+                                            <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider min-h-[24px] flex items-center justify-center leading-tight">Present</span>
+                                            <span className="text-sm font-black text-emerald-600 mt-auto block">{payslipDetail.total_present_days}</span>
+                                        </div>
+                                        <div className="bg-slate-50/50 dark:bg-slate-900/30 border border-slate-100 dark:border-slate-800/50 p-2.5 rounded-xl text-center flex flex-col justify-between min-h-[75px]">
+                                            <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider min-h-[24px] flex items-center justify-center leading-tight">Half Days</span>
+                                            <span className="text-sm font-black text-orange-500 mt-auto block">{breakdown.half_days || 0}</span>
+                                        </div>
+                                        <div className="bg-slate-50/50 dark:bg-slate-900/30 border border-slate-100 dark:border-slate-800/50 p-2.5 rounded-xl text-center flex flex-col justify-between min-h-[75px]">
+                                            <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider min-h-[24px] flex items-center justify-center leading-tight">Leaves</span>
+                                            <span className="text-sm font-black text-blue-600 mt-auto block">{payslipDetail.total_leaves}</span>
+                                        </div>
+                                        <div className="bg-slate-50/50 dark:bg-slate-900/30 border border-slate-100 dark:border-slate-800/50 p-2.5 rounded-xl text-center flex flex-col justify-between min-h-[75px]">
+                                            <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider min-h-[24px] flex items-center justify-center leading-tight">Absent</span>
+                                            <span className="text-sm font-black text-rose-600 mt-auto block">{breakdown.absent_days}</span>
+                                        </div>
+                                        <div className="bg-slate-50/50 dark:bg-slate-900/30 border border-slate-100 dark:border-slate-800/50 p-2.5 rounded-xl text-center flex flex-col justify-between min-h-[75px]">
+                                            <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider min-h-[24px] flex items-center justify-center leading-tight">Extra Days</span>
+                                            <span className="text-sm font-black text-amber-600 mt-auto block">{breakdown.extra_days || 0}</span>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -624,7 +686,10 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                                         <span className="text-xs font-black uppercase tracking-widest opacity-90">Net Pay (Take-Home)</span>
                                         <span className="text-2xl font-black tracking-tight">{formatCurr(breakdown.take_home)}</span>
                                     </div>
-                                    <p className="text-[11px] opacity-70 font-medium italic">
+                                    <div className="text-[10px] opacity-90 my-2 font-semibold bg-white/10 px-2.5 py-1 rounded-lg inline-block backdrop-blur-sm">
+                                        Formula: Earnings ({formatCurr(totalEarnings)}) - Deductions ({formatCurr(totalDeductions)})
+                                    </div>
+                                    <p className="text-[11px] opacity-70 font-medium italic mt-1">
                                         ({numberToWords(Number(breakdown.take_home || 0))})
                                     </p>
                                 </div>

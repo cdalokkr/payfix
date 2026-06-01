@@ -138,6 +138,7 @@ export const officeSettings = pgTable('office_settings', {
     default_check_out: text('default_check_out').notNull().default('19:00:00'),
     off_days: integer('off_days').array().default([0]),
     daily_working_hours: jsonb('daily_working_hours').default({}),
+    absent_deduction_multiplier: integer('absent_deduction_multiplier').notNull().default(1),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 

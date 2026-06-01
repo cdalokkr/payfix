@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { trpc } from "@/lib/trpc/client"
 import { toast } from "sonner"
-import { Receipt, Loader2, Printer, Eye, AlertTriangle } from "lucide-react"
+import { Receipt, Loader2, Printer, Eye, AlertTriangle, TrendingUp, TrendingDown } from "lucide-react"
 import { CardShell } from "./CardShell"
 import {
     Select,
@@ -173,7 +173,8 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
         Number(breakdown.da || 0) +
         Number(breakdown.ta || 0) +
         Number(breakdown.special_allowance || 0) +
-        Number(breakdown.incentive || 0)
+        Number(breakdown.incentive || 0) +
+        Number(breakdown.extra_day_payment || 0)
     ) : 0
 
     const totalDeductions = breakdown ? (
@@ -189,13 +190,26 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
         { label: 'TA', amount: breakdown.ta },
         { label: 'Special Allowance', amount: breakdown.special_allowance },
         { label: 'Incentive', amount: breakdown.incentive },
-    ] : []
+        ...(Number(breakdown.extra_day_payment) > 0 ? [{ label: 'Extra Days Payment', amount: breakdown.extra_day_payment }] : []),
+    ].filter(e => Number(e.amount) > 0) : []
 
     const deductionItems = breakdown ? [
-        { label: 'Absence Deduction', amount: breakdown.absence_deduction },
+        ...(breakdown.absent_deduction !== undefined
+            ? [
+                { 
+                    label: `Absent Deduction${Number(breakdown.absent_deduction_multiplier) > 1 ? ` (${breakdown.absent_deduction_multiplier}x)` : ''}`, 
+                    amount: breakdown.absent_deduction 
+                },
+                { label: 'Half Day Deduction', amount: breakdown.half_day_deduction },
+                { label: 'Leave Deduction', amount: breakdown.leave_deduction || 0 },
+              ]
+            : [
+                { label: 'Absence Deduction', amount: breakdown.absence_deduction }
+              ]
+        ),
         { label: 'Other Deductions (PF/ESI/etc.)', amount: breakdown.other_deductions },
         ...(Number(breakdown.advance_recovery) > 0 ? [{ label: 'Advance Recovery', amount: breakdown.advance_recovery }] : []),
-    ] : []
+    ].filter(e => Number(e.amount) > 0 || ['Absent Deduction', 'Half Day Deduction', 'Leave Deduction'].some(lbl => e.label.startsWith(lbl))) : []
 
     // Convert number to words for Net Pay
     const numberToWords = (num: number): string => {
@@ -345,8 +359,13 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
                                                 </div>
                                             </div>
 
-                                            <div className="text-xs text-muted-foreground mt-2">
-                                                Present: <span className="text-emerald-600 font-medium">{s.total_present_days}</span> | Absent: <span className="text-rose-600 font-medium">{s.total_absent_days}</span> | Leaves: {s.total_leaves}
+                                            <div className="text-[10px] text-muted-foreground mt-2 grid grid-cols-3 gap-1 bg-muted/10 p-1.5 rounded-md">
+                                                <div>Month: <span className="font-semibold">{s.total_working_days}</span></div>
+                                                <div>Present: <span className="text-emerald-600 font-semibold">{s.total_present_days}</span></div>
+                                                <div>Half: <span className="text-orange-500 font-semibold">{s.total_half_days}</span></div>
+                                                <div>Leaves: <span className="font-semibold">{s.total_leaves}</span></div>
+                                                <div>Absent: <span className="text-rose-600 font-semibold">{s.total_absent_days}</span></div>
+                                                <div>Extra: <span className="text-amber-600 font-semibold">{(s.salary_breakdown as any)?.extra_days || 0}</span></div>
                                             </div>
 
                                             {isGenerated && (
@@ -376,7 +395,7 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
                                             />
                                         </th>
                                         <th className="p-3 text-left font-semibold text-muted-foreground min-w-[200px]">Employee</th>
-                                        <th className="p-3 text-center font-semibold text-muted-foreground">Work/Pr/Ab/Lv</th>
+                                        <th className="p-3 text-center font-semibold text-muted-foreground">Month/Pr/Hd/Ab/Lv/Ex</th>
                                         <th className="p-3 text-right font-semibold text-muted-foreground">Gross Pay</th>
                                         <th className="p-3 text-right font-semibold text-muted-foreground">Deductions</th>
                                         <th className="p-3 text-right font-semibold text-muted-foreground">Adv. Rec.</th>
@@ -425,7 +444,7 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
                                                 </div>
                                             </td>
                                             <td className="p-3 text-center">
-                                                <span className="text-muted-foreground">{s.total_working_days}</span> / <span className="font-bold text-emerald-600">{s.total_present_days}</span> / <span className="font-bold text-rose-600">{s.total_absent_days}</span> / <span className="text-muted-foreground">{s.total_leaves}</span>
+                                                <span className="text-muted-foreground">{s.total_working_days}</span> / <span className="font-bold text-emerald-600">{s.total_present_days}</span> / <span className="text-orange-500 font-semibold">{s.total_half_days}</span> / <span className="font-bold text-rose-600">{s.total_absent_days}</span> / <span className="text-muted-foreground">{s.total_leaves}</span> / <span className="text-amber-600 font-semibold">{(s.salary_breakdown as any)?.extra_days || 0}</span>
                                             </td>
                                             <td className="p-3 text-right font-medium">
                                                 {isGenerated ? formatCurrency(s.gross_salary) : <span className="text-muted-foreground/40">—</span>}
@@ -513,176 +532,296 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
 
                         {payslipDetail && breakdown && (
                             <>
-                                <div ref={payslipRef}>
-                                    <div className="slip-page" style={{ padding: '32px 40px 40px' }}>
-                                        {/* Slip Header */}
-                                        <div style={{ textAlign: 'center', paddingBottom: '14px', marginBottom: '18px', borderBottom: '3px double currentColor' }}>
-                                            <h1 style={{ fontSize: '20px', fontWeight: 700, letterSpacing: '3px', textTransform: 'uppercase' as const, marginBottom: '4px' }}>
-                                                SALARY SLIP
-                                            </h1>
-                                            <p style={{ fontSize: '14px', opacity: 0.6, fontWeight: 500 }}>
-                                                For the month of {MONTHS[month - 1]} {year}
-                                            </p>
-                                        </div>
+                                {/* Hidden print container */}
+                                <div style={{ display: 'none' }}>
+                                    <div ref={payslipRef}>
+                                        <div className="slip-page" style={{ padding: '32px 40px 40px' }}>
+                                            {/* Slip Header */}
+                                            <div style={{ textAlign: 'center', paddingBottom: '14px', marginBottom: '18px', borderBottom: '3px double currentColor' }}>
+                                                <h1 style={{ fontSize: '20px', fontWeight: 700, letterSpacing: '3px', textTransform: 'uppercase' as const, marginBottom: '4px' }}>
+                                                    SALARY SLIP
+                                                </h1>
+                                                <p style={{ fontSize: '14px', opacity: 0.6, fontWeight: 500 }}>
+                                                    For the month of {MONTHS[month - 1]} {year}
+                                                </p>
+                                            </div>
 
-                                        {/* Employee Details Grid */}
-                                        <div style={{
-                                            display: 'grid',
-                                            gridTemplateColumns: '1fr 1fr',
-                                            gap: '4px 36px',
-                                            marginBottom: '22px',
-                                            padding: '14px 18px',
-                                            border: '1px solid',
-                                            borderRadius: '4px',
-                                            borderColor: 'var(--border, #ddd)',
-                                            background: 'var(--muted, #fafafa)',
-                                        }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0' }}>
-                                                <span style={{ opacity: 0.6 }}>Employee Name</span>
-                                                <span style={{ fontWeight: 600 }}>{payslipDetail.profile?.full_name || '—'}</span>
+                                            {/* Employee Details Grid */}
+                                            <div style={{
+                                                display: 'grid',
+                                                gridTemplateColumns: '1fr 1fr',
+                                                gap: '4px 36px',
+                                                marginBottom: '22px',
+                                                padding: '14px 18px',
+                                                border: '1px solid',
+                                                borderRadius: '4px',
+                                                borderColor: 'var(--border, #ddd)',
+                                                background: 'var(--muted, #fafafa)',
+                                            }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0' }}>
+                                                    <span style={{ opacity: 0.6 }}>Employee Name</span>
+                                                    <span style={{ fontWeight: 600 }}>{payslipDetail.profile?.full_name || '—'}</span>
+                                                </div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0' }}>
+                                                    <span style={{ opacity: 0.6 }}>Designation</span>
+                                                    <span style={{ fontWeight: 600 }}>{payslipDetail.profile?.designation?.name || '—'}</span>
+                                                </div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0' }}>
+                                                    <span style={{ opacity: 0.6 }}>Email</span>
+                                                    <span style={{ fontWeight: 600, fontSize: '12px' }}>{payslipDetail.profile?.email || '—'}</span>
+                                                </div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0' }}>
+                                                    <span style={{ opacity: 0.6 }}>Month / Year</span>
+                                                    <span style={{ fontWeight: 600 }}>{MONTHS[month - 1]} {year}</span>
+                                                </div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0' }}>
+                                                    <span style={{ opacity: 0.6 }}>Month Days</span>
+                                                    <span style={{ fontWeight: 600 }}>{breakdown.total_working_days}</span>
+                                                </div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0' }}>
+                                                    <span style={{ opacity: 0.6 }}>Present Days</span>
+                                                    <span style={{ fontWeight: 600, color: '#16a34a' }}>{payslipDetail.total_present_days}</span>
+                                                </div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0' }}>
+                                                    <span style={{ opacity: 0.6 }}>Half Days</span>
+                                                    <span style={{ fontWeight: 600, color: '#d97706' }}>{breakdown.half_days || 0}</span>
+                                                </div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0' }}>
+                                                    <span style={{ opacity: 0.6 }}>Leaves</span>
+                                                    <span style={{ fontWeight: 600 }}>{payslipDetail.total_leaves}</span>
+                                                </div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0' }}>
+                                                    <span style={{ opacity: 0.6 }}>Absent Days</span>
+                                                    <span style={{ fontWeight: 600, color: '#dc2626' }}>{breakdown.absent_days}</span>
+                                                </div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0' }}>
+                                                    <span style={{ opacity: 0.6 }}>Extra Days</span>
+                                                    <span style={{ fontWeight: 600, color: '#b45309' }}>{breakdown.extra_days || 0}</span>
+                                                </div>
                                             </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0' }}>
-                                                <span style={{ opacity: 0.6 }}>Designation</span>
-                                                <span style={{ fontWeight: 600 }}>{payslipDetail.profile?.designation?.name || '—'}</span>
-                                            </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0' }}>
-                                                <span style={{ opacity: 0.6 }}>Email</span>
-                                                <span style={{ fontWeight: 600, fontSize: '12px' }}>{payslipDetail.profile?.email || '—'}</span>
-                                            </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0' }}>
-                                                <span style={{ opacity: 0.6 }}>Month / Year</span>
-                                                <span style={{ fontWeight: 600 }}>{MONTHS[month - 1]} {year}</span>
-                                            </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0' }}>
-                                                <span style={{ opacity: 0.6 }}>Working Days</span>
-                                                <span style={{ fontWeight: 600 }}>{breakdown.total_working_days}</span>
-                                            </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0' }}>
-                                                <span style={{ opacity: 0.6 }}>Present Days</span>
-                                                <span style={{ fontWeight: 600, color: '#16a34a' }}>{payslipDetail.total_present_days}</span>
-                                            </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0' }}>
-                                                <span style={{ opacity: 0.6 }}>Absent Days</span>
-                                                <span style={{ fontWeight: 600, color: '#dc2626' }}>{breakdown.absent_days}</span>
-                                            </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0' }}>
-                                                <span style={{ opacity: 0.6 }}>Leaves</span>
-                                                <span style={{ fontWeight: 600 }}>{payslipDetail.total_leaves}</span>
-                                            </div>
-                                        </div>
 
-                                        {/* Earnings & Deductions — Side by Side Table */}
-                                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                            <thead>
-                                                <tr>
-                                                    <th style={{ background: '#f0f0f0', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.8px', padding: '10px 14px', border: '1px solid #ccc', textAlign: 'left', width: '30%' }}>Earnings</th>
-                                                    <th style={{ background: '#f0f0f0', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.8px', padding: '10px 14px', border: '1px solid #ccc', textAlign: 'right', width: '20%' }}>Amount (₹)</th>
-                                                    <th style={{ background: '#f0f0f0', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.8px', padding: '10px 14px', border: '1px solid #ccc', textAlign: 'left', width: '30%' }}>Deductions</th>
-                                                    <th style={{ background: '#f0f0f0', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.8px', padding: '10px 14px', border: '1px solid #ccc', textAlign: 'right', width: '20%' }}>Amount (₹)</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {Array.from({ length: maxRows }).map((_, i) => (
-                                                    <tr key={i}>
-                                                        <td style={{ padding: '7px 14px', border: '1px solid #ddd', fontSize: '13px', color: '#333' }}>
-                                                            {earningsItems[i]?.label || ''}
+                                            {/* Earnings & Deductions — Side by Side Table */}
+                                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                                <thead>
+                                                    <tr>
+                                                        <th style={{ background: '#f0f0f0', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.8px', padding: '10px 14px', border: '1px solid #ccc', textAlign: 'left', width: '30%' }}>Earnings</th>
+                                                        <th style={{ background: '#f0f0f0', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.8px', padding: '10px 14px', border: '1px solid #ccc', textAlign: 'right', width: '20%' }}>Amount (₹)</th>
+                                                        <th style={{ background: '#f0f0f0', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.8px', padding: '10px 14px', border: '1px solid #ccc', textAlign: 'left', width: '30%' }}>Deductions</th>
+                                                        <th style={{ background: '#f0f0f0', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.8px', padding: '10px 14px', border: '1px solid #ccc', textAlign: 'right', width: '20%' }}>Amount (₹)</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {Array.from({ length: maxRows }).map((_, i) => (
+                                                        <tr key={i}>
+                                                            <td style={{ padding: '7px 14px', border: '1px solid #ddd', fontSize: '13px', color: '#333' }}>
+                                                                {earningsItems[i]?.label || ''}
+                                                            </td>
+                                                            <td style={{ padding: '7px 14px', border: '1px solid #ddd', fontSize: '13px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                                                                {earningsItems[i] ? formatCurrency(earningsItems[i].amount) : ''}
+                                                            </td>
+                                                            <td style={{ padding: '7px 14px', border: '1px solid #ddd', fontSize: '13px', color: '#b91c1c' }}>
+                                                                {deductionItems[i]?.label || ''}
+                                                            </td>
+                                                            <td style={{ padding: '7px 14px', border: '1px solid #ddd', fontSize: '13px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#b91c1c' }}>
+                                                                {deductionItems[i] ? formatCurrency(deductionItems[i].amount) : ''}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                    {/* Totals Row */}
+                                                    <tr>
+                                                        <td style={{ padding: '10px 14px', border: '1px solid #ccc', fontSize: '13px', fontWeight: 700, background: '#f5f5f5', borderTop: '2px solid #999' }}>
+                                                            Total Earnings
                                                         </td>
-                                                        <td style={{ padding: '7px 14px', border: '1px solid #ddd', fontSize: '13px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                                                            {earningsItems[i] ? formatCurrency(earningsItems[i].amount) : ''}
+                                                        <td style={{ padding: '10px 14px', border: '1px solid #ccc', fontSize: '13px', fontWeight: 700, background: '#f5f5f5', textAlign: 'right', borderTop: '2px solid #999', fontVariantNumeric: 'tabular-nums' }}>
+                                                            {formatCurrency(totalEarnings)}
                                                         </td>
-                                                        <td style={{ padding: '7px 14px', border: '1px solid #ddd', fontSize: '13px', color: '#b91c1c' }}>
-                                                            {deductionItems[i]?.label || ''}
+                                                        <td style={{ padding: '10px 14px', border: '1px solid #ccc', fontSize: '13px', fontWeight: 700, background: '#f5f5f5', borderTop: '2px solid #999', color: '#b91c1c' }}>
+                                                            Total Deductions
                                                         </td>
-                                                        <td style={{ padding: '7px 14px', border: '1px solid #ddd', fontSize: '13px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#b91c1c' }}>
-                                                            {deductionItems[i] ? formatCurrency(deductionItems[i].amount) : ''}
+                                                        <td style={{ padding: '10px 14px', border: '1px solid #ccc', fontSize: '13px', fontWeight: 700, background: '#f5f5f5', textAlign: 'right', borderTop: '2px solid #999', fontVariantNumeric: 'tabular-nums', color: '#b91c1c' }}>
+                                                            {formatCurrency(totalDeductions)}
                                                         </td>
                                                     </tr>
-                                                ))}
-                                                {/* Totals Row */}
-                                                <tr>
-                                                    <td style={{ padding: '10px 14px', border: '1px solid #ccc', fontSize: '13px', fontWeight: 700, background: '#f5f5f5', borderTop: '2px solid #999' }}>
-                                                        Total Earnings
-                                                    </td>
-                                                    <td style={{ padding: '10px 14px', border: '1px solid #ccc', fontSize: '13px', fontWeight: 700, background: '#f5f5f5', textAlign: 'right', borderTop: '2px solid #999', fontVariantNumeric: 'tabular-nums' }}>
-                                                        {formatCurrency(totalEarnings)}
-                                                    </td>
-                                                    <td style={{ padding: '10px 14px', border: '1px solid #ccc', fontSize: '13px', fontWeight: 700, background: '#f5f5f5', borderTop: '2px solid #999', color: '#b91c1c' }}>
-                                                        Total Deductions
-                                                    </td>
-                                                    <td style={{ padding: '10px 14px', border: '1px solid #ccc', fontSize: '13px', fontWeight: 700, background: '#f5f5f5', textAlign: 'right', borderTop: '2px solid #999', fontVariantNumeric: 'tabular-nums', color: '#b91c1c' }}>
-                                                        {formatCurrency(totalDeductions)}
-                                                    </td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
+                                                </tbody>
+                                            </table>
 
-                                        {/* Net Pay Box */}
-                                        <div style={{
-                                            marginTop: '20px',
-                                            padding: '16px 20px',
-                                            border: '2px solid currentColor',
-                                            borderRadius: '4px',
-                                        }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <span style={{ fontSize: '15px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '1px' }}>
-                                                    Net Pay
-                                                </span>
-                                                <span style={{ fontSize: '20px', fontWeight: 800 }}>
-                                                    {formatCurrency(breakdown.take_home)}
-                                                </span>
+                                            {/* Net Pay Box */}
+                                            <div style={{
+                                                marginTop: '20px',
+                                                padding: '16px 20px',
+                                                border: '2px solid currentColor',
+                                                borderRadius: '4px',
+                                            }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                    <span style={{ fontSize: '15px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '1px' }}>
+                                                        Net Pay
+                                                    </span>
+                                                    <span style={{ fontSize: '20px', fontWeight: 800 }}>
+                                                        {formatCurrency(breakdown.take_home)}
+                                                    </span>
+                                                </div>
+                                                <div style={{ fontSize: '12px', opacity: 0.7, marginTop: '6px', fontStyle: 'italic' }}>
+                                                    ({numberToWords(Number(breakdown.take_home || 0))})
+                                                </div>
                                             </div>
-                                            <div style={{ fontSize: '12px', opacity: 0.7, marginTop: '6px', fontStyle: 'italic' }}>
-                                                ({numberToWords(Number(breakdown.take_home || 0))})
+
+                                            {/* Carry-Forward Notice */}
+                                            {Number(breakdown.carry_forward || 0) > 0 && (
+                                                <div style={{
+                                                    marginTop: '12px',
+                                                    padding: '12px 16px',
+                                                    border: '1px solid #fca5a5',
+                                                    borderRadius: '4px',
+                                                    background: '#fef2f2',
+                                                    color: '#991b1b',
+                                                    fontSize: '12px',
+                                                }}>
+                                                    <strong>Note:</strong> Deductions exceeded earnings by {formatCurrency(breakdown.carry_forward)}.
+                                                    This amount has been carried forward as an advance and will be adjusted in the next month&apos;s salary.
+                                                </div>
+                                            )}
+
+                                            {/* Authorized Signatory */}
+                                            <div style={{
+                                                marginTop: '60px',
+                                                display: 'flex',
+                                                justifyContent: 'flex-end',
+                                            }}>
+                                                <div style={{ textAlign: 'center', minWidth: '200px' }}>
+                                                    <div style={{ borderBottom: '1px solid #999', marginBottom: '8px', height: '50px' }} />
+                                                    <span style={{ fontSize: '13px', fontWeight: 600 }}>Authorized Signatory</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Footer */}
+                                            <div style={{
+                                                marginTop: '30px',
+                                                paddingTop: '10px',
+                                                borderTop: '1px solid #ccc',
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                fontSize: '11px',
+                                                opacity: 0.5,
+                                            }}>
+                                                <span>This is a computer-generated salary slip.</span>
+                                                <span>Generated on {new Date().toLocaleDateString('en-IN')}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Premium On-Screen Interactive Dashboard View */}
+                                <div className="p-6 space-y-6">
+                                    {/* Glassmorphic Header */}
+                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-muted/30 border border-border/50 p-4 rounded-2xl">
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-12 w-12 rounded-xl bg-orange-500/10 flex items-center justify-center border border-orange-500/20 text-orange-600 font-bold text-lg">
+                                                {payslipDetail.profile?.full_name?.charAt(0) || 'E'}
+                                            </div>
+                                            <div>
+                                                <h3 className="font-bold text-base leading-none">{payslipDetail.profile?.full_name || '—'}</h3>
+                                                <p className="text-xs text-muted-foreground mt-1">{payslipDetail.profile?.designation?.name || '—'}</p>
+                                                <p className="text-[10px] text-muted-foreground mt-0.5">{payslipDetail.profile?.email}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col md:items-end justify-center">
+                                            <Badge variant="outline" className="bg-orange-500/10 text-orange-600 border-orange-500/25 text-[10px] px-2 py-0.5 font-bold tracking-widest uppercase">
+                                                {MONTHS[month - 1]} {year}
+                                            </Badge>
+                                            <span className="text-[10px] text-muted-foreground mt-1">Status: Generated</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Attendance Stats Cards */}
+                                    <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+                                        <div className="bg-card border border-border/40 p-3 rounded-xl text-center flex flex-col justify-between min-h-[85px]">
+                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider min-h-[28px] flex items-center justify-center leading-tight">Month Days</span>
+                                            <span className="text-lg font-bold text-slate-800 dark:text-slate-200 mt-auto block">{breakdown.total_working_days}</span>
+                                        </div>
+                                        <div className="bg-card border border-border/40 p-3 rounded-xl text-center flex flex-col justify-between min-h-[85px]">
+                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider min-h-[28px] flex items-center justify-center leading-tight">Present</span>
+                                            <span className="text-lg font-bold text-emerald-600 mt-auto block">{payslipDetail.total_present_days}</span>
+                                        </div>
+                                        <div className="bg-card border border-border/40 p-3 rounded-xl text-center flex flex-col justify-between min-h-[85px]">
+                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider min-h-[28px] flex items-center justify-center leading-tight">Half Days</span>
+                                            <span className="text-lg font-bold text-orange-600 mt-auto block">{breakdown.half_days || 0}</span>
+                                        </div>
+                                        <div className="bg-card border border-border/40 p-3 rounded-xl text-center flex flex-col justify-between min-h-[85px]">
+                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider min-h-[28px] flex items-center justify-center leading-tight">Leaves</span>
+                                            <span className="text-lg font-bold text-blue-600 mt-auto block">{payslipDetail.total_leaves}</span>
+                                        </div>
+                                        <div className="bg-card border border-border/40 p-3 rounded-xl text-center flex flex-col justify-between min-h-[85px]">
+                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider min-h-[28px] flex items-center justify-center leading-tight">Absent</span>
+                                            <span className="text-lg font-bold text-rose-600 mt-auto block">{breakdown.absent_days}</span>
+                                        </div>
+                                        <div className="bg-card border border-border/40 p-3 rounded-xl text-center flex flex-col justify-between min-h-[85px]">
+                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider min-h-[28px] flex items-center justify-center leading-tight">Extra Days</span>
+                                            <span className="text-lg font-bold text-amber-600 mt-auto block">{breakdown.extra_days || 0}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Earnings & Deductions Tables */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {/* Earnings */}
+                                        <div className="bg-emerald-50/10 dark:bg-emerald-500/5 rounded-2xl border border-emerald-500/10 overflow-hidden">
+                                            <div className="bg-emerald-500/10 dark:bg-emerald-500/15 px-4 py-2 border-b border-emerald-500/10 font-bold text-xs text-emerald-700 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                                                <TrendingUp className="h-4 w-4" /> Earnings
+                                            </div>
+                                            <div className="divide-y divide-emerald-500/10">
+                                                {earningsItems.map((item, i) => (
+                                                    <div key={i} className="flex justify-between px-4 py-2.5 text-sm font-medium">
+                                                        <span className="text-muted-foreground">{item.label}</span>
+                                                        <span className="font-bold tabular-nums">{formatCurrency(item.amount)}</span>
+                                                    </div>
+                                                ))}
+                                                <div className="flex justify-between px-4 py-3 bg-emerald-500/10 font-bold text-sm text-emerald-800 dark:text-emerald-400">
+                                                    <span>Total Earnings</span>
+                                                    <span className="tabular-nums">{formatCurrency(totalEarnings)}</span>
+                                                </div>
                                             </div>
                                         </div>
 
-                                        {/* Carry-Forward Notice */}
+                                        {/* Deductions */}
+                                        <div className="bg-rose-50/10 dark:bg-rose-500/5 rounded-2xl border border-rose-500/10 overflow-hidden">
+                                            <div className="bg-rose-500/10 dark:bg-rose-500/15 px-4 py-2 border-b border-rose-500/10 font-bold text-xs text-rose-700 dark:text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
+                                                <TrendingDown className="h-4 w-4" /> Deductions
+                                            </div>
+                                            <div className="divide-y divide-rose-500/10">
+                                                {deductionItems.map((item, i) => (
+                                                    <div key={i} className="flex justify-between px-4 py-2.5 text-sm font-medium">
+                                                        <span className="text-muted-foreground">{item.label}</span>
+                                                        <span className="font-bold text-rose-600 dark:text-rose-400 tabular-nums">{formatCurrency(item.amount)}</span>
+                                                    </div>
+                                                ))}
+                                                <div className="flex justify-between px-4 py-3 bg-rose-500/10 font-bold text-sm text-rose-800 dark:text-rose-400">
+                                                    <span>Total Deductions</span>
+                                                    <span className="tabular-nums text-rose-600 dark:text-rose-400">{formatCurrency(totalDeductions)}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Net Pay Gradient Hero Card */}
+                                    <div className="relative overflow-hidden bg-gradient-to-r from-orange-500 to-rose-600 p-5 rounded-2xl text-white shadow-lg shadow-orange-500/10 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+                                        <div>
+                                            <span className="text-[10px] font-black uppercase tracking-wider opacity-80">Net Take-Home Salary</span>
+                                            <h2 className="text-3xl font-black mt-1 tracking-tight">{formatCurrency(breakdown.take_home)}</h2>
+                                            <div className="text-[11px] opacity-90 mt-1.5 font-semibold bg-white/10 px-2.5 py-1 rounded-lg inline-block backdrop-blur-sm">
+                                                Formula: Total Earnings ({formatCurrency(totalEarnings)}) - Total Deductions ({formatCurrency(totalDeductions)})
+                                            </div>
+                                            <p className="text-xs opacity-75 font-medium italic mt-2">({numberToWords(Number(breakdown.take_home || 0))})</p>
+                                        </div>
                                         {Number(breakdown.carry_forward || 0) > 0 && (
-                                            <div style={{
-                                                marginTop: '12px',
-                                                padding: '12px 16px',
-                                                border: '1px solid #fca5a5',
-                                                borderRadius: '4px',
-                                                background: '#fef2f2',
-                                                color: '#991b1b',
-                                                fontSize: '12px',
-                                            }}>
-                                                <strong>Note:</strong> Deductions exceeded earnings by {formatCurrency(breakdown.carry_forward)}.
-                                                This amount has been carried forward as an advance and will be adjusted in the next month&apos;s salary.
+                                            <div className="bg-white/10 border border-white/20 p-3 rounded-xl max-w-xs text-xs backdrop-blur-sm self-stretch md:self-auto">
+                                                <strong>Note:</strong> Deductions exceeded earnings by {formatCurrency(breakdown.carry_forward)}. This amount is carried forward as a deficit.
                                             </div>
                                         )}
-
-                                        {/* Authorized Signatory */}
-                                        <div style={{
-                                            marginTop: '60px',
-                                            display: 'flex',
-                                            justifyContent: 'flex-end',
-                                        }}>
-                                            <div style={{ textAlign: 'center', minWidth: '200px' }}>
-                                                <div style={{ borderBottom: '1px solid #999', marginBottom: '8px', height: '50px' }} />
-                                                <span style={{ fontSize: '13px', fontWeight: 600 }}>Authorized Signatory</span>
-                                            </div>
-                                        </div>
-
-                                        {/* Footer */}
-                                        <div style={{
-                                            marginTop: '30px',
-                                            paddingTop: '10px',
-                                            borderTop: '1px solid #ccc',
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            fontSize: '11px',
-                                            opacity: 0.5,
-                                        }}>
-                                            <span>This is a computer-generated salary slip.</span>
-                                            <span>Generated on {new Date().toLocaleDateString('en-IN')}</span>
-                                        </div>
                                     </div>
                                 </div>
 
                                 <div className="flex justify-end gap-2 px-6 pb-5 pt-3 border-t border-border/50">
                                     <Button variant="outline" size="sm" onClick={handlePrint}>
-                                        <Printer className="h-4 w-4 mr-1" />Print
+                                        <Printer className="h-4 w-4 mr-1" />Print A4 Slip
                                     </Button>
                                     <Button variant="secondary" size="sm" onClick={() => setViewPayslipId(null)}>
                                         Close

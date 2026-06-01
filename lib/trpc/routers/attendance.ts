@@ -437,6 +437,7 @@ export const attendanceRouter = router({
                 checkIn: z.string(),
                 checkOut: z.string()
             })).optional(),
+            absentDeductionMultiplier: z.number().int().min(1).max(3).optional(),
         }))
         .mutation(async ({ ctx, input }) => {
             const current = await ctx.db.query.officeSettings.findFirst({
@@ -450,6 +451,7 @@ export const attendanceRouter = router({
                 default_check_out: input.defaultCheckOut,
                 off_days: input.offDays,
                 daily_working_hours: input.dailyWorkingHours || {},
+                absent_deduction_multiplier: input.absentDeductionMultiplier ?? 1,
                 updated_at: new Date()
             }).where(eq(officeSettings.id, current.id)).returning()
 

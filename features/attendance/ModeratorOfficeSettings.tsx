@@ -18,6 +18,7 @@ import { DataTable } from "@/components/ui/data-table"
 import { ColumnDef } from "@tanstack/react-table"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Card } from "@/components/ui/card"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export function ModeratorOfficeSettings() {
     const utils = trpc.useUtils()
@@ -26,11 +27,13 @@ export function ModeratorOfficeSettings() {
 
     const [offDays, setOffDays] = useState<number[]>([])
     const [dailyHours, setDailyHours] = useState<Record<string, { checkIn: string, checkOut: string }>>({})
+    const [absentDeductionMultiplier, setAbsentDeductionMultiplier] = useState<number>(1)
 
     useEffect(() => {
         if (settings) {
             setOffDays(settings.off_days || [])
             setDailyHours((settings.daily_working_hours as any) || {})
+            setAbsentDeductionMultiplier((settings as any).absent_deduction_multiplier ?? 1)
         }
     }, [settings])
 
@@ -74,7 +77,8 @@ export function ModeratorOfficeSettings() {
             defaultCheckIn: settings.default_check_in,
             defaultCheckOut: settings.default_check_out,
             offDays: offDays,
-            dailyWorkingHours: formattedDailyHours
+            dailyWorkingHours: formattedDailyHours,
+            absentDeductionMultiplier: absentDeductionMultiplier
         })
     }
 
@@ -298,6 +302,26 @@ export function ModeratorOfficeSettings() {
                                                     })}
                                                 </TableBody>
                                             </Table>
+                                        </div>
+
+                                        <div className="p-6 border-t border-muted/20 bg-muted/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                            <div className="flex flex-col gap-1.5 max-w-sm">
+                                                <Label className="font-bold text-xs uppercase tracking-wider text-muted-foreground">Absent Deduction Rule</Label>
+                                                <Select 
+                                                    value={absentDeductionMultiplier.toString()} 
+                                                    onValueChange={(val) => setAbsentDeductionMultiplier(parseInt(val))}
+                                                >
+                                                    <SelectTrigger className="w-[280px] bg-background">
+                                                        <SelectValue placeholder="Select absent rule" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="1">1 Absent = 1 Day Deduction</SelectItem>
+                                                        <SelectItem value="2">1 Absent = 2 Days Deduction</SelectItem>
+                                                        <SelectItem value="3">1 Absent = 3 Days Deduction</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                                <span className="text-[10px] text-muted-foreground">Specify the multiplier of per-day rate deducted for every unexcused absent day.</span>
+                                            </div>
                                         </div>
 
                                         <div className="p-8 bg-muted/10 border-t border-muted/20 flex items-center justify-between">

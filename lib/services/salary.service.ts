@@ -355,6 +355,7 @@ export class SalaryService {
             total_leaves?: number
             total_working_hours?: string | null
             total_extra_hours?: string | null
+            salary_breakdown?: any
         },
         metrics: {
             totalWorkingDays: number
@@ -364,12 +365,14 @@ export class SalaryService {
             leaveDays: number
             totalWorkingHours: number
             totalExtraHours: number
+            extraDays: number
         },
         tx?: any
     ) {
         const client = tx || db
 
         if (existingSummary.status === 'draft' || existingSummary.status === 'set_for_salary') {
+            const currentBD = (existingSummary.salary_breakdown as Record<string, any>) || {}
             const [updated] = await client.update(monthlyAttendanceSummary).set({
                 total_working_days: metrics.totalWorkingDays,
                 total_present_days: metrics.presentDays,
@@ -378,6 +381,10 @@ export class SalaryService {
                 total_leaves: metrics.leaveDays,
                 total_working_hours: metrics.totalWorkingHours.toFixed(2),
                 total_extra_hours: metrics.totalExtraHours.toFixed(2),
+                salary_breakdown: {
+                    ...currentBD,
+                    extra_days: metrics.extraDays || 0
+                },
                 updated_at: new Date(),
             }).where(eq(monthlyAttendanceSummary.id, existingSummary.id)).returning()
             return updated
@@ -406,6 +413,9 @@ export class SalaryService {
                 return updated
             }
 
+            const officeSettingsData = await SmartCache.getOfficeSettingsCached()
+            const multiplier = officeSettingsData?.absent_deduction_multiplier ?? 1
+
             const basic = Number(salarySetup.basic_salary) || 0
             const hra = Number(salarySetup.hra) || 0
             const da = Number(salarySetup.da) || 0
@@ -418,12 +428,17 @@ export class SalaryService {
             const totalWorkingDaysVal = metrics.totalWorkingDays || 1
             const absentDaysVal = metrics.absentDays || 0
             const halfDaysVal = metrics.halfDays || 0
+            const extraDaysVal = metrics.extraDays || 0
 
             // Pro-rate absence deduction
             const perDayRate = grossSalary / totalWorkingDaysVal
-            const absenceDeduction = (absentDaysVal * perDayRate) + (halfDaysVal * 0.5 * perDayRate)
+            const extraDayPayment = extraDaysVal * perDayRate
+            const absentDeductionVal = absentDaysVal * multiplier * perDayRate
+            const halfDayDeductionVal = halfDaysVal * 0.5 * perDayRate
+            const leaveDeductionVal = 0
+            const absenceDeduction = absentDeductionVal + halfDayDeductionVal
 
-            const netSalary = grossSalary - absenceDeduction - otherDeductions
+            const netSalary = grossSalary + extraDayPayment - absenceDeduction - otherDeductions
 
             // Get pending advances + adjusted advances for this target month/year
             const pendingAdvances = await client.select({
@@ -459,8 +474,14 @@ export class SalaryService {
                 total_working_days: totalWorkingDaysVal,
                 absent_days: absentDaysVal,
                 half_days: halfDaysVal,
+                extra_days: extraDaysVal,
+                extra_day_payment: Number(extraDayPayment.toFixed(2)),
+                absent_deduction_multiplier: multiplier,
                 per_day_rate: Number(perDayRate.toFixed(2)),
                 absence_deduction: Number(absenceDeduction.toFixed(2)),
+                absent_deduction: Number(absentDeductionVal.toFixed(2)),
+                half_day_deduction: Number(halfDayDeductionVal.toFixed(2)),
+                leave_deduction: Number(leaveDeductionVal.toFixed(2)),
                 other_deductions: otherDeductions,
                 net_salary: Number(netSalary.toFixed(2)),
                 advance_recovery: advanceTotal,
@@ -553,13 +574,18 @@ export class SalaryService {
     // MONTHLY ATTENDANCE COMPILATION
     // ==========================================
 
-    /** Compile monthly attendance for all employees */
-    static async compileMonthlyAttendance(month: number, year: number) {
-        // Get all active employees
+    /** Compile monthly attendance for all employees or a specific employee */
+    static async compileMonthlyAttendance(month: number, year: number, profileId?: string) {
+        // Get all active employees or a specific employee
         const employees = await db.query.profiles.findMany({
-            where: eq(profiles.status, 'active'),
+            where: profileId
+                ? eq(profiles.id, profileId)
+                : eq(profiles.status, 'active'),
             columns: { id: true, full_name: true, email: true }
         })
+
+        const employeeIds = employees.map(e => e.id)
+        if (employeeIds.length === 0) return []
 
         // Get office settings for working hours calculation
         const settings = await SmartCache.getOfficeSettingsCached()
@@ -585,38 +611,54 @@ export class SalaryService {
         })
         const closureDates = new Set(closures.map(c => c.date))
 
-        // Calculate total working days in the month
-        let totalWorkingDays = 0
+        // Pre-fetch all attendance records in bulk
+        const allAttendanceRecords = await db.query.attendance.findMany({
+            where: and(
+                inArray(attendance.profile_id, employeeIds),
+                gte(attendance.date, startDate),
+                lte(attendance.date, endDate)
+            )
+        })
+
+        // Pre-fetch all approved leaves in bulk
+        const allLeaves = await db.query.leaves.findMany({
+            where: and(
+                inArray(leaves.profile_id, employeeIds),
+                eq(leaves.status, 'approved'),
+                lte(leaves.start_date, endDate),
+                gte(leaves.end_date, startDate)
+            )
+        })
+
+        // Pre-fetch existing summaries in bulk
+        const allExistingSummaries = await db.query.monthlyAttendanceSummary.findMany({
+            where: and(
+                inArray(monthlyAttendanceSummary.profile_id, employeeIds),
+                eq(monthlyAttendanceSummary.month, month),
+                eq(monthlyAttendanceSummary.year, year)
+            )
+        })
+
+        // Calculate working days & required working days
+        const totalWorkingDays = lastDay // Month calendar days is the default working days
+        let requiredWorkingDays = 0
         for (let d = 1; d <= lastDay; d++) {
             const dateObj = new Date(year, month - 1, d)
             const dayOfWeek = dateObj.getDay()
             const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
             if (!offDays.includes(dayOfWeek) && !closureDates.has(dateStr)) {
-                totalWorkingDays++
+                requiredWorkingDays++
             }
         }
 
         const results = []
 
         for (const employee of employees) {
-            // Get attendance records for the month
-            const records = await db.query.attendance.findMany({
-                where: and(
-                    eq(attendance.profile_id, employee.id),
-                    gte(attendance.date, startDate),
-                    lte(attendance.date, endDate)
-                )
-            })
+            // Filter attendance records in memory
+            const records = allAttendanceRecords.filter(r => r.profile_id === employee.id)
 
-            // Get approved leaves for the month
-            const employeeLeaves = await db.query.leaves.findMany({
-                where: and(
-                    eq(leaves.profile_id, employee.id),
-                    eq(leaves.status, 'approved'),
-                    lte(leaves.start_date, endDate),
-                    gte(leaves.end_date, startDate)
-                )
-            })
+            // Filter approved leaves in memory
+            const employeeLeaves = allLeaves.filter(l => l.profile_id === employee.id)
 
             // Count leave days within this month
             let leaveDays = 0
@@ -632,30 +674,42 @@ export class SalaryService {
                 }
             }
 
-            const presentDays = records.filter(r => r.check_in && (r.status === 'verified' || r.status === 'pending')).length
-            const halfDays = records.filter(r => r.is_half_day).length
-            const effectivePresentDays = presentDays - (halfDays * 0.5)
-            const absentDays = Math.max(0, totalWorkingDays - effectivePresentDays - leaveDays)
+            // Classify attendance records
+            const verifiedRecords = records.filter(r => r.check_in && (r.status === 'verified' || r.status === 'pending'))
 
-            const totalWorkingHours = records.reduce((sum, r) => sum + (Number(r.working_hours) || 0), 0)
-            const totalExtraHours = Math.max(0, totalWorkingHours - (effectivePresentDays * scheduledHoursPerDay))
-
-            // Check if summary already exists for this month
-            const existingSummary = await db.query.monthlyAttendanceSummary.findFirst({
-                where: and(
-                    eq(monthlyAttendanceSummary.profile_id, employee.id),
-                    eq(monthlyAttendanceSummary.month, month),
-                    eq(monthlyAttendanceSummary.year, year)
-                )
+            const extraRecords = verifiedRecords.filter(r => {
+                if (r.is_extra_day) return true
+                const dateObj = new Date(r.date)
+                const dayOfWeek = dateObj.getDay()
+                const isSundayOrHoliday = offDays.includes(dayOfWeek) || closureDates.has(r.date)
+                return isSundayOrHoliday
             })
 
+            const regularRecords = verifiedRecords.filter(r => !extraRecords.includes(r))
+
+            const presentDays = regularRecords.filter(r => !r.is_half_day).length
+            const halfDays = regularRecords.filter(r => r.is_half_day).length
+            const extraDays = extraRecords.length
+            const absentDays = Math.max(0, requiredWorkingDays - presentDays - halfDays - Math.floor(leaveDays))
+
+            const totalWorkingHours = verifiedRecords.reduce((sum, r) => sum + (Number(r.working_hours) || 0), 0)
+            // Extra hours are based on full days + half days * 0.5 scheduled hours
+            const totalExtraHours = Math.max(0, totalWorkingHours - ((presentDays + halfDays * 0.5) * scheduledHoursPerDay))
+
+            // Check if summary already exists for this month in memory
+            const existingSummary = allExistingSummaries.find(s => s.profile_id === employee.id)
+
             if (existingSummary) {
+                const existingBD = existingSummary.salary_breakdown as Record<string, any> | null
+                const existingExtraDays = existingBD?.extra_days || 0
+
                 const hasChanges =
                     existingSummary.total_working_days !== totalWorkingDays ||
                     existingSummary.total_present_days !== presentDays ||
-                    existingSummary.total_absent_days !== Math.round(absentDays) ||
+                    existingSummary.total_absent_days !== absentDays ||
                     existingSummary.total_half_days !== halfDays ||
                     existingSummary.total_leaves !== Math.round(leaveDays) ||
+                    existingExtraDays !== extraDays ||
                     Number(existingSummary.total_working_hours) !== Number(totalWorkingHours.toFixed(2)) ||
                     Number(existingSummary.total_extra_hours) !== Number(totalExtraHours.toFixed(2))
 
@@ -664,10 +718,11 @@ export class SalaryService {
                         totalWorkingDays,
                         presentDays,
                         halfDays,
-                        absentDays: Math.round(absentDays),
+                        absentDays,
                         leaveDays: Math.round(leaveDays),
                         totalWorkingHours,
-                        totalExtraHours
+                        totalExtraHours,
+                        extraDays
                     })
                     results.push(updated)
                 } else {
@@ -680,11 +735,12 @@ export class SalaryService {
                     year,
                     total_working_days: totalWorkingDays,
                     total_present_days: presentDays,
-                    total_absent_days: Math.round(absentDays),
+                    total_absent_days: absentDays,
                     total_half_days: halfDays,
                     total_leaves: Math.round(leaveDays),
                     total_working_hours: totalWorkingHours.toFixed(2),
                     total_extra_hours: totalExtraHours.toFixed(2),
+                    salary_breakdown: { extra_days: extraDays },
                     status: 'draft',
                 }).returning()
                 results.push(newSummary)
@@ -813,6 +869,9 @@ export class SalaryService {
                 continue
             }
 
+            const officeSettingsData = await SmartCache.getOfficeSettingsCached()
+            const multiplier = officeSettingsData?.absent_deduction_multiplier ?? 1
+
             const basic = Number(salarySetup.basic_salary) || 0
             const hra = Number(salarySetup.hra) || 0
             const da = Number(salarySetup.da) || 0
@@ -826,11 +885,18 @@ export class SalaryService {
             const absentDays = summary.total_absent_days || 0
             const halfDays = summary.total_half_days || 0
 
+            const summaryBD = summary.salary_breakdown as Record<string, any> | null
+            const extraDays = summaryBD?.extra_days || 0
+
             // Pro-rate absence deduction
             const perDayRate = grossSalary / totalWorkingDays
-            const absenceDeduction = (absentDays * perDayRate) + (halfDays * 0.5 * perDayRate)
+            const extraDayPayment = extraDays * perDayRate
+            const absentDeductionVal = absentDays * multiplier * perDayRate
+            const halfDayDeductionVal = halfDays * 0.5 * perDayRate
+            const leaveDeductionVal = 0
+            const absenceDeduction = absentDeductionVal + halfDayDeductionVal
 
-            const netSalary = grossSalary - absenceDeduction - otherDeductions
+            const netSalary = grossSalary + extraDayPayment - absenceDeduction - otherDeductions
 
             // Get pending advances
             const advanceTotal = Number(await this.getPendingAdvancesTotal(summary.profile_id))
@@ -853,8 +919,14 @@ export class SalaryService {
                 total_working_days: totalWorkingDays,
                 absent_days: absentDays,
                 half_days: halfDays,
+                extra_days: extraDays,
+                extra_day_payment: Number(extraDayPayment.toFixed(2)),
+                absent_deduction_multiplier: multiplier,
                 per_day_rate: Number(perDayRate.toFixed(2)),
                 absence_deduction: Number(absenceDeduction.toFixed(2)),
+                absent_deduction: Number(absentDeductionVal.toFixed(2)),
+                half_day_deduction: Number(halfDayDeductionVal.toFixed(2)),
+                leave_deduction: Number(leaveDeductionVal.toFixed(2)),
                 other_deductions: otherDeductions,
                 net_salary: Number(netSalary.toFixed(2)),
                 advance_recovery: advanceTotal,
@@ -1191,7 +1263,8 @@ export class SalaryService {
                                     absentDays: item.record.totalAbsent,
                                     leaveDays: item.record.totalLeaves,
                                     totalWorkingHours: item.record.totalWorkingHours || 0,
-                                    totalExtraHours: 0
+                                    totalExtraHours: 0,
+                                    extraDays: (item.existing.salary_breakdown as any)?.extra_days || 0
                                 },
                                 tx
                             )

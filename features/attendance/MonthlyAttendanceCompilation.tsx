@@ -17,6 +17,12 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { useRouter } from "next/navigation"
 import { BulkMonthlySummaryUpload } from "./BulkMonthlySummaryUpload"
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog"
 
 const MONTHS = [
     "January", "February", "March", "April", "May", "June",
@@ -40,18 +46,116 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
     const [selectedIds, setSelectedIds] = useState<string[]>([])
     const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false)
 
+    // Progress compilation states
+    const [isCompileModalOpen, setIsCompileModalOpen] = useState(false)
+    const [compilationProgress, setCompilationProgress] = useState({
+        total: 0,
+        current: 0,
+        percentage: 0,
+        activeEmployeeName: "",
+        logs: [] as Array<{ name: string; status: 'success' | 'info' | 'error'; message: string }>,
+        isFinished: false
+    })
+
     const { data: summaries, isLoading, refetch } = trpc.salary.getMonthlySummaries.useQuery(
         { month, year },
         { placeholderData: (prev: any) => prev }
     )
 
-    const compileMutation = trpc.salary.compileMonthlyAttendance.useMutation({
-        onSuccess: (data) => {
-            toast.success(`Compiled attendance for ${data.length} employees`)
+    const compileSingleMutation = trpc.salary.compileMonthlyAttendance.useMutation()
+    const { refetch: fetchActiveEmployees } = trpc.salary.getActiveEmployeesForCompilation.useQuery(undefined, { enabled: false })
+
+    const handleStartCompilation = async () => {
+        setIsCompileModalOpen(true)
+        setCompilationProgress({
+            total: 0,
+            current: 0,
+            percentage: 0,
+            activeEmployeeName: "Fetching active employees...",
+            logs: [],
+            isFinished: false
+        })
+
+        try {
+            const { data: employees } = await fetchActiveEmployees()
+            if (!employees || employees.length === 0) {
+                setCompilationProgress(prev => ({
+                    ...prev,
+                    activeEmployeeName: "No active employees found.",
+                    isFinished: true
+                }))
+                return
+            }
+
+            setCompilationProgress(prev => ({
+                ...prev,
+                total: employees.length,
+                activeEmployeeName: `Starting compilation for ${employees.length} employees...`
+            }))
+
+            let completed = 0
+            const currentLogs: typeof compilationProgress.logs = []
+
+            for (const employee of employees) {
+                setCompilationProgress(prev => ({
+                    ...prev,
+                    current: completed + 1,
+                    percentage: Math.round((completed / employees.length) * 100),
+                    activeEmployeeName: employee.full_name || employee.email,
+                    logs: [...currentLogs]
+                }))
+
+                try {
+                    const result = await compileSingleMutation.mutateAsync({
+                        month,
+                        year,
+                        profileId: employee.id
+                    })
+
+                    const summary = result[0]
+                    let detailMsg = "Up to date"
+                    if (summary) {
+                        if (summary.status === 'draft') {
+                            detailMsg = "Compiled (Draft)"
+                        } else if (summary.status === 'payslip_generated') {
+                            detailMsg = "Recalculated Payslip"
+                        } else if (summary.status === 'set_for_salary') {
+                            detailMsg = "Updated Summary"
+                        }
+                    }
+
+                    currentLogs.push({
+                        name: employee.full_name || employee.email,
+                        status: 'success',
+                        message: detailMsg
+                    })
+                } catch (err: any) {
+                    currentLogs.push({
+                        name: employee.full_name || employee.email,
+                        status: 'error',
+                        message: err.message || "Failed"
+                    })
+                }
+
+                completed++
+            }
+
+            setCompilationProgress(prev => ({
+                ...prev,
+                current: completed,
+                percentage: 100,
+                activeEmployeeName: "Compilation finished.",
+                logs: [...currentLogs],
+                isFinished: true
+            }))
+
+            toast.success(`Completed attendance compilation for ${employees.length} employees`)
             refetch()
-        },
-        onError: (err) => toast.error(err.message),
-    })
+        } catch (err: any) {
+            toast.error(err.message || "Compilation failed")
+            setIsCompileModalOpen(false)
+        }
+    }
 
     const setForSalaryMutation = trpc.salary.setForSalary.useMutation({
         onSuccess: (data) => {
@@ -206,13 +310,10 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                     </Select>
                     <div className="flex items-center gap-2">
                         <Button
-                            onClick={() => compileMutation.mutate({ month, year })}
-                            disabled={compileMutation.isPending}
+                            onClick={handleStartCompilation}
+                            disabled={isCompileModalOpen && !compilationProgress.isFinished}
                         >
-                            {compileMutation.isPending
-                                ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Compiling...</>
-                                : <><RefreshCw className="h-4 w-4 mr-1" />Compile</>
-                            }
+                            <RefreshCw className="h-4 w-4 mr-1" />Compile
                         </Button>
                         {lastCompiledAt && (
                             <span className="text-xs text-muted-foreground flex items-center gap-1 whitespace-nowrap">
@@ -345,19 +446,31 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                                         {statusBadge(s.status)}
                                     </div>
                                     <div className="grid grid-cols-3 gap-2 text-xs">
-                                        <div className="text-center p-2 rounded-md bg-emerald-500/5">
-                                            <p className="font-bold text-emerald-600">{s.total_present_days}</p>
-                                            <p className="text-muted-foreground">Present</p>
-                                        </div>
-                                        <div className="text-center p-2 rounded-md bg-rose-500/5">
-                                            <p className="font-bold text-rose-600">{s.total_absent_days}</p>
-                                            <p className="text-muted-foreground">Absent</p>
-                                        </div>
-                                        <div className="text-center p-2 rounded-md bg-blue-500/5">
-                                            <p className="font-bold text-blue-600">{s.total_leaves}</p>
-                                            <p className="text-muted-foreground">Leaves</p>
-                                        </div>
-                                    </div>
+                                         <div className="text-center p-1.5 rounded-md bg-slate-500/5">
+                                             <p className="font-bold text-slate-700 dark:text-slate-300">{s.total_working_days}</p>
+                                             <p className="text-[10px] text-muted-foreground">Month Days</p>
+                                         </div>
+                                         <div className="text-center p-1.5 rounded-md bg-emerald-500/5">
+                                             <p className="font-bold text-emerald-600">{s.total_present_days}</p>
+                                             <p className="text-[10px] text-muted-foreground">Present</p>
+                                         </div>
+                                         <div className="text-center p-1.5 rounded-md bg-rose-500/5">
+                                             <p className="font-bold text-rose-600">{s.total_absent_days}</p>
+                                             <p className="text-[10px] text-muted-foreground">Absent</p>
+                                         </div>
+                                         <div className="text-center p-1.5 rounded-md bg-orange-500/5">
+                                             <p className="font-bold text-orange-600">{s.total_half_days}</p>
+                                             <p className="text-[10px] text-muted-foreground">Half Days</p>
+                                         </div>
+                                         <div className="text-center p-1.5 rounded-md bg-blue-500/5">
+                                             <p className="font-bold text-blue-600">{s.total_leaves}</p>
+                                             <p className="text-[10px] text-muted-foreground">Leaves</p>
+                                         </div>
+                                         <div className="text-center p-1.5 rounded-md bg-amber-500/5">
+                                             <p className="font-bold text-amber-600">{(s.salary_breakdown as any)?.extra_days || 0}</p>
+                                             <p className="text-[10px] text-muted-foreground">Extra Days</p>
+                                         </div>
+                                     </div>
                                 </div>
                             ))}
                         </div>
@@ -378,11 +491,12 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                                         <th className="p-3 text-center font-semibold text-muted-foreground w-10">#</th>
                                         <th className="p-3 text-left font-semibold text-muted-foreground">Employee</th>
                                         <th className="p-3 text-left font-semibold text-muted-foreground">Designation</th>
-                                        <th className="p-3 text-center font-semibold text-muted-foreground">Working Days</th>
+                                        <th className="p-3 text-center font-semibold text-muted-foreground">Calendar Days</th>
                                         <th className="p-3 text-center font-semibold text-muted-foreground">Present</th>
                                         <th className="p-3 text-center font-semibold text-muted-foreground">Absent</th>
                                         <th className="p-3 text-center font-semibold text-muted-foreground">Half Days</th>
                                         <th className="p-3 text-center font-semibold text-muted-foreground">Leaves</th>
+                                        <th className="p-3 text-center font-semibold text-muted-foreground">Extra Days</th>
                                         <th className="p-3 text-center font-semibold text-muted-foreground">Hours</th>
                                         <th className="p-3 text-center font-semibold text-muted-foreground">Status</th>
                                     </tr>
@@ -422,6 +536,9 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                                                 </td>
                                                 <td className="p-3 text-center">{s.total_half_days}</td>
                                                 <td className="p-3 text-center">{s.total_leaves}</td>
+                                                <td className="p-3 text-center">
+                                                    <span className="font-bold text-amber-600">{(s.salary_breakdown as any)?.extra_days || 0}</span>
+                                                </td>
                                                 <td className="p-3 text-center text-muted-foreground">{s.total_working_hours || 0}h</td>
                                                 <td className="p-3 text-center">{statusBadge(s.status)}</td>
                                             </tr>
@@ -440,6 +557,89 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                 initialMonth={month}
                 initialYear={year}
             />
+
+            <Dialog 
+                open={isCompileModalOpen} 
+                onOpenChange={(open) => {
+                    if (!compilationProgress.isFinished) return
+                    setIsCompileModalOpen(open)
+                }}
+            >
+                <DialogContent className="max-w-[480px]">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <RefreshCw className={`h-5 w-5 text-orange-500 ${!compilationProgress.isFinished ? 'animate-spin' : ''}`} />
+                            Attendance Compilation
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-2">
+                        <div className="flex justify-between items-center text-sm font-medium">
+                            <span className="text-muted-foreground">
+                                {!compilationProgress.isFinished 
+                                    ? `Processing ${compilationProgress.current} of ${compilationProgress.total}`
+                                    : "Compilation Complete"
+                                }
+                            </span>
+                            <span className="text-orange-500 font-bold">{compilationProgress.percentage}%</span>
+                        </div>
+
+                        <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 bg-muted overflow-hidden">
+                            <div 
+                                className="bg-gradient-to-r from-orange-500 to-rose-500 h-full transition-all duration-300"
+                                style={{ width: `${compilationProgress.percentage}%` }}
+                            />
+                        </div>
+
+                        <div className="bg-slate-50 dark:bg-slate-900 border border-border/50 rounded-xl p-3 flex items-center gap-3">
+                            {!compilationProgress.isFinished ? (
+                                <Loader2 className="h-4 w-4 animate-spin text-orange-500 shrink-0" />
+                            ) : (
+                                <CheckCircle className="h-4 w-4 text-emerald-500 shrink-0" />
+                            )}
+                            <span className="text-xs font-semibold truncate leading-none">
+                                {compilationProgress.activeEmployeeName}
+                            </span>
+                        </div>
+
+                        <div className="border border-border/50 rounded-xl bg-slate-50/50 dark:bg-slate-900/50 overflow-hidden">
+                            <div className="bg-muted/50 px-3 py-2 border-b border-border/50 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                                Process Logs
+                            </div>
+                            <div className="h-[180px] overflow-y-auto p-3 space-y-2 text-xs font-medium scroll-smooth">
+                                {compilationProgress.logs.map((log, index) => (
+                                    <div key={index} className="flex justify-between items-center bg-card p-2 rounded-lg border border-border/30">
+                                        <span className="font-semibold truncate pr-2">{log.name}</span>
+                                        <span className={`text-[10px] font-black uppercase tracking-wider shrink-0 px-2 py-0.5 rounded-md ${
+                                            log.status === 'success' 
+                                                ? log.message === 'Up to date' 
+                                                    ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                                    : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'
+                                                : 'bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400'
+                                        }`}>
+                                            {log.message}
+                                        </span>
+                                    </div>
+                                ))}
+                                {compilationProgress.logs.length === 0 && (
+                                    <div className="text-center text-muted-foreground py-12 text-xs">
+                                        Waiting to start...
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end pt-2">
+                            <Button 
+                                onClick={() => setIsCompileModalOpen(false)}
+                                disabled={!compilationProgress.isFinished}
+                            >
+                                Done
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
