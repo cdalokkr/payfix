@@ -42,14 +42,81 @@ function calculateScheduledHours(checkIn: string, checkOut: string): number {
     return (outMinutes - inMinutes) / 60
 }
 
+function getRecordDayType(record: any): 'Present' | 'Leave' | 'Absent' | 'Weekly Off' | 'Holiday' | 'Extra Day' | 'Half Day' {
+    const status = record.status as string;
+
+    if (status === 'verified' || status === 'rejected' || status === 'pending') {
+        if (record.check_in || record.check_out) {
+            if (record.is_extra_day) {
+                return 'Extra Day';
+            } else if (record.is_half_day) {
+                return 'Half Day';
+            } else {
+                return 'Present';
+            }
+        } else {
+            const remarks = (record.remarks || '').toLowerCase();
+            if (remarks.includes('leave')) {
+                return 'Leave';
+            } else if (remarks.includes('weekly off') || remarks.includes('weekly_off')) {
+                return 'Weekly Off';
+            } else if (remarks.includes('holiday')) {
+                return 'Holiday';
+            } else {
+                return 'Absent';
+            }
+        }
+    } else {
+        // Virtual records
+        if (status === 'leave') {
+            return 'Leave';
+        } else if (status === 'weekly_off') {
+            return 'Weekly Off';
+        } else if (status === 'holiday') {
+            return 'Holiday';
+        } else {
+            return 'Absent';
+        }
+    }
+}
+
 export function AdminAttendanceVerification() {
-    const [searchTerm, setSearchTerm] = useState("")
+    const [employeeFilter, setEmployeeFilter] = useState('all')
+    const [searchQuery, setSearchQuery] = useState("")
     const [isEditOpen, setIsEditOpen] = useState(false)
     const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false)
     const [selectedRecord, setSelectedRecord] = useState<any>(null)
     const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({})
     // Default to current date (IST) and all statuses for full logging visibility
-    const [statusFilter, setStatusFilter] = useState('all')
+    const [verificationFilter, setVerificationFilter] = useState('all')
+    const [dayTypeFilter, setDayTypeFilter] = useState('all')
+    const [isFiltering, setIsFiltering] = useState(false)
+
+    // Helper wrappers for filter changes to simulate a quick tactile spinner
+    const handleVerificationFilterChange = (val: string) => {
+        setIsFiltering(true)
+        setVerificationFilter(val)
+        setTimeout(() => setIsFiltering(false), 200)
+    }
+
+    const handleDayTypeFilterChange = (val: string) => {
+        setIsFiltering(true)
+        setDayTypeFilter(val)
+        setTimeout(() => setIsFiltering(false), 200)
+    }
+
+    const handleEmployeeFilterChange = (val: string) => {
+        setIsFiltering(true)
+        setEmployeeFilter(val)
+        setTimeout(() => setIsFiltering(false), 200)
+    }
+
+    const handleSearchQueryChange = (val: string) => {
+        setIsFiltering(true)
+        setSearchQuery(val)
+        setTimeout(() => setIsFiltering(false), 200)
+    }
+
     const [dateFilter, setDateFilter] = useState<DateRange | undefined>({
         from: new Date(),
         to: new Date()
@@ -210,15 +277,11 @@ export function AdminAttendanceVerification() {
         let successCount = 0
         let errorCount = 0
 
-        for (let i = 0; i < selectedIds.length; i++) {
-            const id = selectedIds[i]
+        for (const id of selectedIds) {
             const record = attendance?.find(r => r.id === id)
-            const employeeName = record?.profile?.full_name || 'Unknown'
-
             setBulkVerificationDialog(prev => ({
                 ...prev,
-                currentProgress: i,
-                currentRecordName: employeeName
+                currentRecordName: record?.profile?.full_name || 'Unknown'
             }))
 
             try {
@@ -234,9 +297,14 @@ export function AdminAttendanceVerification() {
                 errorCount++
             }
 
-            // Sync/refresh in background after each record to keep UI up to date
-            utils.attendance.getAttendance.invalidate()
+            setBulkVerificationDialog(prev => ({
+                ...prev,
+                currentProgress: prev.currentProgress + 1
+            }))
         }
+
+        // Sync/refresh in background after all records complete
+        utils.attendance.getAttendance.invalidate()
 
         setBulkVerificationDialog(prev => ({
             ...prev,
@@ -286,7 +354,7 @@ export function AdminAttendanceVerification() {
 
             // Detect if all records belong to one employee (name-filtered)
             const uniqueNames = new Set(sortedData.map((r: any) => r.profile?.full_name))
-            const isSingleEmployee = uniqueNames.size === 1 && searchTerm.trim().length > 0
+            const isSingleEmployee = (uniqueNames.size === 1 && searchQuery.trim().length > 0) || employeeFilter !== 'all';
 
             let headers: string[]
             let rows: string[][]
@@ -375,25 +443,60 @@ export function AdminAttendanceVerification() {
         return Array.from(new Set(dates)).sort().reverse()
     }, [attendance])
 
+    const uniqueEmployees = useMemo(() => {
+        if (!attendance) return [];
+        const seen = new Set<string>();
+        const list: any[] = [];
+        attendance.forEach(record => {
+            if (record.profile) {
+                const empId = record.profile.id || record.profile_id;
+                if (empId && !seen.has(empId)) {
+                    seen.add(empId);
+                    list.push({
+                        ...record.profile,
+                        id: empId
+                    });
+                }
+            }
+        });
+        return list.sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
+    }, [attendance])
+
     const searchFilteredAttendance = useMemo(() => {
         return attendance?.filter(record => {
-            const matchesSearch = !searchTerm ||
-                record.profile?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                record.profile?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                record.profile?.designation?.name?.toLowerCase().includes(searchTerm.toLowerCase())
-            return matchesSearch
+            const matchesEmployee = employeeFilter === 'all' || record.profile_id === employeeFilter;
+            const matchesQuery = !searchQuery ||
+                record.profile?.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                record.profile?.designation?.name?.toLowerCase().includes(searchQuery.toLowerCase());
+            return matchesEmployee && matchesQuery;
         })
-    }, [attendance, searchTerm])
+    }, [attendance, employeeFilter, searchQuery])
 
     const filteredAttendance = useMemo(() => {
         return searchFilteredAttendance?.filter(record => {
-            const matchesStatus = statusFilter === 'all' ||
-                (statusFilter === 'halfDay' ? record.is_half_day :
-                    statusFilter === 'noOfficeOut' ? (record.check_in && !record.check_out) :
-                        record.status === statusFilter)
-            return matchesStatus
+            // Match verification filter
+            let matchesVerification = true;
+            const status = record.status as string;
+            
+            if (verificationFilter !== 'all') {
+                if (verificationFilter === 'verified') {
+                    matchesVerification = status === 'verified';
+                } else if (verificationFilter === 'rejected') {
+                    matchesVerification = status === 'rejected';
+                } else if (verificationFilter === 'pending') {
+                    matchesVerification = status === 'pending' || (!['verified', 'rejected', 'pending'].includes(status));
+                }
+            }
+            
+            // Match day type filter
+            let matchesDayType = true;
+            if (dayTypeFilter !== 'all') {
+                matchesDayType = getRecordDayType(record) === dayTypeFilter;
+            }
+            
+            return matchesVerification && matchesDayType;
         })
-    }, [searchFilteredAttendance, statusFilter])
+    }, [searchFilteredAttendance, verificationFilter, dayTypeFilter])
 
     const handleEdit = useCallback((record: any) => {
         setRowSelection({ [record.id]: true })
@@ -448,17 +551,59 @@ export function AdminAttendanceVerification() {
 
     const getRowId = useCallback((row: any) => row.id, [])
 
-    const stats = useMemo(() => ({
-        pending: searchFilteredAttendance?.filter(a => a.status === 'pending').length || 0,
-        verified: searchFilteredAttendance?.filter(a => a.status === 'verified').length || 0,
-        halfDay: searchFilteredAttendance?.filter(a => a.is_half_day).length || 0,
-        rejected: searchFilteredAttendance?.filter(a => a.status === 'rejected').length || 0,
-        noOfficeOut: searchFilteredAttendance?.filter(a => a.check_in && !a.check_out).length || 0,
-        absent: searchFilteredAttendance?.filter(a => a.status === 'absent').length || 0,
-        leave: searchFilteredAttendance?.filter(a => a.status === 'leave').length || 0,
-        weekly_off: searchFilteredAttendance?.filter(a => a.status === 'weekly_off').length || 0,
-        all: searchFilteredAttendance?.length || 0,
-    }), [searchFilteredAttendance])
+    const stats = useMemo(() => {
+        const list = searchFilteredAttendance || [];
+        
+        let pending = 0;
+        let verified = 0;
+        let rejected = 0;
+        let present = 0;
+        let halfDay = 0;
+        let weekly_off = 0;
+        let leave = 0;
+        let absent = 0;
+        let holiday = 0;
+        let extra_day = 0;
+        let noOfficeOut = 0;
+        
+        list.forEach(a => {
+            const dayType = getRecordDayType(a);
+            const status = a.status as string;
+            
+            if (status === 'verified') {
+                verified++;
+            } else if (status === 'rejected') {
+                rejected++;
+            } else {
+                pending++; // pending or virtual
+            }
+            
+            if (dayType === 'Present') present++;
+            if (dayType === 'Half Day') halfDay++;
+            if (dayType === 'Weekly Off') weekly_off++;
+            if (dayType === 'Leave') leave++;
+            if (dayType === 'Absent') absent++;
+            if (dayType === 'Holiday') holiday++;
+            if (dayType === 'Extra Day') extra_day++;
+            
+            if (a.check_in && !a.check_out) noOfficeOut++;
+        });
+        
+        return {
+            pending,
+            verified,
+            rejected,
+            present,
+            halfDay,
+            weekly_off,
+            leave,
+            absent,
+            holiday,
+            extra_day,
+            noOfficeOut,
+            all: list.length
+        };
+    }, [searchFilteredAttendance])
 
     if (!mounted) {
         return (
@@ -530,32 +675,47 @@ export function AdminAttendanceVerification() {
                     </Button>
                 }
             >
-                <DataTable
-                    columns={columns}
-                    data={filteredAttendance || []}
-                    isLoading={isLoading}
-                    getRowId={getRowId}
-                    rowSelection={rowSelection}
-                    onRowSelectionChange={setRowSelection}
-                    toolbar={(table) => (
-                        <AttendanceTableToolbar
-                            table={table}
-                            searchTerm={searchTerm}
-                            onSearchChange={setSearchTerm}
-                            statusFilter={statusFilter}
-                            onStatusFilterChange={setStatusFilter}
-                            dateFilter={dateFilter}
-                            onDateFilterChange={setDateFilter}
-                            uniqueDates={uniqueDates}
-                            onBulkVerify={() => handleBulkVerify('verified')}
-                            onBulkReject={() => handleBulkVerify('rejected')}
-                            isBulkUpdating={bulkVerificationDialog.status === 'processing'}
-                            stats={stats}
-                            onDownload={handleDownloadReport}
-                            isDownloading={isDownloading}
-                        />
+                <div className="relative">
+                    {isFiltering && (
+                        <div className="absolute inset-0 bg-white/50 dark:bg-slate-950/50 backdrop-blur-[1px] flex items-center justify-center z-10 rounded-xl transition-all duration-200">
+                            <div className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-900 shadow-xl border border-slate-100 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-150">
+                                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                                <span className="text-[10px] font-bold text-muted-foreground">Filtering logs...</span>
+                            </div>
+                        </div>
                     )}
-                />
+                    <DataTable
+                        columns={columns}
+                        data={filteredAttendance || []}
+                        isLoading={isLoading}
+                        getRowId={getRowId}
+                        rowSelection={rowSelection}
+                        onRowSelectionChange={setRowSelection}
+                        toolbar={(table) => (
+                            <AttendanceTableToolbar
+                                table={table}
+                                employeeFilter={employeeFilter}
+                                onEmployeeFilterChange={handleEmployeeFilterChange}
+                                uniqueEmployees={uniqueEmployees}
+                                searchQuery={searchQuery}
+                                onSearchQueryChange={handleSearchQueryChange}
+                                verificationFilter={verificationFilter}
+                                onVerificationFilterChange={handleVerificationFilterChange}
+                                dayTypeFilter={dayTypeFilter}
+                                onDayTypeFilterChange={handleDayTypeFilterChange}
+                                dateFilter={dateFilter}
+                                onDateFilterChange={setDateFilter}
+                                uniqueDates={uniqueDates}
+                                onBulkVerify={() => handleBulkVerify('verified')}
+                                onBulkReject={() => handleBulkVerify('rejected')}
+                                isBulkUpdating={bulkVerificationDialog.status === 'processing'}
+                                stats={stats}
+                                onDownload={handleDownloadReport}
+                                isDownloading={isDownloading}
+                            />
+                        )}
+                    />
+                </div>
             </CardShell>
 
             <AttendanceEditSheet

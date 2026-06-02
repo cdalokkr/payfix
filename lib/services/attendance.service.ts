@@ -117,6 +117,7 @@ export class AttendanceService {
             with: {
                 profile: {
                     columns: {
+                        id: true,
                         email: true,
                         full_name: true,
                         role: true,
@@ -199,6 +200,7 @@ export class AttendanceService {
                         created_at: new Date(`${dateStr}T00:00:00.000Z`),
                         updated_at: new Date(`${dateStr}T00:00:00.000Z`),
                         profile: {
+                            id: profile.id,
                             email: profile.email,
                             full_name: profile.full_name,
                             role: profile.role,
