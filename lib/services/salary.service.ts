@@ -9,7 +9,7 @@ import {
     officeSettings,
     officeClosures
 } from '@/lib/db/schema'
-import { eq, and, gte, lte, desc, sql, inArray, or, ne } from 'drizzle-orm'
+import { eq, and, gte, lte, desc, sql, inArray, or, ne, gt } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { SmartCache } from '@/lib/cache/smart-cache'
 
@@ -452,6 +452,22 @@ export class SalaryService {
             const lastDay = new Date(existingSummary.year, existingSummary.month, 0).getDate()
             const endDate = `${existingSummary.year}-${String(existingSummary.month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
 
+            // Reset any wrongly adjusted advances for this employee:
+            // 1. Advances adjusted in a month prior to their actual date.
+            // 2. Advances adjusted in this month but their date is in the future.
+            await client.update(employeeAdvances).set({
+                status: 'pending',
+                adjusted_in_month: null,
+                adjusted_in_year: null,
+            }).where(and(
+                eq(employeeAdvances.profile_id, existingSummary.profile_id),
+                eq(employeeAdvances.status, 'adjusted'),
+                or(
+                    sql`(${employeeAdvances.date}::date > (${employeeAdvances.adjusted_in_year}::text || '-' || LPAD(${employeeAdvances.adjusted_in_month}::text, 2, '0') || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')`,
+                    gt(employeeAdvances.date, endDate)
+                )
+            ))
+
             // Get pending advances + adjusted advances for this target month/year
             const advancesList = await client.select({
                 amount: employeeAdvances.amount,
@@ -537,27 +553,42 @@ export class SalaryService {
                 updated_at: new Date(),
             }).where(eq(monthlyAttendanceSummary.id, existingSummary.id)).returning()
 
-            // Update advances status
-            if (advanceTotal > 0) {
-                await client.update(employeeAdvances).set({
-                    status: 'adjusted',
-                    adjusted_in_month: existingSummary.month,
-                    adjusted_in_year: existingSummary.year,
-                }).where(and(
-                    eq(employeeAdvances.profile_id, existingSummary.profile_id),
-                    or(
-                        and(
-                            eq(employeeAdvances.status, 'pending'),
-                            lte(employeeAdvances.date, endDate)
-                        ),
-                        and(
-                            eq(employeeAdvances.status, 'adjusted'),
-                            eq(employeeAdvances.adjusted_in_month, existingSummary.month),
-                            eq(employeeAdvances.adjusted_in_year, existingSummary.year)
+            // Update advances status ONLY if payslip is generated or already generated
+            const isGenerated = existingSummary.status === 'payslip_generated'
+            if (isGenerated) {
+                if (advanceTotal > 0) {
+                    await client.update(employeeAdvances).set({
+                        status: 'adjusted',
+                        adjusted_in_month: existingSummary.month,
+                        adjusted_in_year: existingSummary.year,
+                    }).where(and(
+                        eq(employeeAdvances.profile_id, existingSummary.profile_id),
+                        or(
+                            and(
+                                eq(employeeAdvances.status, 'pending'),
+                                lte(employeeAdvances.date, endDate)
+                            ),
+                            and(
+                                eq(employeeAdvances.status, 'adjusted'),
+                                eq(employeeAdvances.adjusted_in_month, existingSummary.month),
+                                eq(employeeAdvances.adjusted_in_year, existingSummary.year)
+                            )
                         )
-                    )
-                ))
+                    ))
+                } else {
+                    await client.update(employeeAdvances).set({
+                        status: 'pending',
+                        adjusted_in_month: null,
+                        adjusted_in_year: null,
+                    }).where(and(
+                        eq(employeeAdvances.profile_id, existingSummary.profile_id),
+                        eq(employeeAdvances.status, 'adjusted'),
+                        eq(employeeAdvances.adjusted_in_month, existingSummary.month),
+                        eq(employeeAdvances.adjusted_in_year, existingSummary.year)
+                    ))
+                }
             } else {
+                // If it is draft/set_for_salary, ensure no advances remain marked as adjusted for this month/year
                 await client.update(employeeAdvances).set({
                     status: 'pending',
                     adjusted_in_month: null,
@@ -982,19 +1013,44 @@ export class SalaryService {
             const lastDay = new Date(summary.year, summary.month, 0).getDate()
             const endDate = `${summary.year}-${String(summary.month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
 
-            // Fetch pending advances list
-            const pendingAdvancesList = await db.select({
+            // Reset any wrongly adjusted advances for this employee:
+            // 1. Advances adjusted in a month prior to their actual date.
+            // 2. Advances adjusted in this month but their date is in the future.
+            await db.update(employeeAdvances).set({
+                status: 'pending',
+                adjusted_in_month: null,
+                adjusted_in_year: null,
+            }).where(and(
+                eq(employeeAdvances.profile_id, summary.profile_id),
+                eq(employeeAdvances.status, 'adjusted'),
+                or(
+                    sql`(${employeeAdvances.date}::date > (${employeeAdvances.adjusted_in_year}::text || '-' || LPAD(${employeeAdvances.adjusted_in_month}::text, 2, '0') || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')`,
+                    gt(employeeAdvances.date, endDate)
+                )
+            ))
+
+            // Fetch pending and adjusted advances list
+            const advancesList = await db.select({
                 amount: employeeAdvances.amount,
                 particulars: employeeAdvances.particulars,
             }).from(employeeAdvances).where(and(
                 eq(employeeAdvances.profile_id, summary.profile_id),
-                eq(employeeAdvances.status, 'pending'),
-                lte(employeeAdvances.date, endDate)
+                or(
+                    and(
+                        eq(employeeAdvances.status, 'pending'),
+                        lte(employeeAdvances.date, endDate)
+                    ),
+                    and(
+                        eq(employeeAdvances.status, 'adjusted'),
+                        eq(employeeAdvances.adjusted_in_month, summary.month),
+                        eq(employeeAdvances.adjusted_in_year, summary.year)
+                    )
+                )
             ))
 
             let carryForwardRecovery = 0
             let regularAdvanceRecovery = 0
-            for (const adv of pendingAdvancesList) {
+            for (const adv of advancesList) {
                 const amt = Number(adv.amount) || 0
                 if (adv.particulars?.startsWith('Salary deficit carry-forward from')) {
                     carryForwardRecovery += amt
@@ -1051,7 +1107,7 @@ export class SalaryService {
                 updated_at: new Date(),
             }).where(eq(monthlyAttendanceSummary.id, summary.id)).returning()
 
-            // Mark pending advances as adjusted
+            // Update advances status
             if (advanceTotal > 0) {
                 const lastDay = new Date(summary.year, summary.month, 0).getDate()
                 const endDate = `${summary.year}-${String(summary.month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
@@ -1062,8 +1118,28 @@ export class SalaryService {
                     adjusted_in_year: summary.year,
                 }).where(and(
                     eq(employeeAdvances.profile_id, summary.profile_id),
-                    eq(employeeAdvances.status, 'pending'),
-                    lte(employeeAdvances.date, endDate)
+                    or(
+                        and(
+                            eq(employeeAdvances.status, 'pending'),
+                            lte(employeeAdvances.date, endDate)
+                        ),
+                        and(
+                            eq(employeeAdvances.status, 'adjusted'),
+                            eq(employeeAdvances.adjusted_in_month, summary.month),
+                            eq(employeeAdvances.adjusted_in_year, summary.year)
+                        )
+                    )
+                ))
+            } else {
+                await db.update(employeeAdvances).set({
+                    status: 'pending',
+                    adjusted_in_month: null,
+                    adjusted_in_year: null,
+                }).where(and(
+                    eq(employeeAdvances.profile_id, summary.profile_id),
+                    eq(employeeAdvances.status, 'adjusted'),
+                    eq(employeeAdvances.adjusted_in_month, summary.month),
+                    eq(employeeAdvances.adjusted_in_year, summary.year)
                 ))
             }
 
