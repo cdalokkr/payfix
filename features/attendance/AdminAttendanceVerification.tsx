@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useMemo, useEffect, useCallback } from "react"
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -87,6 +87,8 @@ export function AdminAttendanceVerification() {
         currentRecordName: '',
     })
 
+    const isBulkProcessingRef = useRef(false)
+
     useEffect(() => {
         setMounted(true)
     }, [])
@@ -158,10 +160,16 @@ export function AdminAttendanceVerification() {
 
     const verifyMutation = trpc.attendance.verifyAttendance.useMutation({
         onSuccess: (data) => {
-            toast.success(`Attendance marked as ${data.status}`)
+            if (!isBulkProcessingRef.current) {
+                toast.success(`Attendance marked as ${data.status}`)
+            }
             utils.attendance.getAttendance.invalidate()
         },
-        onError: (error) => toast.error(error.message)
+        onError: (error) => {
+            if (!isBulkProcessingRef.current) {
+                toast.error(error.message)
+            }
+        }
     })
 
     const handleExecuteVerification = async () => {
@@ -173,6 +181,7 @@ export function AdminAttendanceVerification() {
             await verifyMutation.mutateAsync({
                 id: verificationDialog.record.id,
                 status: verificationDialog.action,
+                remarks: verificationDialog.record.remarks ?? undefined,
                 isHalfDay: verificationDialog.record.is_half_day ?? undefined
             })
 
@@ -195,6 +204,7 @@ export function AdminAttendanceVerification() {
         const { selectedIds, action } = bulkVerificationDialog
         if (selectedIds.length === 0 || !action) return
 
+        isBulkProcessingRef.current = true
         setBulkVerificationDialog(prev => ({ ...prev, status: 'processing', currentProgress: 0 }))
 
         let successCount = 0
@@ -215,6 +225,7 @@ export function AdminAttendanceVerification() {
                 await verifyMutation.mutateAsync({
                     id,
                     status: action,
+                    remarks: record?.remarks ?? undefined,
                     isHalfDay: record?.is_half_day ?? undefined
                 })
                 successCount++
@@ -239,6 +250,7 @@ export function AdminAttendanceVerification() {
         if (successCount > 0) {
             setRowSelection({})
         }
+        isBulkProcessingRef.current = false
     }
 
     const manualUpdateMutation = trpc.attendance.manualUpdate.useMutation({

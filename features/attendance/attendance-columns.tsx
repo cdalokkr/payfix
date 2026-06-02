@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils"
 import { ActionButton, EditButton } from "@/components/ui/action-button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Checkbox } from "@/components/ui/checkbox"
+import { CheckCircle2, Clock, XCircle } from "lucide-react"
 
 interface AttendanceColumnsProps {
     onVerify: (record: any) => void
@@ -153,34 +154,90 @@ export function createAttendanceColumns({
             accessorKey: "status",
             header: "Status",
             cell: ({ row }) => {
-                const status = row.getValue("status") as string
-                const isHalfDay = row.original.is_half_day
+                const record = row.original;
+                
+                // Determine dayType and verificationState
+                let verificationState: 'pending' | 'verified' | 'rejected' = 'pending';
+                let dayType: 'Present' | 'Leave' | 'Absent' | 'Weekly Off' | 'Holiday' | 'Extra Day' | 'Half Day' = 'Absent';
+
+                const status = record.status as string;
+
+                if (status === 'verified' || status === 'rejected' || status === 'pending') {
+                    verificationState = status;
+                    
+                    if (record.check_in || record.check_out) {
+                        if (record.is_extra_day) {
+                            dayType = 'Extra Day';
+                        } else if (record.is_half_day) {
+                            dayType = 'Half Day';
+                        } else {
+                            dayType = 'Present';
+                        }
+                    } else {
+                        const remarks = (record.remarks || '').toLowerCase();
+                        if (remarks.includes('leave')) {
+                            dayType = 'Leave';
+                        } else if (remarks.includes('weekly off') || remarks.includes('weekly_off')) {
+                            dayType = 'Weekly Off';
+                        } else if (remarks.includes('holiday')) {
+                            dayType = 'Holiday';
+                        } else {
+                            dayType = 'Absent';
+                        }
+                    }
+                } else {
+                    // Virtual records
+                    verificationState = 'pending';
+                    if (status === 'leave') {
+                        dayType = 'Leave';
+                    } else if (status === 'weekly_off') {
+                        dayType = 'Weekly Off';
+                    } else if (status === 'holiday') {
+                        dayType = 'Holiday';
+                    } else {
+                        dayType = 'Absent';
+                    }
+                }
+
+                const dayTypeStyles: Record<string, string> = {
+                    'Present': "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/30",
+                    'Leave': "bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-900/30",
+                    'Weekly Off': "bg-slate-50 dark:bg-slate-900/30 text-slate-700 dark:text-slate-400 border-slate-200 dark:border-slate-800/30",
+                    'Holiday': "bg-sky-50 dark:bg-sky-950/30 text-sky-700 dark:text-sky-400 border-sky-200 dark:border-sky-900/30",
+                    'Extra Day': "bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-900/30",
+                    'Half Day': "bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 border-indigo-200 dark:border-indigo-900/30",
+                    'Absent': "bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-450 border-rose-200 dark:border-rose-900/30",
+                };
+
                 return (
-                    <div className="flex flex-col gap-1">
+                    <div className="flex flex-col gap-1.5 items-start">
+                        {/* Day Type Badge */}
                         <Badge
-                            variant="secondary"
+                            variant="outline"
                             className={cn(
-                                "capitalize font-black text-[9px] tracking-tight px-1.5 h-4 border-none",
-                                status === 'verified' && "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
-                                status === 'pending' && "bg-amber-500/15 text-amber-700 dark:text-amber-400",
-                                status === 'rejected' && "bg-rose-500/15 text-rose-700 dark:text-rose-400",
-                                status === 'absent' && "bg-rose-500/15 text-rose-700 dark:text-rose-400",
-                                status === 'leave' && "bg-orange-500/15 text-orange-700 dark:text-orange-400",
-                                status === 'weekly_off' && "bg-slate-550/15 text-slate-700 dark:text-slate-400",
-                                status === 'holiday' && "bg-sky-500/15 text-sky-700 dark:text-sky-400"
+                                "font-extrabold text-[9px] tracking-tight px-1.5 h-4.5 rounded-md uppercase leading-none border shadow-none",
+                                dayTypeStyles[dayType]
                             )}
                         >
-                            {status === 'weekly_off' ? 'Weekly Off' : status}
+                            {dayType}
                         </Badge>
-                        {isHalfDay && (
-                            <Badge variant="outline" className="text-[8px] h-3.5 bg-indigo-500/5 border-indigo-500/20 text-indigo-600 font-bold uppercase px-1 leading-none">
-                                Half Day
-                            </Badge>
-                        )}
+                        
+                        {/* Verification Status Badge */}
+                        <div className={cn(
+                            "flex items-center gap-1 text-[8px] font-bold px-1.5 py-0.5 rounded-full border",
+                            verificationState === 'verified' && "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20",
+                            verificationState === 'pending' && "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20",
+                            verificationState === 'rejected' && "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/20"
+                        )}>
+                            {verificationState === 'verified' && <CheckCircle2 className="size-2.5 text-emerald-500" />}
+                            {verificationState === 'pending' && <Clock className="size-2.5 text-amber-500 animate-pulse" />}
+                            {verificationState === 'rejected' && <XCircle className="size-2.5 text-rose-500" />}
+                            <span className="capitalize">{verificationState === 'verified' ? 'verified' : verificationState}</span>
+                        </div>
                     </div>
                 )
             },
-            size: 60,
+            size: 90,
         },
         {
             id: "actions",
