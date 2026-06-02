@@ -43,6 +43,9 @@ interface AttendanceTableToolbarProps<TData> {
         halfDay: number
         rejected: number
         noOfficeOut: number
+        absent: number
+        leave: number
+        weekly_off: number
     }
     dateFilter?: DateRange
     onDateFilterChange?: (value: DateRange | undefined) => void
@@ -142,6 +145,24 @@ export function AttendanceTableToolbar<TData>({
                                 <div className="flex items-center justify-between gap-2 w-full">
                                     <span>No Office Out</span>
                                     <span className="text-[10px] bg-amber-100 text-amber-600 px-1.5 rounded-full">{stats.noOfficeOut}</span>
+                                </div>
+                            </SelectItem>
+                            <SelectItem value="absent">
+                                <div className="flex items-center justify-between gap-2 w-full">
+                                    <span>Absent</span>
+                                    <span className="text-[10px] bg-rose-100 text-rose-600 px-1.5 rounded-full">{stats.absent}</span>
+                                </div>
+                            </SelectItem>
+                            <SelectItem value="leave">
+                                <div className="flex items-center justify-between gap-2 w-full">
+                                    <span>Leave</span>
+                                    <span className="text-[10px] bg-orange-100 text-orange-600 px-1.5 rounded-full">{stats.leave}</span>
+                                </div>
+                            </SelectItem>
+                            <SelectItem value="weekly_off">
+                                <div className="flex items-center justify-between gap-2 w-full">
+                                    <span>Weekly Off</span>
+                                    <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 rounded-full">{stats.weekly_off}</span>
                                 </div>
                             </SelectItem>
                         </SelectContent>

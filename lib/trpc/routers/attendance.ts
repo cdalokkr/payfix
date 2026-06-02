@@ -209,7 +209,7 @@ export const attendanceRouter = router({
 
     verifyAttendance: moderatorProcedure
         .input(z.object({
-            id: z.string().uuid(),
+            id: z.string(),
             status: z.enum(['verified', 'rejected']),
             remarks: z.string().optional(),
             isHalfDay: z.boolean().optional(),
@@ -275,7 +275,7 @@ export const attendanceRouter = router({
 
     bulkVerifyAttendance: moderatorProcedure
         .input(z.object({
-            ids: z.array(z.string().uuid()),
+            ids: z.array(z.string()),
             status: z.enum(['verified', 'rejected']),
             remarks: z.string().optional(),
         }))

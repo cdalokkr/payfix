@@ -163,10 +163,14 @@ export function createAttendanceColumns({
                                 "capitalize font-black text-[9px] tracking-tight px-1.5 h-4 border-none",
                                 status === 'verified' && "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
                                 status === 'pending' && "bg-amber-500/15 text-amber-700 dark:text-amber-400",
-                                status === 'rejected' && "bg-rose-500/15 text-rose-700 dark:text-rose-400"
+                                status === 'rejected' && "bg-rose-500/15 text-rose-700 dark:text-rose-400",
+                                status === 'absent' && "bg-rose-500/15 text-rose-700 dark:text-rose-400",
+                                status === 'leave' && "bg-orange-500/15 text-orange-700 dark:text-orange-400",
+                                status === 'weekly_off' && "bg-slate-550/15 text-slate-700 dark:text-slate-400",
+                                status === 'holiday' && "bg-sky-500/15 text-sky-700 dark:text-sky-400"
                             )}
                         >
-                            {status}
+                            {status === 'weekly_off' ? 'Weekly Off' : status}
                         </Badge>
                         {isHalfDay && (
                             <Badge variant="outline" className="text-[8px] h-3.5 bg-indigo-500/5 border-indigo-500/20 text-indigo-600 font-bold uppercase px-1 leading-none">
@@ -183,40 +187,41 @@ export function createAttendanceColumns({
             header: "Actions",
             cell: ({ row }) => {
                 const record = row.original
-                const isPending = record.status === 'pending'
+                const showApprove = record.status !== 'verified'
+                const showReject = record.status !== 'rejected'
  
                 return (
                     <div className="flex items-center justify-end gap-1">
                         <TooltipProvider>
-                            {isPending && (
-                                <>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <ActionButton
-                                                action="verify"
-                                                variant="icon-only"
-                                                size="sm"
-                                                onClick={() => onVerify(record)}
-                                                loading={isVerifying}
-                                                className="h-7 w-7"
-                                            />
-                                        </TooltipTrigger>
-                                        <TooltipContent>Approve</TooltipContent>
-                                    </Tooltip>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <ActionButton
-                                                action="reject"
-                                                variant="icon-only"
-                                                size="sm"
-                                                onClick={() => onReject(record)}
-                                                loading={isVerifying}
-                                                className="h-7 w-7"
-                                            />
-                                        </TooltipTrigger>
-                                        <TooltipContent>Reject</TooltipContent>
-                                    </Tooltip>
-                                </>
+                            {showApprove && (
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <ActionButton
+                                            action="verify"
+                                            variant="icon-only"
+                                            size="sm"
+                                            onClick={() => onVerify(record)}
+                                            loading={isVerifying}
+                                            className="h-7 w-7"
+                                        />
+                                    </TooltipTrigger>
+                                    <TooltipContent>Approve</TooltipContent>
+                                </Tooltip>
+                            )}
+                            {showReject && (
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <ActionButton
+                                            action="reject"
+                                            variant="icon-only"
+                                            size="sm"
+                                            onClick={() => onReject(record)}
+                                            loading={isVerifying}
+                                            className="h-7 w-7"
+                                        />
+                                    </TooltipTrigger>
+                                    <TooltipContent>Reject</TooltipContent>
+                                </Tooltip>
                             )}
                             <Tooltip>
                                 <TooltipTrigger asChild>

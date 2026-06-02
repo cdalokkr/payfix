@@ -215,7 +215,7 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
             case 'draft':
                 return <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/20 text-[10px]">Draft</Badge>
             case 'set_for_salary':
-                return <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/20 text-[10px]">Set for Salary</Badge>
+                return <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/20 text-[10px]">Ready</Badge>
             case 'payslip_generated':
                 return <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px]">Payslip Generated</Badge>
             default:
@@ -394,7 +394,7 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                         </div>
                         <div>
                             <p className="text-lg font-bold leading-none">{summaryStats.setForSalaryCount}</p>
-                            <p className="text-[11px] text-muted-foreground mt-0.5">Set for Salary</p>
+                            <p className="text-[11px] text-muted-foreground mt-0.5">Ready</p>
                         </div>
                     </div>
                 </div>

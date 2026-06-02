@@ -311,13 +311,20 @@ export class SalaryService {
     }
 
     /** Get sum of pending advances for an employee */
-    static async getPendingAdvancesTotal(profileId: string) {
-        const result = await db.select({
-            total: sql<string>`COALESCE(SUM(${employeeAdvances.amount}::numeric), 0)`,
-        }).from(employeeAdvances).where(and(
+    static async getPendingAdvancesTotal(profileId: string, month?: number, year?: number) {
+        let conditions = and(
             eq(employeeAdvances.profile_id, profileId),
             eq(employeeAdvances.status, 'pending')
-        ))
+        )
+        if (month !== undefined && year !== undefined) {
+            const lastDay = new Date(year, month, 0).getDate()
+            const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+            conditions = and(conditions, lte(employeeAdvances.date, endDate))
+        }
+
+        const result = await db.select({
+            total: sql<string>`COALESCE(SUM(${employeeAdvances.amount}::numeric), 0)`,
+        }).from(employeeAdvances).where(conditions)
 
         return result[0]?.total || '0'
     }
@@ -442,13 +449,20 @@ export class SalaryService {
 
             const netSalary = grossSalary + extraDayPayment - absenceDeduction - otherDeductions
 
+            const lastDay = new Date(existingSummary.year, existingSummary.month, 0).getDate()
+            const endDate = `${existingSummary.year}-${String(existingSummary.month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+
             // Get pending advances + adjusted advances for this target month/year
-            const pendingAdvances = await client.select({
-                total: sql<string>`COALESCE(SUM(${employeeAdvances.amount}::numeric), 0)`,
+            const advancesList = await client.select({
+                amount: employeeAdvances.amount,
+                particulars: employeeAdvances.particulars,
             }).from(employeeAdvances).where(and(
                 eq(employeeAdvances.profile_id, existingSummary.profile_id),
                 or(
-                    eq(employeeAdvances.status, 'pending'),
+                    and(
+                        eq(employeeAdvances.status, 'pending'),
+                        lte(employeeAdvances.date, endDate)
+                    ),
                     and(
                         eq(employeeAdvances.status, 'adjusted'),
                         eq(employeeAdvances.adjusted_in_month, existingSummary.month),
@@ -456,7 +470,18 @@ export class SalaryService {
                     )
                 )
             ))
-            const advanceTotal = Number(pendingAdvances[0]?.total || '0')
+
+            let carryForwardRecovery = 0
+            let regularAdvanceRecovery = 0
+            for (const adv of advancesList) {
+                const amt = Number(adv.amount) || 0
+                if (adv.particulars?.startsWith('Salary deficit carry-forward from')) {
+                    carryForwardRecovery += amt
+                } else {
+                    regularAdvanceRecovery += amt
+                }
+            }
+            const advanceTotal = carryForwardRecovery + regularAdvanceRecovery
 
             const rawTakeHome = netSalary - advanceTotal
 
@@ -486,7 +511,9 @@ export class SalaryService {
                 leave_deduction: Number(leaveDeductionVal.toFixed(2)),
                 other_deductions: otherDeductions,
                 net_salary: Number(netSalary.toFixed(2)),
-                advance_recovery: advanceTotal,
+                advance_recovery: Number(regularAdvanceRecovery.toFixed(2)),
+                carry_forward_recovery: Number(carryForwardRecovery.toFixed(2)),
+                total_advance_recovery: Number(advanceTotal.toFixed(2)),
                 take_home: Number(actualTakeHome.toFixed(2)),
                 carry_forward: Number(carryForwardAmount.toFixed(2)),
                 source: metrics.source || (existingSummary.salary_breakdown as any)?.source || 'compiled'
@@ -519,7 +546,10 @@ export class SalaryService {
                 }).where(and(
                     eq(employeeAdvances.profile_id, existingSummary.profile_id),
                     or(
-                        eq(employeeAdvances.status, 'pending'),
+                        and(
+                            eq(employeeAdvances.status, 'pending'),
+                            lte(employeeAdvances.date, endDate)
+                        ),
                         and(
                             eq(employeeAdvances.status, 'adjusted'),
                             eq(employeeAdvances.adjusted_in_month, existingSummary.month),
@@ -949,8 +979,30 @@ export class SalaryService {
 
             const netSalary = grossSalary + extraDayPayment - absenceDeduction - otherDeductions
 
-            // Get pending advances
-            const advanceTotal = Number(await this.getPendingAdvancesTotal(summary.profile_id))
+            const lastDay = new Date(summary.year, summary.month, 0).getDate()
+            const endDate = `${summary.year}-${String(summary.month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+
+            // Fetch pending advances list
+            const pendingAdvancesList = await db.select({
+                amount: employeeAdvances.amount,
+                particulars: employeeAdvances.particulars,
+            }).from(employeeAdvances).where(and(
+                eq(employeeAdvances.profile_id, summary.profile_id),
+                eq(employeeAdvances.status, 'pending'),
+                lte(employeeAdvances.date, endDate)
+            ))
+
+            let carryForwardRecovery = 0
+            let regularAdvanceRecovery = 0
+            for (const adv of pendingAdvancesList) {
+                const amt = Number(adv.amount) || 0
+                if (adv.particulars?.startsWith('Salary deficit carry-forward from')) {
+                    carryForwardRecovery += amt
+                } else {
+                    regularAdvanceRecovery += amt
+                }
+            }
+            const advanceTotal = carryForwardRecovery + regularAdvanceRecovery
 
             const rawTakeHome = netSalary - advanceTotal
 
@@ -980,7 +1032,9 @@ export class SalaryService {
                 leave_deduction: Number(leaveDeductionVal.toFixed(2)),
                 other_deductions: otherDeductions,
                 net_salary: Number(netSalary.toFixed(2)),
-                advance_recovery: advanceTotal,
+                advance_recovery: Number(regularAdvanceRecovery.toFixed(2)),
+                carry_forward_recovery: Number(carryForwardRecovery.toFixed(2)),
+                total_advance_recovery: Number(advanceTotal.toFixed(2)),
                 take_home: Number(actualTakeHome.toFixed(2)),
                 carry_forward: Number(carryForwardAmount.toFixed(2)),
             }
@@ -999,13 +1053,17 @@ export class SalaryService {
 
             // Mark pending advances as adjusted
             if (advanceTotal > 0) {
+                const lastDay = new Date(summary.year, summary.month, 0).getDate()
+                const endDate = `${summary.year}-${String(summary.month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+
                 await db.update(employeeAdvances).set({
                     status: 'adjusted',
                     adjusted_in_month: summary.month,
                     adjusted_in_year: summary.year,
                 }).where(and(
                     eq(employeeAdvances.profile_id, summary.profile_id),
-                    eq(employeeAdvances.status, 'pending')
+                    eq(employeeAdvances.status, 'pending'),
+                    lte(employeeAdvances.date, endDate)
                 ))
             }
 
@@ -1020,11 +1078,19 @@ export class SalaryService {
                 }
                 const advanceDate = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`
 
+                const carryForwardParticulars = `Salary deficit carry-forward from ${MONTH_NAMES[summary.month - 1]} ${summary.year} payslip`
+
+                // Delete any existing carry-forward advance for this month/year first to prevent duplicate carry-forward
+                await db.delete(employeeAdvances).where(and(
+                    eq(employeeAdvances.profile_id, summary.profile_id),
+                    eq(employeeAdvances.particulars, carryForwardParticulars)
+                ))
+
                 await db.insert(employeeAdvances).values({
                     profile_id: summary.profile_id,
                     date: advanceDate,
                     amount: carryForwardAmount.toFixed(2),
-                    particulars: `Salary deficit carry-forward from ${MONTH_NAMES[summary.month - 1]} ${summary.year} payslip`,
+                    particulars: carryForwardParticulars,
                     status: 'pending',
                     created_by: summary.profile_id, // system-generated
                 })

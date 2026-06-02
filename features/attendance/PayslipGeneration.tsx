@@ -180,7 +180,7 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
     const totalDeductions = breakdown ? (
         Number(breakdown.absence_deduction || 0) +
         Number(breakdown.other_deductions || 0) +
-        Number(breakdown.advance_recovery || 0)
+        Number(breakdown.total_advance_recovery !== undefined ? breakdown.total_advance_recovery : (breakdown.advance_recovery || 0))
     ) : 0
 
     const earningsItems = breakdown ? [
@@ -201,15 +201,22 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
                     amount: breakdown.absent_deduction 
                 },
                 { label: 'Half Day Deduction', amount: breakdown.half_day_deduction },
-                { label: 'Leave Deduction', amount: breakdown.leave_deduction || 0 },
               ]
             : [
                 { label: 'Absence Deduction', amount: breakdown.absence_deduction }
               ]
         ),
         { label: 'Other Deductions (PF/ESI/etc.)', amount: breakdown.other_deductions },
-        ...(Number(breakdown.advance_recovery) > 0 ? [{ label: 'Advance Recovery', amount: breakdown.advance_recovery }] : []),
-    ].filter(e => Number(e.amount) > 0 || ['Absent Deduction', 'Half Day Deduction', 'Leave Deduction'].some(lbl => e.label.startsWith(lbl))) : []
+        ...(breakdown.carry_forward_recovery !== undefined
+            ? [
+                ...(Number(breakdown.carry_forward_recovery) > 0 ? [{ label: 'Salary Deficit Carry-Forward', amount: breakdown.carry_forward_recovery }] : []),
+                ...(Number(breakdown.advance_recovery) > 0 ? [{ label: 'Advance Recovery', amount: breakdown.advance_recovery }] : []),
+              ]
+            : [
+                ...(Number(breakdown.advance_recovery) > 0 ? [{ label: 'Advance Recovery', amount: breakdown.advance_recovery }] : []),
+              ]
+        ),
+    ].filter(e => Number(e.amount) > 0 || ['Absent Deduction', 'Half Day Deduction'].some(lbl => e.label.startsWith(lbl))) : []
 
     // Convert number to words for Net Pay
     const numberToWords = (num: number): string => {

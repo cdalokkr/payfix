@@ -142,15 +142,22 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                     amount: breakdown.absent_deduction 
                 },
                 { label: 'Half Day Deduction', amount: breakdown.half_day_deduction },
-                { label: 'Leave Deduction', amount: breakdown.leave_deduction || 0 },
               ]
             : [
                 { label: 'Absence Deduction', amount: breakdown.absence_deduction }
               ]
         ),
         { label: 'Other Deductions', amount: breakdown.other_deductions },
-        ...(Number(breakdown.advance_recovery) > 0 ? [{ label: 'Advance Recovery', amount: breakdown.advance_recovery }] : []),
-    ].filter(e => Number(e.amount) > 0 || ['Absent Deduction', 'Half Day Deduction', 'Leave Deduction'].some(lbl => e.label.startsWith(lbl))) : []
+        ...(breakdown.carry_forward_recovery !== undefined
+            ? [
+                ...(Number(breakdown.carry_forward_recovery) > 0 ? [{ label: 'Salary Deficit Carry-Forward', amount: breakdown.carry_forward_recovery }] : []),
+                ...(Number(breakdown.advance_recovery) > 0 ? [{ label: 'Advance Recovery', amount: breakdown.advance_recovery }] : []),
+              ]
+            : [
+                ...(Number(breakdown.advance_recovery) > 0 ? [{ label: 'Advance Recovery', amount: breakdown.advance_recovery }] : []),
+              ]
+        ),
+    ].filter(e => Number(e.amount) > 0 || ['Absent Deduction', 'Half Day Deduction'].some(lbl => e.label.startsWith(lbl))) : []
 
     const totalEarnings = earningsItems.reduce((s, e) => s + Number(e.amount || 0), 0)
     const totalDeductions = deductionItems.reduce((s, e) => s + Number(e.amount || 0), 0)
@@ -212,15 +219,22 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                             amount: bd.absent_deduction 
                         },
                         { label: 'Half Day Deduction', amount: bd.half_day_deduction },
-                        { label: 'Leave Deduction', amount: bd.leave_deduction || 0 },
                       ]
                     : [
                         { label: 'Absence Deduction', amount: bd.absence_deduction }
                       ]
                 ),
                 { label: 'Other Deductions', amount: bd.other_deductions },
-                ...(Number(bd.advance_recovery) > 0 ? [{ label: 'Advance Recovery', amount: bd.advance_recovery }] : []),
-            ].filter(ev => Number(ev.amount) > 0 || ['Absent Deduction', 'Half Day Deduction', 'Leave Deduction'].some(lbl => ev.label.startsWith(lbl))) : [];
+                ...(bd.carry_forward_recovery !== undefined
+                    ? [
+                        ...(Number(bd.carry_forward_recovery) > 0 ? [{ label: 'Salary Deficit Carry-Forward', amount: bd.carry_forward_recovery }] : []),
+                        ...(Number(bd.advance_recovery) > 0 ? [{ label: 'Advance Recovery', amount: bd.advance_recovery }] : []),
+                      ]
+                    : [
+                        ...(Number(bd.advance_recovery) > 0 ? [{ label: 'Advance Recovery', amount: bd.advance_recovery }] : []),
+                      ]
+                ),
+            ].filter(ev => Number(ev.amount) > 0 || ['Absent Deduction', 'Half Day Deduction'].some(lbl => ev.label.startsWith(lbl))) : [];
             
             const tEarn = eItems.reduce((s, ev) => s + Number(ev.amount || 0), 0);
             const tDed = dItems.reduce((s, ev) => s + Number(ev.amount || 0), 0);
@@ -424,14 +438,21 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                                         ? [
                                             { label: 'Absent Ded.', amount: bd.absent_deduction },
                                             { label: 'Half Day Ded.', amount: bd.half_day_deduction },
-                                            { label: 'Leave Ded.', amount: bd.leave_deduction || 0 },
                                           ]
                                         : [
                                             { label: 'Absence Ded.', amount: bd.absence_deduction }
                                           ]
                                     ),
                                     { label: 'Other Ded.', amount: bd.other_deductions },
-                                    ...(Number(bd.advance_recovery) > 0 ? [{ label: 'Adv. Recovery', amount: bd.advance_recovery }] : []),
+                                    ...(bd.carry_forward_recovery !== undefined
+                                        ? [
+                                            ...(Number(bd.carry_forward_recovery) > 0 ? [{ label: 'Salary Deficit CF', amount: bd.carry_forward_recovery }] : []),
+                                            ...(Number(bd.advance_recovery) > 0 ? [{ label: 'Adv. Recovery', amount: bd.advance_recovery }] : []),
+                                          ]
+                                        : [
+                                            ...(Number(bd.advance_recovery) > 0 ? [{ label: 'Adv. Recovery', amount: bd.advance_recovery }] : []),
+                                          ]
+                                    ),
                                 ].filter(e => Number(e.amount) > 0) : []
                                 const cardTotalEarnings = cardEarnings.reduce((s: number, e: any) => s + Number(e.amount || 0), 0)
                                 const cardTotalDeductions = cardDeductions.reduce((s: number, e: any) => s + Number(e.amount || 0), 0)

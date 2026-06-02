@@ -1,5 +1,5 @@
 import { db } from '@/lib/db'
-import { attendance, activities, officeSettings, officeClosures, officeLocations, notifications, leaves } from '@/lib/db/schema'
+import { attendance, activities, officeSettings, officeClosures, officeLocations, notifications, leaves, profiles } from '@/lib/db/schema'
 import { eq, and, gte, lte, desc, sql, inArray } from 'drizzle-orm'
 import { throwAppError } from '@/lib/errors/app-errors'
 import { SmartCache } from '@/lib/cache/smart-cache'
@@ -22,31 +22,98 @@ export class AttendanceService {
         endDate?: string
         mode?: 'default' | 'all'
     }) {
-        let whereClause = []
+        // Resolve date range
+        let finalStartDate = startDate || getLocalDateIST()
+        let finalEndDate = endDate || getLocalDateIST()
 
-        // If employee, they can only see their own records (profileId must be provided by router)
-        if (role === 'employee') {
-            if (!profileId) throwAppError('UNAUTHORIZED', 'Profile ID is required for employee role')
-            whereClause.push(eq(attendance.profile_id, profileId))
-        }
-        // If not employee, only filter by profileId if it's explicitly requested
-        else if (profileId) {
-            whereClause.push(eq(attendance.profile_id, profileId))
-        }
-
-        // Mode logic
         if (mode === 'default' && !startDate && !endDate) {
-            const today = getLocalDateIST()
-            whereClause.push(
-                sql`(${attendance.date} = ${today} OR (${attendance.date} < ${today} AND ${attendance.status} = 'pending'))`
-            )
-        } else {
-            if (startDate) whereClause.push(gte(attendance.date, startDate))
-            if (endDate) whereClause.push(lte(attendance.date, endDate))
+            finalStartDate = getLocalDateIST()
+            finalEndDate = getLocalDateIST()
         }
 
-        const data = await db.query.attendance.findMany({
-            where: and(...whereClause),
+        // Parse date objects safely to construct the dates list
+        const startParts = finalStartDate.split('-').map(Number)
+        const endParts = finalEndDate.split('-').map(Number)
+        const start = new Date(startParts[0], startParts[1] - 1, startParts[2])
+        const end = new Date(endParts[0], endParts[1] - 1, endParts[2])
+
+        // Cap date range to prevent infinite loops (max 31 days)
+        const diffTime = Math.abs(end.getTime() - start.getTime())
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+        if (diffDays > 31) {
+            start.setDate(end.getDate() - 31)
+        }
+
+        const dates: string[] = []
+        const curr = new Date(start)
+        while (curr <= end) {
+            const y = curr.getFullYear()
+            const m = String(curr.getMonth() + 1).padStart(2, '0')
+            const d = String(curr.getDate()).padStart(2, '0')
+            dates.push(`${y}-${m}-${d}`)
+            curr.setDate(curr.getDate() + 1)
+        }
+
+        if (dates.length === 0) return []
+
+        // Resolve profiles
+        const isEmployee = role === 'employee'
+        const filterProfileId = isEmployee ? profileId : profileId
+        
+        if (isEmployee && !filterProfileId) {
+            throwAppError('UNAUTHORIZED', 'Profile ID is required for employee role')
+        }
+
+        const targetProfiles = await db.query.profiles.findMany({
+            where: filterProfileId ? eq(profiles.id, filterProfileId) : eq(profiles.status, 'active'),
+            columns: {
+                id: true,
+                email: true,
+                full_name: true,
+                role: true,
+                avatar_url: true,
+                sex: true
+            },
+            with: {
+                designation: {
+                    columns: {
+                        name: true
+                    }
+                }
+            }
+        })
+
+        if (targetProfiles.length === 0) return []
+        const employeeIds = targetProfiles.map(p => p.id)
+
+        // Fetch office settings & closures (holidays)
+        const settings = await SmartCache.getOfficeSettingsCached()
+        const offDays = settings?.off_days || [0]
+        const closures = await db.query.officeClosures.findMany({
+            where: and(
+                gte(officeClosures.date, dates[0]),
+                lte(officeClosures.date, dates[dates.length - 1])
+            )
+        })
+        const closuresMap = new Map(closures.map(c => [c.date, c.reason]))
+
+        // Fetch leaves (both approved and pending) for employees in range
+        const leavesList = await db.query.leaves.findMany({
+            where: and(
+                inArray(leaves.profile_id, employeeIds),
+                inArray(leaves.status, ['approved', 'pending']),
+                lte(leaves.start_date, dates[dates.length - 1]),
+                gte(leaves.end_date, dates[0])
+            )
+        })
+
+        // Fetch actual attendance records
+        const actualRecords = await db.query.attendance.findMany({
+            where: and(
+                inArray(attendance.profile_id, employeeIds),
+                gte(attendance.date, dates[0]),
+                lte(attendance.date, dates[dates.length - 1])
+            ),
             with: {
                 profile: {
                     columns: {
@@ -64,14 +131,91 @@ export class AttendanceService {
                         }
                     }
                 }
-            },
-            orderBy: [desc(attendance.date)]
+            }
         })
 
-        return data.map(item => ({
-            ...item,
-            working_hours: item.working_hours ? Number(item.working_hours) : null
-        }))
+        const actualMap = new Map<string, any>()
+        for (const r of actualRecords) {
+            actualMap.set(`${r.profile_id}_${r.date}`, r)
+        }
+
+        const results: any[] = []
+
+        for (const dateStr of dates) {
+            for (const profile of targetProfiles) {
+                const key = `${profile.id}_${dateStr}`
+                const actual = actualMap.get(key)
+                if (actual) {
+                    results.push({
+                        ...actual,
+                        working_hours: actual.working_hours ? Number(actual.working_hours) : null
+                    })
+                } else {
+                    const matchedLeave = leavesList.find(l => 
+                        l.profile_id === profile.id && 
+                        dateStr >= l.start_date && 
+                        dateStr <= l.end_date
+                    )
+                    const dateObj = new Date(dateStr)
+                    const dayOfWeek = dateObj.getDay()
+                    const isWeeklyOff = offDays.includes(dayOfWeek)
+                    const holidayReason = closuresMap.get(dateStr)
+
+                    let status: string = 'absent'
+                    let isHalfDay = false
+                    let remarks = 'System Generated (Absent)'
+
+                    if (matchedLeave) {
+                        status = 'leave'
+                        isHalfDay = matchedLeave.is_half_day || false
+                        remarks = `Leave: ${matchedLeave.leave_type || 'Casual'} (${matchedLeave.status})`
+                    } else if (holidayReason) {
+                        status = 'holiday'
+                        remarks = `Holiday: ${holidayReason}`
+                    } else if (isWeeklyOff) {
+                        status = 'weekly_off'
+                        remarks = 'Weekly Off'
+                    }
+
+                    results.push({
+                        id: `virtual_${profile.id}_${dateStr}`,
+                        profile_id: profile.id,
+                        date: dateStr,
+                        check_in: null,
+                        check_out: null,
+                        working_hours: null,
+                        status: status,
+                        remarks: remarks,
+                        verified_by: null,
+                        is_extra_day: false,
+                        is_half_day: isHalfDay,
+                        source: 'bulk',
+                        device_id: null,
+                        selfie_url: null,
+                        checkin_latitude: null,
+                        checkin_longitude: null,
+                        checkin_location_name: null,
+                        face_match_score: null,
+                        created_at: new Date(`${dateStr}T00:00:00.000Z`),
+                        updated_at: new Date(`${dateStr}T00:00:00.000Z`),
+                        profile: {
+                            email: profile.email,
+                            full_name: profile.full_name,
+                            role: profile.role,
+                            avatar_url: profile.avatar_url,
+                            sex: profile.sex,
+                            designation: profile.designation
+                        }
+                    })
+                }
+            }
+        }
+
+        // Sort: date descending, then full name ascending
+        return results.sort((a, b) => 
+            b.date.localeCompare(a.date) || 
+            (a.profile?.full_name || '').localeCompare(b.profile?.full_name || '')
+        )
     }
 
     /**
@@ -103,14 +247,8 @@ export class AttendanceService {
         const isOffDay = settings?.off_days?.includes(dayOfWeek)
         const isHoliday = closures?.some(c => c.date === today)
 
-        if (isHoliday) {
-            const holiday = closures.find(c => c.date === today)
-            throwAppError('HOLIDAY_RESTRICTION', `Office is closed for ${holiday?.reason || 'Holiday'}.`)
-        }
-
-        if (isOffDay && !isExtraDay) {
-            throwAppError('OFF_DAY_RESTRICTION', 'Today is a weekly off day. Please use "Extra Work" to clock in if authorized.')
-        }
+        // For off days and holidays, they are automatically clocked in as pending extra days
+        const autoExtraDay = isOffDay || isHoliday
 
         const existing = await db.query.attendance.findFirst({
             where: and(
@@ -174,7 +312,7 @@ export class AttendanceService {
             date: today,
             check_in: new Date(),
             status: 'pending',
-            is_extra_day: isExtraDay || false,
+            is_extra_day: isExtraDay || autoExtraDay,
             checkin_latitude: latitude ? String(latitude) : null,
             checkin_longitude: longitude ? String(longitude) : null,
             checkin_location_name: locationName
@@ -269,15 +407,72 @@ export class AttendanceService {
         verifiedBy: string
         verifierName: string
     }) {
+        let recordId = id
+        if (id.startsWith('virtual_')) {
+            const parts = id.split('_')
+            const profileId = parts[1]
+            const recordDate = parts[2]
+
+            const existing = await db.query.attendance.findFirst({
+                where: and(
+                    eq(attendance.profile_id, profileId),
+                    eq(attendance.date, recordDate)
+                )
+            })
+
+            if (existing) {
+                recordId = existing.id
+            } else {
+                const settings = await SmartCache.getOfficeSettingsCached()
+                const closures = await SmartCache.getOfficeClosuresCached()
+                const dayOfWeek = new Date(recordDate).getDay()
+                const isOffDay = settings?.off_days?.includes(dayOfWeek)
+                const isHoliday = closures?.some(c => c.date === recordDate)
+                const isExtraDay = (isOffDay || isHoliday) ? true : false
+
+                const [inserted] = await db.insert(attendance).values({
+                    profile_id: profileId,
+                    date: recordDate,
+                    check_in: null,
+                    check_out: null,
+                    status: 'pending',
+                    remarks: remarks || 'System generated from virtual log verification',
+                    source: 'bulk',
+                    is_extra_day: isExtraDay,
+                    is_half_day: isHalfDay ?? false,
+                    updated_at: new Date()
+                }).returning()
+                recordId = inserted.id
+            }
+        }
+
         const [data] = await db.update(attendance).set({
             status,
             remarks,
             is_half_day: isHalfDay ?? false,
             verified_by: verifiedBy,
             updated_at: new Date()
-        }).where(eq(attendance.id, id)).returning()
+        }).where(eq(attendance.id, recordId)).returning()
 
         if (!data) throwAppError('DATABASE_ERROR', 'Failed to verify attendance')
+
+        // Sync leaf records status in leaves table
+        const matchingLeaves = await db.query.leaves.findMany({
+            where: and(
+                eq(leaves.profile_id, data.profile_id),
+                lte(leaves.start_date, data.date),
+                gte(leaves.end_date, data.date)
+            )
+        })
+        for (const l of matchingLeaves) {
+            const newLeaveStatus = status === 'verified' ? 'approved' : 'rejected'
+            await db.update(leaves).set({
+                status: newLeaveStatus,
+                remarks: remarks || `Leave status updated to ${newLeaveStatus} via attendance verification by ${verifierName}`,
+                approved_by: verifiedBy,
+                updated_at: new Date()
+            }).where(eq(leaves.id, l.id))
+        }
 
         await db.insert(activities).values({
             user_id: data.profile_id,
@@ -305,14 +500,79 @@ export class AttendanceService {
         verifiedBy: string
         verifierName: string
     }) {
+        const resolvedIds: string[] = []
+
+        for (const id of ids) {
+            if (id.startsWith('virtual_')) {
+                const parts = id.split('_')
+                const profileId = parts[1]
+                const recordDate = parts[2]
+
+                const existing = await db.query.attendance.findFirst({
+                    where: and(
+                        eq(attendance.profile_id, profileId),
+                        eq(attendance.date, recordDate)
+                    )
+                })
+
+                if (existing) {
+                    resolvedIds.push(existing.id)
+                } else {
+                    const settings = await SmartCache.getOfficeSettingsCached()
+                    const closures = await SmartCache.getOfficeClosuresCached()
+                    const dayOfWeek = new Date(recordDate).getDay()
+                    const isOffDay = settings?.off_days?.includes(dayOfWeek)
+                    const isHoliday = closures?.some(c => c.date === recordDate)
+                    const isExtraDay = (isOffDay || isHoliday) ? true : false
+
+                    const [inserted] = await db.insert(attendance).values({
+                        profile_id: profileId,
+                        date: recordDate,
+                        check_in: null,
+                        check_out: null,
+                        status: 'pending',
+                        remarks: remarks || 'System generated from virtual log bulk verification',
+                        source: 'bulk',
+                        is_extra_day: isExtraDay,
+                        updated_at: new Date()
+                    }).returning()
+                    resolvedIds.push(inserted.id)
+                }
+            } else {
+                resolvedIds.push(id)
+            }
+        }
+
+        if (resolvedIds.length === 0) return []
+
         const updatedRecords = await db.update(attendance).set({
             status,
             remarks,
             verified_by: verifiedBy,
             updated_at: new Date()
-        }).where(inArray(attendance.id, ids)).returning()
+        }).where(inArray(attendance.id, resolvedIds)).returning()
 
         if (!updatedRecords.length) throwAppError('NOT_FOUND', 'No records found to update')
+
+        // Sync leaf records status in leaves table
+        for (const r of updatedRecords) {
+            const matchingLeaves = await db.query.leaves.findMany({
+                where: and(
+                    eq(leaves.profile_id, r.profile_id),
+                    lte(leaves.start_date, r.date),
+                    gte(leaves.end_date, r.date)
+                )
+            })
+            for (const l of matchingLeaves) {
+                const newLeaveStatus = status === 'verified' ? 'approved' : 'rejected'
+                await db.update(leaves).set({
+                    status: newLeaveStatus,
+                    remarks: remarks || `Leave status updated to ${newLeaveStatus} via bulk attendance verification by ${verifierName}`,
+                    approved_by: verifiedBy,
+                    updated_at: new Date()
+                }).where(eq(leaves.id, l.id))
+            }
+        }
 
         await db.insert(activities).values({
             user_id: verifiedBy,
@@ -346,15 +606,38 @@ export class AttendanceService {
         updatedBy: string
         updaterName: string
     }) {
-        const existing = await db.query.attendance.findFirst({
-            where: eq(attendance.id, id)
-        })
+        let recordId = id
+        let recordDate = ''
+        let profileId = ''
 
-        if (!existing) {
-            throwAppError('NOT_FOUND', 'Attendance record not found')
+        if (id.startsWith('virtual_')) {
+            const parts = id.split('_')
+            profileId = parts[1]
+            recordDate = parts[2]
+
+            const dbRecord = await db.query.attendance.findFirst({
+                where: and(
+                    eq(attendance.profile_id, profileId),
+                    eq(attendance.date, recordDate)
+                )
+            })
+
+            if (dbRecord) {
+                recordId = dbRecord.id
+                recordDate = dbRecord.date
+            }
+        } else {
+            const dbRecord = await db.query.attendance.findFirst({
+                where: eq(attendance.id, id)
+            })
+            if (!dbRecord) {
+                throwAppError('NOT_FOUND', 'Attendance record not found')
+            }
+            recordId = dbRecord.id
+            recordDate = dbRecord.date
+            profileId = dbRecord.profile_id
         }
 
-        const recordDate = existing!.date
         const updateData: any = {
             updated_at: new Date()
         }
@@ -378,12 +661,56 @@ export class AttendanceService {
         if (isHalfDay !== undefined) updateData.is_half_day = isHalfDay
         if (remarks) updateData.remarks = remarks
 
-        const [data] = await db.update(attendance)
-            .set(updateData)
-            .where(eq(attendance.id, id))
-            .returning()
+        let data: any
+
+        if (id.startsWith('virtual_') && recordId === id) {
+            const settings = await SmartCache.getOfficeSettingsCached()
+            const closures = await SmartCache.getOfficeClosuresCached()
+            const dayOfWeek = new Date(recordDate).getDay()
+            const isOffDay = settings?.off_days?.includes(dayOfWeek)
+            const isHoliday = closures?.some(c => c.date === recordDate)
+            const isExtraDay = (isOffDay || isHoliday) ? true : false
+
+            const [inserted] = await db.insert(attendance).values({
+                profile_id: profileId,
+                date: recordDate,
+                check_in: updateData.check_in || null,
+                check_out: updateData.check_out || null,
+                status: status || 'pending',
+                is_half_day: isHalfDay ?? false,
+                is_extra_day: isExtraDay,
+                remarks: remarks || `Manually created from virtual log by ${updaterName}`,
+                source: 'manual',
+                updated_at: new Date()
+            }).returning()
+            data = inserted
+        } else {
+            const [updated] = await db.update(attendance)
+                .set(updateData)
+                .where(eq(attendance.id, recordId))
+                .returning()
+            data = updated
+        }
 
         if (!data) throwAppError('DATABASE_ERROR', 'Failed to update attendance record')
+
+        // Sync leaves table state
+        const matchingLeaves = await db.query.leaves.findMany({
+            where: and(
+                eq(leaves.profile_id, data.profile_id),
+                lte(leaves.start_date, data.date),
+                gte(leaves.end_date, data.date)
+            )
+        })
+        for (const l of matchingLeaves) {
+            const newLeaveStatus = (data.status === 'verified' || data.status === 'leave') ? 'approved' : 'rejected'
+            await db.update(leaves).set({
+                status: newLeaveStatus,
+                remarks: remarks || `Leave status updated to ${newLeaveStatus} via manual attendance update by ${updaterName}`,
+                approved_by: updatedBy,
+                updated_at: new Date()
+            }).where(eq(leaves.id, l.id))
+        }
 
         await db.insert(activities).values({
             user_id: data.profile_id,
