@@ -310,11 +310,12 @@ export const attendanceRouter = router({
 
     manualUpdate: moderatorProcedure
         .input(z.object({
-            id: z.string().uuid(),
-            checkIn: z.string().optional(),
-            checkOut: z.string().optional(),
+            id: z.string(),
+            checkIn: z.string().nullable().optional(),
+            checkOut: z.string().nullable().optional(),
             status: z.enum(['pending', 'verified', 'rejected']).optional(),
             isHalfDay: z.boolean().optional(),
+            isExtraDay: z.boolean().optional(),
             remarks: z.string().optional(),
         }))
         .mutation(async ({ ctx, input }) => {

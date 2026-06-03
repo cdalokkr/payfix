@@ -14,14 +14,14 @@ import { cn } from "@/lib/utils"
 import { useSharedManagementChannel } from "@/hooks/use-shared-management-channel"
 import { useProfile } from "@/lib/context/profile-context"
 
-import { createAttendanceColumns } from "./attendance-columns"
+import { createAttendanceColumns, getRecordDayType } from "./attendance-columns"
 import { DataTable } from "@/components/ui/data-table"
 import { ProfileInfoCell } from "@/components/dashboard/profile-info-cell"
 import { format } from "date-fns"
 import { DateRange } from "react-day-picker"
 import { generateCSV, generatePDF, downloadFile } from "@/lib/report-utils"
 import { AttendanceTableToolbar } from "./attendance-table-toolbar"
-import { AttendanceEditSheet } from "./attendance-edit-sheet"
+import { AttendanceEditDialog } from "./attendance-edit-dialog"
 import { BulkDailyUpload } from "./BulkDailyUpload"
 import { CardShell } from "./CardShell"
 import { Badge } from "@/components/ui/badge"
@@ -40,44 +40,6 @@ function calculateScheduledHours(checkIn: string, checkOut: string): number {
     const inMinutes = inH * 60 + inM
     const outMinutes = outH * 60 + outM
     return (outMinutes - inMinutes) / 60
-}
-
-function getRecordDayType(record: any): 'Present' | 'Leave' | 'Absent' | 'Weekly Off' | 'Holiday' | 'Extra Day' | 'Half Day' {
-    const status = record.status as string;
-
-    if (status === 'verified' || status === 'rejected' || status === 'pending') {
-        if (record.check_in || record.check_out) {
-            if (record.is_extra_day) {
-                return 'Extra Day';
-            } else if (record.is_half_day) {
-                return 'Half Day';
-            } else {
-                return 'Present';
-            }
-        } else {
-            const remarks = (record.remarks || '').toLowerCase();
-            if (remarks.includes('leave')) {
-                return 'Leave';
-            } else if (remarks.includes('weekly off') || remarks.includes('weekly_off')) {
-                return 'Weekly Off';
-            } else if (remarks.includes('holiday')) {
-                return 'Holiday';
-            } else {
-                return 'Absent';
-            }
-        }
-    } else {
-        // Virtual records
-        if (status === 'leave') {
-            return 'Leave';
-        } else if (status === 'weekly_off') {
-            return 'Weekly Off';
-        } else if (status === 'holiday') {
-            return 'Holiday';
-        } else {
-            return 'Absent';
-        }
-    }
 }
 
 export function AdminAttendanceVerification() {
@@ -182,6 +144,7 @@ export function AdminAttendanceVerification() {
         {
             staleTime: 0, // Always consider stale so invalidation triggers immediate refetch
             refetchOnWindowFocus: false, // Rely on real-time instead
+            placeholderData: (prev) => prev, // Retain old data on screen while background refetch runs
         }
     )
     const { data: settings } = trpc.attendance.getOfficeSettings.useQuery()
@@ -578,13 +541,14 @@ export function AdminAttendanceVerification() {
                 pending++; // pending or virtual
             }
             
+            if (a.is_half_day) halfDay++;
+            if (a.is_extra_day) extra_day++;
+            
             if (dayType === 'Present') present++;
-            if (dayType === 'Half Day') halfDay++;
             if (dayType === 'Weekly Off') weekly_off++;
             if (dayType === 'Leave') leave++;
             if (dayType === 'Absent') absent++;
             if (dayType === 'Holiday') holiday++;
-            if (dayType === 'Extra Day') extra_day++;
             
             if (a.check_in && !a.check_out) noOfficeOut++;
         });
@@ -676,11 +640,13 @@ export function AdminAttendanceVerification() {
                 }
             >
                 <div className="relative">
-                    {isFiltering && (
+                    {(isFiltering || (isFetching && !isLoading)) && (
                         <div className="absolute inset-0 bg-white/50 dark:bg-slate-950/50 backdrop-blur-[1px] flex items-center justify-center z-10 rounded-xl transition-all duration-200">
                             <div className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-900 shadow-xl border border-slate-100 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-150">
                                 <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                                <span className="text-[10px] font-bold text-muted-foreground">Filtering logs...</span>
+                                <span className="text-[10px] font-bold text-muted-foreground">
+                                    {isFiltering ? "Filtering logs..." : "Refreshing attendance logs..."}
+                                </span>
                             </div>
                         </div>
                     )}
@@ -718,7 +684,7 @@ export function AdminAttendanceVerification() {
                 </div>
             </CardShell>
 
-            <AttendanceEditSheet
+            <AttendanceEditDialog
                 isOpen={isEditOpen}
                 onOpenChange={handleOpenChange}
                 record={selectedRecord}
@@ -731,7 +697,8 @@ export function AdminAttendanceVerification() {
                         checkOut: data.checkOut,
                         status: data.status,
                         remarks: data.remarks,
-                        isHalfDay: data.isHalfDay
+                        isHalfDay: data.isHalfDay,
+                        isExtraDay: data.isExtraDay
                     })
                 }}
             />

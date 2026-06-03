@@ -11,6 +11,83 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Checkbox } from "@/components/ui/checkbox"
 import { CheckCircle2, Clock, XCircle } from "lucide-react"
 
+export type DayType = 
+    | 'Present' 
+    | 'Leave' 
+    | 'Absent' 
+    | 'Weekly Off' 
+    | 'Holiday' 
+    | 'Extra Day' 
+    | 'Half Day' 
+    | 'Not marked' 
+    | 'Marked In' 
+    | 'Marked Out' 
+    | 'Applied Leave';
+
+export function getRecordDayType(record: any): DayType {
+    const status = record.status as string; // 'verified', 'rejected', 'pending', or virtual status
+    const hasCheckIn = !!record.check_in;
+    const hasCheckOut = !!record.check_out;
+
+    const isVerifiedOrRejected = status === 'verified' || status === 'rejected';
+
+    if (isVerifiedOrRejected) {
+        if (hasCheckIn || hasCheckOut) {
+            if (record.is_extra_day) {
+                return 'Extra Day';
+            } else if (record.is_half_day) {
+                return 'Half Day';
+            } else {
+                return 'Present';
+            }
+        } else {
+            const remarks = (record.remarks || '').toLowerCase();
+            if (remarks.includes('leave')) {
+                return 'Leave';
+            } else if (remarks.includes('weekly off') || remarks.includes('weekly_off')) {
+                return 'Weekly Off';
+            } else if (remarks.includes('holiday')) {
+                return 'Holiday';
+            } else {
+                return 'Absent';
+            }
+        }
+    } else {
+        // Pending / Unverified
+        if (hasCheckIn && hasCheckOut) {
+            return 'Marked Out';
+        } else if (hasCheckIn) {
+            return 'Marked In';
+        }
+
+        const isVirtual = typeof record.id === 'string' && record.id.startsWith('virtual_');
+        const remarks = (record.remarks || '').toLowerCase();
+
+        if (isVirtual) {
+            if (status === 'leave') {
+                return 'Applied Leave';
+            } else if (status === 'holiday') {
+                return 'Holiday';
+            } else if (status === 'weekly_off') {
+                return 'Weekly Off';
+            } else {
+                return 'Not marked';
+            }
+        } else {
+            // Actual record is pending
+            if (remarks.includes('leave')) {
+                return 'Applied Leave';
+            } else if (remarks.includes('weekly off') || remarks.includes('weekly_off')) {
+                return 'Weekly Off';
+            } else if (remarks.includes('holiday')) {
+                return 'Holiday';
+            } else {
+                return 'Not marked';
+            }
+        }
+    }
+}
+
 interface AttendanceColumnsProps {
     onVerify: (record: any) => void
     onReject: (record: any) => void
@@ -155,49 +232,12 @@ export function createAttendanceColumns({
             header: "Status",
             cell: ({ row }) => {
                 const record = row.original;
-                
-                // Determine dayType and verificationState
-                let verificationState: 'pending' | 'verified' | 'rejected' = 'pending';
-                let dayType: 'Present' | 'Leave' | 'Absent' | 'Weekly Off' | 'Holiday' | 'Extra Day' | 'Half Day' = 'Absent';
-
                 const status = record.status as string;
-
-                if (status === 'verified' || status === 'rejected' || status === 'pending') {
-                    verificationState = status;
-                    
-                    if (record.check_in || record.check_out) {
-                        if (record.is_extra_day) {
-                            dayType = 'Extra Day';
-                        } else if (record.is_half_day) {
-                            dayType = 'Half Day';
-                        } else {
-                            dayType = 'Present';
-                        }
-                    } else {
-                        const remarks = (record.remarks || '').toLowerCase();
-                        if (remarks.includes('leave')) {
-                            dayType = 'Leave';
-                        } else if (remarks.includes('weekly off') || remarks.includes('weekly_off')) {
-                            dayType = 'Weekly Off';
-                        } else if (remarks.includes('holiday')) {
-                            dayType = 'Holiday';
-                        } else {
-                            dayType = 'Absent';
-                        }
-                    }
-                } else {
-                    // Virtual records
-                    verificationState = 'pending';
-                    if (status === 'leave') {
-                        dayType = 'Leave';
-                    } else if (status === 'weekly_off') {
-                        dayType = 'Weekly Off';
-                    } else if (status === 'holiday') {
-                        dayType = 'Holiday';
-                    } else {
-                        dayType = 'Absent';
-                    }
-                }
+                const dayType = getRecordDayType(record);
+                
+                const verificationState: 'pending' | 'verified' | 'rejected' = 
+                    status === 'verified' ? 'verified' : 
+                    status === 'rejected' ? 'rejected' : 'pending';
 
                 const dayTypeStyles: Record<string, string> = {
                     'Present': "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/30",
@@ -207,6 +247,10 @@ export function createAttendanceColumns({
                     'Extra Day': "bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-900/30",
                     'Half Day': "bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 border-indigo-200 dark:border-indigo-900/30",
                     'Absent': "bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-450 border-rose-200 dark:border-rose-900/30",
+                    'Not marked': "bg-zinc-105 dark:bg-zinc-900/40 text-zinc-650 dark:text-zinc-400 border-zinc-200/50 dark:border-zinc-800/40",
+                    'Marked In': "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-900/30",
+                    'Marked Out': "bg-teal-50 dark:bg-teal-950/30 text-teal-700 dark:text-teal-400 border-teal-200 dark:border-teal-900/30",
+                    'Applied Leave': "bg-yellow-50 dark:bg-yellow-950/30 text-yellow-800 dark:text-yellow-400 border-yellow-200 dark:border-yellow-900/30",
                 };
 
                 return (

@@ -340,6 +340,10 @@ export function AttendanceTableToolbar<TData>({
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All</SelectItem>
+                                <SelectItem value="Not marked">Not marked</SelectItem>
+                                <SelectItem value="Marked In">Marked In</SelectItem>
+                                <SelectItem value="Marked Out">Marked Out</SelectItem>
+                                <SelectItem value="Applied Leave">Applied Leave</SelectItem>
                                 <SelectItem value="Present">Present</SelectItem>
                                 <SelectItem value="Half Day">Half Day</SelectItem>
                                 <SelectItem value="Weekly Off">Weekly Off</SelectItem>

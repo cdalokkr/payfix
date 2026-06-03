@@ -89,12 +89,8 @@ export class AttendanceService {
         // Fetch office settings & closures (holidays)
         const settings = await SmartCache.getOfficeSettingsCached()
         const offDays = settings?.off_days || [0]
-        const closures = await db.query.officeClosures.findMany({
-            where: and(
-                gte(officeClosures.date, dates[0]),
-                lte(officeClosures.date, dates[dates.length - 1])
-            )
-        })
+        const allClosures = await SmartCache.getOfficeClosuresCached()
+        const closures = allClosures.filter(c => c.date >= dates[0] && c.date <= dates[dates.length - 1])
         const closuresMap = new Map(closures.map(c => [c.date, c.reason]))
 
         // Fetch leaves (both approved and pending) for employees in range
@@ -595,15 +591,17 @@ export class AttendanceService {
         checkOut,
         status,
         isHalfDay,
+        isExtraDay,
         remarks,
         updatedBy,
         updaterName
     }: {
         id: string
-        checkIn?: string
-        checkOut?: string
+        checkIn?: string | null
+        checkOut?: string | null
         status?: 'pending' | 'verified' | 'rejected'
         isHalfDay?: boolean
+        isExtraDay?: boolean
         remarks?: string
         updatedBy: string
         updaterName: string
@@ -644,23 +642,32 @@ export class AttendanceService {
             updated_at: new Date()
         }
 
-        if (checkIn) {
-            const parts = checkIn.split(':')
-            const h = parts[0].padStart(2, '0')
-            const m = (parts[1] || '00').padStart(2, '0')
-            updateData.check_in = new Date(`${recordDate}T${h}:${m}:00+05:30`)
+        if (checkIn !== undefined) {
+            if (!checkIn) {
+                updateData.check_in = null
+            } else {
+                const parts = checkIn.split(':')
+                const h = parts[0].padStart(2, '0')
+                const m = (parts[1] || '00').padStart(2, '0')
+                updateData.check_in = new Date(`${recordDate}T${h}:${m}:00+05:30`)
+            }
         }
 
-        if (checkOut) {
-            const parts = checkOut.split(':')
-            const h = parts[0].padStart(2, '0')
-            const m = (parts[1] || '00').padStart(2, '0')
-            updateData.check_out = new Date(`${recordDate}T${h}:${m}:00+05:30`)
+        if (checkOut !== undefined) {
+            if (!checkOut) {
+                updateData.check_out = null
+            } else {
+                const parts = checkOut.split(':')
+                const h = parts[0].padStart(2, '0')
+                const m = (parts[1] || '00').padStart(2, '0')
+                updateData.check_out = new Date(`${recordDate}T${h}:${m}:00+05:30`)
+            }
         }
 
         updateData.source = 'manual'
         if (status) updateData.status = status
         if (isHalfDay !== undefined) updateData.is_half_day = isHalfDay
+        if (isExtraDay !== undefined) updateData.is_extra_day = isExtraDay
         if (remarks) updateData.remarks = remarks
 
         let data: any
@@ -671,7 +678,9 @@ export class AttendanceService {
             const dayOfWeek = new Date(recordDate).getDay()
             const isOffDay = settings?.off_days?.includes(dayOfWeek)
             const isHoliday = closures?.some(c => c.date === recordDate)
-            const isExtraDay = (isOffDay || isHoliday) ? true : false
+            const autoExtraDay = (isOffDay || isHoliday) ? true : false
+
+            const resolvedExtraDay = isExtraDay !== undefined ? isExtraDay : autoExtraDay
 
             const [inserted] = await db.insert(attendance).values({
                 profile_id: profileId,
@@ -680,7 +689,7 @@ export class AttendanceService {
                 check_out: updateData.check_out || null,
                 status: status || 'pending',
                 is_half_day: isHalfDay ?? false,
-                is_extra_day: isExtraDay,
+                is_extra_day: resolvedExtraDay,
                 remarks: remarks || `Manually created from virtual log by ${updaterName}`,
                 source: 'manual',
                 updated_at: new Date()
