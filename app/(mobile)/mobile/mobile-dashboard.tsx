@@ -85,7 +85,7 @@ const quickActions = [
 export function MobileDashboard({ profile, todayAttendance: initialAttendance }: MobileDashboardProps) {
     const { isPwa, isMobile, isReady } = usePwaCheck()
 
-    // Initialize from sessionStorage if available (persists across navigation)
+    // Initialize from sessionStorage if available (persists across navigation) and not expired
     const [geofenceResult, setGeofenceResult] = useState<{
         isAllowed: boolean
         nearestOffice?: { id: string; name: string; distance: number }
@@ -93,15 +93,32 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
     } | null>(() => {
         if (typeof window !== 'undefined') {
             const cached = sessionStorage.getItem('mobileGeofenceResult')
-            return cached ? JSON.parse(cached) : null
+            const cachedTime = sessionStorage.getItem('mobileGeofenceTimestamp')
+            if (cached && cachedTime) {
+                const age = Date.now() - Number(cachedTime)
+                if (age < 30000) { // 30 seconds cache validity
+                    return JSON.parse(cached)
+                }
+            }
+            // Clear expired or absent cache
+            sessionStorage.removeItem('mobileGeofenceResult')
+            sessionStorage.removeItem('mobileUserCoords')
+            sessionStorage.removeItem('mobileGeofenceTimestamp')
         }
         return null
     })
 
     const [isLocChecking, setIsLocChecking] = useState(() => {
-        // If we have cached geofence result, don't show loading
+        // If we have valid cached geofence result, don't show loading
         if (typeof window !== 'undefined') {
-            return !sessionStorage.getItem('mobileGeofenceResult')
+            const cached = sessionStorage.getItem('mobileGeofenceResult')
+            const cachedTime = sessionStorage.getItem('mobileGeofenceTimestamp')
+            if (cached && cachedTime) {
+                const age = Date.now() - Number(cachedTime)
+                if (age < 30000) {
+                    return false
+                }
+            }
         }
         return true
     })
@@ -109,7 +126,13 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
     const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(() => {
         if (typeof window !== 'undefined') {
             const cached = sessionStorage.getItem('mobileUserCoords')
-            return cached ? JSON.parse(cached) : null
+            const cachedTime = sessionStorage.getItem('mobileGeofenceTimestamp')
+            if (cached && cachedTime) {
+                const age = Date.now() - Number(cachedTime)
+                if (age < 30000) {
+                    return JSON.parse(cached)
+                }
+            }
         }
         return null
     })
@@ -158,10 +181,15 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
                 return
             }
 
-            // Show loading spinner only if we don't have any cached geofence result yet
-            const hasCache = sessionStorage.getItem('mobileGeofenceResult')
-            if (!hasCache) {
-                setIsLocChecking(true)
+            // Since we are performing a fresh check, reset old location details and show loading spinner
+            setGeofenceResult(null)
+            setUserCoords(null)
+            setIsLocChecking(true)
+
+            if (typeof window !== 'undefined') {
+                sessionStorage.removeItem('mobileGeofenceResult')
+                sessionStorage.removeItem('mobileUserCoords')
+                sessionStorage.removeItem('mobileGeofenceTimestamp')
             }
 
             if (!navigator.geolocation) {
