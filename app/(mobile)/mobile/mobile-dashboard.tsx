@@ -140,10 +140,16 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
 
     useEffect(() => {
         const fetchLocation = async () => {
-            // Skip if already have cached location from sessionStorage
-            if (geofenceResult) {
-                setIsLocChecking(false)
-                return
+            // Check if we have a valid recent cache (less than 30 seconds old)
+            if (typeof window !== 'undefined') {
+                const cachedTime = sessionStorage.getItem('mobileGeofenceTimestamp')
+                if (cachedTime) {
+                    const age = Date.now() - Number(cachedTime)
+                    if (age < 30000) { // 30 seconds cache validity
+                        setIsLocChecking(false)
+                        return
+                    }
+                }
             }
 
             // Only fetch if PWA (or Employee on mobile browser) and Profile photo is updated
@@ -152,7 +158,12 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
                 return
             }
 
-            setIsLocChecking(true)
+            // Show loading spinner only if we don't have any cached geofence result yet
+            const hasCache = sessionStorage.getItem('mobileGeofenceResult')
+            if (!hasCache) {
+                setIsLocChecking(true)
+            }
+
             if (!navigator.geolocation) {
                 setIsLocChecking(false)
                 return
@@ -174,8 +185,9 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
                             longitude: pos.coords.longitude
                         })
                         setGeofenceResult(result)
-                        // Cache in sessionStorage for navigation persistence
+                        // Cache in sessionStorage with a timestamp for background revalidation
                         sessionStorage.setItem('mobileGeofenceResult', JSON.stringify(result))
+                        sessionStorage.setItem('mobileGeofenceTimestamp', Date.now().toString())
                     } catch (err) {
                         console.error('Geofence check failed:', err)
                     } finally {
@@ -190,7 +202,7 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
         if (isReady) {
             fetchLocation()
         }
-    }, [utils, isPwa, isReady, hasNoPhoto, geofenceResult])
+    }, [utils, isPwa, isReady, hasNoPhoto])
 
     const hasCheckedIn = !!todayAttendance?.check_in
     const hasCheckedOut = !!todayAttendance?.check_out
