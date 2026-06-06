@@ -223,7 +223,7 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
                     }
                 },
                 () => setIsLocChecking(false),
-                { enableHighAccuracy: true, timeout: 10000 }
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
             )
         }
 
