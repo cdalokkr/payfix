@@ -55,6 +55,7 @@ export function MobileLeavesClient({ profile }: { profile: any }) {
 
     // Fetch leaves data
     const { data: leaves = [], isLoading, isFetching } = trpc.attendance.getLeaves.useQuery({
+        profileId: profile?.id,
         status: 'all'
     })
 

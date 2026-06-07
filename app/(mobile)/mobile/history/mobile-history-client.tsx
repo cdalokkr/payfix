@@ -70,6 +70,7 @@ export function MobileHistoryClient({ profile }: { profile: any }) {
     })
 
     const { data: leaves = [], isLoading: isLeavesLoading } = trpc.attendance.getLeaves.useQuery({
+        profileId: profile?.id,
         status: 'approved'
     })
 

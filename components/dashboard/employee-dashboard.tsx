@@ -85,7 +85,10 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
 
     // 2. Fetch Personal Leave Summary
     const { data: leavesList, isLoading: leavesLoading } = trpc.attendance.getLeaves.useQuery(
-        { status: 'all' },
+        {
+            profileId: profile?.id,
+            status: 'all'
+        },
         {
             staleTime: 30000,
             refetchOnWindowFocus: false,

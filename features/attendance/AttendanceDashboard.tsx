@@ -61,6 +61,7 @@ export function AttendanceDashboard() {
     })
 
     const { data: leaves } = trpc.attendance.getLeaves.useQuery({
+        profileId: profile?.id,
         status: 'approved'
     })
 

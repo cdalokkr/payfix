@@ -182,6 +182,20 @@ export const adminNavItems: NavGroup[] = [
         requiredRole: "admin",
         description: "Your profile and account settings"
       },
+      {
+        title: "Attendance History",
+        href: "/employee/attendance-history",
+        icon: "CalendarCheck",
+        moduleId: "attendance",
+        description: "View your personal attendance history"
+      },
+      {
+        title: "My Leaves",
+        href: "/employee/payroll/leaves",
+        icon: "CalendarOff",
+        moduleId: "leaves",
+        description: "Apply for leaves and track status"
+      },
     ]
   }
 ];
@@ -317,9 +331,16 @@ export const moderatorNavItems: NavGroup[] = [
       {
         title: "Attendance History",
         href: "/employee/attendance-history",
-        icon: "CalendarDays",
+        icon: "CalendarCheck",
         moduleId: "attendance",
         description: "View your personal attendance history"
+      },
+      {
+        title: "My Leaves",
+        href: "/employee/payroll/leaves",
+        icon: "CalendarOff",
+        moduleId: "leaves",
+        description: "Apply for leaves and track status"
       },
     ]
   }

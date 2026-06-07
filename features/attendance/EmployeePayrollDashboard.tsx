@@ -37,6 +37,7 @@ export function EmployeePayrollDashboard() {
     })
 
     const { data: leaves, isLoading: leavesLoading, isFetching: leavesFetching } = trpc.attendance.getLeaves.useQuery({
+        profileId: profile?.id,
         status: 'all'
     })
 

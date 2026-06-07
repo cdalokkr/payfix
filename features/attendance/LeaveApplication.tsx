@@ -15,8 +15,10 @@ import { format } from "date-fns"
 import { Plane, Plus, Loader2 } from "lucide-react"
 import { ModernDialog, ModernDialogContent, ModernDialogHeader, ModernDialogTitle, ModernDialogDescription } from "@/components/ui/modern-dialog"
 import { cn } from "@/lib/utils"
+import { useProfile } from "@/lib/context/profile-context"
 
 export function LeaveApplication() {
+    const { profile } = useProfile()
     const [isOpen, setIsOpen] = useState(false)
     const [leaveType, setLeaveType] = useState<string>("")
     const [startDate, setStartDate] = useState("")
@@ -26,7 +28,9 @@ export function LeaveApplication() {
     const [halfDayPeriod, setHalfDayPeriod] = useState<"morning" | "afternoon">("morning")
 
     const utils = trpc.useUtils()
-    const { data: leaves, isLoading: isLeavesLoading } = trpc.attendance.getLeaves.useQuery({})
+    const { data: leaves, isLoading: isLeavesLoading } = trpc.attendance.getLeaves.useQuery({
+        profileId: profile?.id
+    })
 
     const applyMutation = trpc.attendance.applyLeave.useMutation({
         onSuccess: () => {
