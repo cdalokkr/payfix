@@ -253,8 +253,22 @@ export async function proxy(request: NextRequest) {
         if (profile?.role === 'admin') {
             return redirectWithCookies('/admin')
         } else if (profile?.role === 'moderator') {
+            const isStandalonePwa = request.cookies.get('pwa_standalone')?.value === 'true'
+            if (isStandalonePwa) {
+                return redirectWithCookies('/mobile')
+            }
             return redirectWithCookies('/moderator')
         } else if (profile?.role === 'employee') {
+            const userAgent = request.headers.get('user-agent') || ''
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile/i.test(userAgent)
+            const isStandalonePwa = request.cookies.get('pwa_standalone')?.value === 'true'
+            const paramDesktop = request.nextUrl.searchParams.get('desktop')
+            const cookieDesktop = request.cookies.get('desktop_mode')?.value
+            const wantsDesktop = !isStandalonePwa && (paramDesktop === 'true' || (paramDesktop !== 'false' && cookieDesktop === 'true'))
+
+            if (isMobile && !wantsDesktop) {
+                return redirectWithCookies('/mobile')
+            }
             return redirectWithCookies('/employee')
         } else {
             // Fallback to moderator dashboard for unknown roles
@@ -296,11 +310,31 @@ export async function proxy(request: NextRequest) {
         }
     }
 
-    // Also handle /mobile route auth (uses employee check)
+    // Also handle /mobile route auth and role-based redirects
     const isMobileRoute = pathname.startsWith('/mobile')
     if (!user && isMobileRoute) {
         console.warn(`[PROXY-AUTH] Redirecting unauthenticated request on mobile route ${pathname} to /login`)
         return redirectWithCookies('/login')
+    }
+
+    if (user && isMobileRoute) {
+        if (!profile) {
+            console.warn(`[PROXY-AUTH] Redirecting to /login because no profile was found for authenticated user: ${user.id}`)
+            return redirectWithCookies('/login')
+        }
+
+        // Moderator is redirected to /moderator if they are accessing /mobile from a browser (not standalone PWA)
+        if (profile.role === 'moderator') {
+            const isStandalonePwa = request.cookies.get('pwa_standalone')?.value === 'true'
+            if (!isStandalonePwa) {
+                console.log(`[PROXY-MOBILE] Moderator (${user.id}) on mobile browser accessing mobile route ${pathname}, redirecting to /moderator for backoffice access`)
+                return redirectWithCookies('/moderator')
+            }
+        } else if (profile.role !== 'employee') {
+            // Other roles (like admin) are not allowed on /mobile, redirect to their home
+            console.log(`[PROXY-MOBILE] Non-mobile role ${profile.role} accessing mobile route ${pathname}, redirecting to /${profile.role}`)
+            return redirectWithCookies('/' + profile.role)
+        }
     }
 
     // Status and Role-based access control for authenticated users
