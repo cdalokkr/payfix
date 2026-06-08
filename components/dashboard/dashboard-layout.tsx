@@ -191,7 +191,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   // Use cached profile as initial data and always fetch fresh data in background
   const { data: profile, isLoading: profileLoading, isError: profileError } = trpc.profile.get.useQuery(undefined, {
-    initialData: initialProfile || undefined, // Use cached profile from localStorage
     staleTime: 5 * 60 * 1000, // 5 minutes - prevent unnecessary refetches during navigation
     gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
     refetchOnMount: false, // Use cached data if available, don't refetch on every mount
@@ -210,9 +209,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   }, [])
 
   useEffect(() => {
-    if (profile && profile !== getInitialProfile()) {
-      setStoredProfile(profile)
-      localStorage.setItem('userProfile', JSON.stringify(profile))
+    if (profile) {
+      const currentStored = getInitialProfile()
+      if (!currentStored || currentStored.id !== profile.id || currentStored.avatar_url !== profile.avatar_url || currentStored.full_name !== profile.full_name || currentStored.role !== profile.role) {
+        setStoredProfile(profile)
+        localStorage.setItem('userProfile', JSON.stringify(profile))
+      }
       // Close splash screen once we have profile data
       setContentLoading(false)
       setIsInitialLoad(false)

@@ -24,6 +24,33 @@ import { Card, CardContent } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { trpc } from "@/lib/trpc/client"
 
+// Helper to poll for cookie presence to ensure browser has persisted it before client-side transition
+const waitForCookie = (cookieSubstr: string, maxWaitMs = 1000): Promise<boolean> => {
+  return new Promise((resolve) => {
+    if (typeof document === 'undefined') {
+      resolve(false);
+      return;
+    }
+    
+    // Check immediately
+    if (document.cookie.includes(cookieSubstr)) {
+      resolve(true);
+      return;
+    }
+
+    const startTime = Date.now();
+    const interval = setInterval(() => {
+      if (document.cookie.includes(cookieSubstr)) {
+        clearInterval(interval);
+        resolve(true);
+      } else if (Date.now() - startTime > maxWaitMs) {
+        clearInterval(interval);
+        resolve(false); // timeout
+      }
+    }, 10);
+  });
+};
+
 export function LoginForm() {
   const router = useRouter()
   const utils = trpc.useUtils()
@@ -171,20 +198,17 @@ export function LoginForm() {
       }
 
       // HIGH PERFORMANCE: Navigate eagerly without waiting for prefetch.
-      // Since dashboard pages are server-prefetch enabled, they will pull data immediately on load.
-      // Doing the prefetch in the background allows the browser to resolve assets during navigation
-      // without introducing any artificial delay.
       prefetchPromise.catch(() => {})
 
-      // Safe hydration delay: wait 150ms to allow the browser to successfully write
-      // and flush Supabase session cookies before initiating the transition.
-      // This prevents edge middleware redirect loops on Vercel.
-      await new Promise(resolve => setTimeout(resolve, 150))
-
-      // HIGH PERFORMANCE: Use direct window.location.replace() to force a clean,
-      // server-side validated HTTP request to the dashboard. This bypasses Next.js's
-      // client-side router cache race conditions and guarantees instant redirection on Vercel.
-      window.location.replace(redirectPath)
+      // Wait for cookie to be written, then do a smooth client-side transition
+      const cookieWritten = await waitForCookie('-auth-token', 1000)
+      if (cookieWritten) {
+        console.log('[LoginForm] Auth cookie detected, executing smooth client-side transition to:', redirectPath)
+        router.replace(redirectPath)
+      } else {
+        console.warn('[LoginForm] Cookie write timed out, falling back to window.location.replace')
+        window.location.replace(redirectPath)
+      }
     },
   })
 
