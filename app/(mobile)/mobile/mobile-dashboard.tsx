@@ -163,10 +163,11 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
 
     useEffect(() => {
         const fetchLocation = async () => {
-            // Check if we have a valid recent cache (less than 30 seconds old)
+            // Check if we have a valid recent cache (less than 30 seconds old) with a result
             if (typeof window !== 'undefined') {
                 const cachedTime = sessionStorage.getItem('mobileGeofenceTimestamp')
-                if (cachedTime) {
+                const cachedResult = sessionStorage.getItem('mobileGeofenceResult')
+                if (cachedTime && cachedResult) {
                     const age = Date.now() - Number(cachedTime)
                     if (age < 30000) { // 30 seconds cache validity
                         setIsLocChecking(false)
@@ -181,15 +182,55 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
                 return
             }
 
-            // Since we are performing a fresh check, reset old location details and show loading spinner
-            setGeofenceResult(null)
-            setUserCoords(null)
-            setIsLocChecking(true)
+            // Look for cached or pre-warmed coordinates in sessionStorage or state
+            let startCoords = userCoords
+            if (!startCoords && typeof window !== 'undefined') {
+                const cached = sessionStorage.getItem('mobileUserCoords')
+                if (cached) {
+                    try {
+                        startCoords = JSON.parse(cached)
+                    } catch (e) {}
+                }
+            }
 
-            if (typeof window !== 'undefined') {
-                sessionStorage.removeItem('mobileGeofenceResult')
-                sessionStorage.removeItem('mobileUserCoords')
-                sessionStorage.removeItem('mobileGeofenceTimestamp')
+            // If no coordinates are available yet, try a fast low-accuracy lookup (1.5s timeout)
+            if (!startCoords && typeof window !== 'undefined' && navigator.geolocation) {
+                try {
+                    const fastPos = await new Promise<GeolocationPosition>((resolve, reject) => {
+                        navigator.geolocation.getCurrentPosition(resolve, reject, {
+                            enableHighAccuracy: false,
+                            timeout: 1500,
+                            maximumAge: 60000 // up to 1 minute cached coordinates
+                        })
+                    })
+                    startCoords = {
+                        lat: fastPos.coords.latitude,
+                        lng: fastPos.coords.longitude
+                    }
+                    setUserCoords(startCoords)
+                    sessionStorage.setItem('mobileUserCoords', JSON.stringify(startCoords))
+                } catch (err) {
+                    console.warn('[GEO] Fast geolocation lookup failed or timed out:', err)
+                }
+            }
+
+            // If we have starting coordinates, run a fast server check immediately to render UI state
+            if (startCoords) {
+                try {
+                    const result = await utils.officeLocations.checkGeofence.fetch({
+                        latitude: startCoords.lat,
+                        longitude: startCoords.lng
+                    })
+                    setGeofenceResult(result)
+                    sessionStorage.setItem('mobileGeofenceResult', JSON.stringify(result))
+                    sessionStorage.setItem('mobileGeofenceTimestamp', Date.now().toString())
+                } catch (err) {
+                    console.error('[GEO] Fast geofence verification failed:', err)
+                } finally {
+                    setIsLocChecking(false)
+                }
+            } else {
+                setIsLocChecking(true)
             }
 
             if (!navigator.geolocation) {
@@ -197,32 +238,46 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance }:
                 return
             }
 
+            // Run high-accuracy refinement in the background
             navigator.geolocation.getCurrentPosition(
                 async (pos) => {
-                    // Store user coordinates
-                    const coords = {
+                    const refinedCoords = {
                         lat: pos.coords.latitude,
                         lng: pos.coords.longitude
                     }
-                    setUserCoords(coords)
-                    sessionStorage.setItem('mobileUserCoords', JSON.stringify(coords))
+
+                    // Check if difference is negligible (within ~10m) to save a redundant fetch
+                    if (startCoords) {
+                        const latDiff = Math.abs(refinedCoords.lat - startCoords.lat)
+                        const lngDiff = Math.abs(refinedCoords.lng - startCoords.lng)
+                        if (latDiff < 0.0001 && lngDiff < 0.0001) {
+                            console.log('[GEO] Location refined: negligible difference, keeping fast result')
+                            setIsLocChecking(false)
+                            return
+                        }
+                    }
+
+                    setUserCoords(refinedCoords)
+                    sessionStorage.setItem('mobileUserCoords', JSON.stringify(refinedCoords))
 
                     try {
                         const result = await utils.officeLocations.checkGeofence.fetch({
-                            latitude: pos.coords.latitude,
-                            longitude: pos.coords.longitude
+                            latitude: refinedCoords.lat,
+                            longitude: refinedCoords.lng
                         })
                         setGeofenceResult(result)
-                        // Cache in sessionStorage with a timestamp for background revalidation
                         sessionStorage.setItem('mobileGeofenceResult', JSON.stringify(result))
                         sessionStorage.setItem('mobileGeofenceTimestamp', Date.now().toString())
                     } catch (err) {
-                        console.error('Geofence check failed:', err)
+                        console.error('[GEO] Refined geofence check failed:', err)
                     } finally {
                         setIsLocChecking(false)
                     }
                 },
-                () => setIsLocChecking(false),
+                (err) => {
+                    console.warn('[GEO] Location refinement failed:', err)
+                    setIsLocChecking(false)
+                },
                 { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
             )
         }

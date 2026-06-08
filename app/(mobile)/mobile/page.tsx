@@ -21,24 +21,33 @@ export default async function MobilePage() {
     const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 
-    const { data: profile } = await supabase
-        .from('profiles')
-        .select('id, full_name, avatar_url, email, sex, avatar_status, role')
-        .eq('id', user!.id)
-        .single()
+    if (!user) {
+        return null
+    }
 
-    // Get today's attendance status using IST date
+    // Get today's date in IST (Asia/Kolkata timezone)
     const today = getLocalDateIST()
-    console.log('[MOBILE-PAGE] Querying attendance for user:', user!.id, 'date:', today)
+    console.log('[MOBILE-PAGE] Querying data for user:', user.id, 'date:', today)
 
-    const { data: todayAttendance, error } = await supabase
-        .from('attendance')
-        .select('id, check_in, check_out, status, date')
-        .eq('profile_id', user!.id)
-        .eq('date', today)
-        .maybeSingle()
+    // Parallelize Supabase database fetches to accelerate server response times
+    const [profileRes, attendanceRes] = await Promise.all([
+        supabase
+            .from('profiles')
+            .select('id, full_name, avatar_url, email, sex, avatar_status, role')
+            .eq('id', user.id)
+            .single(),
+        supabase
+            .from('attendance')
+            .select('id, check_in, check_out, status, date')
+            .eq('profile_id', user.id)
+            .eq('date', today)
+            .maybeSingle()
+    ])
 
-    console.log('[MOBILE-PAGE] Attendance result:', todayAttendance ? `found for ${todayAttendance.date}` : 'none', 'error:', error?.message)
+    const profile = profileRes.data
+    const todayAttendance = attendanceRes.data
+
+    console.log('[MOBILE-PAGE] Attendance result:', todayAttendance ? `found for ${todayAttendance.date}` : 'none', 'profile found:', !!profile)
 
     return (
         <MobileDashboard

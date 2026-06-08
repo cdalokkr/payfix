@@ -70,6 +70,45 @@ export function LocationVerification({ onVerified, onSkip }: LocationVerificatio
         setStatus('loading')
         setErrorMessage('')
 
+        // Check for recent coordinates in sessionStorage first for instant results
+        if (typeof window !== 'undefined') {
+            const cachedCoordsStr = sessionStorage.getItem('mobileUserCoords')
+            const cachedTimeStr = sessionStorage.getItem('mobileGeofenceTimestamp')
+            if (cachedCoordsStr && cachedTimeStr) {
+                const age = Date.now() - Number(cachedTimeStr)
+                if (age < 30000) { // 30s cache validity
+                    try {
+                        const cachedCoords = JSON.parse(cachedCoordsStr)
+                        console.log('[LOCATION-VERIFY] Reusing cached coordinates:', cachedCoords)
+                        setUserLocation({
+                            lat: cachedCoords.lat,
+                            lng: cachedCoords.lng
+                        })
+
+                        // Fire a background high-accuracy refinement check
+                        navigator.geolocation.getCurrentPosition(
+                            (pos) => {
+                                const newCoords = {
+                                    lat: pos.coords.latitude,
+                                    lng: pos.coords.longitude
+                                }
+                                const diffLat = Math.abs(newCoords.lat - cachedCoords.lat)
+                                const diffLng = Math.abs(newCoords.lng - cachedCoords.lng)
+                                // Only trigger refetch if different enough
+                                if (diffLat > 0.0001 || diffLng > 0.0001) {
+                                    console.log('[LOCATION-VERIFY] Coordinates refined with significant change')
+                                    setUserLocation(newCoords)
+                                }
+                            },
+                            (err) => console.warn('[LOCATION-VERIFY] Background refinement failed:', err),
+                            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                        )
+                        return
+                    } catch (e) {}
+                }
+            }
+        }
+
         try {
             const isSecure = window.isSecureContext
             const protocol = window.location.protocol

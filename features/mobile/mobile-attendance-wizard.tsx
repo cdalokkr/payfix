@@ -112,7 +112,28 @@ export function MobileAttendanceWizard({
         let coords: { latitude: number | null; longitude: number | null } = { latitude: null, longitude: null }
         if (action === 'clock_in') {
             try {
-                if ('geolocation' in navigator) {
+                // Try to reuse fresh cached coordinates from sessionStorage (less than 1 minute old)
+                let cachedCoords: { lat: number; lng: number } | null = null
+                if (typeof window !== 'undefined') {
+                    const cachedCoordsStr = sessionStorage.getItem('mobileUserCoords')
+                    const cachedTimeStr = sessionStorage.getItem('mobileGeofenceTimestamp')
+                    if (cachedCoordsStr && cachedTimeStr) {
+                        const age = Date.now() - Number(cachedTimeStr)
+                        if (age < 60000) { // 1 minute is extremely fresh for location verification
+                            const parsed = JSON.parse(cachedCoordsStr)
+                            if (parsed && typeof parsed.lat === 'number' && typeof parsed.lng === 'number') {
+                                console.log('[WIZARD] Reusing fresh cached coordinates for clock_in:', parsed)
+                                coords = {
+                                    latitude: parsed.lat,
+                                    longitude: parsed.lng
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Fallback to fresh GPS query if cached coordinates are missing or stale
+                if (!coords.latitude && 'geolocation' in navigator) {
                     const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
                         navigator.geolocation.getCurrentPosition(resolve, reject, {
                             enableHighAccuracy: true,

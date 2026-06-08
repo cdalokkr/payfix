@@ -80,6 +80,24 @@ export function LoginForm() {
   const loginMutation = trpc.auth.login.useMutation({
     onMutate: () => {
       setAsyncState('loading')
+      // Pre-warm geolocation in background right after submission (if permitted previously)
+      if (typeof window !== 'undefined' && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const coords = {
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude
+            }
+            sessionStorage.setItem('mobileUserCoords', JSON.stringify(coords))
+            sessionStorage.setItem('mobileGeofenceTimestamp', Date.now().toString())
+            console.log('[LoginForm] Geolocation pre-warmed on mutate successfully:', coords)
+          },
+          (err) => {
+            console.warn('[LoginForm] Geolocation pre-warm on mutate failed:', err)
+          },
+          { enableHighAccuracy: true, timeout: 4000, maximumAge: 0 }
+        )
+      }
     },
     onError: (error) => {
       console.log('[LoginForm] Login error:', error)
@@ -126,6 +144,28 @@ export function LoginForm() {
         profileRole: data?.profile?.role,
         warning: data?.warning
       })
+
+      // Ensure background geolocation is pre-warmed if not already done
+      if (typeof window !== 'undefined' && navigator.geolocation && (data?.profile?.role === 'employee' || data?.profile?.role === 'moderator')) {
+        const cachedTime = sessionStorage.getItem('mobileGeofenceTimestamp')
+        if (!cachedTime || Date.now() - Number(cachedTime) > 10000) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const coords = {
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude
+              }
+              sessionStorage.setItem('mobileUserCoords', JSON.stringify(coords))
+              sessionStorage.setItem('mobileGeofenceTimestamp', Date.now().toString())
+              console.log('[LoginForm] Geolocation pre-warmed on success successfully:', coords)
+            },
+            (err) => {
+              console.warn('[LoginForm] Geolocation pre-warm on success failed:', err)
+            },
+            { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+          )
+        }
+      }
 
       // Start prefetch in the background after 50ms to allow the browser to write auth cookies successfully
       const prefetchPromise = data?.profile?.role !== 'employee'
