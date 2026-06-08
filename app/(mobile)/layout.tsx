@@ -1,4 +1,4 @@
-import { headers } from 'next/headers'
+import { headers, cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { TRPCProvider } from '@/lib/trpc/provider'
@@ -12,6 +12,10 @@ export default async function MobileLayout({
 }: {
     children: React.ReactNode
 }) {
+    // Check PWA standalone status from server-side cookies
+    const cookieStore = await cookies()
+    const isPwa = cookieStore.get('pwa_standalone')?.value === 'true'
+
     // Check authentication
     const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -48,7 +52,7 @@ export default async function MobileLayout({
 
                 {/* Main Content with padding for header and bottom nav */}
                 <main className="max-w-md mx-auto px-4 pt-20 pb-24 min-h-screen">
-                    <PermissionGuard>
+                    <PermissionGuard isPwaServer={isPwa}>
                         {children}
                     </PermissionGuard>
                 </main>

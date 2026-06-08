@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { cookies } from 'next/headers'
 import { MobileDashboard } from './mobile-dashboard'
 
 export const metadata = {
@@ -18,6 +19,9 @@ function getLocalDateIST(): string {
 }
 
 export default async function MobilePage() {
+    const cookieStore = await cookies()
+    const isPwa = cookieStore.get('pwa_standalone')?.value === 'true'
+
     const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -53,6 +57,7 @@ export default async function MobilePage() {
         <MobileDashboard
             profile={profile!}
             todayAttendance={todayAttendance}
+            isPwaServer={isPwa}
         />
     )
 }

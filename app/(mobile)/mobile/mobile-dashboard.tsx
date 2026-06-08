@@ -56,6 +56,7 @@ interface MobileDashboardProps {
         check_out: string | null
         status: string
     } | null
+    isPwaServer?: boolean
 }
 
 const containerVars = {
@@ -82,8 +83,8 @@ const quickActions = [
     { label: "Settings", icon: IconSettings, href: "/mobile/profile", color: "bg-slate-500/10 text-slate-600" },
 ]
 
-export function MobileDashboard({ profile, todayAttendance: initialAttendance }: MobileDashboardProps) {
-    const { isPwa, isMobile, isReady } = usePwaCheck()
+export function MobileDashboard({ profile, todayAttendance: initialAttendance, isPwaServer }: MobileDashboardProps) {
+    const { isPwa, isMobile, isReady } = usePwaCheck(isPwaServer)
 
     // Initialize from sessionStorage if available (persists across navigation) and not expired
     const [geofenceResult, setGeofenceResult] = useState<{

@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react'
 
-export function usePwaCheck() {
-    const [isPwa, setIsPwa] = useState<boolean>(false)
+export function usePwaCheck(initialIsPwa?: boolean) {
+    const [isPwa, setIsPwa] = useState<boolean>(initialIsPwa ?? false)
     const [isMobile, setIsMobile] = useState<boolean>(false)
-    const [isReady, setIsReady] = useState<boolean>(false)
+    const [isReady, setIsReady] = useState<boolean>(initialIsPwa !== undefined)
 
     useEffect(() => {
         const checkPwa = () => {

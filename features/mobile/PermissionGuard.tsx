@@ -11,10 +11,11 @@ import { usePwaCheck } from "@/hooks/use-pwa-check"
 interface PermissionGuardProps {
     children: React.ReactNode
     showOnlyIfDenied?: boolean
+    isPwaServer?: boolean
 }
 
-export function PermissionGuard({ children, showOnlyIfDenied = false }: PermissionGuardProps) {
-    const { isPwa, isReady } = usePwaCheck()
+export function PermissionGuard({ children, showOnlyIfDenied = false, isPwaServer }: PermissionGuardProps) {
+    const { isPwa, isReady } = usePwaCheck(isPwaServer)
     const {
         locationStatus,
         cameraStatus,
@@ -31,6 +32,12 @@ export function PermissionGuard({ children, showOnlyIfDenied = false }: Permissi
 
     // Bypass if not PWA - only enforce permissions in installed PWA mode
     if (!isPwa) {
+        return <>{children}</>
+    }
+
+    // If we are currently checking permissions, do not block the page transition.
+    // Render the children to avoid blank screens or visual flickering.
+    if (locationStatus === 'checking' || cameraStatus === 'checking') {
         return <>{children}</>
     }
 
