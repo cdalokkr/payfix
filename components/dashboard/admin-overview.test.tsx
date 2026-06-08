@@ -26,6 +26,11 @@ jest.mock('@/lib/trpc/client', () => ({
         useQuery: jest.fn().mockReturnValue({ data: null, isLoading: false }),
       },
     },
+    notification: {
+      getUnreadCount: {
+        useQuery: jest.fn().mockReturnValue({ data: 0, isLoading: false }),
+      },
+    },
   },
 }))
 jest.mock('next/navigation', () => ({
@@ -128,10 +133,10 @@ describe('AdminOverview', () => {
       render(<AdminOverview onLoadingChange={mockOnLoadingChange} />)
 
       // Check that metric values are displayed
-      expect(screen.getByText('100')).toBeInTheDocument() // Total Users
-      expect(screen.getByText('10')).toBeInTheDocument() // Employee Role (replaces Active Users if > 0)
-      expect(screen.getByText('5')).toBeInTheDocument() // Moderator Role
-      expect(screen.getByText('3')).toBeInTheDocument() // Administrators
+      expect(screen.getAllByText('100')[0]).toBeInTheDocument() // Total Users
+      expect(screen.getAllByText('10')[0]).toBeInTheDocument() // Employee Role (replaces Active Users if > 0)
+      expect(screen.getAllByText('5')[0]).toBeInTheDocument() // Moderator Role
+      expect(screen.getAllByText('3')[0]).toBeInTheDocument() // Administrators
     })
 
     it('shows skeleton loading state when showSkeleton is true', () => {
