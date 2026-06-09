@@ -657,6 +657,7 @@ export function AdminAttendanceVerification() {
                         getRowId={getRowId}
                         rowSelection={rowSelection}
                         onRowSelectionChange={setRowSelection}
+                        className="[&_td]:px-1 [&_th]:px-1 [&_td]:py-1 md:[&_td]:px-1.5 md:[&_th]:px-1.5"
                         toolbar={(table) => (
                             <AttendanceTableToolbar
                                 table={table}

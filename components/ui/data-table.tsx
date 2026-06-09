@@ -42,6 +42,7 @@ interface DataTableProps<TData, TValue> {
     emptyIcon?: React.ReactNode
     emptyMessage?: string
     getRowId?: (row: TData) => string
+    className?: string
 }
 
 export function DataTable<TData, TValue>({
@@ -57,6 +58,7 @@ export function DataTable<TData, TValue>({
     emptyIcon,
     emptyMessage = "No Record Found",
     getRowId,
+    className,
 }: DataTableProps<TData, TValue>) {
     const [internalRowSelection, setInternalRowSelection] = React.useState<RowSelectionState>({})
 
@@ -115,7 +117,7 @@ export function DataTable<TData, TValue>({
             {toolbar && toolbar(table)}
 
             {/* Desktop Table View */}
-            <div className="hidden md:block rounded-md border border-border/60">
+            <div className={cn("hidden md:block rounded-md border border-border/60", className)}>
                 <Table>
                     <TableHeader>
                         {table.getHeaderGroups().map((headerGroup) => (

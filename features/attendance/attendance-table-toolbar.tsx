@@ -315,7 +315,10 @@ export function AttendanceTableToolbar<TData>({
                             onValueChange={onVerificationFilterChange}
                             disabled={isLoading}
                         >
-                            <SelectTrigger className="w-36 h-9 rounded-xl border-slate-200 dark:border-slate-800">
+                            <SelectTrigger className={cn(
+                                "w-36 h-9 rounded-xl border-slate-200 dark:border-slate-800 transition-colors",
+                                verificationFilter !== 'all' && "border-indigo-500/50 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 font-semibold"
+                            )}>
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -335,7 +338,10 @@ export function AttendanceTableToolbar<TData>({
                             onValueChange={onDayTypeFilterChange}
                             disabled={isLoading}
                         >
-                            <SelectTrigger className="w-40 h-9 rounded-xl border-slate-200 dark:border-slate-800">
+                            <SelectTrigger className={cn(
+                                "w-40 h-9 rounded-xl border-slate-200 dark:border-slate-800 transition-colors",
+                                dayTypeFilter !== 'all' && "border-indigo-500/50 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 font-semibold"
+                            )}>
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>

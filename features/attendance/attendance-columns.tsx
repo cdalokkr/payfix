@@ -157,7 +157,7 @@ export function createAttendanceColumns({
                     </div>
                 )
             },
-            size: 70,
+            size: 65,
         },
         {
             accessorKey: "check_in",
@@ -172,7 +172,7 @@ export function createAttendanceColumns({
                     </div>
                 ) : <span className="text-muted-foreground/30 text-[10px]">--:--</span>
             },
-            size: 55,
+            size: 50,
         },
         {
             accessorKey: "check_out",
@@ -187,7 +187,7 @@ export function createAttendanceColumns({
                     </div>
                 ) : <span className="text-muted-foreground/30 text-[10px]">--:--</span>
             },
-            size: 55,
+            size: 50,
         },
         {
             accessorKey: "working_hours",
@@ -200,7 +200,7 @@ export function createAttendanceColumns({
                     </Badge>
                 ) : <span className="text-muted-foreground/30 text-[10px]">--</span>
             },
-            size: 40,
+            size: 35,
         },
         {
             id: "extra_hours",
@@ -225,7 +225,7 @@ export function createAttendanceColumns({
                     </span>
                 )
             },
-            size: 40,
+            size: 35,
         },
         {
             accessorKey: "status",
@@ -248,7 +248,7 @@ export function createAttendanceColumns({
                     'Half Day': "bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 border-indigo-200 dark:border-indigo-900/30",
                     'Absent': "bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-450 border-rose-200 dark:border-rose-900/30",
                     'Not marked': "bg-zinc-105 dark:bg-zinc-900/40 text-zinc-650 dark:text-zinc-400 border-zinc-200/50 dark:border-zinc-800/40",
-                    'Marked In': "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-900/30",
+                    'Marked In': "bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 border-indigo-200 dark:border-indigo-900/30",
                     'Marked Out': "bg-teal-50 dark:bg-teal-950/30 text-teal-700 dark:text-teal-400 border-teal-200 dark:border-teal-900/30",
                     'Applied Leave': "bg-yellow-50 dark:bg-yellow-950/30 text-yellow-800 dark:text-yellow-400 border-yellow-200 dark:border-yellow-900/30",
                 };
@@ -270,18 +270,18 @@ export function createAttendanceColumns({
                         <div className={cn(
                             "flex items-center gap-1 text-[8px] font-bold px-1.5 py-0.5 rounded-full border",
                             verificationState === 'verified' && "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20",
-                            verificationState === 'pending' && "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20",
+                            verificationState === 'pending' && "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20",
                             verificationState === 'rejected' && "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/20"
                         )}>
                             {verificationState === 'verified' && <CheckCircle2 className="size-2.5 text-emerald-500" />}
-                            {verificationState === 'pending' && <Clock className="size-2.5 text-amber-500 animate-pulse" />}
+                            {verificationState === 'pending' && <Clock className="size-2.5 text-blue-500 animate-pulse" />}
                             {verificationState === 'rejected' && <XCircle className="size-2.5 text-rose-500" />}
                             <span className="capitalize">{verificationState === 'verified' ? 'verified' : verificationState}</span>
                         </div>
                     </div>
                 )
             },
-            size: 90,
+            size: 75,
         },
         {
             id: "actions",
@@ -339,7 +339,7 @@ export function createAttendanceColumns({
                     </div>
                 )
             },
-            size: 75,
+            size: 65,
         },
     ]
 }
