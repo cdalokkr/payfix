@@ -9,7 +9,6 @@ import { Mail, Lock, AlertCircle } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 
 import { LoginButton } from "@/components/ui/async-button"
-import { useDashboardPrefetch } from '@/hooks/use-dashboard-prefetch'
 import { Input } from "@/components/ui/input"
 import { PasswordInput } from "@/components/ui/password-input"
 import {
@@ -24,49 +23,17 @@ import { Card, CardContent } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { trpc } from "@/lib/trpc/client"
 
-// Helper to poll for cookie presence to ensure browser has persisted it before client-side transition
-const waitForCookie = (cookieSubstr: string, maxWaitMs = 1000): Promise<boolean> => {
-  return new Promise((resolve) => {
-    if (typeof document === 'undefined') {
-      resolve(false);
-      return;
-    }
-    
-    // Check immediately
-    if (document.cookie.includes(cookieSubstr)) {
-      resolve(true);
-      return;
-    }
 
-    const startTime = Date.now();
-    const interval = setInterval(() => {
-      if (document.cookie.includes(cookieSubstr)) {
-        clearInterval(interval);
-        resolve(true);
-      } else if (Date.now() - startTime > maxWaitMs) {
-        clearInterval(interval);
-        resolve(false); // timeout
-      }
-    }, 10);
-  });
-};
 
 export function LoginForm() {
   const router = useRouter()
   const utils = trpc.useUtils()
-  const { prefetch } = useDashboardPrefetch()
   const [isLoading, setIsLoading] = useState(false)
   const [asyncState, setAsyncState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [authError, setAuthError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({})
 
-  // Eagerly prefetch next page bundle chunks so client-side navigation feels instant
-  useEffect(() => {
-    router.prefetch('/admin')
-    router.prefetch('/moderator')
-    router.prefetch('/employee')
-    router.prefetch('/mobile')
-  }, [router])
+
 
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
@@ -93,7 +60,11 @@ export function LoginForm() {
             console.log('[LoginForm] Geolocation pre-warmed on mutate successfully:', coords)
           },
           (err) => {
-            console.warn('[LoginForm] Geolocation pre-warm on mutate failed:', err)
+            if (err.code !== err.PERMISSION_DENIED) {
+              console.warn('[LoginForm] Geolocation pre-warm on mutate failed:', err)
+            } else {
+              console.log('[LoginForm] Geolocation pre-warm on mutate skipped (permission not granted)')
+            }
           },
           { enableHighAccuracy: true, timeout: 4000, maximumAge: 0 }
         )
@@ -160,19 +131,19 @@ export function LoginForm() {
               console.log('[LoginForm] Geolocation pre-warmed on success successfully:', coords)
             },
             (err) => {
-              console.warn('[LoginForm] Geolocation pre-warm on success failed:', err)
+              if (err.code !== err.PERMISSION_DENIED) {
+                console.warn('[LoginForm] Geolocation pre-warm on success failed:', err)
+              } else {
+                console.log('[LoginForm] Geolocation pre-warm on success skipped (permission not granted)')
+              }
             },
             { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
           )
         }
       }
 
-      // Start prefetch in the background after 50ms to allow the browser to write auth cookies successfully
-      const prefetchPromise = data?.profile?.role !== 'employee'
-        ? new Promise(resolve => setTimeout(resolve, 50)).then(() => prefetch()).catch(err => {
-          console.warn('[LoginForm] Prefetch failed, dashboard will fetch on load:', err)
-        })
-        : Promise.resolve()
+      // Prefetch bypassed to prevent duplicate server/client database load concurrency.
+      // Next.js Server Components prefetch this data during page render, making client prefetch redundant.
 
       // Optimized: Pre-populate the tRPC cache for the profile and last session so the dashboard feels instant
       if (data?.profile) {
@@ -222,33 +193,24 @@ export function LoginForm() {
         // Detect mobile device and PWA standalone mode client-side to short-circuit redirects
         const isMobileDevice = typeof window !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile/i.test(navigator.userAgent)
         const isPwaStandalone = typeof window !== 'undefined' && (window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true)
+        const isMobileViewport = typeof window !== 'undefined' && (window.innerWidth < 768 || isMobileDevice)
 
         // Role-based redirect
         if (data.profile.role === 'admin') {
           redirectPath = '/admin'
         } else if (data.profile.role === 'moderator') {
           // Moderator is only redirected to mobile layout if launching standalone PWA
-          redirectPath = (isMobileDevice && isPwaStandalone) ? '/mobile' : '/moderator'
+          redirectPath = (isMobileViewport && isPwaStandalone) ? '/mobile' : '/moderator'
         } else if (data.profile.role === 'employee') {
           // Employee is always redirected to mobile layout on mobile screens
-          redirectPath = isMobileDevice ? '/mobile' : '/employee'
+          redirectPath = isMobileViewport ? '/mobile' : '/employee'
         } else {
           redirectPath = '/moderator'
         }
       }
 
-      // HIGH PERFORMANCE: Navigate eagerly without waiting for prefetch.
-      prefetchPromise.catch(() => {})
-
-      // Wait for cookie to be written, then do a smooth client-side transition
-      const cookieWritten = await waitForCookie('-auth-token', 1000)
-      if (cookieWritten) {
-        console.log('[LoginForm] Auth cookie detected, executing smooth client-side transition to:', redirectPath)
-        router.replace(redirectPath)
-      } else {
-        console.warn('[LoginForm] Cookie write timed out, falling back to window.location.replace')
-        window.location.replace(redirectPath)
-      }
+      console.log('[LoginForm] Executing smooth client-side transition to:', redirectPath)
+      router.replace(redirectPath)
     },
   })
 

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { trpc } from "@/lib/trpc/client"
 import { toast } from "sonner"
-import { CalendarRange, RefreshCw, CheckCircle, Loader2, ArrowRight, Users, TrendingUp, FileEdit, Clock, FileUp } from "lucide-react"
+import { CalendarRange, RefreshCw, CheckCircle, Loader2, ArrowRight, Users, TrendingUp, FileEdit, Clock, FileUp, AlertTriangle } from "lucide-react"
 import { CardShell } from "./CardShell"
 import {
     Select,
@@ -57,6 +57,18 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
         isFinished: false
     })
 
+    const [confirmDialog, setConfirmDialog] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: React.ReactNode;
+        onConfirm: () => void;
+    }>({
+        isOpen: false,
+        title: "",
+        message: null,
+        onConfirm: () => {}
+    })
+
     const { data: summaries, isLoading, refetch } = trpc.salary.getMonthlySummaries.useQuery(
         { month, year },
         { placeholderData: (prev: any) => prev }
@@ -65,7 +77,41 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
     const compileSingleMutation = trpc.salary.compileMonthlyAttendance.useMutation()
     const { refetch: fetchActiveEmployees } = trpc.salary.getActiveEmployeesForCompilation.useQuery(undefined, { enabled: false })
 
-    const handleStartCompilation = async () => {
+    const [compilingProfileId, setCompilingProfileId] = useState<string | null>(null)
+
+    const handleCompileSingle = async (profileId: string, name: string) => {
+        setConfirmDialog({
+            isOpen: true,
+            title: "Re-compile Attendance",
+            message: (
+                <div>
+                    Are you sure you want to re-compile attendance for <strong className="font-bold text-foreground">{name}</strong>?
+                    <div className="text-orange-600/90 dark:text-orange-400/90 mt-1 text-xs font-medium">
+                        This will recalculate the summary details for period : {MONTHS[month - 1]} - {year}
+                    </div>
+                </div>
+            ),
+            onConfirm: async () => {
+                setConfirmDialog(prev => ({ ...prev, isOpen: false }))
+                setCompilingProfileId(profileId)
+                try {
+                    await compileSingleMutation.mutateAsync({
+                        month,
+                        year,
+                        profileId
+                    })
+                    toast.success(`Compiled attendance for ${name}`)
+                    refetch()
+                } catch (err: any) {
+                    toast.error(err.message || `Failed to compile for ${name}`)
+                } finally {
+                    setCompilingProfileId(null)
+                }
+            }
+        })
+    }
+
+    const executeBulkCompilation = async () => {
         setIsCompileModalOpen(true)
         setCompilationProgress({
             total: 0,
@@ -157,6 +203,22 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
         }
     }
 
+    const handleStartCompilation = async () => {
+        setConfirmDialog({
+            isOpen: true,
+            title: "Compile Attendance for All",
+            message: (
+                <div>
+                    Are you sure you want to compile attendance for all active employees?
+                    <div className="text-orange-600/90 dark:text-orange-400/90 mt-1 text-xs font-medium">
+                        This will run compilation for period : {MONTHS[month - 1]} - {year}
+                    </div>
+                </div>
+            ),
+            onConfirm: executeBulkCompilation
+        })
+    }
+
     const setForSalaryMutation = trpc.salary.setForSalary.useMutation({
         onSuccess: (data) => {
             toast.success(`${data.length} records confirmed for salary`)
@@ -169,6 +231,8 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
     const draftSummaries = useMemo(() =>
         summaries?.filter((s: any) => s.status === 'draft') || [], [summaries]
     )
+
+    const daysInMonth = useMemo(() => new Date(year, month, 0).getDate(), [month, year])
 
     // Compute last compiled timestamp from summaries
     const lastCompiledAt = useMemo(() => {
@@ -402,7 +466,7 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
 
             {/* Summary Table */}
             <CardShell
-                title={`Monthly Attendance — ${MONTHS[month - 1]} ${year}`}
+                title={`Monthly Attendance — ${MONTHS[month - 1]} ${year} (${daysInMonth} Calendar Days)`}
                 icon={CalendarRange}
                 description="Compiled attendance summary for all employees"
                 contentClassName="p-0"
@@ -424,7 +488,7 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                         {/* Mobile Cards */}
                         <div className="divide-y divide-border/50 sm:hidden">
                             {summaries.map((s: any, index: number) => (
-                                <div key={s.id} className="p-4 space-y-2">
+                                <div key={s.id} className="p-4 space-y-3">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2">
                                             {s.status === 'draft' && (
@@ -443,32 +507,43 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                                                 </div>
                                             </div>
                                         </div>
-                                        {statusBadge(s.status)}
+                                        <div className="flex items-center gap-1.5">
+                                            {statusBadge(s.status)}
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7 text-orange-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20"
+                                                onClick={() => handleCompileSingle(s.profile_id, s.profile?.full_name || s.profile?.email)}
+                                                disabled={compilingProfileId !== null}
+                                            >
+                                                {compilingProfileId === s.profile_id ? (
+                                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                ) : (
+                                                    <RefreshCw className="h-3.5 w-3.5" />
+                                                )}
+                                            </Button>
+                                        </div>
                                     </div>
-                                    <div className="grid grid-cols-3 gap-2 text-xs">
-                                         <div className="text-center p-1.5 rounded-md bg-slate-500/5">
-                                             <p className="font-bold text-slate-700 dark:text-slate-300">{s.total_working_days}</p>
-                                             <p className="text-[10px] text-muted-foreground">Month Days</p>
-                                         </div>
-                                         <div className="text-center p-1.5 rounded-md bg-emerald-500/5">
+                                    <div className="grid grid-cols-5 gap-1 text-[10px] text-center">
+                                         <div className="p-1 rounded bg-emerald-500/5">
                                              <p className="font-bold text-emerald-600">{s.total_present_days}</p>
-                                             <p className="text-[10px] text-muted-foreground">Present</p>
+                                             <p className="text-[9px] text-muted-foreground mt-0.5">Present</p>
                                          </div>
-                                         <div className="text-center p-1.5 rounded-md bg-rose-500/5">
+                                         <div className="p-1 rounded bg-rose-500/5">
                                              <p className="font-bold text-rose-600">{s.total_absent_days}</p>
-                                             <p className="text-[10px] text-muted-foreground">Absent</p>
+                                             <p className="text-[9px] text-muted-foreground mt-0.5">Absent</p>
                                          </div>
-                                         <div className="text-center p-1.5 rounded-md bg-orange-500/5">
+                                         <div className="p-1 rounded bg-orange-500/5">
                                              <p className="font-bold text-orange-600">{s.total_half_days}</p>
-                                             <p className="text-[10px] text-muted-foreground">Half Days</p>
+                                             <p className="text-[9px] text-muted-foreground mt-0.5">Half</p>
                                          </div>
-                                         <div className="text-center p-1.5 rounded-md bg-blue-500/5">
+                                         <div className="p-1 rounded bg-blue-500/5">
                                              <p className="font-bold text-blue-600">{s.total_leaves}</p>
-                                             <p className="text-[10px] text-muted-foreground">Leaves</p>
+                                             <p className="text-[9px] text-muted-foreground mt-0.5">Leaves</p>
                                          </div>
-                                         <div className="text-center p-1.5 rounded-md bg-amber-500/5">
+                                         <div className="p-1 rounded bg-amber-500/5">
                                              <p className="font-bold text-amber-600">{(s.salary_breakdown as any)?.extra_days || 0}</p>
-                                             <p className="text-[10px] text-muted-foreground">Extra Days</p>
+                                             <p className="text-[9px] text-muted-foreground mt-0.5">Extra</p>
                                          </div>
                                      </div>
                                 </div>
@@ -491,7 +566,6 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                                         <th className="p-3 text-center font-semibold text-muted-foreground w-10">#</th>
                                         <th className="p-3 text-left font-semibold text-muted-foreground">Employee</th>
                                         <th className="p-3 text-left font-semibold text-muted-foreground">Designation</th>
-                                        <th className="p-3 text-center font-semibold text-muted-foreground">Calendar Days</th>
                                         <th className="p-3 text-center font-semibold text-muted-foreground">Present</th>
                                         <th className="p-3 text-center font-semibold text-muted-foreground">Absent</th>
                                         <th className="p-3 text-center font-semibold text-muted-foreground">Half Days</th>
@@ -499,6 +573,7 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                                         <th className="p-3 text-center font-semibold text-muted-foreground">Extra Days</th>
                                         <th className="p-3 text-center font-semibold text-muted-foreground">Hours</th>
                                         <th className="p-3 text-center font-semibold text-muted-foreground">Status</th>
+                                        <th className="p-3 text-center font-semibold text-muted-foreground">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border/30">
@@ -524,7 +599,6 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                                                 <td className="p-3 text-muted-foreground text-xs">
                                                     {s.profile?.designation?.name || <span className="opacity-40">—</span>}
                                                 </td>
-                                                <td className="p-3 text-center">{s.total_working_days}</td>
                                                 <td className="p-3 text-center">
                                                     <div className="flex flex-col items-center">
                                                         <span className="font-bold text-emerald-600">{s.total_present_days}</span>
@@ -541,6 +615,22 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                                                 </td>
                                                 <td className="p-3 text-center text-muted-foreground">{s.total_working_hours || 0}h</td>
                                                 <td className="p-3 text-center">{statusBadge(s.status)}</td>
+                                                <td className="p-3 text-center">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-8 w-8 text-orange-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20"
+                                                        onClick={() => handleCompileSingle(s.profile_id, s.profile?.full_name || s.profile?.email)}
+                                                        disabled={compilingProfileId !== null}
+                                                        title="Recompile Employee Attendance"
+                                                    >
+                                                        {compilingProfileId === s.profile_id ? (
+                                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                                        ) : (
+                                                            <RefreshCw className="h-4 w-4" />
+                                                        )}
+                                                    </Button>
+                                                </td>
                                             </tr>
                                         )
                                     })}
@@ -637,6 +727,42 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                                 Done
                             </Button>
                         </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Modern styled Confirmation Dialog */}
+            <Dialog 
+                open={confirmDialog.isOpen} 
+                onOpenChange={(open) => setConfirmDialog(prev => ({ ...prev, isOpen: open }))}
+            >
+                <DialogContent className="max-w-[400px] p-6 rounded-2xl border border-border bg-background/95 backdrop-blur-md">
+                    <DialogHeader>
+                        <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
+                            <AlertTriangle className="h-5 w-5 text-orange-500" />
+                            {confirmDialog.title}
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="py-2 text-sm text-muted-foreground leading-relaxed">
+                        {confirmDialog.message}
+                    </div>
+                    <div className="flex justify-end gap-2 pt-4 border-t border-border/30">
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="rounded-lg"
+                            onClick={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+                        >
+                            Cancel
+                        </Button>
+                        <Button 
+                            variant="default" 
+                            size="sm" 
+                            className="rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-semibold"
+                            onClick={confirmDialog.onConfirm}
+                        >
+                            Confirm
+                        </Button>
                     </div>
                 </DialogContent>
             </Dialog>

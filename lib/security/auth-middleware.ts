@@ -6,7 +6,12 @@ import { eq } from 'drizzle-orm'
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-const supabase = createClient(supabaseUrl, supabaseAnonKey)
+const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+    }
+})
 
 export interface AuthenticatedContext {
     user: any
@@ -27,7 +32,8 @@ export async function validateBearerToken(authHeader: string | null): Promise<Au
         throw new Error('Token payload is empty.')
     }
 
-    const { data: { user }, error } = await supabase.auth.getUser(token)
+    const { data, error } = await supabase.auth.getUser(token)
+    const user = data?.user || null
 
     if (error || !user) {
         throw new Error(error?.message || 'Invalid or expired authentication token.')

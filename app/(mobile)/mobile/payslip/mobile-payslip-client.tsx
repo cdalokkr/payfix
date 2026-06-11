@@ -12,7 +12,9 @@ import {
     TrendingUp,
     IndianRupee,
     Loader2,
-    Download
+    Download,
+    CheckCircle,
+    CreditCard
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -183,16 +185,25 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
             doc.setFontSize(10);
             doc.text(`For the month of ${monthName} ${slip.year}`, 105, 28, { align: "center" });
             
+            const tableBodyRows = [
+                ['Employee Name', profile.full_name || '—', 'Month Days', bd?.total_working_days || '—'],
+                ['Designation', profile.designation?.name || '—', 'Present Days', slip.total_present_days || '—'],
+                ['Email', profile.email || '—', 'Half Days', bd?.half_days || '0'],
+                ['Month / Year', `${monthName} ${slip.year}`, 'Leaves', slip.total_leaves || '—'],
+                ['Status', slip.paid_mode ? 'Paid' : 'Unpaid', 'Absent Days', bd?.absent_days || '—'],
+                ['', '', 'Extra Days', bd?.extra_days || '0'],
+            ];
+
+            if (slip.paid_mode) {
+                tableBodyRows.push(
+                    ['Payment Mode', slip.paid_mode.replace('_', ' ').toUpperCase(), 'Payment Date', slip.pay_date || '—'],
+                    ['Reference No', slip.pay_reference_no || '—', 'Remarks', slip.payment_remarks || '—']
+                );
+            }
+
             autoTable(doc, {
                 startY: 40,
-                body: [
-                    ['Employee Name', profile.full_name || '—', 'Month Days', bd?.total_working_days || '—'],
-                    ['Designation', profile.designation?.name || '—', 'Present Days', slip.total_present_days || '—'],
-                    ['Email', profile.email || '—', 'Half Days', bd?.half_days || '0'],
-                    ['Month / Year', `${monthName} ${slip.year}`, 'Leaves', slip.total_leaves || '—'],
-                    ['Status', 'Generated', 'Absent Days', bd?.absent_days || '—'],
-                    ['', '', 'Extra Days', bd?.extra_days || '0'],
-                ],
+                body: tableBodyRows,
                 theme: 'grid',
                 styles: { fontSize: 9, cellPadding: 3 },
                 columnStyles: {
@@ -627,6 +638,37 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                                         <span className="font-bold text-slate-800 dark:text-slate-200">{payslipDetail.profile?.designation?.name || '—'}</span>
                                     </div>
                                 </div>
+
+                                {/* Payment Info Card */}
+                                {payslipDetail.paid_mode && (
+                                    <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 space-y-2.5">
+                                        <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-black text-xs uppercase tracking-wider">
+                                            <CheckCircle className="w-4 h-4 text-emerald-600" /> Payment Recorded
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-y-3 gap-x-2 text-xs font-semibold">
+                                            <div>
+                                                <span className="text-[10px] text-slate-400 uppercase block font-bold">Paid Mode</span>
+                                                <span className="text-slate-700 dark:text-slate-300 capitalize">{payslipDetail.paid_mode.replace('_', ' ')}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] text-slate-400 uppercase block font-bold">Pay Date</span>
+                                                <span className="text-slate-700 dark:text-slate-300">{payslipDetail.pay_date}</span>
+                                            </div>
+                                            {payslipDetail.pay_reference_no && (
+                                                <div className="col-span-2 border-t border-slate-100 dark:border-slate-800/50 pt-2">
+                                                    <span className="text-[10px] text-slate-400 uppercase block font-bold">Ref / Transaction No.</span>
+                                                    <span className="text-slate-700 dark:text-slate-300 break-all">{payslipDetail.pay_reference_no}</span>
+                                                </div>
+                                            )}
+                                            {payslipDetail.payment_remarks && (
+                                                <div className="col-span-2 border-t border-slate-100 dark:border-slate-800/50 pt-2">
+                                                    <span className="text-[10px] text-slate-400 uppercase block font-bold">Remarks</span>
+                                                    <span className="text-slate-700 dark:text-slate-300 block">{payslipDetail.payment_remarks}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* Attendance Stats Grid */}
                                 <div>

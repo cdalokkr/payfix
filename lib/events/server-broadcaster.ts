@@ -15,7 +15,12 @@ export async function broadcastServerEvent(category: EventCategory, payload: any
     }
 
     // Create a one-off client with service role
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+        auth: {
+            autoRefreshToken: false,
+            persistSession: false,
+        }
+    })
 
     const routingRule = EVENT_ROUTING_RULES[category]
     if (!routingRule) {

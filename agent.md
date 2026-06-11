@@ -150,10 +150,59 @@ Every input must be wrapped in a controlled `<Field>` layout from the unified UI
              ...
            </SelectContent>
          </Select>
-         {fieldState.invalid && fieldState.error && <FieldError errors={[fieldState.error]} className="mt-1" />}
-       </Field>
-     )}
-   />
+          {fieldState.invalid && fieldState.error && <FieldError errors={[fieldState.error]} className="mt-1" />}
+        </Field>
+      )}
+    />
+    ```
+
+### 3.3 Popover Calendar / Date Picker
+For any single date input, do NOT use default `<input type="date" />`. Instead, use the standard shadcn Popover + Calendar picker for UI symmetry:
+1. **State Management**: Track the date value as a formatted string (e.g., `'yyyy-MM-dd'`) and control popover visibility:
+   ```typescript
+   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+   const [dateVal, setDateVal] = useState<string>("");
+   ```
+2. **Component Structure**:
+   ```tsx
+   import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+   import { Calendar } from "@/components/ui/calendar";
+   import { format } from "date-fns";
+   import { Calendar as CalendarIcon } from "lucide-react";
+   import { Button } from "@/components/ui/button";
+
+   // Inside render:
+   <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+     <PopoverTrigger asChild>
+       <Button
+         variant="outline"
+         className={cn(
+           "w-full h-10 pl-3 text-left font-normal border-muted-foreground/20 hover:bg-muted/10 flex items-center justify-between",
+           !dateVal && "text-muted-foreground"
+         )}
+       >
+         {dateVal ? (
+           format(new Date(dateVal), "PPP")
+         ) : (
+           <span>Pick a date</span>
+         )}
+         <CalendarIcon className="h-4 w-4 opacity-50" />
+       </Button>
+     </PopoverTrigger>
+     <PopoverContent className="w-auto p-0" align="start">
+       <Calendar
+         mode="single"
+         selected={dateVal ? new Date(dateVal) : undefined}
+         onSelect={(date) => {
+           if (date) {
+             setDateVal(format(date, 'yyyy-MM-dd'));
+           }
+           setIsCalendarOpen(false);
+         }}
+         initialFocus
+       />
+     </PopoverContent>
+   </Popover>
    ```
 
 ---

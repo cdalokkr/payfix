@@ -12,15 +12,8 @@ import { ProfileService } from '@/lib/services/profile.service'
 import { TRPCError } from '@trpc/server'
 
 export const profileRouter = router({
-  get: protectedProcedure.query(async ({ ctx }) => {
-    try {
-      const data = await ProfileService.getProfile(ctx.user.id)
-      return data as any as import('@/types').Profile
-    } catch (err: any) {
-      // Fallback
-      console.error('Profile not found in Service for user:', ctx.user.id)
-      return ctx.profile as any as import('@/types').Profile
-    }
+  get: protectedProcedure.query(({ ctx }) => {
+    return ctx.profile as any as import('@/types').Profile
   }),
 
   update: protectedProcedure

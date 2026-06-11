@@ -8,7 +8,8 @@ export const metadata = {
 
 export default async function MobileEditProfilePage() {
     const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data, error } = await supabase.auth.getUser()
+    const user = data?.user || null
 
     if (!user) {
         redirect('/login')

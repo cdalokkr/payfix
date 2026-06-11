@@ -81,6 +81,8 @@ export default function UserManagement({ initialData }: UserManagementProps) {
     status: activeTab === 'live' ? 'all' : 'deleted',
   }, {
     initialData: activeTab === 'live' ? initialData : undefined,
+    staleTime: 30000,
+    refetchOnWindowFocus: false,
   })
 
   const handleEditUser = useCallback((user: Profile) => {

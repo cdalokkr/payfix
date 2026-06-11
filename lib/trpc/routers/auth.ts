@@ -426,8 +426,8 @@ export const authRouter = router({
         })
       }
 
-      // Clear session cache and perform comprehensive logout cleanup
-      const logoutResult = await performLogout()
+      // Clear session cache and perform comprehensive logout cleanup for this specific user
+      const logoutResult = await performLogout(ctx.user?.id)
       if (!logoutResult.success) {
         console.warn('[AUTH-LOGOUT] Session cache cleanup had issues:', logoutResult.error)
         // Don't fail the logout if cache cleanup has issues
@@ -439,8 +439,8 @@ export const authRouter = router({
     } catch (error) {
       console.error('[AUTH-LOGOUT] Logout procedure failed:', error)
 
-      // Even if there's an error, try to clear the session cache
-      await performLogout()
+      // Even if there's an error, try to clear the session cache for this specific user
+      await performLogout(ctx.user?.id)
 
       if (error instanceof TRPCError) {
         throw error

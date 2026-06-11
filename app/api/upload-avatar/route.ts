@@ -6,7 +6,8 @@ export async function POST(request: NextRequest) {
     try {
         // Verify user is authenticated
         const supabase = await createServerSupabaseClient()
-        const { data: { user } } = await supabase.auth.getUser()
+        const { data, error } = await supabase.auth.getUser()
+        const user = data?.user || null
 
         if (!user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

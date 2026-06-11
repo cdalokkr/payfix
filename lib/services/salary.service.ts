@@ -535,7 +535,7 @@ export class SalaryService {
                 source: metrics.source || (existingSummary.salary_breakdown as any)?.source || 'compiled'
             }
 
-            // Update summary with new metrics and recalculated payslip
+            // Update summary with new metrics and recalculated payslip, resetting payment details
             const [updated] = await client.update(monthlyAttendanceSummary).set({
                 total_working_days: metrics.totalWorkingDays,
                 total_present_days: metrics.presentDays,
@@ -550,6 +550,12 @@ export class SalaryService {
                 advance_recovery: advanceTotal.toFixed(2),
                 take_home: actualTakeHome.toFixed(2),
                 salary_breakdown: salaryBreakdown,
+                paid_mode: null,
+                pay_date: null,
+                pay_reference_no: null,
+                payment_remarks: null,
+                paid_by: null,
+                paid_at: null,
                 updated_at: new Date(),
             }).where(eq(monthlyAttendanceSummary.id, existingSummary.id)).returning()
 
@@ -1250,6 +1256,46 @@ export class SalaryService {
         }
 
         return summary
+    }
+
+    /** Mark salary as paid and record payment details */
+    static async markSalaryPaid({
+        summaryId,
+        paidMode,
+        payDate,
+        payReferenceNo,
+        paymentRemarks,
+        paidBy,
+    }: {
+        summaryId: string
+        paidMode: string
+        payDate: string
+        payReferenceNo?: string
+        paymentRemarks?: string
+        paidBy: string
+    }) {
+        const summary = await db.query.monthlyAttendanceSummary.findFirst({
+            where: eq(monthlyAttendanceSummary.id, summaryId)
+        })
+
+        if (!summary) {
+            throw new TRPCError({ code: 'NOT_FOUND', message: 'Payslip summary not found' })
+        }
+        if (summary.status !== 'payslip_generated') {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'Payslip must be generated before marking as paid' })
+        }
+
+        const [updated] = await db.update(monthlyAttendanceSummary).set({
+            paid_mode: paidMode,
+            pay_date: payDate,
+            pay_reference_no: payReferenceNo || null,
+            payment_remarks: paymentRemarks || null,
+            paid_by: paidBy,
+            paid_at: new Date(),
+            updated_at: new Date(),
+        }).where(eq(monthlyAttendanceSummary.id, summaryId)).returning()
+
+        return updated
     }
 
     // ==========================================

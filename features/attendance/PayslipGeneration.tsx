@@ -5,8 +5,12 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { trpc } from "@/lib/trpc/client"
 import { toast } from "sonner"
-import { Receipt, Loader2, Printer, Eye, AlertTriangle, TrendingUp, TrendingDown } from "lucide-react"
+import { Receipt, Loader2, Printer, Eye, AlertTriangle, TrendingUp, TrendingDown, CreditCard, CheckCircle, Save, Calendar as CalendarIcon } from "lucide-react"
 import { CardShell } from "./CardShell"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
+import { format } from "date-fns"
+import { cn } from "@/lib/utils"
 import {
     Select,
     SelectContent,
@@ -23,6 +27,7 @@ import {
 } from "@/components/ui/dialog"
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { AsyncButton } from "@/components/ui/async-button"
 
 const MONTHS = [
     "January", "February", "March", "April", "May", "June",
@@ -44,6 +49,45 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
     const [selectedIds, setSelectedIds] = useState<string[]>([])
     const [viewPayslipId, setViewPayslipId] = useState<string | null>(null)
     const payslipRef = useRef<HTMLDivElement>(null)
+
+    const utils = trpc.useUtils()
+    const [markPaidId, setMarkPaidId] = useState<string | null>(null)
+    const [isCalendarOpen, setIsCalendarOpen] = useState(false)
+    const [paidMode, setPaidMode] = useState<string>("bank_transfer")
+    const [payDate, setPayDate] = useState<string>(new Date().toISOString().split('T')[0])
+    const [payReferenceNo, setPayReferenceNo] = useState<string>("")
+    const [paymentRemarks, setPaymentRemarks] = useState<string>("")
+
+    const markPaidMutation = trpc.salary.markSalaryPaid.useMutation({
+        onSuccess: () => {
+            toast.success("Salary marked as paid successfully")
+            setTimeout(() => {
+                setMarkPaidId(null)
+                setPayReferenceNo("")
+                setPaymentRemarks("")
+            }, 1500)
+            refetch()
+            utils.salary.getPayslipDetail.invalidate({ summaryId: viewPayslipId || "" })
+        },
+        onError: (err) => {
+            toast.error(err.message || "Failed to mark salary as paid")
+        }
+    })
+
+    const handleOpenMarkPaid = (id: string, currentDetails?: any) => {
+        setMarkPaidId(id)
+        if (currentDetails) {
+            setPaidMode(currentDetails.paid_mode || "bank_transfer")
+            setPayDate(currentDetails.pay_date || new Date().toISOString().split('T')[0])
+            setPayReferenceNo(currentDetails.pay_reference_no || "")
+            setPaymentRemarks(currentDetails.payment_remarks || "")
+        } else {
+            setPaidMode("bank_transfer")
+            setPayDate(new Date().toISOString().split('T')[0])
+            setPayReferenceNo("")
+            setPaymentRemarks("")
+        }
+    }
 
     const { data: summaries, isLoading, refetch } = trpc.salary.getMonthlySummaries.useQuery(
         { month, year },
@@ -75,6 +119,10 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
 
     const displaySummaries = useMemo(() =>
         summaries?.filter((s: any) => s.status === 'set_for_salary' || s.status === 'payslip_generated') || [], [summaries]
+    )
+
+    const selectedSummary = useMemo(() =>
+        summaries?.find((s: any) => s.id === markPaidId), [summaries, markPaidId]
     )
 
     const selectableSummaries = useMemo(() =>
@@ -351,9 +399,19 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
                                                         </Badge>
                                                     ) : isGenerated ? (
                                                         <div className="flex items-center gap-1">
-                                                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px]">
-                                                                Generated
-                                                            </Badge>
+                                                            {s.paid_mode ? (
+                                                                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-bold">
+                                                                    Paid
+                                                                </Badge>
+                                                            ) : (
+                                                                <Badge 
+                                                                    variant="outline" 
+                                                                    className="bg-amber-500/10 text-amber-600 border-amber-500/20 text-[10px] font-bold cursor-pointer hover:bg-amber-500/20"
+                                                                    onClick={() => handleOpenMarkPaid(s.id, s)}
+                                                                >
+                                                                    Unpaid
+                                                                </Badge>
+                                                            )}
                                                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setViewPayslipId(s.id)}>
                                                                 <Eye className="h-3.5 w-3.5" />
                                                             </Button>
@@ -481,9 +539,20 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
                                                     </Tooltip>
                                                 ) : isGenerated ? (
                                                     <div className="flex items-center justify-center gap-1">
-                                                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] py-0 px-1.5">
-                                                            Generated
-                                                        </Badge>
+                                                        {s.paid_mode ? (
+                                                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] py-0 px-1.5 font-bold">
+                                                                Paid
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge 
+                                                                variant="outline" 
+                                                                className="bg-amber-500/10 text-amber-600 border-amber-500/20 text-[10px] py-0 px-1.5 font-bold cursor-pointer hover:bg-amber-500/20"
+                                                                onClick={() => handleOpenMarkPaid(s.id, s)}
+                                                                title="Click to mark as paid"
+                                                            >
+                                                                Unpaid
+                                                            </Badge>
+                                                        )}
                                                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setViewPayslipId(s.id)}>
                                                             <Eye className="h-4 w-4" />
                                                         </Button>
@@ -605,6 +674,24 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
                                                     <span style={{ opacity: 0.6 }}>Extra Days</span>
                                                     <span style={{ fontWeight: 600, color: '#b45309' }}>{breakdown.extra_days || 0}</span>
                                                 </div>
+                                                {payslipDetail.paid_mode && (
+                                                    <>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0' }}>
+                                                            <span style={{ opacity: 0.6 }}>Payment Mode</span>
+                                                            <span style={{ fontWeight: 600, textTransform: 'capitalize' }}>{payslipDetail.paid_mode.replace('_', ' ')}</span>
+                                                        </div>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0' }}>
+                                                            <span style={{ opacity: 0.6 }}>Payment Date</span>
+                                                            <span style={{ fontWeight: 600 }}>{payslipDetail.pay_date}</span>
+                                                        </div>
+                                                        {payslipDetail.pay_reference_no && (
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '3px 0', gridColumn: 'span 2' }}>
+                                                                <span style={{ opacity: 0.6 }}>Ref / Txn No</span>
+                                                                <span style={{ fontWeight: 600 }}>{payslipDetail.pay_reference_no}</span>
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                )}
                                             </div>
 
                                             {/* Earnings & Deductions — Side by Side Table */}
@@ -767,6 +854,61 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
                                         </div>
                                     </div>
 
+                                    {/* Payment Details Card */}
+                                    {payslipDetail.paid_mode ? (
+                                        <div className="bg-emerald-50/50 dark:bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 space-y-3">
+                                            <div className="flex items-center justify-between">
+                                                <h4 className="text-xs font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+                                                    <CheckCircle className="h-4 w-4 text-emerald-600" /> Payment Recorded
+                                                </h4>
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="sm" 
+                                                    className="h-7 text-xs text-emerald-700 hover:text-emerald-800 dark:text-emerald-400"
+                                                    onClick={() => handleOpenMarkPaid(payslipDetail.id, payslipDetail)}
+                                                >
+                                                    Edit Details
+                                                </Button>
+                                            </div>
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm font-medium">
+                                                <div>
+                                                    <span className="text-[10px] text-muted-foreground uppercase block">Paid Mode</span>
+                                                    <span className="font-bold capitalize">{payslipDetail.paid_mode.replace('_', ' ')}</span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-[10px] text-muted-foreground uppercase block">Pay Date</span>
+                                                    <span className="font-bold">{payslipDetail.pay_date}</span>
+                                                </div>
+                                                {payslipDetail.pay_reference_no && (
+                                                    <div>
+                                                        <span className="text-[10px] text-muted-foreground uppercase block">Ref / Txn No</span>
+                                                        <span className="font-bold">{payslipDetail.pay_reference_no}</span>
+                                                    </div>
+                                                )}
+                                                {payslipDetail.payment_remarks && (
+                                                    <div className="col-span-2 md:col-span-1">
+                                                        <span className="text-[10px] text-muted-foreground uppercase block">Remarks</span>
+                                                        <span className="font-bold truncate block">{payslipDetail.payment_remarks}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="bg-slate-500/5 border border-dashed border-border rounded-2xl p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+                                            <div>
+                                                <h4 className="text-xs font-black uppercase tracking-wider text-muted-foreground">Payment Pending</h4>
+                                                <p className="text-xs text-muted-foreground mt-0.5">This generated payslip has not been marked as paid yet.</p>
+                                            </div>
+                                            <Button 
+                                                size="sm"
+                                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                                                onClick={() => handleOpenMarkPaid(payslipDetail.id)}
+                                            >
+                                                Mark as Paid
+                                            </Button>
+                                        </div>
+                                    )}
+
                                     {/* Earnings & Deductions Tables */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         {/* Earnings */}
@@ -836,6 +978,152 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
                                 </div>
                             </>
                         )}
+                    </DialogContent>
+                </Dialog>
+
+                {/* Mark Paid Dialog */}
+                <Dialog open={!!markPaidId} onOpenChange={(open) => !open && setMarkPaidId(null)}>
+                    <DialogContent className="max-w-[650px]">
+                        <DialogHeader>
+                            <DialogTitle className="flex items-center gap-2">
+                                <CreditCard className="h-5 w-5 text-orange-500" />
+                                Mark Salary as Paid
+                            </DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4 py-3">
+                            {/* Row 1: Employee Details styled like payslip view */}
+                            <div className="flex items-center gap-3 bg-muted/30 border border-border/50 p-3.5 rounded-2xl">
+                                <div className="h-12 w-12 rounded-xl bg-orange-500/10 flex items-center justify-center border border-orange-500/20 text-orange-600 font-bold text-lg shrink-0">
+                                    {selectedSummary?.profile?.full_name?.charAt(0) || 'E'}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <h3 className="font-bold text-sm leading-none truncate">{selectedSummary?.profile?.full_name || '—'}</h3>
+                                    <p className="text-xs text-muted-foreground mt-1 truncate">{selectedSummary?.profile?.designation?.name || 'No Designation'}</p>
+                                    <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{selectedSummary?.profile?.email}</p>
+                                </div>
+                                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                    <Badge variant="outline" className="bg-orange-500/10 text-orange-600 border-orange-500/25 text-[9px] px-2 py-0.5 font-bold tracking-widest uppercase">
+                                        {MONTHS[month - 1]} {year}
+                                    </Badge>
+                                    <div className="text-right">
+                                        <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground block">Net Salary</span>
+                                        <span className="text-xs font-black text-emerald-600 block leading-none mt-0.5">{formatCurrency(selectedSummary?.take_home)}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Row 2: Payment Mode & Payment Date */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Payment Mode</label>
+                                    <Select value={paidMode} onValueChange={(val) => setPaidMode(val)}>
+                                        <SelectTrigger className="w-full h-10 text-xs">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                                            <SelectItem value="cash">Cash</SelectItem>
+                                            <SelectItem value="cheque">Cheque</SelectItem>
+                                            <SelectItem value="upi">UPI / Online</SelectItem>
+                                            <SelectItem value="other">Other</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-1 flex flex-col justify-end">
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">Payment Date</label>
+                                    <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                className={cn(
+                                                    "w-full h-10 pl-3 text-left font-normal border border-input bg-background hover:bg-muted/10 flex items-center justify-between",
+                                                    !payDate && "text-muted-foreground"
+                                                )}
+                                            >
+                                                {payDate ? (
+                                                    format(new Date(payDate), "PPP")
+                                                ) : (
+                                                    <span>Pick a date</span>
+                                                )}
+                                                <CalendarIcon className="h-4 w-4 opacity-50" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0" align="start">
+                                            <Calendar
+                                                mode="single"
+                                                selected={payDate ? new Date(payDate) : undefined}
+                                                onSelect={(date) => {
+                                                    if (date) {
+                                                        setPayDate(format(date, 'yyyy-MM-dd'))
+                                                    }
+                                                    setIsCalendarOpen(false)
+                                                }}
+                                                initialFocus
+                                            />
+                                        </PopoverContent>
+                                    </Popover>
+                                </div>
+                            </div>
+
+                            {/* Row 3: Payment Amount & Transfer No */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Payment Amount</label>
+                                    <input 
+                                        type="text"
+                                        value={selectedSummary ? formatCurrency(selectedSummary.take_home) : '—'}
+                                        disabled
+                                        className="w-full flex h-10 rounded-md border border-input bg-muted px-3 py-1 text-xs font-bold text-emerald-600 disabled:opacity-80"
+                                    />
+                                </div>
+
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Transfer No.</label>
+                                    <input 
+                                        type="text"
+                                        value={payReferenceNo}
+                                        onChange={(e) => setPayReferenceNo(e.target.value)}
+                                        placeholder="Enter bank reference, check no, or UPI txn id"
+                                        className="w-full flex h-10 rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Row 4: Remarks */}
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Remarks</label>
+                                <textarea 
+                                    value={paymentRemarks}
+                                    onChange={(e) => setPaymentRemarks(e.target.value)}
+                                    placeholder="Additional notes..."
+                                    className="w-full flex min-h-[60px] rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                />
+                            </div>
+
+                            <div className="flex justify-end gap-2 pt-2">
+                                <Button variant="outline" size="sm" onClick={() => setMarkPaidId(null)}>Cancel</Button>
+                                <AsyncButton 
+                                    onClick={async () => {
+                                        await markPaidMutation.mutateAsync({
+                                            summaryId: markPaidId!,
+                                            paidMode,
+                                            payDate,
+                                            payReferenceNo,
+                                            paymentRemarks,
+                                        })
+                                    }}
+                                    variant="primary"
+                                    size="sm"
+                                    loadingText="Recording..."
+                                    successText="Payment Saved successfully!"
+                                    icons={{ idle: <Save className="h-4 w-4" /> }}
+                                    className="w-auto px-4"
+                                >
+                                    Save Payment
+                                </AsyncButton>
+                            </div>
+                        </div>
                     </DialogContent>
                 </Dialog>
             </div>

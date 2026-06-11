@@ -253,6 +253,12 @@ export interface MonthlyAttendanceSummary {
   advance_recovery: string | null
   take_home: string | null
   salary_breakdown: Record<string, unknown> | null
+  paid_mode: string | null
+  pay_date: string | null
+  pay_reference_no: string | null
+  payment_remarks: string | null
+  paid_by: string | null
+  paid_at: string | null
   created_at: string | null
   updated_at: string | null
 }

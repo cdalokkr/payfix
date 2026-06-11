@@ -9,7 +9,8 @@ export const metadata = {
 export default async function UpdatePhotoPage() {
     console.log('[UPDATE-PHOTO] Page started')
     const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data, error: authError } = await supabase.auth.getUser()
+    const user = data?.user || null
 
     console.log('[UPDATE-PHOTO] User:', user?.id ? 'Found' : 'Not found')
     if (!user) {

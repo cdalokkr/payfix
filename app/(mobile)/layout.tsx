@@ -18,7 +18,8 @@ export default async function MobileLayout({
 
     // Check authentication
     const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data, error } = await supabase.auth.getUser()
+    const user = data?.user || null
 
     if (!user) {
         redirect('/login')

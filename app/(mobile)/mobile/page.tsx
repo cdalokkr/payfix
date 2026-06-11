@@ -23,7 +23,8 @@ export default async function MobilePage() {
     const isPwa = cookieStore.get('pwa_standalone')?.value === 'true'
 
     const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data, error } = await supabase.auth.getUser()
+    const user = data?.user || null
 
     if (!user) {
         return null

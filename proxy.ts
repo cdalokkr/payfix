@@ -149,6 +149,11 @@ export async function proxy(request: NextRequest) {
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
         {
+            auth: {
+                autoRefreshToken: false,
+                persistSession: false,
+                detectSessionInUrl: false,
+            },
             cookies: {
                 getAll() {
                     return request.cookies.getAll()
@@ -218,7 +223,13 @@ export async function proxy(request: NextRequest) {
         }
     } else {
         const tStart = performance.now()
-        const { data: authData } = await supabase.auth.getUser()
+        let authData = null
+        try {
+            const { data } = await supabase.auth.getUser()
+            authData = data
+        } catch (err) {
+            console.error('[PROXY-AUTH] Error fetching user session:', err)
+        }
         user = authData?.user || null
 
         if (user) {

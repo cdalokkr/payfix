@@ -245,4 +245,19 @@ export const salaryRouter = router({
         .query(async ({ ctx, input }) => {
             return await SalaryService.getMyPayslipDetail(input.summaryId, ctx.profile.id)
         }),
+
+    markSalaryPaid: moderatorProcedure
+        .input(z.object({
+            summaryId: z.string().uuid(),
+            paidMode: z.string(),
+            payDate: z.string(),
+            payReferenceNo: z.string().optional(),
+            paymentRemarks: z.string().optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+            return await SalaryService.markSalaryPaid({
+                ...input,
+                paidBy: ctx.profile.id,
+            })
+        }),
 })

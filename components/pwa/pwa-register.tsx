@@ -18,6 +18,26 @@ export function PWARegister() {
             return
         }
 
+        // Only register service worker on mobile devices, standalone PWA, or mobile viewports
+        const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile/i.test(navigator.userAgent)
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true
+        const isMobileViewport = window.innerWidth < 768
+
+        if (!isMobileDevice && !isStandalone && !isMobileViewport) {
+            console.log('[PWA] Skipping service worker registration on desktop/laptop browser')
+            // Clean up any existing service worker registrations on desktop
+            navigator.serviceWorker.getRegistrations().then((registrations) => {
+                for (const registration of registrations) {
+                    registration.unregister().then((success) => {
+                        if (success) {
+                            console.log('[PWA] Unregistered existing service worker on desktop browser')
+                        }
+                    })
+                }
+            })
+            return
+        }
+
         const registerServiceWorker = async () => {
             try {
                 const registration = await navigator.serviceWorker.register('/sw.js', {
@@ -50,13 +70,6 @@ export function PWARegister() {
                     })
                 })
 
-                // Handle controller change
-                let refreshing = false
-                navigator.serviceWorker.addEventListener('controllerchange', () => {
-                    if (refreshing) return
-                    refreshing = true
-                    window.location.reload()
-                })
             } catch (error) {
                 console.error('[PWA] Service worker registration failed:', error)
             }

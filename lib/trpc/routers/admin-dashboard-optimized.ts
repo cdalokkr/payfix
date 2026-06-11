@@ -103,16 +103,22 @@ export const adminDashboardRouter = router({
       const cacheKey = `unified-dashboard-${ctx.user.id}-${input.analyticsDays}-${input.activitiesLimit}-${input.priority}-${input.localDate || 'no-date'}-v${cacheVersion}`
 
       try {
-        // Check local request cache first
+        // Check local request cache first (including concurrent in-progress promises)
         if (input.enableCache && input.priority === 'speed') {
-          const cachedData = requestCache.get(cacheKey)
-          if (cachedData && Date.now() < cachedData.expiry) {
+          const cached = requestCache.get(cacheKey)
+          if (cached && (Date.now() < cached.expiry || cached.promise)) {
             metrics.cacheHit = true
+            
+            // Wait for in-progress promise or reuse cached data
+            const dbResult = await cached.promise
+            
             const timingMetrics = endDashboardTiming(metrics)
+            
+            // Map the resolved result with updated cache-hit metrics
             return {
-              ...cachedData.data as any,
+              ...dbResult as any,
               metadata: {
-                ...(cachedData.data as any).metadata,
+                ...(dbResult as any).metadata,
                 performance: {
                   cacheHit: true,
                   totalTime: timingMetrics.totalTime
@@ -122,36 +128,49 @@ export const adminDashboardRouter = router({
           }
         }
 
-        // Use OptimizedQueryManager (Drizzle-powered)
-        const dbResult = await queryManager.getDashboardMetricsUnified({
-          analyticsDays: input.analyticsDays,
-          activitiesLimit: input.activitiesLimit,
-          useCache: input.priority === 'speed' && input.enableCache,
-          // Filter activities by profileId for non-admin users (moderators and employees)
-          // Admin sees ALL activities, others see only their own
-          profileId: ctx.profile.role !== 'admin' ? ctx.profile.id : undefined,
-          localDate: input.localDate
-        })
+        // Use a deferred promise pattern to deduplicate concurrent requests
+        const queryPromise = (async () => {
+          // Use OptimizedQueryManager (Drizzle-powered)
+          const dbResult = await queryManager.getDashboardMetricsUnified({
+            analyticsDays: input.analyticsDays,
+            activitiesLimit: input.activitiesLimit,
+            useCache: input.priority === 'speed' && input.enableCache,
+            // Filter activities by profileId for non-admin users (moderators and employees)
+            // Admin sees ALL activities, others see only their own
+            profileId: ctx.profile.role !== 'admin' ? ctx.profile.id : undefined,
+            localDate: input.localDate
+          })
 
-        const result = {
-          ...dbResult,
-          metadata: {
-            consolidated: true,
-            unified: true,
-            fetchedAt: new Date().toISOString(),
-            version: '4.0.0 (Drizzle)',
-            priority: input.priority,
-            performance: {
-              cacheHit: false,
-              totalTime: 0 // Will be updated by endDashboardTiming
+          return {
+            ...dbResult,
+            metadata: {
+              consolidated: true,
+              unified: true,
+              fetchedAt: new Date().toISOString(),
+              version: '4.0.0 (Drizzle)',
+              priority: input.priority,
+              performance: {
+                cacheHit: false,
+                totalTime: 0 // Will be updated by resolver
+              }
             }
           }
+        })()
+
+        // Cache the promise immediately so concurrent requests hit the in-progress promise
+        if (input.enableCache) {
+          requestCache.set(cacheKey, {
+            data: null,
+            expiry: Date.now() + CACHE_TTL,
+            promise: queryPromise
+          })
         }
 
+        const result = await queryPromise
         const timingMetrics = endDashboardTiming(metrics)
         result.metadata.performance.totalTime = timingMetrics.totalTime
 
-        // Cache the result locally
+        // Update cache entry with the resolved data
         if (input.enableCache) {
           requestCache.set(cacheKey, {
             data: result,

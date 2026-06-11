@@ -5,32 +5,9 @@ import { getServerClient } from '@/lib/trpc/server-client'
 import { DASHBOARD_QUERY_PARAMS } from '@/lib/dashboard-config'
 
 export default async function EmployeeDashboardPage() {
-    let initialData = null
-
-    try {
-        // Current date in IST (GMT+5:30) for accurate server-side prefetch
-        // This must match the client's local date calculation to avoid hydration mismatch
-        const now = new Date();
-        const istOffset = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes
-        const istDate = new Date(now.getTime() + istOffset);
-        const year = istDate.getUTCFullYear();
-        const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
-        const day = String(istDate.getUTCDate()).padStart(2, '0');
-        const todayStr = `${year}-${month}-${day}`;
-
-        // Prefetch data on the server for instant loading
-        const trpc = await getServerClient()
-
-        // OPTIMIZATION: Only fetch attendance status (already cached from login)
-        // Employees don't need the heavy unified dashboard query (that's for admins)
-        const attendanceStatus = await trpc.attendance.getTodayStatus({ localDate: todayStr })
-
-        initialData = {
-            attendanceStatus
-        }
-    } catch (error) {
-        console.error('[EMPLOYEE-PAGE] Prefetch failed:', error)
-    }
+    // No server-side prefetch is needed here as the client-side component performs lazy, concurrent fetching.
+    // This turns the server component render into a fast, non-blocking operation.
+    const initialData = null;
 
     return (
         <ErrorBoundary level="page">

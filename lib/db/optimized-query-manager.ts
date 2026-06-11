@@ -262,10 +262,9 @@ export class OptimizedQueryManager {
       const activitiesStatsQuery = shouldFetchGlobalStats
         ? db.execute(sql`
             SELECT 
-              count(*) as total_activities,
-              count(*) FILTER (WHERE created_at >= ${todayStart.toISOString()}::timestamp) as today_activities,
-              count(DISTINCT user_id) FILTER (WHERE created_at >= ${sevenDaysAgo.toISOString()}::timestamp) as active_users
-            FROM activities
+              (SELECT count(*) FROM activities) as total_activities,
+              (SELECT count(*) FROM activities WHERE created_at >= ${todayStart.toISOString()}::timestamp) as today_activities,
+              (SELECT count(DISTINCT user_id) FROM activities WHERE created_at >= ${sevenDaysAgo.toISOString()}::timestamp) as active_users
           `)
         : Promise.resolve([{
           total_activities: 0, today_activities: 0, active_users: 0
@@ -299,31 +298,36 @@ export class OptimizedQueryManager {
           : Promise.resolve([]),
 
         // 3. Recent activities - Filtered for employee if profileId exists
-        db.query.activities.findMany({
-          where: profileId ? eq(activities.user_id, profileId) : undefined,
-          with: {
-            profile: {
-              columns: {
-                id: true,
-                email: true,
-                full_name: true,
-                first_name: true,
-                last_name: true,
-                role: true,
-                designation_id: true
-              },
-              with: {
-                designation: {
-                  columns: {
-                    name: true
-                  }
-                }
-              }
-            }
-          },
-          orderBy: [desc(activities.created_at)],
-          limit: activitiesLimit
-        }),
+        (async () => {
+          const raw = await db
+            .select({
+              activity: activities,
+              profile: profiles,
+              designation: designations
+            })
+            .from(activities)
+            .leftJoin(profiles, eq(activities.user_id, profiles.id))
+            .leftJoin(designations, eq(profiles.designation_id, designations.id))
+            .where(profileId ? eq(activities.user_id, profileId) : undefined)
+            .orderBy(desc(activities.created_at))
+            .limit(activitiesLimit)
+
+          return raw.map(row => ({
+            ...row.activity,
+            profile: row.profile ? {
+              id: row.profile.id,
+              email: row.profile.email,
+              full_name: row.profile.full_name,
+              first_name: row.profile.first_name,
+              last_name: row.profile.last_name,
+              role: row.profile.role,
+              designation_id: row.profile.designation_id,
+              designation: row.designation ? {
+                name: row.designation.name
+              } : null
+            } : null
+          }))
+        })(),
 
         // 4. User-specific attendance data (only if needed)
         // CRITICAL: Use client's localDate to calculate date range for timezone consistency

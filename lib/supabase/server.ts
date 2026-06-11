@@ -26,6 +26,11 @@ export function createSupabaseClientSync(cookieStore: Awaited<ReturnType<typeof 
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     supabaseKey,
     {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
+      },
       cookies: {
         getAll() {
           return cookieStore.getAll()
@@ -68,6 +73,11 @@ export async function createPublicSupabaseClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
+      },
       cookies: {
         getAll() {
           return cookieStore.getAll()

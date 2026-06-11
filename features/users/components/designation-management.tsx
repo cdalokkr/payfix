@@ -42,6 +42,7 @@ export default function DesignationManagement({ initialData }: DesignationManage
     // Data Fetching
     const { data: designations, isLoading, refetch } = trpc.admin.designation.getDesignations.useQuery(undefined, {
         initialData: initialData,
+        staleTime: 30000,
         refetchOnWindowFocus: false,
     })
 
