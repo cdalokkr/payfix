@@ -87,8 +87,7 @@ export function LogoutModal({ isOpen, onOpenChange }: LogoutModalProps) {
               localStorage.removeItem('userProfile')
               sessionStorage.removeItem('sessionProfile')
 
-              // Clear React Query cache
-              queryClient.clear()
+              // Clear React Query cache is deferred to the redirect step to prevent refetching while components are still mounted
 
               // Clear prefetch status and multi-tier cache
               clearAllPrefetchStatus()
@@ -121,6 +120,17 @@ export function LogoutModal({ isOpen, onOpenChange }: LogoutModalProps) {
           setTimeout(() => {
             console.log('[LOGOUT-MODAL] Immediate redirecting to /login')
             onOpenChange(false)
+            try {
+              // Disable queries first so clearing cache doesn't trigger refetches of mounted components
+              queryClient.setDefaultOptions({
+                queries: {
+                  enabled: false,
+                },
+              })
+              queryClient.clear()
+            } catch (clearError) {
+              console.warn('[LOGOUT-MODAL] Error clearing query cache:', clearError)
+            }
             window.location.replace('/login')
           }, 450)
 
@@ -129,6 +139,14 @@ export function LogoutModal({ isOpen, onOpenChange }: LogoutModalProps) {
           // Secure fallback: always clear and redirect
           localStorage.clear()
           sessionStorage.clear()
+          try {
+            queryClient.setDefaultOptions({
+              queries: {
+                enabled: false,
+              },
+            })
+            queryClient.clear()
+          } catch (e) {}
           onOpenChange(false)
           window.location.replace('/login')
         }
