@@ -606,7 +606,43 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
                             </DialogTitle>
                         </DialogHeader>
 
-                        {payslipDetail && breakdown && (
+                        {!payslipDetail || !breakdown ? (
+                            <div className="p-6 space-y-6">
+                                {/* Glassmorphic Header Skeleton */}
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-muted/30 border border-border/50 p-4 rounded-2xl animate-pulse">
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-12 w-12 rounded-xl bg-muted/60 dark:bg-slate-800 animate-pulse" />
+                                        <div className="space-y-2">
+                                            <div className="h-4 w-32 bg-muted/60 dark:bg-slate-800 rounded" />
+                                            <div className="h-3 w-24 bg-muted/60 dark:bg-slate-800 rounded" />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2 flex flex-col md:items-end">
+                                        <div className="h-5 w-20 bg-muted/60 dark:bg-slate-800 rounded-xl" />
+                                        <div className="h-3 w-16 bg-muted/60 dark:bg-slate-800 rounded" />
+                                    </div>
+                                </div>
+                                {/* Attendance Stats Cards Skeleton */}
+                                <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+                                    {[...Array(6)].map((_, i) => (
+                                        <div key={i} className="bg-card border border-border/40 p-3 rounded-xl min-h-[85px] animate-pulse flex flex-col justify-between">
+                                            <div className="h-3 w-12 bg-muted/60 dark:bg-slate-800 rounded mx-auto" />
+                                            <div className="h-5 w-8 bg-muted/60 dark:bg-slate-800 rounded mx-auto" />
+                                        </div>
+                                    ))}
+                                </div>
+                                {/* Table skeleton */}
+                                <div className="space-y-3">
+                                    <div className="h-10 bg-muted/40 dark:bg-slate-800 rounded-xl animate-pulse" />
+                                    <div className="h-32 bg-muted/20 dark:bg-slate-800/50 rounded-xl animate-pulse" />
+                                </div>
+                                {/* Footer skeleton */}
+                                <div className="flex justify-end gap-2 pt-3 border-t border-border/50">
+                                    <div className="h-9 w-28 bg-muted/60 dark:bg-slate-800 rounded-lg animate-pulse" />
+                                    <div className="h-9 w-20 bg-muted/60 dark:bg-slate-800 rounded-lg animate-pulse" />
+                                </div>
+                            </div>
+                        ) : (
                             <>
                                 {/* Hidden print container */}
                                 <div style={{ display: 'none' }}>

@@ -586,7 +586,7 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
 
             {/* PaySlip Detail Bottom Sheet */}
             <AnimatePresence>
-                {viewPayslipId && payslipDetail && breakdown && (
+                {viewPayslipId && (
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -619,7 +619,8 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                             </div>
 
                             {/* Visible Payslip Content + Hidden Print Content */}
-                            <div className="px-4 pb-8 space-y-5">
+                            {payslipDetail && breakdown ? (
+                                <div className="px-4 pb-8 space-y-5">
                                 {/* Period Badge */}
                                 <div className="flex justify-center">
                                     <Badge className="bg-orange-500/10 text-orange-600 border-orange-200 dark:border-orange-500/30 font-black uppercase tracking-widest text-[10px] py-1.5 px-4 rounded-xl">
@@ -767,7 +768,55 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                                     </div>
                                 )}
                             </div>
+                            ) : (
+                                <div className="px-4 pb-8 space-y-5 animate-pulse">
+                                    {/* Period Badge Skeleton */}
+                                    <div className="flex justify-center">
+                                        <div className="h-8 w-28 bg-slate-100 dark:bg-slate-900 rounded-xl" />
+                                    </div>
 
+                                    {/* Employee Info Skeleton */}
+                                    <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 space-y-3 border border-slate-100 dark:border-slate-800">
+                                        <div className="flex justify-between">
+                                            <div className="h-4 w-12 bg-slate-200 dark:bg-slate-800 rounded" />
+                                            <div className="h-4 w-32 bg-slate-200 dark:bg-slate-800 rounded" />
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <div className="h-4 w-20 bg-slate-200 dark:bg-slate-800 rounded" />
+                                            <div className="h-4 w-24 bg-slate-200 dark:bg-slate-800 rounded" />
+                                        </div>
+                                    </div>
+
+                                    {/* Attendance Stats Skeleton */}
+                                    <div className="grid grid-cols-3 gap-3">
+                                        {[...Array(3)].map((_, idx) => (
+                                            <div key={idx} className="bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 rounded-xl p-3 text-center space-y-2">
+                                                <div className="h-3 w-16 bg-slate-200 dark:bg-slate-800 rounded mx-auto" />
+                                                <div className="h-5 w-8 bg-slate-200 dark:bg-slate-800 rounded mx-auto" />
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Table Skeleton */}
+                                    <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 space-y-3">
+                                        <div className="h-4 w-24 bg-slate-200 dark:bg-slate-800 rounded" />
+                                        <div className="space-y-2">
+                                            {[...Array(4)].map((_, idx) => (
+                                                <div key={idx} className="flex justify-between">
+                                                    <div className="h-3.5 w-24 bg-slate-200 dark:bg-slate-800 rounded" />
+                                                    <div className="h-3.5 w-16 bg-slate-200 dark:bg-slate-800 rounded" />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Net Pay Skeleton */}
+                                    <div className="bg-slate-900 dark:bg-slate-800 text-white rounded-2xl p-4 flex justify-between items-center">
+                                        <div className="h-4 w-16 bg-slate-700 rounded" />
+                                        <div className="h-6 w-24 bg-slate-700 rounded" />
+                                    </div>
+                                </div>
+                            )}
                         </motion.div>
                     </motion.div>
                 )}
