@@ -1,20 +1,17 @@
 "use client"
 
 import { useState } from "react"
-import { motion, AnimatePresence } from "framer-motion"
+import { motion } from "framer-motion"
 import { format } from "date-fns"
 import { trpc } from "@/lib/trpc/client"
 import {
     Receipt,
     FileText,
-    X,
     TrendingDown,
     TrendingUp,
-    IndianRupee,
     Loader2,
     Download,
-    CheckCircle,
-    CreditCard
+    CheckCircle
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -105,22 +102,9 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
 
     const [month, setMonth] = useState<number>(defaultMonth)
     const [year, setYear] = useState<number>(defaultYear)
-    const [viewPayslipId, setViewPayslipId] = useState<string | null>(null)
     const [isDownloading, setIsDownloading] = useState<string | null>(null)
 
-
     const { data: payslips, isLoading, isFetching } = trpc.salary.getMyPayslips.useQuery({ month, year })
-
-    const { data: payslipDetail } = trpc.salary.getMyPayslipDetail.useQuery(
-        { summaryId: viewPayslipId || "" },
-        { enabled: !!viewPayslipId }
-    )
-
-    const selectedSlip = payslips?.find(s => s.id === viewPayslipId) || null
-    const displayPaidMode = payslipDetail?.paid_mode ?? selectedSlip?.paid_mode
-    const displayPayDate = payslipDetail?.pay_date ?? selectedSlip?.pay_date
-    const displayPayReferenceNo = payslipDetail?.pay_reference_no ?? selectedSlip?.pay_reference_no
-    const displayPaymentRemarks = payslipDetail?.payment_remarks ?? selectedSlip?.payment_remarks
 
     const months = Array.from({ length: 12 }, (_, i) => ({
         value: i + 1,
@@ -129,46 +113,7 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
 
     const years = Array.from({ length: 5 }, (_, i) => year - 2 + i)
 
-    // Payslip detail breakdown
-    const breakdown = payslipDetail?.salary_breakdown as Record<string, any> | null
-
-    const earningsItems = breakdown ? [
-        { label: 'Basic Salary', amount: breakdown.basic_salary },
-        { label: 'HRA', amount: breakdown.hra },
-        { label: 'DA', amount: breakdown.da },
-        { label: 'TA', amount: breakdown.ta },
-        { label: 'Special Allowance', amount: breakdown.special_allowance },
-        { label: 'Incentive', amount: breakdown.incentive },
-        ...(Number(breakdown.extra_day_payment) > 0 ? [{ label: 'Extra Days Payment', amount: breakdown.extra_day_payment }] : []),
-    ].filter(e => Number(e.amount) > 0) : []
-
-    const deductionItems = breakdown ? [
-        ...(breakdown.absent_deduction !== undefined
-            ? [
-                { 
-                    label: `Absent Deduction${Number(breakdown.absent_deduction_multiplier) > 1 ? ` (${breakdown.absent_deduction_multiplier}x)` : ''}`, 
-                    amount: breakdown.absent_deduction 
-                },
-                { label: 'Half Day Deduction', amount: breakdown.half_day_deduction },
-              ]
-            : [
-                { label: 'Absence Deduction', amount: breakdown.absence_deduction }
-              ]
-        ),
-        { label: 'Other Deductions', amount: breakdown.other_deductions },
-        ...(breakdown.carry_forward_recovery !== undefined
-            ? [
-                ...(Number(breakdown.carry_forward_recovery) > 0 ? [{ label: 'Salary Deficit Carry-Forward', amount: breakdown.carry_forward_recovery }] : []),
-                ...(Number(breakdown.advance_recovery) > 0 ? [{ label: 'Advance Recovery', amount: breakdown.advance_recovery }] : []),
-              ]
-            : [
-                ...(Number(breakdown.advance_recovery) > 0 ? [{ label: 'Advance Recovery', amount: breakdown.advance_recovery }] : []),
-              ]
-        ),
-    ].filter(e => Number(e.amount) > 0 || ['Absent Deduction', 'Half Day Deduction'].some(lbl => e.label.startsWith(lbl))) : []
-
-    const totalEarnings = earningsItems.reduce((s, e) => s + Number(e.amount || 0), 0)
-    const totalDeductions = deductionItems.reduce((s, e) => s + Number(e.amount || 0), 0)
+    // No top-level breakdown needed as details are rendered inline in the list cards
 
     const handleDownloadPdf = async (slip: any, e: React.MouseEvent) => {
         e.stopPropagation();
@@ -329,70 +274,20 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
 
 
 
-    // Determine first payslip summary data for the hero card
-    const firstPayslip = payslips?.[0]
-
     return (
         <div className="flex flex-col h-[calc(100dvh-5rem-5rem)] -mx-4 -mt-4 bg-slate-50 dark:bg-slate-950">
             {/* Fixed Top Section */}
-            <div className="flex-none px-4 pt-1 pb-2 space-y-3 z-10 bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 shadow-sm relative">
+            <div className="flex-none px-4 pt-3 pb-3 space-y-3 z-10 bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 shadow-sm relative">
                 {/* Header */}
-                <header className="flex items-center gap-2">
-                    <Receipt className="w-5 h-5 text-orange-500" />
-                    <h1 className="text-lg font-black tracking-tight flex items-center gap-2">
-                        My PaySlips
-                        {isFetching && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
-                    </h1>
-                </header>
-
-                {/* Summary Card */}
-                <motion.div variants={itemVars} initial="hidden" animate="show">
-                    <div className="relative overflow-hidden rounded-[1.5rem] bg-gradient-to-br from-orange-500 to-rose-600 p-5 text-white shadow-xl shadow-orange-500/20">
-                        {/* Glass Decorations */}
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-xl" />
-                        <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full -ml-12 -mb-12 blur-lg" />
-
-                        <div className="relative">
-                            <div className="flex items-center gap-2 mb-4 opacity-90">
-                                <IndianRupee className="w-4 h-4" />
-                                <span className="text-xs font-black uppercase tracking-widest">Take-Home Pay</span>
-                            </div>
-                            <div className="flex items-end gap-2 mb-6">
-                                <span className="text-3xl font-black tracking-tighter leading-none">
-                                    {firstPayslip ? formatCurr(firstPayslip.take_home) : '—'}
-                                </span>
-                                <span className="text-sm font-medium opacity-80 mb-1">
-                                    {format(new Date(year, month - 1), 'MMM yyyy')}
-                                </span>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-white/10 rounded-xl p-3 backdrop-blur-md border border-white/20">
-                                    <div className="flex items-center gap-1.5 mb-1 opacity-80">
-                                        <TrendingUp className="w-3.5 h-3.5" />
-                                        <span className="text-[10px] font-bold uppercase tracking-wider">Gross</span>
-                                    </div>
-                                    <span className="font-bold">
-                                        {firstPayslip ? formatCurr(firstPayslip.gross_salary) : '—'}
-                                    </span>
-                                </div>
-                                <div className="bg-black/10 rounded-xl p-3 backdrop-blur-md border border-black/10">
-                                    <div className="flex items-center gap-1.5 mb-1 opacity-80">
-                                        <TrendingDown className="w-3.5 h-3.5" />
-                                        <span className="text-[10px] font-bold uppercase tracking-wider">Deductions</span>
-                                    </div>
-                                    <span className="font-bold">
-                                        {firstPayslip ? formatCurr(
-                                            Number(firstPayslip.absence_deduction || 0) +
-                                            Number((firstPayslip.salary_breakdown as any)?.other_deductions || 0) +
-                                            Number(firstPayslip.advance_recovery || 0)
-                                        ) : '—'}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
+                <header className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Receipt className="w-5 h-5 text-orange-500" />
+                        <h1 className="text-lg font-black tracking-tight flex items-center gap-2">
+                            My PaySlips
+                            {isFetching && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
+                        </h1>
                     </div>
-                </motion.div>
+                </header>
 
                 {/* Filters */}
                 <motion.div variants={itemVars} initial="hidden" animate="show" className="flex items-center gap-3">
@@ -496,9 +391,7 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                                     <motion.div
                                         key={slip.id}
                                         variants={itemVars}
-                                        whileTap={{ scale: 0.98 }}
-                                        onClick={() => setViewPayslipId(slip.id)}
-                                        className="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-100 dark:border-slate-800/50 cursor-pointer active:bg-slate-50 dark:active:bg-slate-800/50 transition-colors"
+                                        className="bg-white dark:bg-slate-900 rounded-[1.5rem] p-5 shadow-md border border-slate-100 dark:border-slate-800/50"
                                     >
                                         {/* Header: Month + Generated Badge */}
                                         <div className="flex items-center justify-between mb-3">
@@ -597,10 +490,51 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                                         </div>
 
                                         {/* Net Pay */}
-                                        <div className="mt-3 pt-3 border-t border-dashed border-slate-200 dark:border-slate-700 flex justify-between items-center">
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Net Pay</span>
-                                            <span className="text-base font-black text-emerald-600 dark:text-emerald-400 tracking-tight">{formatCurr(slip.take_home)}</span>
+                                        <div className="mt-4 pt-4 border-t-2 border-dashed border-slate-200 dark:border-slate-800 flex justify-between items-center">
+                                            <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">Net Pay</span>
+                                            <span className="text-lg font-black text-emerald-600 dark:text-emerald-400 tracking-tight">{formatCurr(slip.take_home)}</span>
                                         </div>
+
+                                        {/* Carry-Forward Notice */}
+                                        {bd && Number(bd.carry_forward || 0) > 0 && (
+                                            <div className="mt-4 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-xl p-3">
+                                                <p className="text-[11px] text-rose-700 dark:text-rose-400 font-medium">
+                                                    <strong>Note:</strong> Deductions exceeded earnings by {formatCurr(bd.carry_forward)}.
+                                                    This amount has been carried forward as an advance.
+                                                </p>
+                                            </div>
+                                        )}
+
+                                        {/* Payment Info Card */}
+                                        {slip.paid_mode && (
+                                            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
+                                                <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-black text-[10px] uppercase tracking-wider">
+                                                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> Payment Recorded
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-y-3 gap-x-2 bg-emerald-50/50 dark:bg-emerald-500/5 border border-emerald-100 dark:border-emerald-500/10 p-3.5 rounded-xl text-[11px] font-semibold">
+                                                    <div>
+                                                        <span className="text-[9px] text-slate-400 uppercase block font-bold">Paid Mode</span>
+                                                        <span className="text-slate-700 dark:text-slate-300 capitalize">{slip.paid_mode.replace('_', ' ')}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-[9px] text-slate-400 uppercase block font-bold">Pay Date</span>
+                                                        <span className="text-slate-700 dark:text-slate-300">{slip.pay_date}</span>
+                                                    </div>
+                                                    {slip.pay_reference_no && (
+                                                        <div className="col-span-2 border-t border-slate-100/50 dark:border-slate-800/20 pt-2">
+                                                            <span className="text-[9px] text-slate-400 uppercase block font-bold">Ref No.</span>
+                                                            <span className="text-slate-700 dark:text-slate-300 break-all">{slip.pay_reference_no}</span>
+                                                        </div>
+                                                    )}
+                                                    {slip.payment_remarks && (
+                                                        <div className="col-span-2 border-t border-slate-100/50 dark:border-slate-800/20 pt-2">
+                                                            <span className="text-[9px] text-slate-400 uppercase block font-bold">Remarks</span>
+                                                            <span className="text-slate-700 dark:text-slate-300 block whitespace-pre-wrap">{slip.payment_remarks}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
                                     </motion.div>
                                 )
                             })}
@@ -608,245 +542,6 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                     )}
                 </div>
             </div>
-
-            {/* PaySlip Detail Bottom Sheet */}
-            <AnimatePresence>
-                {viewPayslipId && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm"
-                        onClick={() => setViewPayslipId(null)}
-                    >
-                        <motion.div
-                            initial={{ y: "100%" }}
-                            animate={{ y: 0 }}
-                            exit={{ y: "100%" }}
-                            transition={{ type: "spring", damping: 30, stiffness: 300 }}
-                            className="absolute bottom-0 left-0 right-0 bg-white dark:bg-slate-950 rounded-t-[2rem] max-h-[92vh] overflow-y-auto shadow-2xl"
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            {/* Sheet Handle */}
-                            <div className="sticky top-0 z-10 bg-white dark:bg-slate-950 pt-3 pb-2 px-4 rounded-t-[2rem]">
-                                <div className="w-10 h-1 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto mb-3" />
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <Receipt className="w-5 h-5 text-orange-500" />
-                                        <h2 className="text-base font-black tracking-tight">Salary Slip</h2>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => setViewPayslipId(null)}>
-                                            <X className="w-4 h-4" />
-                                        </Button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {payslipDetail && breakdown ? (
-                                <div className="px-4 pb-20 space-y-5">
-                                {/* Period Badge */}
-                                <div className="flex justify-center">
-                                    <Badge className="bg-orange-500/10 text-orange-600 border-orange-200 dark:border-orange-500/30 font-black uppercase tracking-widest text-[10px] py-1.5 px-4 rounded-xl">
-                                        {MONTHS[month - 1]} {year}
-                                    </Badge>
-                                </div>
-
-                                {/* Employee Info */}
-                                <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 space-y-2 border border-slate-100 dark:border-slate-800">
-                                    <div className="flex justify-between text-[13px]">
-                                        <span className="text-slate-500 font-medium">Name</span>
-                                        <span className="font-bold text-slate-800 dark:text-slate-200">{payslipDetail.profile?.full_name || '—'}</span>
-                                    </div>
-                                    <div className="flex justify-between text-[13px]">
-                                        <span className="text-slate-500 font-medium">Designation</span>
-                                        <span className="font-bold text-slate-800 dark:text-slate-200">{payslipDetail.profile?.designation?.name || '—'}</span>
-                                    </div>
-                                </div>
-
-
-
-                                {/* Attendance Stats Grid */}
-                                <div>
-                                    <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 px-1">
-                                        Attendance Summary
-                                    </h3>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        <div className="bg-slate-50/50 dark:bg-slate-900/30 border border-slate-100 dark:border-slate-800/50 p-2.5 rounded-xl text-center flex flex-col justify-between min-h-[75px]">
-                                            <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider min-h-[24px] flex items-center justify-center leading-tight">Month Days</span>
-                                            <span className="text-sm font-black text-slate-700 dark:text-slate-300 mt-auto block">{breakdown.total_working_days}</span>
-                                        </div>
-                                        <div className="bg-slate-50/50 dark:bg-slate-900/30 border border-slate-100 dark:border-slate-800/50 p-2.5 rounded-xl text-center flex flex-col justify-between min-h-[75px]">
-                                            <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider min-h-[24px] flex items-center justify-center leading-tight">Present</span>
-                                            <span className="text-sm font-black text-emerald-600 mt-auto block">{payslipDetail.total_present_days}</span>
-                                        </div>
-                                        <div className="bg-slate-50/50 dark:bg-slate-900/30 border border-slate-100 dark:border-slate-800/50 p-2.5 rounded-xl text-center flex flex-col justify-between min-h-[75px]">
-                                            <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider min-h-[24px] flex items-center justify-center leading-tight">Half Days</span>
-                                            <span className="text-sm font-black text-orange-500 mt-auto block">{breakdown.half_days || 0}</span>
-                                        </div>
-                                        <div className="bg-slate-50/50 dark:bg-slate-900/30 border border-slate-100 dark:border-slate-800/50 p-2.5 rounded-xl text-center flex flex-col justify-between min-h-[75px]">
-                                            <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider min-h-[24px] flex items-center justify-center leading-tight">Leaves</span>
-                                            <span className="text-sm font-black text-blue-600 mt-auto block">{payslipDetail.total_leaves}</span>
-                                        </div>
-                                        <div className="bg-slate-50/50 dark:bg-slate-900/30 border border-slate-100 dark:border-slate-800/50 p-2.5 rounded-xl text-center flex flex-col justify-between min-h-[75px]">
-                                            <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider min-h-[24px] flex items-center justify-center leading-tight">Absent</span>
-                                            <span className="text-sm font-black text-rose-600 mt-auto block">{breakdown.absent_days}</span>
-                                        </div>
-                                        <div className="bg-slate-50/50 dark:bg-slate-900/30 border border-slate-100 dark:border-slate-800/50 p-2.5 rounded-xl text-center flex flex-col justify-between min-h-[75px]">
-                                            <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider min-h-[24px] flex items-center justify-center leading-tight">Extra Days</span>
-                                            <span className="text-sm font-black text-amber-600 mt-auto block">{breakdown.extra_days || 0}</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Earnings */}
-                                <div>
-                                    <h3 className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-2 px-1 flex items-center gap-1.5">
-                                        <TrendingUp className="w-3.5 h-3.5" /> Earnings
-                                    </h3>
-                                    <div className="bg-emerald-50/50 dark:bg-emerald-500/5 rounded-2xl border border-emerald-100 dark:border-emerald-500/10 overflow-hidden">
-                                        {earningsItems.map((item, i) => (
-                                            <div key={i} className={`flex justify-between px-4 py-2.5 text-[13px] ${i > 0 ? 'border-t border-emerald-100 dark:border-emerald-500/10' : ''}`}>
-                                                <span className="text-slate-600 dark:text-slate-400 font-medium">{item.label}</span>
-                                                <span className="font-bold tabular-nums">{formatCurr(item.amount)}</span>
-                                            </div>
-                                        ))}
-                                        <div className="flex justify-between px-4 py-3 text-[13px] border-t-2 border-emerald-200 dark:border-emerald-500/20 bg-emerald-100/50 dark:bg-emerald-500/10">
-                                            <span className="font-black text-emerald-700 dark:text-emerald-400">Total Earnings</span>
-                                            <span className="font-black text-emerald-700 dark:text-emerald-400 tabular-nums">{formatCurr(totalEarnings)}</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Deductions */}
-                                {deductionItems.length > 0 && (
-                                    <div>
-                                        <h3 className="text-[10px] font-black uppercase tracking-widest text-rose-600 mb-2 px-1 flex items-center gap-1.5">
-                                            <TrendingDown className="w-3.5 h-3.5" /> Deductions
-                                        </h3>
-                                        <div className="bg-rose-50/50 dark:bg-rose-500/5 rounded-2xl border border-rose-100 dark:border-rose-500/10 overflow-hidden">
-                                            {deductionItems.map((item, i) => (
-                                                <div key={i} className={`flex justify-between px-4 py-2.5 text-[13px] ${i > 0 ? 'border-t border-rose-100 dark:border-rose-500/10' : ''}`}>
-                                                    <span className="text-slate-600 dark:text-slate-400 font-medium">{item.label}</span>
-                                                    <span className="font-bold text-rose-600 tabular-nums">{formatCurr(item.amount)}</span>
-                                                </div>
-                                            ))}
-                                            <div className="flex justify-between px-4 py-3 text-[13px] border-t-2 border-rose-200 dark:border-rose-500/20 bg-rose-100/50 dark:bg-rose-500/10">
-                                                <span className="font-black text-rose-700 dark:text-rose-400">Total Deductions</span>
-                                                <span className="font-black text-rose-700 dark:text-rose-400 tabular-nums">{formatCurr(totalDeductions)}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Net Pay */}
-                                <div className="bg-gradient-to-br from-orange-500 to-rose-600 rounded-2xl p-5 text-white shadow-lg shadow-orange-500/20">
-                                    <div className="flex justify-between items-center mb-1">
-                                        <span className="text-xs font-black uppercase tracking-widest opacity-90">Net Pay (Take-Home)</span>
-                                        <span className="text-2xl font-black tracking-tight">{formatCurr(breakdown.take_home)}</span>
-                                    </div>
-                                    <div className="text-[10px] opacity-90 my-2 font-semibold bg-white/10 px-2.5 py-1 rounded-lg inline-block backdrop-blur-sm">
-                                        Formula: Earnings ({formatCurr(totalEarnings)}) - Deductions ({formatCurr(totalDeductions)})
-                                    </div>
-                                    <p className="text-[11px] opacity-70 font-medium italic mt-1">
-                                        ({numberToWords(Number(breakdown.take_home || 0))})
-                                    </p>
-                                </div>
-
-                                {/* Carry-Forward Notice */}
-                                {Number(breakdown.carry_forward || 0) > 0 && (
-                                    <div className="bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-xl p-3">
-                                        <p className="text-[12px] text-rose-700 dark:text-rose-400 font-medium">
-                                            <strong>Note:</strong> Deductions exceeded earnings by {formatCurr(breakdown.carry_forward)}.
-                                            This amount has been carried forward as an advance.
-                                        </p>
-                                    </div>
-                                )}
-
-                                {/* Payment Info Card */}
-                                {displayPaidMode && (
-                                    <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 space-y-2.5">
-                                        <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-black text-xs uppercase tracking-wider">
-                                            <CheckCircle className="w-4 h-4 text-emerald-600" /> Payment Recorded
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-y-3 gap-x-2 text-xs font-semibold">
-                                            <div>
-                                                <span className="text-[10px] text-slate-400 uppercase block font-bold">Paid Mode</span>
-                                                <span className="text-slate-700 dark:text-slate-300 capitalize">{displayPaidMode.replace('_', ' ')}</span>
-                                            </div>
-                                            <div>
-                                                <span className="text-[10px] text-slate-400 uppercase block font-bold">Pay Date</span>
-                                                <span className="text-slate-700 dark:text-slate-300">{displayPayDate}</span>
-                                            </div>
-                                            {displayPayReferenceNo && (
-                                                <div className="col-span-2 border-t border-slate-100 dark:border-slate-800/50 pt-2">
-                                                    <span className="text-[10px] text-slate-400 uppercase block font-bold">Ref / Transaction No.</span>
-                                                    <span className="text-slate-700 dark:text-slate-300 break-all">{displayPayReferenceNo}</span>
-                                                </div>
-                                            )}
-                                            {displayPaymentRemarks && (
-                                                <div className="col-span-2 border-t border-slate-100 dark:border-slate-800/50 pt-2">
-                                                    <span className="text-[10px] text-slate-400 uppercase block font-bold">Remarks</span>
-                                                    <span className="text-slate-700 dark:text-slate-300 block whitespace-pre-wrap">{displayPaymentRemarks}</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                            ) : (
-                                <div className="px-4 pb-8 space-y-5 animate-pulse">
-                                    {/* Period Badge Skeleton */}
-                                    <div className="flex justify-center">
-                                        <div className="h-8 w-28 bg-slate-100 dark:bg-slate-900 rounded-xl" />
-                                    </div>
-
-                                    {/* Employee Info Skeleton */}
-                                    <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 space-y-3 border border-slate-100 dark:border-slate-800">
-                                        <div className="flex justify-between">
-                                            <div className="h-4 w-12 bg-slate-200 dark:bg-slate-800 rounded" />
-                                            <div className="h-4 w-32 bg-slate-200 dark:bg-slate-800 rounded" />
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <div className="h-4 w-20 bg-slate-200 dark:bg-slate-800 rounded" />
-                                            <div className="h-4 w-24 bg-slate-200 dark:bg-slate-800 rounded" />
-                                        </div>
-                                    </div>
-
-                                    {/* Attendance Stats Skeleton */}
-                                    <div className="grid grid-cols-3 gap-3">
-                                        {[...Array(3)].map((_, idx) => (
-                                            <div key={idx} className="bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 rounded-xl p-3 text-center space-y-2">
-                                                <div className="h-3 w-16 bg-slate-200 dark:bg-slate-800 rounded mx-auto" />
-                                                <div className="h-5 w-8 bg-slate-200 dark:bg-slate-800 rounded mx-auto" />
-                                            </div>
-                                        ))}
-                                    </div>
-
-                                    {/* Table Skeleton */}
-                                    <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 space-y-3">
-                                        <div className="h-4 w-24 bg-slate-200 dark:bg-slate-800 rounded" />
-                                        <div className="space-y-2">
-                                            {[...Array(4)].map((_, idx) => (
-                                                <div key={idx} className="flex justify-between">
-                                                    <div className="h-3.5 w-24 bg-slate-200 dark:bg-slate-800 rounded" />
-                                                    <div className="h-3.5 w-16 bg-slate-200 dark:bg-slate-800 rounded" />
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* Net Pay Skeleton */}
-                                    <div className="bg-slate-900 dark:bg-slate-800 text-white rounded-2xl p-4 flex justify-between items-center">
-                                        <div className="h-4 w-16 bg-slate-700 rounded" />
-                                        <div className="h-6 w-24 bg-slate-700 rounded" />
-                                    </div>
-                                </div>
-                            )}
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
         </div>
     )
 }
