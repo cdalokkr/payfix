@@ -7,7 +7,8 @@ import {
     leaves,
     profiles,
     officeSettings,
-    officeClosures
+    officeClosures,
+    salaryPayments
 } from '@/lib/db/schema'
 import { eq, and, gte, lte, desc, sql, inArray, or, ne, gt } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
@@ -882,7 +883,8 @@ export class SalaryService {
                                 columns: { name: true }
                             }
                         }
-                    }
+                    },
+                    payments: true
                 },
                 orderBy: [desc(monthlyAttendanceSummary.created_at)],
             }),
@@ -1208,6 +1210,9 @@ export class SalaryService {
                             columns: { name: true }
                         }
                     }
+                },
+                payments: {
+                    orderBy: [desc(salaryPayments.pay_date), desc(salaryPayments.created_at)]
                 }
             }
         })
@@ -1236,6 +1241,9 @@ export class SalaryService {
                             columns: { name: true }
                         }
                     }
+                },
+                payments: {
+                    orderBy: [desc(salaryPayments.pay_date), desc(salaryPayments.created_at)]
                 }
             },
             orderBy: [desc(monthlyAttendanceSummary.created_at)],
@@ -1259,6 +1267,9 @@ export class SalaryService {
                             columns: { name: true }
                         }
                     }
+                },
+                payments: {
+                    orderBy: [desc(salaryPayments.pay_date), desc(salaryPayments.created_at)]
                 }
             }
         })
@@ -1273,6 +1284,7 @@ export class SalaryService {
     /** Mark salary as paid and record payment details */
     static async markSalaryPaid({
         summaryId,
+        paidAmount,
         paidMode,
         payDate,
         payReferenceNo,
@@ -1280,6 +1292,7 @@ export class SalaryService {
         paidBy,
     }: {
         summaryId: string
+        paidAmount: number
         paidMode: string
         payDate: string
         payReferenceNo?: string
@@ -1287,7 +1300,10 @@ export class SalaryService {
         paidBy: string
     }) {
         const summary = await db.query.monthlyAttendanceSummary.findFirst({
-            where: eq(monthlyAttendanceSummary.id, summaryId)
+            where: eq(monthlyAttendanceSummary.id, summaryId),
+            with: {
+                payments: true
+            }
         })
 
         if (!summary) {
@@ -1297,7 +1313,36 @@ export class SalaryService {
             throw new TRPCError({ code: 'BAD_REQUEST', message: 'Payslip must be generated before marking as paid' })
         }
 
+        const netSalary = Number(summary.take_home) || 0
+        const existingPaymentsSum = summary.payments?.reduce((s, p) => s + (Number(p.amount) || 0), 0) || 0
+        const remainingBalance = netSalary - existingPaymentsSum
+
+        if (Number(paidAmount.toFixed(2)) > Number(remainingBalance.toFixed(2))) {
+            throw new TRPCError({
+                code: 'BAD_REQUEST',
+                message: `Payment amount of ${paidAmount} exceeds the remaining balance of ${remainingBalance}`
+            })
+        }
+
+        // 1. Insert new payment record
+        await db.insert(salaryPayments).values({
+            summary_id: summaryId,
+            amount: String(paidAmount),
+            paid_mode: paidMode,
+            pay_date: payDate,
+            pay_reference_no: payReferenceNo || null,
+            payment_remarks: paymentRemarks || null,
+            paid_by: paidBy,
+            created_at: new Date(),
+            updated_at: new Date()
+        })
+
+        // 2. Calculate new total paid
+        const newTotalPaid = existingPaymentsSum + paidAmount
+
+        // 3. Update monthlyAttendanceSummary with denormalized payment details
         const [updated] = await db.update(monthlyAttendanceSummary).set({
+            paid_amount: String(newTotalPaid),
             paid_mode: paidMode,
             pay_date: payDate,
             pay_reference_no: payReferenceNo || null,
@@ -1308,6 +1353,27 @@ export class SalaryService {
         }).where(eq(monthlyAttendanceSummary.id, summaryId)).returning()
 
         return updated
+    }
+
+    /** Get salary passbook/paybook for an employee (self-service) */
+    static async getMyPaybook(profileId: string) {
+        const summaries = await db.query.monthlyAttendanceSummary.findMany({
+            where: and(
+                eq(monthlyAttendanceSummary.profile_id, profileId),
+                eq(monthlyAttendanceSummary.status, 'payslip_generated')
+            ),
+            with: {
+                payments: {
+                    orderBy: [desc(salaryPayments.pay_date), desc(salaryPayments.created_at)]
+                }
+            },
+            orderBy: [
+                desc(monthlyAttendanceSummary.year),
+                desc(monthlyAttendanceSummary.month)
+            ],
+        })
+
+        return summaries
     }
 
     // ==========================================

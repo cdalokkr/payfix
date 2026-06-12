@@ -100,11 +100,15 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
         defaultYear -= 1
     }
 
+    const [activeTab, setActiveTab] = useState<"monthly" | "passbook">("monthly")
     const [month, setMonth] = useState<number>(defaultMonth)
     const [year, setYear] = useState<number>(defaultYear)
     const [isDownloading, setIsDownloading] = useState<string | null>(null)
 
     const { data: payslips, isLoading, isFetching } = trpc.salary.getMyPayslips.useQuery({ month, year })
+    const { data: paybook, isLoading: isPaybookLoading } = trpc.salary.getMyPaybook.useQuery(undefined, {
+        enabled: activeTab === "passbook"
+    })
 
     const months = Array.from({ length: 12 }, (_, i) => ({
         value: i + 1,
@@ -289,258 +293,401 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                     </div>
                 </header>
 
+                {/* Tabs switcher */}
+                <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-xl">
+                    <button
+                        onClick={() => setActiveTab("monthly")}
+                        className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                            activeTab === "monthly"
+                                ? "bg-white dark:bg-slate-800 shadow text-orange-600 dark:text-orange-400"
+                                : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                        }`}
+                    >
+                        Monthly Slips
+                    </button>
+                    <button
+                        onClick={() => setActiveTab("passbook")}
+                        className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                            activeTab === "passbook"
+                                ? "bg-white dark:bg-slate-800 shadow text-orange-600 dark:text-orange-400"
+                                : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                        }`}
+                    >
+                        Salary Passbook
+                    </button>
+                </div>
+
                 {/* Filters */}
-                <motion.div variants={itemVars} initial="hidden" animate="show" className="flex items-center gap-3">
-                    <div className="flex-1">
-                        <Select value={month.toString()} onValueChange={(val) => setMonth(parseInt(val))}>
-                            <SelectTrigger className="w-full bg-white dark:bg-slate-900 border-none shadow-sm rounded-xl h-11 font-bold">
-                                <SelectValue placeholder="Month" />
-                            </SelectTrigger>
-                            <SelectContent className="rounded-xl border-none shadow-xl">
-                                {months.map(m => (
-                                    <SelectItem key={m.value} value={m.value.toString()} className="font-medium">
-                                        {m.label}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="w-32">
-                        <Select value={year.toString()} onValueChange={(val) => setYear(parseInt(val))}>
-                            <SelectTrigger className="w-full bg-white dark:bg-slate-900 border-none shadow-sm rounded-xl h-11 font-bold">
-                                <SelectValue placeholder="Year" />
-                            </SelectTrigger>
-                            <SelectContent className="rounded-xl border-none shadow-xl">
-                                {years.map(y => (
-                                    <SelectItem key={y} value={y.toString()} className="font-medium">
-                                        {y}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </motion.div>
+                {activeTab === "monthly" && (
+                    <motion.div variants={itemVars} initial="hidden" animate="show" className="flex items-center gap-3">
+                        <div className="flex-1">
+                            <Select value={month.toString()} onValueChange={(val) => setMonth(parseInt(val))}>
+                                <SelectTrigger className="w-full bg-white dark:bg-slate-900 border-none shadow-sm rounded-xl h-11 font-bold">
+                                    <SelectValue placeholder="Month" />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-xl border-none shadow-xl">
+                                    {months.map(m => (
+                                        <SelectItem key={m.value} value={m.value.toString()} className="font-medium">
+                                            {m.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="w-32">
+                            <Select value={year.toString()} onValueChange={(val) => setYear(parseInt(val))}>
+                                <SelectTrigger className="w-full bg-white dark:bg-slate-900 border-none shadow-sm rounded-xl h-11 font-bold">
+                                    <SelectValue placeholder="Year" />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-xl border-none shadow-xl">
+                                    {years.map(y => (
+                                        <SelectItem key={y} value={y.toString()} className="font-medium">
+                                            {y}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </motion.div>
+                )}
             </div>
 
             {/* Scrollable List */}
             <div className="flex-1 overflow-y-auto px-4 pb-4 pt-4 space-y-4 hide-scrollbar">
-                <div className="space-y-4">
-                    <div className="flex items-center justify-between px-1">
-                        <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Salary Slips</h2>
-                        <Badge variant="secondary" className="bg-slate-200/50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-black rounded-lg">
-                            {payslips?.length || 0} Found
-                        </Badge>
-                    </div>
-
-                    {isLoading ? (
-                        <div className="space-y-3">
-                            {[1, 2].map(i => (
-                                <div key={i} className="bg-slate-200/50 dark:bg-slate-800/50 animate-pulse h-36 rounded-2xl" />
-                            ))}
+                {activeTab === "monthly" ? (
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between px-1">
+                            <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Salary Slips</h2>
+                            <Badge variant="secondary" className="bg-slate-200/50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-black rounded-lg">
+                                {payslips?.length || 0} Found
+                            </Badge>
                         </div>
-                    ) : !payslips || payslips.length === 0 ? (
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-[1.5rem] p-8 text-center flex flex-col items-center justify-center min-h-[200px]"
-                        >
-                            <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
-                                <Receipt className="w-8 h-8 text-slate-400" />
+
+                        {isLoading ? (
+                            <div className="space-y-3">
+                                {[1, 2].map(i => (
+                                    <div key={i} className="bg-slate-200/50 dark:bg-slate-800/50 animate-pulse h-36 rounded-2xl" />
+                                ))}
                             </div>
-                            <h3 className="text-base font-black text-slate-900 dark:text-white mb-1">No PaySlips Found</h3>
-                            <p className="text-[13px] font-medium text-slate-500 max-w-[220px] leading-snug">
-                                No salary slips have been generated for {MONTHS[month - 1]} {year} yet.
-                            </p>
-                        </motion.div>
-                    ) : (
-                        <motion.div variants={containerVars} initial="hidden" animate="show" className="space-y-3">
-                            {payslips.map((slip: any) => {
-                                const bd = slip.salary_breakdown as Record<string, any> | null
-                                const cardEarnings = bd ? [
-                                    { label: 'Basic', amount: bd.basic_salary },
-                                    { label: 'HRA', amount: bd.hra },
-                                    { label: 'DA', amount: bd.da },
-                                    { label: 'TA', amount: bd.ta },
-                                    { label: 'Special Allow.', amount: bd.special_allowance },
-                                    { label: 'Incentive', amount: bd.incentive },
-                                ].filter(e => Number(e.amount) > 0) : []
-                                const cardDeductions = bd ? [
-                                    ...(bd.absent_deduction !== undefined
-                                        ? [
-                                            { label: 'Absent Ded.', amount: bd.absent_deduction },
-                                            { label: 'Half Day Ded.', amount: bd.half_day_deduction },
-                                          ]
-                                        : [
-                                            { label: 'Absence Ded.', amount: bd.absence_deduction }
-                                          ]
-                                    ),
-                                    { label: 'Other Ded.', amount: bd.other_deductions },
-                                    ...(bd.carry_forward_recovery !== undefined
-                                        ? [
-                                            ...(Number(bd.carry_forward_recovery) > 0 ? [{ label: 'Salary Deficit CF', amount: bd.carry_forward_recovery }] : []),
-                                            ...(Number(bd.advance_recovery) > 0 ? [{ label: 'Adv. Recovery', amount: bd.advance_recovery }] : []),
-                                          ]
-                                        : [
-                                            ...(Number(bd.advance_recovery) > 0 ? [{ label: 'Adv. Recovery', amount: bd.advance_recovery }] : []),
-                                          ]
-                                    ),
-                                ].filter(e => Number(e.amount) > 0) : []
-                                const cardTotalEarnings = cardEarnings.reduce((s: number, e: any) => s + Number(e.amount || 0), 0)
-                                const cardTotalDeductions = cardDeductions.reduce((s: number, e: any) => s + Number(e.amount || 0), 0)
-                                return (
-                                    <motion.div
-                                        key={slip.id}
-                                        variants={itemVars}
-                                        className="bg-white dark:bg-slate-900 rounded-[1.5rem] p-5 shadow-md border border-slate-100 dark:border-slate-800/50"
-                                    >
-                                        {/* Header: Month + Generated Badge */}
-                                        <div className="flex items-center justify-between mb-3">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center shrink-0">
-                                                    <Receipt className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-                                                </div>
-                                                <div className="text-sm font-black text-slate-900 dark:text-white leading-none">
-                                                    {MONTHS[slip.month - 1]} {slip.year}
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-1.5">
-                                                <Badge variant="outline" className="border-emerald-200 text-emerald-600 bg-emerald-50/50 font-bold uppercase tracking-widest text-[9px] py-1 px-2 rounded-lg gap-1">
-                                                    <FileText className="w-3 h-3" /> Generated
-                                                </Badge>
-                                                <Button 
-                                                    variant="ghost" 
-                                                    size="icon" 
-                                                    className="w-8 h-8 rounded-full text-slate-400 hover:text-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700" 
-                                                    onClick={(e) => handleDownloadPdf(slip, e)}
-                                                    disabled={isDownloading === slip.id}
-                                                >
-                                                    {isDownloading === slip.id ? <Loader2 className="w-4 h-4 animate-spin"/> : <Download className="w-4 h-4" />}
-                                                </Button>
-                                            </div>
-                                        </div>
-
-                                        {/* Attendance Stats */}
-                                        <div className="grid grid-cols-6 gap-1 pt-3 border-t border-slate-100 dark:border-slate-800 text-center">
-                                            <div>
-                                                <div className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">Month</div>
-                                                <div className="text-[11px] font-bold text-slate-700 dark:text-slate-300">{bd?.total_working_days ?? slip.total_working_days ?? '—'}</div>
-                                            </div>
-                                            <div>
-                                                <div className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">Present</div>
-                                                <div className="text-[11px] font-bold text-emerald-600">{slip.total_present_days ?? '—'}</div>
-                                            </div>
-                                            <div>
-                                                <div className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">Half</div>
-                                                <div className="text-[11px] font-bold text-orange-500">{bd?.half_days ?? slip.total_half_days ?? '—'}</div>
-                                            </div>
-                                            <div>
-                                                <div className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">Leave</div>
-                                                <div className="text-[11px] font-bold text-blue-600">{slip.total_leaves ?? '—'}</div>
-                                            </div>
-                                            <div>
-                                                <div className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">Absent</div>
-                                                <div className="text-[11px] font-bold text-rose-600">{bd?.absent_days ?? slip.total_absent_days ?? '—'}</div>
-                                            </div>
-                                            <div>
-                                                <div className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">Extra</div>
-                                                <div className="text-[11px] font-bold text-amber-600">{bd?.extra_days ?? '0'}</div>
-                                            </div>
-                                        </div>
-
-                                        {/* Earnings & Deductions */}
-                                        <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-3">
-                                            {cardEarnings.length > 0 && (
-                                                <div>
-                                                    <div className="text-[9px] font-black uppercase tracking-widest text-emerald-600 mb-1.5 flex items-center gap-1">
-                                                        <TrendingUp className="w-3 h-3" /> Earnings
+                        ) : !payslips || payslips.length === 0 ? (
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-[1.5rem] p-8 text-center flex flex-col items-center justify-center min-h-[200px]"
+                            >
+                                <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
+                                    <Receipt className="w-8 h-8 text-slate-400" />
+                                </div>
+                                <h3 className="text-base font-black text-slate-900 dark:text-white mb-1">No PaySlips Found</h3>
+                                <p className="text-[13px] font-medium text-slate-500 max-w-[220px] leading-snug">
+                                    No salary slips have been generated for {MONTHS[month - 1]} {year} yet.
+                                </p>
+                            </motion.div>
+                        ) : (
+                            <motion.div variants={containerVars} initial="hidden" animate="show" className="space-y-3">
+                                {payslips.map((slip: any) => {
+                                    const bd = slip.salary_breakdown as Record<string, any> | null
+                                    const cardEarnings = bd ? [
+                                        { label: 'Basic', amount: bd.basic_salary },
+                                        { label: 'HRA', amount: bd.hra },
+                                        { label: 'DA', amount: bd.da },
+                                        { label: 'TA', amount: bd.ta },
+                                        { label: 'Special Allow.', amount: bd.special_allowance },
+                                        { label: 'Incentive', amount: bd.incentive },
+                                    ].filter(e => Number(e.amount) > 0) : []
+                                    const cardDeductions = bd ? [
+                                        ...(bd.absent_deduction !== undefined
+                                            ? [
+                                                { label: 'Absent Ded.', amount: bd.absent_deduction },
+                                                { label: 'Half Day Ded.', amount: bd.half_day_deduction },
+                                              ]
+                                            : [
+                                                { label: 'Absence Ded.', amount: bd.absence_deduction }
+                                              ]
+                                        ),
+                                        { label: 'Other Ded.', amount: bd.other_deductions },
+                                        ...(bd.carry_forward_recovery !== undefined
+                                            ? [
+                                                ...(Number(bd.carry_forward_recovery) > 0 ? [{ label: 'Salary Deficit CF', amount: bd.carry_forward_recovery }] : []),
+                                                ...(Number(bd.advance_recovery) > 0 ? [{ label: 'Adv. Recovery', amount: bd.advance_recovery }] : []),
+                                              ]
+                                            : [
+                                                ...(Number(bd.advance_recovery) > 0 ? [{ label: 'Adv. Recovery', amount: bd.advance_recovery }] : []),
+                                              ]
+                                        ),
+                                    ].filter(e => Number(e.amount) > 0) : []
+                                    const cardTotalEarnings = cardEarnings.reduce((s: number, e: any) => s + Number(e.amount || 0), 0)
+                                    const cardTotalDeductions = cardDeductions.reduce((s: number, e: any) => s + Number(e.amount || 0), 0)
+                                    return (
+                                        <motion.div
+                                            key={slip.id}
+                                            variants={itemVars}
+                                            className="bg-white dark:bg-slate-900 rounded-[1.5rem] p-5 shadow-md border border-slate-100 dark:border-slate-800/50"
+                                        >
+                                            {/* Header: Month + Generated Badge */}
+                                            <div className="flex items-center justify-between mb-3">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center shrink-0">
+                                                        <Receipt className="w-5 h-5 text-orange-600 dark:text-orange-400" />
                                                     </div>
-                                                    <div className="bg-emerald-50/50 dark:bg-emerald-500/5 rounded-xl border border-emerald-100/50 dark:border-emerald-500/10 overflow-hidden">
-                                                        {cardEarnings.map((item, i) => (
-                                                            <div key={i} className={`flex justify-between px-3 py-1.5 text-[11px] ${i > 0 ? 'border-t border-emerald-100/50 dark:border-emerald-500/10' : ''}`}>
-                                                                <span className="text-slate-500 font-medium">{item.label}</span>
-                                                                <span className="font-bold tabular-nums text-slate-700 dark:text-slate-300">{formatCurr(item.amount)}</span>
+                                                    <div className="text-sm font-black text-slate-900 dark:text-white leading-none">
+                                                        {MONTHS[slip.month - 1]} {slip.year}
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-1.5">
+                                                    {(() => {
+                                                        const netSalary = Number(slip.take_home) || 0
+                                                        const paidSoFar = slip.payments?.reduce((sum: number, pm: any) => sum + (Number(pm.amount) || 0), 0) || 0
+                                                        if (paidSoFar === 0) {
+                                                            return (
+                                                                <Badge variant="outline" className="border-amber-200 text-amber-600 bg-amber-50/50 font-black uppercase tracking-widest text-[9px] py-1 px-2 rounded-lg gap-1">
+                                                                    Unpaid
+                                                                </Badge>
+                                                            )
+                                                        } else if (paidSoFar < netSalary) {
+                                                            return (
+                                                                <Badge variant="outline" className="border-orange-200 text-orange-600 bg-orange-50/50 font-black uppercase tracking-widest text-[9px] py-1 px-2 rounded-lg gap-1">
+                                                                    Partially Paid ({formatCurr(paidSoFar)})
+                                                                </Badge>
+                                                            )
+                                                        } else {
+                                                            return (
+                                                                <Badge variant="outline" className="border-emerald-200 text-emerald-600 bg-emerald-50/50 font-black uppercase tracking-widest text-[9px] py-1 px-2 rounded-lg gap-1">
+                                                                    Paid
+                                                                </Badge>
+                                                            )
+                                                        }
+                                                    })()}
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="icon" 
+                                                        className="w-8 h-8 rounded-full text-slate-400 hover:text-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700" 
+                                                        onClick={(e) => handleDownloadPdf(slip, e)}
+                                                        disabled={isDownloading === slip.id}
+                                                    >
+                                                        {isDownloading === slip.id ? <Loader2 className="w-4 h-4 animate-spin"/> : <Download className="w-4 h-4" />}
+                                                    </Button>
+                                                </div>
+                                            </div>
+
+                                            {/* Attendance Stats */}
+                                            <div className="grid grid-cols-6 gap-1 pt-3 border-t border-slate-100 dark:border-slate-800 text-center">
+                                                <div>
+                                                    <div className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">Month</div>
+                                                    <div className="text-[11px] font-bold text-slate-700 dark:text-slate-300">{bd?.total_working_days ?? slip.total_working_days ?? '—'}</div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">Present</div>
+                                                    <div className="text-[11px] font-bold text-emerald-600">{slip.total_present_days ?? '—'}</div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">Half</div>
+                                                    <div className="text-[11px] font-bold text-orange-500">{bd?.half_days ?? slip.total_half_days ?? '—'}</div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">Leave</div>
+                                                    <div className="text-[11px] font-bold text-blue-600">{slip.total_leaves ?? '—'}</div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">Absent</div>
+                                                    <div className="text-[11px] font-bold text-rose-600">{bd?.absent_days ?? slip.total_absent_days ?? '—'}</div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">Extra</div>
+                                                    <div className="text-[11px] font-bold text-amber-600">{bd?.extra_days ?? '0'}</div>
+                                                </div>
+                                            </div>
+
+                                            {/* Earnings & Deductions */}
+                                            <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-3">
+                                                {cardEarnings.length > 0 && (
+                                                    <div>
+                                                        <div className="text-[9px] font-black uppercase tracking-widest text-emerald-600 mb-1.5 flex items-center gap-1">
+                                                            <TrendingUp className="w-3 h-3" /> Earnings
+                                                        </div>
+                                                        <div className="bg-emerald-50/50 dark:bg-emerald-500/5 rounded-xl border border-emerald-100/50 dark:border-emerald-500/10 overflow-hidden">
+                                                            {cardEarnings.map((item, i) => (
+                                                                <div key={i} className={`flex justify-between px-3 py-1.5 text-[11px] ${i > 0 ? 'border-t border-emerald-100/50 dark:border-emerald-500/10' : ''}`}>
+                                                                    <span className="text-slate-500 font-medium">{item.label}</span>
+                                                                    <span className="font-bold tabular-nums text-slate-700 dark:text-slate-300">{formatCurr(item.amount)}</span>
+                                                                </div>
+                                                            ))}
+                                                            <div className="flex justify-between px-3 py-1.5 text-[11px] border-t-2 border-emerald-200/60 dark:border-emerald-500/20 bg-emerald-100/40 dark:bg-emerald-500/10">
+                                                                <span className="font-black text-emerald-700 dark:text-emerald-400">Total Earnings</span>
+                                                                <span className="font-black text-emerald-700 dark:text-emerald-400 tabular-nums">{formatCurr(cardTotalEarnings)}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {cardDeductions.length > 0 && (
+                                                    <div>
+                                                        <div className="text-[9px] font-black uppercase tracking-widest text-rose-600 mb-1.5 flex items-center gap-1">
+                                                            <TrendingDown className="w-3 h-3" /> Deductions
+                                                        </div>
+                                                        <div className="bg-rose-50/50 dark:bg-rose-500/5 rounded-xl border border-rose-100/50 dark:border-rose-500/10 overflow-hidden">
+                                                            {cardDeductions.map((item, i) => (
+                                                                <div key={i} className={`flex justify-between px-3 py-1.5 text-[11px] ${i > 0 ? 'border-t border-rose-100/50 dark:border-rose-500/10' : ''}`}>
+                                                                    <span className="text-slate-500 font-medium">{item.label}</span>
+                                                                    <span className="font-bold tabular-nums text-rose-600">{formatCurr(item.amount)}</span>
+                                                                </div>
+                                                            ))}
+                                                            <div className="flex justify-between px-3 py-1.5 text-[11px] border-t-2 border-rose-200/60 dark:border-rose-500/20 bg-rose-100/40 dark:bg-rose-500/10">
+                                                                <span className="font-black text-rose-700 dark:text-rose-400">Total Deductions</span>
+                                                                <span className="font-black text-rose-700 dark:text-rose-400 tabular-nums">{formatCurr(cardTotalDeductions)}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Net Pay */}
+                                            <div className="mt-4 pt-4 border-t-2 border-dashed border-slate-200 dark:border-slate-800 flex justify-between items-center">
+                                                <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">Net Pay</span>
+                                                <span className="text-lg font-black text-emerald-600 dark:text-emerald-400 tracking-tight">{formatCurr(slip.take_home)}</span>
+                                            </div>
+
+                                            {/* Carry-Forward Notice */}
+                                            {bd && Number(bd.carry_forward || 0) > 0 && (
+                                                <div className="mt-4 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-xl p-3">
+                                                    <p className="text-[11px] text-rose-700 dark:text-rose-400 font-medium">
+                                                        <strong>Note:</strong> Deductions exceeded earnings by {formatCurr(bd.carry_forward)}.
+                                                        This amount has been carried forward as an advance.
+                                                    </p>
+                                                </div>
+                                            )}
+
+                                            {/* Payment History Card */}
+                                            {slip.payments && slip.payments.length > 0 && (
+                                                <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
+                                                    <div className="flex items-center justify-between text-slate-700 dark:text-slate-300 font-black text-[10px] uppercase tracking-wider">
+                                                        <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                                                            <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> Payment Transactions
+                                                        </div>
+                                                        <Badge variant="secondary" className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-[9px] py-0.5 px-2 rounded-md">
+                                                            {slip.payments.length} Paid
+                                                        </Badge>
+                                                    </div>
+                                                    
+                                                    <div className="space-y-2">
+                                                        {slip.payments.map((pm: any, pIdx: number) => (
+                                                            <div key={pm.id || pIdx} className="bg-slate-50 dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/50 p-3 rounded-xl text-[11px]">
+                                                                <div className="flex justify-between items-center font-bold">
+                                                                    <span className="text-slate-800 dark:text-slate-200 capitalize">{pm.paid_mode.replace('_', ' ')}</span>
+                                                                    <span className="text-emerald-600">{formatCurr(pm.amount)}</span>
+                                                                </div>
+                                                                <div className="grid grid-cols-2 gap-1 text-[10px] mt-1.5 text-slate-500 font-semibold border-t border-dashed border-slate-200/50 dark:border-slate-800/50 pt-1.5">
+                                                                    <div>Date: <span className="text-slate-700 dark:text-slate-300">{pm.pay_date}</span></div>
+                                                                    {pm.pay_reference_no && <div>Ref: <span className="text-slate-700 dark:text-slate-300 break-all">{pm.pay_reference_no}</span></div>}
+                                                                    {pm.payment_remarks && <div className="col-span-2 mt-0.5">Remarks: <span className="text-slate-700 dark:text-slate-300 font-normal">{pm.payment_remarks}</span></div>}
+                                                                </div>
                                                             </div>
                                                         ))}
-                                                        <div className="flex justify-between px-3 py-1.5 text-[11px] border-t-2 border-emerald-200/60 dark:border-emerald-500/20 bg-emerald-100/40 dark:bg-emerald-500/10">
-                                                            <span className="font-black text-emerald-700 dark:text-emerald-400">Total Earnings</span>
-                                                            <span className="font-black text-emerald-700 dark:text-emerald-400 tabular-nums">{formatCurr(cardTotalEarnings)}</span>
-                                                        </div>
                                                     </div>
                                                 </div>
                                             )}
-                                            {cardDeductions.length > 0 && (
-                                                <div>
-                                                    <div className="text-[9px] font-black uppercase tracking-widest text-rose-600 mb-1.5 flex items-center gap-1">
-                                                        <TrendingDown className="w-3 h-3" /> Deductions
-                                                    </div>
-                                                    <div className="bg-rose-50/50 dark:bg-rose-500/5 rounded-xl border border-rose-100/50 dark:border-rose-500/10 overflow-hidden">
-                                                        {cardDeductions.map((item, i) => (
-                                                            <div key={i} className={`flex justify-between px-3 py-1.5 text-[11px] ${i > 0 ? 'border-t border-rose-100/50 dark:border-rose-500/10' : ''}`}>
-                                                                <span className="text-slate-500 font-medium">{item.label}</span>
-                                                                <span className="font-bold tabular-nums text-rose-600">{formatCurr(item.amount)}</span>
-                                                            </div>
-                                                        ))}
-                                                        <div className="flex justify-between px-3 py-1.5 text-[11px] border-t-2 border-rose-200/60 dark:border-rose-500/20 bg-rose-100/40 dark:bg-rose-500/10">
-                                                            <span className="font-black text-rose-700 dark:text-rose-400">Total Deductions</span>
-                                                            <span className="font-black text-rose-700 dark:text-rose-400 tabular-nums">{formatCurr(cardTotalDeductions)}</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
+                                        </motion.div>
+                                    )
+                                })}
+                            </motion.div>
+                        )}
+                    </div>
+                ) : (
+                    /* Passbook View */
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between px-1">
+                            <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Salary Passbook</h2>
+                            <Badge variant="secondary" className="bg-slate-200/50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-black rounded-lg">
+                                {paybook?.length || 0} Records
+                            </Badge>
+                        </div>
 
-                                        {/* Net Pay */}
-                                        <div className="mt-4 pt-4 border-t-2 border-dashed border-slate-200 dark:border-slate-800 flex justify-between items-center">
-                                            <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">Net Pay</span>
-                                            <span className="text-lg font-black text-emerald-600 dark:text-emerald-400 tracking-tight">{formatCurr(slip.take_home)}</span>
-                                        </div>
-
-                                        {/* Carry-Forward Notice */}
-                                        {bd && Number(bd.carry_forward || 0) > 0 && (
-                                            <div className="mt-4 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-xl p-3">
-                                                <p className="text-[11px] text-rose-700 dark:text-rose-400 font-medium">
-                                                    <strong>Note:</strong> Deductions exceeded earnings by {formatCurr(bd.carry_forward)}.
-                                                    This amount has been carried forward as an advance.
-                                                </p>
-                                            </div>
-                                        )}
-
-                                        {/* Payment Info Card */}
-                                        {slip.paid_mode && (
-                                            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
-                                                <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-black text-[10px] uppercase tracking-wider">
-                                                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> Payment Recorded
-                                                </div>
-                                                <div className="grid grid-cols-2 gap-y-3 gap-x-2 bg-emerald-50/50 dark:bg-emerald-500/5 border border-emerald-100 dark:border-emerald-500/10 p-3.5 rounded-xl text-[11px] font-semibold">
-                                                    <div>
-                                                        <span className="text-[9px] text-slate-400 uppercase block font-bold">Paid Mode</span>
-                                                        <span className="text-slate-700 dark:text-slate-300 capitalize">{slip.paid_mode.replace('_', ' ')}</span>
-                                                    </div>
-                                                    <div>
-                                                        <span className="text-[9px] text-slate-400 uppercase block font-bold">Pay Date</span>
-                                                        <span className="text-slate-700 dark:text-slate-300">{slip.pay_date}</span>
-                                                    </div>
-                                                    {slip.pay_reference_no && (
-                                                        <div className="col-span-2 border-t border-slate-100/50 dark:border-slate-800/20 pt-2">
-                                                            <span className="text-[9px] text-slate-400 uppercase block font-bold">Ref No.</span>
-                                                            <span className="text-slate-700 dark:text-slate-300 break-all">{slip.pay_reference_no}</span>
-                                                        </div>
-                                                    )}
-                                                    {slip.payment_remarks && (
-                                                        <div className="col-span-2 border-t border-slate-100/50 dark:border-slate-800/20 pt-2">
-                                                            <span className="text-[9px] text-slate-400 uppercase block font-bold">Remarks</span>
-                                                            <span className="text-slate-700 dark:text-slate-300 block whitespace-pre-wrap">{slip.payment_remarks}</span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </motion.div>
-                                )
-                            })}
-                        </motion.div>
-                    )}
-                </div>
+                        {isPaybookLoading ? (
+                            <div className="space-y-3">
+                                {[1, 2].map(i => (
+                                    <div key={i} className="bg-slate-200/50 dark:bg-slate-800/50 animate-pulse h-36 rounded-2xl" />
+                                ))}
+                            </div>
+                        ) : !paybook || paybook.length === 0 ? (
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-[1.5rem] p-8 text-center flex flex-col items-center justify-center min-h-[200px]"
+                            >
+                                <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
+                                    <Receipt className="w-8 h-8 text-slate-400" />
+                                </div>
+                                <h3 className="text-base font-black text-slate-900 dark:text-white mb-1">No Passbook Records</h3>
+                                <p className="text-[13px] font-medium text-slate-500 max-w-[220px] leading-snug">
+                                    No generated salary slips found to build your passbook.
+                                </p>
+                            </motion.div>
+                        ) : (
+                            <motion.div
+                                variants={containerVars}
+                                initial="hidden"
+                                animate="show"
+                                className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-[1.5rem] overflow-hidden shadow-md"
+                            >
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="bg-slate-100 dark:bg-slate-800/50 text-[10px] font-black uppercase tracking-wider text-slate-500 border-b border-slate-200 dark:border-slate-800">
+                                                <th className="px-4 py-3">Month-Year</th>
+                                                <th className="px-4 py-3 text-right">Net Salary</th>
+                                                <th className="px-4 py-3 text-right">Paid Amount</th>
+                                                <th className="px-4 py-3 text-right">Balance</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                                            {paybook.map((slip: any) => {
+                                                const netSalary = Number(slip.take_home) || 0
+                                                const paidAmount = slip.payments?.reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0) || 0
+                                                const balance = netSalary - paidAmount
+                                                const monthYear = `${MONTHS[slip.month - 1].slice(0, 3)} ${slip.year}`
+                                                
+                                                return (
+                                                    <tr key={slip.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                                                        <td className="px-4 py-3.5 font-bold text-slate-900 dark:text-white">{monthYear}</td>
+                                                        <td className="px-4 py-3.5 text-right font-semibold text-slate-700 dark:text-slate-300 tabular-nums">{formatCurr(netSalary)}</td>
+                                                        <td className="px-4 py-3.5 text-right tabular-nums">
+                                                            {paidAmount > 0 ? (
+                                                                <span className="font-bold text-emerald-600">{formatCurr(paidAmount)}</span>
+                                                            ) : (
+                                                                <span className="font-medium text-slate-400 dark:text-slate-600">Unpaid</span>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-4 py-3.5 text-right tabular-nums">
+                                                            {balance > 0 ? (
+                                                                <span className="font-bold text-orange-500">{formatCurr(balance)}</span>
+                                                            ) : (
+                                                                <span className="font-bold text-slate-400 dark:text-slate-600">0</span>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                )
+                                            })}
+                                        </tbody>
+                                        <tfoot>
+                                            {(() => {
+                                                const totalNet = paybook.reduce((sum: number, s: any) => sum + (Number(s.take_home) || 0), 0)
+                                                const totalPaid = paybook.reduce((sum: number, s: any) => sum + (s.payments?.reduce((pSum: number, p: any) => pSum + (Number(p.amount) || 0), 0) || 0), 0)
+                                                const totalBalance = totalNet - totalPaid
+                                                return (
+                                                    <tr className="bg-slate-50 dark:bg-slate-800/30 font-black text-xs border-t-2 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white">
+                                                        <td className="px-4 py-4 uppercase tracking-wider text-[10px] text-slate-500">Total All</td>
+                                                        <td className="px-4 py-4 text-right tabular-nums text-slate-900 dark:text-white">{formatCurr(totalNet)}</td>
+                                                        <td className="px-4 py-4 text-right tabular-nums text-emerald-600">{formatCurr(totalPaid)}</td>
+                                                        <td className="px-4 py-4 text-right tabular-nums text-orange-500">{formatCurr(totalBalance)}</td>
+                                                    </tr>
+                                                )
+                                            })()}
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            </motion.div>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     )

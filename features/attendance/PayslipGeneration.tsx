@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useMemo, useRef } from "react"
+import React, { useState, useMemo, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { trpc } from "@/lib/trpc/client"
@@ -58,6 +58,7 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
     const [payDate, setPayDate] = useState<string>(new Date().toISOString().split('T')[0])
     const [payReferenceNo, setPayReferenceNo] = useState<string>("")
     const [paymentRemarks, setPaymentRemarks] = useState<string>("")
+    const [paidAmount, setPaidAmount] = useState<string>("")
 
     const markPaidMutation = trpc.salary.markSalaryPaid.useMutation({
         onSuccess: () => {
@@ -79,6 +80,16 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
 
     const handleOpenMarkPaid = (id: string, currentDetails?: any) => {
         setMarkPaidId(id)
+        const summary = currentDetails || summaries?.find((s: any) => s.id === id)
+        if (summary) {
+            const netSalary = Number(summary.take_home) || 0
+            const paidSoFar = summary.payments?.reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0) || 0
+            const remaining = netSalary - paidSoFar
+            setPaidAmount(String(remaining > 0 ? remaining : 0))
+        } else {
+            setPaidAmount("")
+        }
+
         if (currentDetails) {
             setPaidMode(currentDetails.paid_mode || "bank_transfer")
             setPayDate(currentDetails.pay_date || new Date().toISOString().split('T')[0])
@@ -127,6 +138,15 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
     const selectedSummary = useMemo(() =>
         summaries?.find((s: any) => s.id === markPaidId), [summaries, markPaidId]
     )
+
+    useEffect(() => {
+        if (selectedSummary) {
+            const netSalary = Number(selectedSummary.take_home) || 0
+            const paidSoFar = selectedSummary.payments?.reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0) || 0
+            const remaining = netSalary - paidSoFar
+            setPaidAmount(String(remaining > 0 ? remaining : 0))
+        }
+    }, [selectedSummary])
 
     const selectableSummaries = useMemo(() =>
         displaySummaries.filter((s: any) => s.status === 'set_for_salary' && s.has_salary_setup),
@@ -408,19 +428,37 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
                                                         </Badge>
                                                     ) : isGenerated ? (
                                                         <div className="flex items-center gap-1">
-                                                            {s.paid_mode ? (
-                                                                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-bold">
-                                                                    Paid
-                                                                </Badge>
-                                                            ) : (
-                                                                <Badge 
-                                                                    variant="outline" 
-                                                                    className="bg-amber-500/10 text-amber-600 border-amber-500/20 text-[10px] font-bold cursor-pointer hover:bg-amber-500/20"
-                                                                    onClick={() => handleOpenMarkPaid(s.id, s)}
-                                                                >
-                                                                    Unpaid
-                                                                </Badge>
-                                                            )}
+                                                            {(() => {
+                                                                const netSalary = Number(s.take_home) || 0
+                                                                const paidSoFar = s.payments?.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0
+                                                                if (paidSoFar === 0) {
+                                                                    return (
+                                                                        <Badge 
+                                                                            variant="outline" 
+                                                                            className="bg-amber-500/10 text-amber-600 border-amber-500/20 text-[10px] font-bold cursor-pointer hover:bg-amber-500/20"
+                                                                            onClick={() => handleOpenMarkPaid(s.id, s)}
+                                                                        >
+                                                                            Unpaid
+                                                                        </Badge>
+                                                                    )
+                                                                } else if (paidSoFar < netSalary) {
+                                                                    return (
+                                                                        <Badge 
+                                                                            variant="outline" 
+                                                                            className="bg-orange-500/10 text-orange-600 border-orange-500/20 text-[10px] font-bold cursor-pointer hover:bg-orange-500/20"
+                                                                            onClick={() => handleOpenMarkPaid(s.id, s)}
+                                                                        >
+                                                                            Partially Paid ({formatCurrency(paidSoFar)})
+                                                                        </Badge>
+                                                                    )
+                                                                } else {
+                                                                    return (
+                                                                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-bold">
+                                                                            Paid
+                                                                        </Badge>
+                                                                    )
+                                                                }
+                                                            })()}
                                                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setViewPayslipId(s.id)}>
                                                                 <Eye className="h-3.5 w-3.5" />
                                                             </Button>
@@ -1146,63 +1184,107 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
                                 </div>
                             </div>
 
+                            {/* Summary metrics for partial payments */}
+                            {(() => {
+                                const netSalary = selectedSummary ? Number(selectedSummary.take_home) || 0 : 0
+                                const paidSoFar = selectedSummary?.payments?.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0
+                                const remaining = netSalary - paidSoFar
+                                return (
+                                    <div className="grid grid-cols-3 gap-2 bg-muted/20 p-3 rounded-xl text-center text-[11px] font-semibold border border-border/40 mb-2">
+                                        <div>
+                                            <span className="text-[9px] text-muted-foreground block uppercase font-bold">Net Take Home</span>
+                                            <span className="text-slate-700 dark:text-slate-300 font-bold">{formatCurrency(netSalary)}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[9px] text-muted-foreground block uppercase font-bold">Paid So Far</span>
+                                            <span className="text-emerald-600 font-bold">{formatCurrency(paidSoFar)}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[9px] text-muted-foreground block uppercase font-bold">Remaining Balance</span>
+                                            <span className="text-orange-500 font-bold">{formatCurrency(remaining)}</span>
+                                        </div>
+                                    </div>
+                                )
+                            })()}
+
                             {/* Row 3: Payment Amount & Transfer No */}
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Payment Amount</label>
-                                    <input 
-                                        type="text"
-                                        value={selectedSummary ? formatCurrency(selectedSummary.take_home) : '—'}
-                                        disabled
-                                        className="w-full flex h-10 rounded-md border border-input bg-muted px-3 py-1 text-xs font-bold text-emerald-600 disabled:opacity-80"
-                                    />
-                                </div>
+                            {(() => {
+                                const netSalary = selectedSummary ? Number(selectedSummary.take_home) || 0 : 0
+                                const paidSoFar = selectedSummary?.payments?.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0
+                                const remaining = netSalary - paidSoFar
+                                const hasExceededLimit = Number(paidAmount) > remaining
+                                return (
+                                    <>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Payment Amount</label>
+                                                <input 
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0.01"
+                                                    max={remaining}
+                                                    value={paidAmount}
+                                                    onChange={(e) => setPaidAmount(e.target.value)}
+                                                    className="w-full flex h-10 rounded-md border border-input bg-background px-3 py-1 text-xs font-bold text-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                                    placeholder={`Max ${remaining}`}
+                                                />
+                                                {hasExceededLimit && (
+                                                    <p className="text-[10px] text-rose-500 font-bold mt-0.5">
+                                                        Cannot exceed remaining balance of {formatCurrency(remaining)}
+                                                    </p>
+                                                )}
+                                            </div>
 
-                                <div className="space-y-1">
-                                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Transfer No.</label>
-                                    <input 
-                                        type="text"
-                                        value={payReferenceNo}
-                                        onChange={(e) => setPayReferenceNo(e.target.value)}
-                                        placeholder="Enter bank reference, check no, or UPI txn id"
-                                        className="w-full flex h-10 rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                    />
-                                </div>
-                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Transfer No.</label>
+                                                <input 
+                                                    type="text"
+                                                    value={payReferenceNo}
+                                                    onChange={(e) => setPayReferenceNo(e.target.value)}
+                                                    placeholder="Enter bank reference, check no, or UPI txn id"
+                                                    className="w-full flex h-10 rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                                />
+                                            </div>
+                                        </div>
 
-                            {/* Row 4: Remarks */}
-                            <div className="space-y-2">
-                                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Remarks</label>
-                                <textarea 
-                                    value={paymentRemarks}
-                                    onChange={(e) => setPaymentRemarks(e.target.value)}
-                                    placeholder="Additional notes..."
-                                    className="w-full flex min-h-[60px] rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                />
-                            </div>
+                                        {/* Row 4: Remarks */}
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Remarks</label>
+                                            <textarea 
+                                                value={paymentRemarks}
+                                                onChange={(e) => setPaymentRemarks(e.target.value)}
+                                                placeholder="Additional notes..."
+                                                className="w-full flex min-h-[60px] rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                            />
+                                        </div>
 
-                            <div className="flex justify-end gap-2 pt-2">
-                                <Button variant="outline" size="sm" onClick={() => setMarkPaidId(null)}>Cancel</Button>
-                                <AsyncButton 
-                                    onClick={async () => {
-                                        await markPaidMutation.mutateAsync({
-                                            summaryId: markPaidId!,
-                                            paidMode,
-                                            payDate,
-                                            payReferenceNo,
-                                            paymentRemarks,
-                                        })
-                                    }}
-                                    variant="primary"
-                                    size="sm"
-                                    loadingText="Recording..."
-                                    successText="Payment Saved successfully!"
-                                    icons={{ idle: <Save className="h-4 w-4" /> }}
-                                    className="w-auto px-4"
-                                >
-                                    Save Payment
-                                </AsyncButton>
-                            </div>
+                                        <div className="flex justify-end gap-2 pt-2">
+                                            <Button variant="outline" size="sm" onClick={() => setMarkPaidId(null)}>Cancel</Button>
+                                            <AsyncButton 
+                                                disabled={!paidAmount || Number(paidAmount) <= 0 || hasExceededLimit || isNaN(Number(paidAmount))}
+                                                onClick={async () => {
+                                                    await markPaidMutation.mutateAsync({
+                                                        summaryId: markPaidId!,
+                                                        paidAmount: Number(paidAmount),
+                                                        paidMode,
+                                                        payDate,
+                                                        payReferenceNo,
+                                                        paymentRemarks,
+                                                    })
+                                                }}
+                                                variant="primary"
+                                                size="sm"
+                                                loadingText="Recording..."
+                                                successText="Payment Saved successfully!"
+                                                icons={{ idle: <Save className="h-4 w-4" /> }}
+                                                className="w-auto px-4"
+                                            >
+                                                Save Payment
+                                            </AsyncButton>
+                                        </div>
+                                    </>
+                                )
+                            })()}
                         </div>
                     </DialogContent>
                 </Dialog>

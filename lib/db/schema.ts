@@ -281,6 +281,7 @@ export const monthlyAttendanceSummary = pgTable('monthly_attendance_summary', {
     net_salary: numeric('net_salary', { precision: 12, scale: 2 }),
     advance_recovery: numeric('advance_recovery', { precision: 12, scale: 2 }),
     take_home: numeric('take_home', { precision: 12, scale: 2 }),
+    paid_amount: numeric('paid_amount', { precision: 12, scale: 2 }),
     salary_breakdown: jsonb('salary_breakdown'),
     paid_mode: text('paid_mode'),
     pay_date: date('pay_date'),
@@ -516,7 +517,7 @@ export const employeeAdvancesRelations = relations(employeeAdvances, ({ one }) =
     }),
 }));
 
-export const monthlyAttendanceSummaryRelations = relations(monthlyAttendanceSummary, ({ one }) => ({
+export const monthlyAttendanceSummaryRelations = relations(monthlyAttendanceSummary, ({ one, many }) => ({
     profile: one(profiles, {
         fields: [monthlyAttendanceSummary.profile_id],
         references: [profiles.id],
@@ -525,6 +526,7 @@ export const monthlyAttendanceSummaryRelations = relations(monthlyAttendanceSumm
         fields: [monthlyAttendanceSummary.set_for_salary_by],
         references: [profiles.id],
     }),
+    payments: many(salaryPayments),
 }));
 
 // Complaint & Ticket Relations
@@ -605,6 +607,31 @@ export const callLogsRelations = relations(callLogs, ({ one }) => ({
     }),
     caller: one(profiles, {
         fields: [callLogs.called_by],
+        references: [profiles.id],
+    }),
+}));
+
+// Salary Payments (individual transactions against a payslip)
+export const salaryPayments = pgTable('salary_payments', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    summary_id: uuid('summary_id').notNull().references(() => monthlyAttendanceSummary.id, { onDelete: 'cascade' }),
+    amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
+    paid_mode: text('paid_mode').notNull(),
+    pay_date: date('pay_date').notNull(),
+    pay_reference_no: text('pay_reference_no'),
+    payment_remarks: text('payment_remarks'),
+    paid_by: uuid('paid_by').references(() => profiles.id, { onDelete: 'set null' }),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+export const salaryPaymentsRelations = relations(salaryPayments, ({ one }) => ({
+    summary: one(monthlyAttendanceSummary, {
+        fields: [salaryPayments.summary_id],
+        references: [monthlyAttendanceSummary.id],
+    }),
+    paidByProfile: one(profiles, {
+        fields: [salaryPayments.paid_by],
         references: [profiles.id],
     }),
 }));
