@@ -640,36 +640,7 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                                     </div>
                                 </div>
 
-                                {/* Payment Info Card */}
-                                {payslipDetail.paid_mode && (
-                                    <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 space-y-2.5">
-                                        <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-black text-xs uppercase tracking-wider">
-                                            <CheckCircle className="w-4 h-4 text-emerald-600" /> Payment Recorded
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-y-3 gap-x-2 text-xs font-semibold">
-                                            <div>
-                                                <span className="text-[10px] text-slate-400 uppercase block font-bold">Paid Mode</span>
-                                                <span className="text-slate-700 dark:text-slate-300 capitalize">{payslipDetail.paid_mode.replace('_', ' ')}</span>
-                                            </div>
-                                            <div>
-                                                <span className="text-[10px] text-slate-400 uppercase block font-bold">Pay Date</span>
-                                                <span className="text-slate-700 dark:text-slate-300">{payslipDetail.pay_date}</span>
-                                            </div>
-                                            {payslipDetail.pay_reference_no && (
-                                                <div className="col-span-2 border-t border-slate-100 dark:border-slate-800/50 pt-2">
-                                                    <span className="text-[10px] text-slate-400 uppercase block font-bold">Ref / Transaction No.</span>
-                                                    <span className="text-slate-700 dark:text-slate-300 break-all">{payslipDetail.pay_reference_no}</span>
-                                                </div>
-                                            )}
-                                            {payslipDetail.payment_remarks && (
-                                                <div className="col-span-2 border-t border-slate-100 dark:border-slate-800/50 pt-2">
-                                                    <span className="text-[10px] text-slate-400 uppercase block font-bold">Remarks</span>
-                                                    <span className="text-slate-700 dark:text-slate-300 block">{payslipDetail.payment_remarks}</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
+
 
                                 {/* Attendance Stats Grid */}
                                 <div>
@@ -765,6 +736,37 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                                             <strong>Note:</strong> Deductions exceeded earnings by {formatCurr(breakdown.carry_forward)}.
                                             This amount has been carried forward as an advance.
                                         </p>
+                                    </div>
+                                )}
+
+                                {/* Payment Info Card */}
+                                {payslipDetail.paid_mode && (
+                                    <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 space-y-2.5">
+                                        <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-black text-xs uppercase tracking-wider">
+                                            <CheckCircle className="w-4 h-4 text-emerald-600" /> Payment Recorded
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-y-3 gap-x-2 text-xs font-semibold">
+                                            <div>
+                                                <span className="text-[10px] text-slate-400 uppercase block font-bold">Paid Mode</span>
+                                                <span className="text-slate-700 dark:text-slate-300 capitalize">{payslipDetail.paid_mode.replace('_', ' ')}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] text-slate-400 uppercase block font-bold">Pay Date</span>
+                                                <span className="text-slate-700 dark:text-slate-300">{payslipDetail.pay_date}</span>
+                                            </div>
+                                            {payslipDetail.pay_reference_no && (
+                                                <div className="col-span-2 border-t border-slate-100 dark:border-slate-800/50 pt-2">
+                                                    <span className="text-[10px] text-slate-400 uppercase block font-bold">Ref / Transaction No.</span>
+                                                    <span className="text-slate-700 dark:text-slate-300 break-all">{payslipDetail.pay_reference_no}</span>
+                                                </div>
+                                            )}
+                                            {payslipDetail.payment_remarks && (
+                                                <div className="col-span-2 border-t border-slate-100 dark:border-slate-800/50 pt-2">
+                                                    <span className="text-[10px] text-slate-400 uppercase block font-bold">Remarks</span>
+                                                    <span className="text-slate-700 dark:text-slate-300 block whitespace-pre-wrap">{payslipDetail.payment_remarks}</span>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 )}
                             </div>
