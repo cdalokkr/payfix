@@ -131,14 +131,15 @@ export const designationRouter = router({
     deleteDesignation: adminProcedure
         .input(z.object({ id: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
-            const currentData = await ctx.db.query.designations.findFirst({
-                where: eq(designations.id, input.id),
-                columns: { name: true }
-            })
-
-            const usageCheck = await ctx.db.select({ value: count() })
-                .from(profiles)
-                .where(eq(profiles.designation_id, input.id))
+            const [currentData, usageCheck] = await Promise.all([
+                ctx.db.query.designations.findFirst({
+                    where: eq(designations.id, input.id),
+                    columns: { name: true }
+                }),
+                ctx.db.select({ value: count() })
+                    .from(profiles)
+                    .where(eq(profiles.designation_id, input.id))
+            ])
 
             const usageCount = usageCheck[0].value
 

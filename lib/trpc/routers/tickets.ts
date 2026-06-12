@@ -67,32 +67,33 @@ export const ticketsRouter = router({
 
       const where = conditions.length > 0 ? and(...conditions) : undefined
 
-      const data = await ctx.db.query.tickets.findMany({
-        where: where,
-        with: {
-          complaint: {
-            columns: { id: true, complaint_number: true, subject: true },
-            with: {
-              client: {
-                columns: { id: true, company_name: true },
+      const [data, countResult] = await Promise.all([
+        ctx.db.query.tickets.findMany({
+          where: where,
+          with: {
+            complaint: {
+              columns: { id: true, complaint_number: true, subject: true },
+              with: {
+                client: {
+                  columns: { id: true, company_name: true },
+                },
+              },
+            },
+            assignments: {
+              with: {
+                assignee: {
+                  columns: { id: true, full_name: true, email: true, avatar_url: true },
+                },
               },
             },
           },
-          assignments: {
-            with: {
-              assignee: {
-                columns: { id: true, full_name: true, email: true, avatar_url: true },
-              },
-            },
-          },
-        },
-        orderBy: [desc(tickets.created_at)],
-        limit: input?.limit ?? 50,
-        offset: input?.offset ?? 0,
-      })
-
-      const countResult = await ctx.db.select({ count: sql<number>`count(*)` })
-        .from(tickets).where(where)
+          orderBy: [desc(tickets.created_at)],
+          limit: input?.limit ?? 50,
+          offset: input?.offset ?? 0,
+        }),
+        ctx.db.select({ count: sql<number>`count(*)` })
+          .from(tickets).where(where)
+      ])
 
       return { data, total: Number(countResult[0]?.count ?? 0) }
     }),

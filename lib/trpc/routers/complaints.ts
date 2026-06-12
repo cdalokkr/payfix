@@ -62,23 +62,24 @@ export const complaintsRouter = router({
 
       const where = conditions.length > 0 ? and(...conditions) : undefined
 
-      const data = await ctx.db.query.complaints.findMany({
-        where: where,
-        with: {
-          client: {
-            columns: { id: true, company_name: true, contact_person: true, phone: true },
+      const [data, countResult] = await Promise.all([
+        ctx.db.query.complaints.findMany({
+          where: where,
+          with: {
+            client: {
+              columns: { id: true, company_name: true, contact_person: true, phone: true },
+            },
+            tickets: {
+              columns: { id: true, status: true },
+            },
           },
-          tickets: {
-            columns: { id: true, status: true },
-          },
-        },
-        orderBy: [desc(complaints.created_at)],
-        limit: input?.limit ?? 50,
-        offset: input?.offset ?? 0,
-      })
-
-      const countResult = await ctx.db.select({ count: sql<number>`count(*)` })
-        .from(complaints).where(where)
+          orderBy: [desc(complaints.created_at)],
+          limit: input?.limit ?? 50,
+          offset: input?.offset ?? 0,
+        }),
+        ctx.db.select({ count: sql<number>`count(*)` })
+          .from(complaints).where(where)
+      ])
 
       return { data, total: Number(countResult[0]?.count ?? 0) }
     }),
@@ -178,27 +179,26 @@ export const complaintsRouter = router({
 
   // Dashboard stats
   getDashboardStats: protectedProcedure.query(async ({ ctx }) => {
-    const stats = await ctx.db.select({
-      status: complaints.status,
-      count: sql<number>`count(*)`,
-    })
-      .from(complaints)
-      .groupBy(complaints.status)
-
-    const callStats = await ctx.db.select({
-      status: callLogs.status,
-      count: sql<number>`count(*)`,
-    })
-      .from(callLogs)
-      .groupBy(callLogs.status)
-
-    // Ticket stats
-    const ticketStats = await ctx.db.select({
-      status: sql<string>`status`,
-      count: sql<number>`count(*)`,
-    })
-      .from(tickets)
-      .groupBy(sql`status`)
+    const [stats, callStats, ticketStats] = await Promise.all([
+      ctx.db.select({
+        status: complaints.status,
+        count: sql<number>`count(*)`,
+      })
+        .from(complaints)
+        .groupBy(complaints.status),
+      ctx.db.select({
+        status: callLogs.status,
+        count: sql<number>`count(*)`,
+      })
+        .from(callLogs)
+        .groupBy(callLogs.status),
+      ctx.db.select({
+        status: sql<string>`status`,
+        count: sql<number>`count(*)`,
+      })
+        .from(tickets)
+        .groupBy(sql`status`)
+    ])
 
     const complaintStats: Record<string, number> = {}
     stats.forEach(s => { complaintStats[s.status || 'unknown'] = Number(s.count) })
