@@ -867,49 +867,43 @@ export class SalaryService {
 
     /** Get monthly summaries for a month/year */
     static async getMonthlySummaries(month: number, year: number) {
-        const summaries = await db.query.monthlyAttendanceSummary.findMany({
-            where: and(
-                eq(monthlyAttendanceSummary.month, month),
-                eq(monthlyAttendanceSummary.year, year)
-            ),
-            with: {
-                profile: {
-                    columns: { id: true, full_name: true, email: true, role: true },
-                    with: {
-                        designation: {
-                            columns: { name: true }
+        // Fetch summaries and active setups concurrently to eliminate sequential DB roundtrips
+        const [summaries, activeSetups] = await Promise.all([
+            db.query.monthlyAttendanceSummary.findMany({
+                where: and(
+                    eq(monthlyAttendanceSummary.month, month),
+                    eq(monthlyAttendanceSummary.year, year)
+                ),
+                with: {
+                    profile: {
+                        columns: { id: true, full_name: true, email: true, role: true },
+                        with: {
+                            designation: {
+                                columns: { name: true }
+                            }
                         }
                     }
-                }
-            },
-            orderBy: [desc(monthlyAttendanceSummary.created_at)],
-        })
-
-        // Also fetch active salary setups for these profiles to return has_salary_setup boolean
-        const profileIds = summaries.map(s => s.profile_id)
-        let activeSetupsMap = new Map<string, boolean>()
-
-        if (profileIds.length > 0) {
-            const activeSetups = await db.query.employeeSalarySetup.findMany({
-                where: and(
-                    inArray(employeeSalarySetup.profile_id, profileIds),
-                    eq(employeeSalarySetup.is_active, true)
-                )
+                },
+                orderBy: [desc(monthlyAttendanceSummary.created_at)],
+            }),
+            db.query.employeeSalarySetup.findMany({
+                where: eq(employeeSalarySetup.is_active, true)
             })
+        ])
 
-            // Or use the getActiveSalaryForPeriod logic for a more accurate check,
-            // but for simplicity, checking if an active setup exists or querying specific period:
-            for (const setup of activeSetups) {
-                const fromVal = setup.effective_from_year * 100 + setup.effective_from_month
-                const targetVal = year * 100 + month
-                if (fromVal <= targetVal) {
-                    if (!setup.effective_to_month || !setup.effective_to_year) {
+        const activeSetupsMap = new Map<string, boolean>()
+
+        // Check if an active setup exists and falls within target period:
+        for (const setup of activeSetups) {
+            const fromVal = setup.effective_from_year * 100 + setup.effective_from_month
+            const targetVal = year * 100 + month
+            if (fromVal <= targetVal) {
+                if (!setup.effective_to_month || !setup.effective_to_year) {
+                    activeSetupsMap.set(setup.profile_id, true)
+                } else {
+                    const toVal = setup.effective_to_year * 100 + setup.effective_to_month
+                    if (targetVal <= toVal) {
                         activeSetupsMap.set(setup.profile_id, true)
-                    } else {
-                        const toVal = setup.effective_to_year * 100 + setup.effective_to_month
-                        if (targetVal <= toVal) {
-                            activeSetupsMap.set(setup.profile_id, true)
-                        }
                     }
                 }
             }
