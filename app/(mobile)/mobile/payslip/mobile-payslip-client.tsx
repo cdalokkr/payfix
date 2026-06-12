@@ -194,12 +194,7 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                 ['', '', 'Extra Days', bd?.extra_days || '0'],
             ];
 
-            if (slip.paid_mode) {
-                tableBodyRows.push(
-                    ['Payment Mode', slip.paid_mode.replace('_', ' ').toUpperCase(), 'Payment Date', slip.pay_date || '—'],
-                    ['Reference No', slip.pay_reference_no || '—', 'Remarks', slip.payment_remarks || '—']
-                );
-            }
+
 
             autoTable(doc, {
                 startY: 40,
@@ -292,6 +287,30 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
             doc.setFontSize(9);
             doc.setFont('helvetica', 'italic');
             doc.text(`(${numberToWords(Number(slip.take_home))})`, 14, finalY + 6);
+
+            if (slip.paid_mode) {
+                const paymentTableBody = [
+                    ['Payment Mode', slip.paid_mode.replace('_', ' ').toUpperCase(), 'Payment Date', slip.pay_date || '—'],
+                ];
+                if (slip.pay_reference_no || slip.payment_remarks) {
+                    paymentTableBody.push([
+                        'Reference No', slip.pay_reference_no || '—',
+                        'Remarks', slip.payment_remarks || '—'
+                    ]);
+                }
+
+                autoTable(doc, {
+                    startY: finalY + 14,
+                    head: [[{ content: 'Payment Information', colSpan: 4, styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } }]],
+                    body: paymentTableBody,
+                    theme: 'grid',
+                    styles: { fontSize: 9, cellPadding: 3 },
+                    columnStyles: {
+                        0: { fontStyle: 'bold', fillColor: [245, 245, 245] },
+                        2: { fontStyle: 'bold', fillColor: [245, 245, 245] }
+                    }
+                });
+            }
             
             const fileName = `Salary_Slip_${profile.full_name?.replace(/\s+/g, '_')}_${monthName}_${slip.year}.pdf`;
             doc.save(fileName);
@@ -618,9 +637,8 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                                 </div>
                             </div>
 
-                            {/* Visible Payslip Content + Hidden Print Content */}
                             {payslipDetail && breakdown ? (
-                                <div className="px-4 pb-8 space-y-5">
+                                <div className="px-4 pb-20 space-y-5">
                                 {/* Period Badge */}
                                 <div className="flex justify-center">
                                     <Badge className="bg-orange-500/10 text-orange-600 border-orange-200 dark:border-orange-500/30 font-black uppercase tracking-widest text-[10px] py-1.5 px-4 rounded-xl">
