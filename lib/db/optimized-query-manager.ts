@@ -6,6 +6,7 @@
 import { db } from '@/lib/db'
 import { profiles, activities, analyticsMetrics, designations, attendance, officeSettings, officeClosures } from '@/lib/db/schema'
 import { eq, and, gte, lte, desc, sql, or, ilike, count } from 'drizzle-orm'
+import { SmartCache } from '@/lib/cache/smart-cache'
 
 // Performance monitoring for database queries
 interface DatabaseMetrics {
@@ -185,7 +186,7 @@ export class OptimizedQueryManager {
           if (profileId) {
             // Fetch only fresh attendance data
             const todayStart = new Date(new Date().setHours(0, 0, 0, 0))
-            const [attendanceData, settingsData, closuresData] = await Promise.all([
+            const [attendanceData, settingsData, allClosures] = await Promise.all([
               (async () => {
                 const [year, month, day] = (localDate || new Date().toISOString().split('T')[0]).split('-').map(Number);
                 const yesterday = new Date(year, month - 1, day - 1);
@@ -196,9 +197,12 @@ export class OptimizedQueryManager {
                     gte(attendance.date, yesterdayStr)
                   ));
               })(),
-              db.select().from(officeSettings).limit(1),
-              db.select().from(officeClosures).where(gte(officeClosures.date, sql`CURRENT_DATE`))
+              SmartCache.getOfficeSettingsCached(),
+              SmartCache.getOfficeClosuresCached()
             ])
+
+            const serverTodayStr = new Date().toISOString().split('T')[0]
+            const closuresData = (allClosures || []).filter(c => c.date >= serverTodayStr)
 
             // Merge cached data with fresh attendance
             const serverLocalDate = (() => {
@@ -221,8 +225,8 @@ export class OptimizedQueryManager {
               attendance: {
                 todayRecord: records.find(r => normalizeDate(r.date) === targetDate) || null,
                 pendingRecord: records.filter(r => !r.check_out).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0] || null,
-                settings: (settingsData as any[])[0] || null,
-                closures: (closuresData as any[]) || []
+                settings: settingsData || null,
+                closures: closuresData || []
               }
             }
           }

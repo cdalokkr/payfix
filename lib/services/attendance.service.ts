@@ -64,76 +64,73 @@ export class AttendanceService {
             throwAppError('UNAUTHORIZED', 'Profile ID is required for employee role')
         }
 
-        const targetProfiles = await db.query.profiles.findMany({
-            where: filterProfileId ? eq(profiles.id, filterProfileId) : eq(profiles.status, 'active'),
-            columns: {
-                id: true,
-                email: true,
-                full_name: true,
-                role: true,
-                avatar_url: true,
-                sex: true
-            },
-            with: {
-                designation: {
-                    columns: {
-                        name: true
+        const [targetProfiles, settings, allClosures] = await Promise.all([
+            db.query.profiles.findMany({
+                where: filterProfileId ? eq(profiles.id, filterProfileId) : eq(profiles.status, 'active'),
+                columns: {
+                    id: true,
+                    email: true,
+                    full_name: true,
+                    role: true,
+                    avatar_url: true,
+                    sex: true
+                },
+                with: {
+                    designation: {
+                        columns: {
+                            name: true
+                        }
                     }
                 }
-            }
-        })
+            }),
+            SmartCache.getOfficeSettingsCached(),
+            SmartCache.getOfficeClosuresCached()
+        ])
 
         if (targetProfiles.length === 0) return []
         const employeeIds = targetProfiles.map(p => p.id)
 
-        // Fetch office settings & closures (holidays)
-        const settings = await SmartCache.getOfficeSettingsCached()
         const offDays = settings?.off_days || [0]
-        const allClosures = await SmartCache.getOfficeClosuresCached()
         const closures = allClosures.filter(c => c.date >= dates[0] && c.date <= dates[dates.length - 1])
         const closuresMap = new Map(closures.map(c => [c.date, c.reason]))
 
-        // Fetch leaves (both approved and pending) for employees in range
-        const leavesList = await db.query.leaves.findMany({
-            where: and(
-                inArray(leaves.profile_id, employeeIds),
-                inArray(leaves.status, ['approved', 'pending']),
-                lte(leaves.start_date, dates[dates.length - 1]),
-                gte(leaves.end_date, dates[0])
-            )
-        })
+        // Fetch leaves (both approved and pending) for employees in range & actual attendance records concurrently
+        const [leavesList, actualRecords] = await Promise.all([
+            db.query.leaves.findMany({
+                where: and(
+                    inArray(leaves.profile_id, employeeIds),
+                    inArray(leaves.status, ['approved', 'pending']),
+                    lte(leaves.start_date, dates[dates.length - 1]),
+                    gte(leaves.end_date, dates[0])
+                )
+            }),
+            db.query.attendance.findMany({
+                where: and(
+                    inArray(attendance.profile_id, employeeIds),
+                    gte(attendance.date, dates[0]),
+                    lte(attendance.date, dates[dates.length - 1])
+                )
+            })
+        ])
 
-        // Fetch actual attendance records
-        const actualRecords = await db.query.attendance.findMany({
-            where: and(
-                inArray(attendance.profile_id, employeeIds),
-                gte(attendance.date, dates[0]),
-                lte(attendance.date, dates[dates.length - 1])
-            ),
-            with: {
-                profile: {
-                    columns: {
-                        id: true,
-                        email: true,
-                        full_name: true,
-                        role: true,
-                        avatar_url: true,
-                        sex: true
-                    },
-                    with: {
-                        designation: {
-                            columns: {
-                                name: true
-                            }
-                        }
-                    }
-                }
-            }
-        })
+        // Build a profile lookup map from targetProfiles to stitch profiles in memory (avoiding redundant DB joins)
+        const profilesMap = new Map(targetProfiles.map(p => [p.id, p]))
 
         const actualMap = new Map<string, any>()
         for (const r of actualRecords) {
-            actualMap.set(`${r.profile_id}_${r.date}`, r)
+            const profile = profilesMap.get(r.profile_id)
+            actualMap.set(`${r.profile_id}_${r.date}`, {
+                ...r,
+                profile: profile ? {
+                    id: profile.id,
+                    email: profile.email,
+                    full_name: profile.full_name,
+                    role: profile.role,
+                    avatar_url: profile.avatar_url,
+                    sex: profile.sex,
+                    designation: profile.designation
+                } : null
+            })
         }
 
         const results: any[] = []
