@@ -69,6 +69,8 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
             }, 1500)
             refetch()
             utils.salary.getPayslipDetail.invalidate({ summaryId: viewPayslipId || "" })
+            utils.salary.getMyPayslips.invalidate()
+            utils.salary.getMyPayslipDetail.invalidate()
         },
         onError: (err) => {
             toast.error(err.message || "Failed to mark salary as paid")
@@ -214,6 +216,12 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
     }
 
     const breakdown = payslipDetail?.salary_breakdown as Record<string, any> | null
+
+    const viewedSummary = summaries?.find((s: any) => s.id === viewPayslipId) || null
+    const displayPaidMode = payslipDetail?.paid_mode ?? viewedSummary?.paid_mode
+    const displayPayDate = payslipDetail?.pay_date ?? viewedSummary?.pay_date
+    const displayPayReferenceNo = payslipDetail?.pay_reference_no ?? viewedSummary?.pay_reference_no
+    const displayPaymentRemarks = payslipDetail?.payment_remarks ?? viewedSummary?.payment_remarks
 
     // Compute totals for the columnar layout
     const totalEarnings = breakdown ? (
@@ -868,7 +876,7 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
                                 </div>
 
                                 {/* Premium On-Screen Interactive Dashboard View */}
-                                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                                <div className="flex-1 overflow-y-auto p-6 pb-24 space-y-6">
                                     {/* Glassmorphic Header */}
                                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-muted/30 border border-border/50 p-4 rounded-2xl">
                                         <div className="flex items-center gap-3">
@@ -976,7 +984,7 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
                                     </div>
 
                                     {/* Payment Details Card */}
-                                    {payslipDetail.paid_mode ? (
+                                    {displayPaidMode ? (
                                         <div className="bg-emerald-50/50 dark:bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 space-y-3">
                                             <div className="flex items-center justify-between">
                                                 <h4 className="text-xs font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
@@ -986,7 +994,13 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
                                                     variant="ghost" 
                                                     size="sm" 
                                                     className="h-7 text-xs text-emerald-700 hover:text-emerald-800 dark:text-emerald-400"
-                                                    onClick={() => handleOpenMarkPaid(payslipDetail.id, payslipDetail)}
+                                                    onClick={() => handleOpenMarkPaid(payslipDetail.id, {
+                                                        ...payslipDetail,
+                                                        paid_mode: displayPaidMode,
+                                                        pay_date: displayPayDate,
+                                                        pay_reference_no: displayPayReferenceNo,
+                                                        payment_remarks: displayPaymentRemarks
+                                                    })}
                                                 >
                                                     Edit Details
                                                 </Button>
@@ -994,23 +1008,23 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
                                             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm font-medium">
                                                 <div>
                                                     <span className="text-[10px] text-muted-foreground uppercase block">Paid Mode</span>
-                                                    <span className="font-bold capitalize">{payslipDetail.paid_mode.replace('_', ' ')}</span>
+                                                    <span className="font-bold capitalize">{displayPaidMode.replace('_', ' ')}</span>
                                                 </div>
                                                 <div>
                                                     <span className="text-[10px] text-muted-foreground uppercase block">Pay Date</span>
-                                                    <span className="font-bold">{payslipDetail.pay_date}</span>
+                                                    <span className="font-bold">{displayPayDate}</span>
                                                 </div>
-                                                {payslipDetail.pay_reference_no && (
+                                                {displayPayReferenceNo && (
                                                     <div>
                                                         <span className="text-[10px] text-muted-foreground uppercase block">Ref / Txn No</span>
-                                                        <span className="font-bold">{payslipDetail.pay_reference_no}</span>
+                                                        <span className="font-bold">{displayPayReferenceNo}</span>
                                                     </div>
                                                 )}
                                             </div>
-                                            {payslipDetail.payment_remarks && (
+                                            {displayPaymentRemarks && (
                                                 <div className="pt-2.5 border-t border-emerald-500/10 dark:border-emerald-500/5 text-sm font-medium">
                                                     <span className="text-[10px] text-muted-foreground uppercase block">Remarks</span>
-                                                    <span className="font-bold whitespace-pre-wrap block">{payslipDetail.payment_remarks}</span>
+                                                    <span className="font-bold whitespace-pre-wrap block">{displayPaymentRemarks}</span>
                                                 </div>
                                             )}
                                         </div>

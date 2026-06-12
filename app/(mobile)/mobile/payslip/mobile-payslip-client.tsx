@@ -116,6 +116,12 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
         { enabled: !!viewPayslipId }
     )
 
+    const selectedSlip = payslips?.find(s => s.id === viewPayslipId) || null
+    const displayPaidMode = payslipDetail?.paid_mode ?? selectedSlip?.paid_mode
+    const displayPayDate = payslipDetail?.pay_date ?? selectedSlip?.pay_date
+    const displayPayReferenceNo = payslipDetail?.pay_reference_no ?? selectedSlip?.pay_reference_no
+    const displayPaymentRemarks = payslipDetail?.payment_remarks ?? selectedSlip?.payment_remarks
+
     const months = Array.from({ length: 12 }, (_, i) => ({
         value: i + 1,
         label: format(new Date(2024, i, 1), "MMMM")
@@ -758,7 +764,7 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                                 )}
 
                                 {/* Payment Info Card */}
-                                {payslipDetail.paid_mode && (
+                                {displayPaidMode && (
                                     <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 space-y-2.5">
                                         <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-black text-xs uppercase tracking-wider">
                                             <CheckCircle className="w-4 h-4 text-emerald-600" /> Payment Recorded
@@ -766,22 +772,22 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                                         <div className="grid grid-cols-2 gap-y-3 gap-x-2 text-xs font-semibold">
                                             <div>
                                                 <span className="text-[10px] text-slate-400 uppercase block font-bold">Paid Mode</span>
-                                                <span className="text-slate-700 dark:text-slate-300 capitalize">{payslipDetail.paid_mode.replace('_', ' ')}</span>
+                                                <span className="text-slate-700 dark:text-slate-300 capitalize">{displayPaidMode.replace('_', ' ')}</span>
                                             </div>
                                             <div>
                                                 <span className="text-[10px] text-slate-400 uppercase block font-bold">Pay Date</span>
-                                                <span className="text-slate-700 dark:text-slate-300">{payslipDetail.pay_date}</span>
+                                                <span className="text-slate-700 dark:text-slate-300">{displayPayDate}</span>
                                             </div>
-                                            {payslipDetail.pay_reference_no && (
+                                            {displayPayReferenceNo && (
                                                 <div className="col-span-2 border-t border-slate-100 dark:border-slate-800/50 pt-2">
                                                     <span className="text-[10px] text-slate-400 uppercase block font-bold">Ref / Transaction No.</span>
-                                                    <span className="text-slate-700 dark:text-slate-300 break-all">{payslipDetail.pay_reference_no}</span>
+                                                    <span className="text-slate-700 dark:text-slate-300 break-all">{displayPayReferenceNo}</span>
                                                 </div>
                                             )}
-                                            {payslipDetail.payment_remarks && (
+                                            {displayPaymentRemarks && (
                                                 <div className="col-span-2 border-t border-slate-100 dark:border-slate-800/50 pt-2">
                                                     <span className="text-[10px] text-slate-400 uppercase block font-bold">Remarks</span>
-                                                    <span className="text-slate-700 dark:text-slate-300 block whitespace-pre-wrap">{payslipDetail.payment_remarks}</span>
+                                                    <span className="text-slate-700 dark:text-slate-300 block whitespace-pre-wrap">{displayPaymentRemarks}</span>
                                                 </div>
                                             )}
                                         </div>
