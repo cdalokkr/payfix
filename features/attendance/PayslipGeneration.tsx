@@ -599,8 +599,8 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
 
                 {/* Payslip Detail Dialog — A4 Salary Slip */}
                 <Dialog open={!!viewPayslipId} onOpenChange={(open) => !open && setViewPayslipId(null)}>
-                    <DialogContent className="max-w-[820px] max-h-[95vh] overflow-y-auto p-0">
-                        <DialogHeader className="px-6 pt-5 pb-0">
+                    <DialogContent className="max-w-[820px] max-h-[90vh] flex flex-col p-0 overflow-hidden">
+                        <DialogHeader className="px-6 pt-5 pb-3 border-b border-border/50 shrink-0">
                             <DialogTitle className="flex items-center gap-2">
                                 <Receipt className="h-5 w-5 text-primary" />
                                 Salary Slip
@@ -611,7 +611,7 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
                         </DialogHeader>
 
                         {!payslipDetail || !breakdown ? (
-                            <div className="p-6 space-y-6">
+                            <div className="flex-1 overflow-y-auto p-6 space-y-6 animate-pulse">
                                 {/* Glassmorphic Header Skeleton */}
                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-muted/30 border border-border/50 p-4 rounded-2xl animate-pulse">
                                     <div className="flex items-center gap-3">
@@ -868,7 +868,7 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
                                 </div>
 
                                 {/* Premium On-Screen Interactive Dashboard View */}
-                                <div className="p-6 space-y-6">
+                                <div className="flex-1 overflow-y-auto p-6 space-y-6">
                                     {/* Glassmorphic Header */}
                                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-muted/30 border border-border/50 p-4 rounded-2xl">
                                         <div className="flex items-center gap-3">
@@ -1031,7 +1031,7 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
                                     )}
                                 </div>
 
-                                <div className="flex justify-end gap-2 px-6 pb-5 pt-3 border-t border-border/50">
+                                <div className="flex justify-end gap-2 px-6 pb-5 pt-3 border-t border-border/50 shrink-0">
                                     <Button variant="outline" size="sm" onClick={handlePrint}>
                                         <Printer className="h-4 w-4 mr-1" />Print A4 Slip
                                     </Button>
