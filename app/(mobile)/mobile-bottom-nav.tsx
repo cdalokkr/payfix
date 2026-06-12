@@ -13,12 +13,6 @@ const navItems = [
         label: "Home",
     },
     {
-        href: "/mobile/attendance",
-        icon: IconChecklist,
-        label: "Attendance",
-        isPrimary: true,
-    },
-    {
         href: "/mobile/tickets",
         icon: IconTicket,
         label: "Tickets",
@@ -46,35 +40,6 @@ export function MobileBottomNav() {
                 {navItems.map((item) => {
                     const isActive = pathname === item.href
                     const Icon = item.icon
-
-                    if (item.isPrimary) {
-                        return (
-                            <Link
-                                key={item.href}
-                                href={item.href}
-                                prefetch={true}
-                                className="relative -top-6 flex flex-col items-center group"
-                            >
-                                <motion.div
-                                    whileTap={{ scale: 0.9 }}
-                                    className={cn(
-                                        "w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg transition-all duration-300",
-                                        isActive
-                                            ? "bg-primary text-white scale-110 shadow-primary/40 ring-4 ring-primary/20"
-                                            : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 shadow-slate-200/50 dark:shadow-none"
-                                    )}
-                                >
-                                    <Icon className={cn("w-7 h-7 stroke-[2]", isActive && "animate-pulse")} />
-                                </motion.div>
-                                <span className={cn(
-                                    "text-[10px] font-bold mt-2 transition-colors duration-300 uppercase tracking-wider",
-                                    isActive ? "text-primary" : "text-slate-500 dark:text-slate-400"
-                                )}>
-                                    {item.label}
-                                </span>
-                            </Link>
-                        )
-                    }
 
                     return (
                         <Link

@@ -602,10 +602,25 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                         </div>
 
                         {isPaybookLoading ? (
-                            <div className="space-y-3">
-                                {[1, 2].map(i => (
-                                    <div key={i} className="bg-slate-200/50 dark:bg-slate-800/50 animate-pulse h-36 rounded-2xl" />
-                                ))}
+                            <div className="flex flex-col items-center justify-center min-h-[280px] p-6 bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-[1.5rem] shadow-sm space-y-4">
+                                <div className="relative flex items-center justify-center">
+                                    {/* Spinner animation */}
+                                    <motion.div
+                                        animate={{ rotate: 360 }}
+                                        transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}
+                                        className="w-12 h-12 rounded-full border-4 border-slate-100 dark:border-slate-800 border-t-orange-500 dark:border-t-orange-400"
+                                    />
+                                    {/* Inner glowing core */}
+                                    <div className="absolute w-4 h-4 rounded-full bg-orange-500/20 dark:bg-orange-400/20 blur-sm animate-pulse" />
+                                </div>
+                                <div className="text-center space-y-1">
+                                    <h4 className="text-sm font-black text-slate-800 dark:text-slate-200 tracking-wide animate-pulse">
+                                        Fetching Passbook Data...
+                                    </h4>
+                                    <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                                        Connecting to database
+                                    </p>
+                                </div>
                             </div>
                         ) : !paybook || paybook.length === 0 ? (
                             <motion.div

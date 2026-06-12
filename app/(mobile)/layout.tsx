@@ -6,6 +6,7 @@ import '@/app/globals.css'
 import { MobileHeader } from './mobile-header'
 import { MobileBottomNav } from './mobile-bottom-nav'
 import { PermissionGuard } from '@/features/mobile/PermissionGuard'
+import { MobileSplash } from '@/components/mobile/mobile-splash'
 
 export default async function MobileLayout({
     children,
@@ -48,6 +49,9 @@ export default async function MobileLayout({
     return (
         <TRPCProvider>
             <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+                {/* Mobile initialization splash screen */}
+                <MobileSplash />
+
                 {/* Sticky Header */}
                 <MobileHeader profile={profile} />
 

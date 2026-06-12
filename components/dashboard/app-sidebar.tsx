@@ -39,19 +39,8 @@ export function AppSidebar({ role, tenants, defaultTenant, onTenantSwitch, user,
   } else if (role === "moderator") {
     navGroups = moderatorNavItems
   } else if (role === "employee") {
-    // Filter items within each group based on allowed_modules
-    navGroups = employeeNavItems.map(group => ({
-      ...group,
-      items: group.items.filter(item =>
-        item.moduleId === "dashboard" ||
-        item.moduleId === "profile" ||
-        item.moduleId === "payroll" ||
-        item.moduleId === "attendance" ||
-        item.moduleId === "leaves" ||
-        item.moduleId === "salary" ||
-        (item.moduleId && user?.allowed_modules?.includes(item.moduleId as Module))
-      )
-    })).filter(group => group.items.length > 0)
+    // Grant access to all employee dashboard navigation items
+    navGroups = employeeNavItems
   } else {
     navGroups = moderatorNavItems
   }

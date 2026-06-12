@@ -85,6 +85,14 @@ const quickActions = [
 
 export function MobileDashboard({ profile, todayAttendance: initialAttendance, isPwaServer }: MobileDashboardProps) {
     const { isPwa, isMobile, isReady } = usePwaCheck(isPwaServer)
+    const [isDesktop, setIsDesktop] = useState(false)
+
+    useEffect(() => {
+        setIsDesktop(window.innerWidth >= 1024)
+        const handleResize = () => setIsDesktop(window.innerWidth >= 1024)
+        window.addEventListener('resize', handleResize)
+        return () => window.removeEventListener('resize', handleResize)
+    }, [])
 
     // Initialize from sessionStorage if available (persists across navigation) and not expired
     const [geofenceResult, setGeofenceResult] = useState<{
@@ -379,11 +387,16 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
                         </div>
                     </div>
 
-                    {/* Integrated Action Row */}
                     <motion.div layout className="mt-1 space-y-3">
                         {!isReady ? (
                             <div className="flex items-center justify-center p-8">
                                 <IconLoader2 className="w-8 h-8 animate-spin opacity-20" />
+                            </div>
+                        ) : isDesktop ? (
+                            <div className="p-6 rounded-[2rem] bg-rose-500/20 backdrop-blur-md border border-rose-500/30 text-center">
+                                <IconAlertTriangle className="w-10 h-10 mx-auto mb-3 text-rose-100" />
+                                <h4 className="text-sm font-black uppercase tracking-widest mb-2 text-rose-50">Desktop Blocked</h4>
+                                <p className="text-[11px] font-medium text-rose-100/80">Attendance marking is restricted to mobile devices / PWA only.</p>
                             </div>
                         ) : (!isPwa && profile.role !== 'employee') ? (
                             <div className="p-6 rounded-[2rem] bg-white/20 backdrop-blur-md border border-white/30 text-center">
