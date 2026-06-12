@@ -12,7 +12,11 @@ const FEATURES = [
     "Daily Ticket Log Tracker"
 ]
 
-export function MobileSplash() {
+interface MobileSplashProps {
+    sessionKey?: string
+}
+
+export function MobileSplash({ sessionKey = "mobile_splash_shown" }: MobileSplashProps) {
     const [showSplash, setShowSplash] = useState(false)
     const [progress, setProgress] = useState(0)
     const [displayedText, setDisplayedText] = useState("")
@@ -21,7 +25,7 @@ export function MobileSplash() {
 
     // Check session storage on mount to show once per session
     useEffect(() => {
-        const hasShown = sessionStorage.getItem("mobile_splash_shown")
+        const hasShown = sessionStorage.getItem(sessionKey)
         if (!hasShown) {
             setShowSplash(true)
             // Progress bar animation
@@ -31,7 +35,7 @@ export function MobileSplash() {
                         clearInterval(interval)
                         setTimeout(() => {
                             setShowSplash(false)
-                            sessionStorage.setItem("mobile_splash_shown", "true")
+                            sessionStorage.setItem(sessionKey, "true")
                         }, 500) // Delay before final fade-out
                         return 100
                     }
@@ -40,7 +44,7 @@ export function MobileSplash() {
             }, 30)
             return () => clearInterval(interval)
         }
-    }, [])
+    }, [sessionKey])
 
     // Typewriter effect logic
     useEffect(() => {

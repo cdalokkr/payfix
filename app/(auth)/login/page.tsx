@@ -6,6 +6,7 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { ShieldUser } from 'lucide-react'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { MobileSplash } from '@/components/mobile/mobile-splash'
 
 export const metadata = {
   title: 'Login - Full-Stack App',
@@ -15,6 +16,9 @@ export const metadata = {
 export default async function LoginPage() {
   return (
     <div className="min-h-screen bg-white dark:bg-zinc-950 relative overflow-hidden flex flex-col font-sans">
+      {/* Modern startup animated splash screen overlay */}
+      <MobileSplash sessionKey="login_splash_shown" />
+
       {/* Dynamic Background Elements - Light Edition */}
       <div className="absolute top-[-10%] left-[-10%] w-[45%] h-[45%] bg-blue-100/40 dark:bg-blue-900/10 blur-[130px] rounded-full animate-pulse" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[45%] h-[45%] bg-indigo-100/40 dark:bg-indigo-900/10 blur-[130px] rounded-full animate-pulse" style={{ animationDelay: '2s' }} />
