@@ -6,7 +6,6 @@ import '@/app/globals.css'
 import { MobileHeader } from './mobile-header'
 import { MobileBottomNav } from './mobile-bottom-nav'
 import { PermissionGuard } from '@/features/mobile/PermissionGuard'
-import { MobileSplash } from '@/components/mobile/mobile-splash'
 
 export default async function MobileLayout({
     children,
@@ -16,7 +15,6 @@ export default async function MobileLayout({
     // Check PWA standalone status from server-side cookies
     const cookieStore = await cookies()
     const isPwa = cookieStore.get('pwa_standalone')?.value === 'true'
-    const hasShownSplash = cookieStore.get('app_splash_shown')?.value === 'true'
 
     // Check authentication
     const supabase = await createServerSupabaseClient()
@@ -50,9 +48,6 @@ export default async function MobileLayout({
     return (
         <TRPCProvider>
             <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
-                {/* Mobile initialization splash screen */}
-                <MobileSplash sessionKey="app_splash_shown" defaultShow={!hasShownSplash} />
-
                 {/* Sticky Header */}
                 <MobileHeader profile={profile} />
 
