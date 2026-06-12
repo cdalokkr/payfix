@@ -397,27 +397,27 @@ export const authRouter = router({
     console.log('[AUTH-LOGOUT] Logout procedure executed for user:', ctx.user?.id)
 
     try {
-      // Log the logout activity before clearing the session
-      if (ctx.user) {
-        // Use ctx.profile.role if available, otherwise fallback to user
-        // ctx.profile should be populated by the optimized context
-        const actorRole = ctx.profile?.role || 'employee'
+      // Log the logout activity & sign out from Supabase concurrently
+      const activityPromise = ctx.user
+        ? ctx.db.insert(activities).values({
+            user_id: ctx.profile?.id || ctx.user.id,
+            activity_type: 'logout',
+            module: 'auth',
+            description: formatActivityDescription({
+              action: 'logout',
+              actorRole: ctx.profile?.role || 'employee',
+              actorEmail: ctx.user.email || '',
+              module: 'auth'
+            }),
+          })
+        : Promise.resolve();
 
-        await ctx.db.insert(activities).values({
-          user_id: ctx.profile?.id || ctx.user.id,
-          activity_type: 'logout',
-          module: 'auth',
-          description: formatActivityDescription({
-            action: 'logout',
-            actorRole: actorRole,
-            actorEmail: ctx.user.email || '',
-            module: 'auth'
-          }),
-        })
-      }
+      const [signOutResult] = await Promise.all([
+        ctx.supabase.auth.signOut(),
+        activityPromise
+      ])
 
-      // Sign out from Supabase (this clears auth cookies)
-      const { error: signOutError } = await ctx.supabase.auth.signOut()
+      const { error: signOutError } = signOutResult
       if (signOutError) {
         console.error('[AUTH-LOGOUT] Error signing out from Supabase:', signOutError)
         throw new TRPCError({

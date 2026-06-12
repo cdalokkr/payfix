@@ -241,28 +241,29 @@ export class SalaryService {
             orderByClause = filters.sortOrder === 'asc' ? [sql`${employeeAdvances.date} ASC`] : [desc(employeeAdvances.date)]
         }
 
-        // Get total count for pagination
-        const totalCountResult = await db.select({ count: sql<number>`count(*)` })
-            .from(employeeAdvances)
-            .where(conditions.length > 0 ? and(...conditions) : undefined)
-        const total = Number(totalCountResult[0]?.count || 0)
-
-        const advances = await db.query.employeeAdvances.findMany({
-            where: conditions.length > 0 ? and(...conditions) : undefined,
-            with: {
-                profile: {
-                    columns: { full_name: true, email: true, avatar_url: true, role: true },
-                    with: {
-                        designation: {
-                            columns: { name: true }
+        // Get total count for pagination and advances concurrently
+        const [totalCountResult, advances] = await Promise.all([
+            db.select({ count: sql<number>`count(*)` })
+                .from(employeeAdvances)
+                .where(conditions.length > 0 ? and(...conditions) : undefined),
+            db.query.employeeAdvances.findMany({
+                where: conditions.length > 0 ? and(...conditions) : undefined,
+                with: {
+                    profile: {
+                        columns: { full_name: true, email: true, avatar_url: true, role: true },
+                        with: {
+                            designation: {
+                                columns: { name: true }
+                            }
                         }
                     }
-                }
-            },
-            orderBy: orderByClause,
-            limit,
-            offset,
-        })
+                },
+                orderBy: orderByClause,
+                limit,
+                offset,
+            })
+        ])
+        const total = Number(totalCountResult[0]?.count || 0)
 
         return {
             advances: advances.map(a => ({
@@ -657,8 +658,43 @@ export class SalaryService {
         const employeeIds = employees.map(e => e.id)
         if (employeeIds.length === 0) return []
 
-        // Get office settings for working hours calculation
-        const settings = await SmartCache.getOfficeSettingsCached()
+        const startDate = `${year}-${String(month).padStart(2, '0')}-01`
+        const lastDay = new Date(year, month, 0).getDate()
+        const endDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`
+
+        // Fetch office settings, closures, bulk attendance records, approved leaves, and existing summaries concurrently
+        const [settings, closures, allAttendanceRecords, allLeaves, allExistingSummaries] = await Promise.all([
+            SmartCache.getOfficeSettingsCached(),
+            db.query.officeClosures.findMany({
+                where: and(
+                    gte(officeClosures.date, startDate),
+                    lte(officeClosures.date, endDate)
+                )
+            }),
+            db.query.attendance.findMany({
+                where: and(
+                    inArray(attendance.profile_id, employeeIds),
+                    gte(attendance.date, startDate),
+                    lte(attendance.date, endDate)
+                )
+            }),
+            db.query.leaves.findMany({
+                where: and(
+                    inArray(leaves.profile_id, employeeIds),
+                    eq(leaves.status, 'approved'),
+                    lte(leaves.start_date, endDate),
+                    gte(leaves.end_date, startDate)
+                )
+            }),
+            db.query.monthlyAttendanceSummary.findMany({
+                where: and(
+                    inArray(monthlyAttendanceSummary.profile_id, employeeIds),
+                    eq(monthlyAttendanceSummary.month, month),
+                    eq(monthlyAttendanceSummary.year, year)
+                )
+            })
+        ])
+
         const defaultCheckIn = settings?.default_check_in || '10:00:00'
         const defaultCheckOut = settings?.default_check_out || '19:00:00'
         const offDays = (settings?.off_days as number[] | null) || [0] // Default Sunday off
@@ -668,46 +704,7 @@ export class SalaryService {
         const [outH, outM] = defaultCheckOut.split(':').map(Number)
         const scheduledHoursPerDay = ((outH * 60 + outM) - (inH * 60 + inM)) / 60
 
-        // Get office closures for the month
-        const startDate = `${year}-${String(month).padStart(2, '0')}-01`
-        const lastDay = new Date(year, month, 0).getDate()
-        const endDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`
-
-        const closures = await db.query.officeClosures.findMany({
-            where: and(
-                gte(officeClosures.date, startDate),
-                lte(officeClosures.date, endDate)
-            )
-        })
         const closureDates = new Set(closures.map(c => c.date))
-
-        // Pre-fetch all attendance records in bulk
-        const allAttendanceRecords = await db.query.attendance.findMany({
-            where: and(
-                inArray(attendance.profile_id, employeeIds),
-                gte(attendance.date, startDate),
-                lte(attendance.date, endDate)
-            )
-        })
-
-        // Pre-fetch all approved leaves in bulk
-        const allLeaves = await db.query.leaves.findMany({
-            where: and(
-                inArray(leaves.profile_id, employeeIds),
-                eq(leaves.status, 'approved'),
-                lte(leaves.start_date, endDate),
-                gte(leaves.end_date, startDate)
-            )
-        })
-
-        // Pre-fetch existing summaries in bulk
-        const allExistingSummaries = await db.query.monthlyAttendanceSummary.findMany({
-            where: and(
-                inArray(monthlyAttendanceSummary.profile_id, employeeIds),
-                eq(monthlyAttendanceSummary.month, month),
-                eq(monthlyAttendanceSummary.year, year)
-            )
-        })
 
         // Calculate working days & required working days
         const totalWorkingDays = lastDay // Month calendar days is the default working days
@@ -968,15 +965,36 @@ export class SalaryService {
             })
         }
 
+        // Pre-fetch all salary setups in a single query to eliminate N+1 queries
+        const profileIds = summaries.map(s => s.profile_id)
+        const allSalarySetups = await db.query.employeeSalarySetup.findMany({
+            where: inArray(employeeSalarySetup.profile_id, profileIds),
+            orderBy: [desc(employeeSalarySetup.effective_from_year), desc(employeeSalarySetup.effective_from_month)],
+        })
+
         const results = []
 
         for (const summary of summaries) {
-            // Get applicable salary setup
-            const salarySetup = await this.getActiveSalaryForPeriod(
-                summary.profile_id,
-                summary.month,
-                summary.year
-            )
+            // Find applicable salary setup in-memory
+            const employeeSetups = allSalarySetups.filter(s => s.profile_id === summary.profile_id)
+            let salarySetup = null
+            for (const setup of employeeSetups) {
+                const fromVal = setup.effective_from_year * 100 + setup.effective_from_month
+                const targetVal = summary.year * 100 + summary.month
+
+                if (fromVal > targetVal) continue
+
+                if (!setup.effective_to_month || !setup.effective_to_year) {
+                    salarySetup = setup // ongoing
+                    break
+                }
+
+                const toVal = setup.effective_to_year * 100 + setup.effective_to_month
+                if (targetVal <= toVal) {
+                    salarySetup = setup
+                    break
+                }
+            }
 
             if (!salarySetup) {
                 // Skip employees without salary setup — don't fail entire batch
