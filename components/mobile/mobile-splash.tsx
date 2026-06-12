@@ -14,37 +14,45 @@ const FEATURES = [
 
 interface MobileSplashProps {
     sessionKey?: string
+    defaultShow?: boolean
 }
 
-export function MobileSplash({ sessionKey = "mobile_splash_shown" }: MobileSplashProps) {
-    const [showSplash, setShowSplash] = useState(false)
+export function MobileSplash({ sessionKey = "mobile_splash_shown", defaultShow = true }: MobileSplashProps) {
+    const [showSplash, setShowSplash] = useState(defaultShow)
     const [progress, setProgress] = useState(0)
     const [displayedText, setDisplayedText] = useState("")
     const [currentFeatureIndex, setCurrentFeatureIndex] = useState(0)
     const [isDeleting, setIsDeleting] = useState(false)
 
-    // Check session storage on mount to show once per session
+    // Check session storage/cookies on mount to show once per session
     useEffect(() => {
-        const hasShown = sessionStorage.getItem(sessionKey)
-        if (!hasShown) {
-            setShowSplash(true)
-            // Progress bar animation
-            const interval = setInterval(() => {
-                setProgress(prev => {
-                    if (prev >= 100) {
-                        clearInterval(interval)
-                        setTimeout(() => {
-                            setShowSplash(false)
-                            sessionStorage.setItem(sessionKey, "true")
-                        }, 500) // Delay before final fade-out
-                        return 100
-                    }
-                    return prev + 1.5
-                })
-            }, 30)
-            return () => clearInterval(interval)
+        if (!showSplash) return
+
+        const hasShownSession = sessionStorage.getItem(sessionKey)
+        const hasShownCookie = document.cookie.includes(`${sessionKey}=true`)
+        
+        if (hasShownSession || hasShownCookie) {
+            setShowSplash(false)
+            return
         }
-    }, [sessionKey])
+
+        // Progress bar animation
+        const interval = setInterval(() => {
+            setProgress(prev => {
+                if (prev >= 100) {
+                    clearInterval(interval)
+                    setTimeout(() => {
+                        setShowSplash(false)
+                        sessionStorage.setItem(sessionKey, "true")
+                        document.cookie = `${sessionKey}=true; path=/; SameSite=Lax`
+                    }, 500) // Delay before final fade-out
+                    return 100
+                }
+                return prev + 1.5
+            })
+        }, 30)
+        return () => clearInterval(interval)
+    }, [sessionKey, showSplash])
 
     // Typewriter effect logic
     useEffect(() => {

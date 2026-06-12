@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { Sparkles, Loader2 } from "lucide-react"
+import { Sparkles } from "lucide-react"
 
 const FEATURES = [
     "Geofence-verified check-ins",
@@ -95,7 +95,7 @@ export default function MobileDashboardLoading() {
                 </div>
             </div>
 
-            {/* Typewriter Feature Showcase & Spinner */}
+            {/* Typewriter Feature Showcase & Progress Bar */}
             <div className="w-full max-w-xs space-y-6 pb-12">
                 {/* Glassmorphic message container */}
                 <div className="min-h-[46px] flex items-center justify-center gap-2 px-4 py-2.5 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-md">
@@ -106,10 +106,26 @@ export default function MobileDashboardLoading() {
                     </p>
                 </div>
 
-                {/* Loading spinner */}
-                <div className="flex flex-col items-center justify-center space-y-2">
-                    <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-                    <span className="text-[10px] text-slate-500 font-black tracking-wider uppercase">Loading Application</span>
+                {/* Progress Bar (Indeterminate) */}
+                <div className="space-y-2">
+                    <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden relative">
+                        <motion.div
+                            className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full absolute top-0 bottom-0 left-0"
+                            animate={{
+                                x: ["-100%", "100%"]
+                            }}
+                            transition={{
+                                repeat: Infinity,
+                                duration: 1.5,
+                                ease: "easeInOut"
+                            }}
+                            style={{ width: "50%" }}
+                        />
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] text-slate-500 font-black tracking-wider uppercase">
+                        <span>INITIALIZING</span>
+                        <span className="animate-pulse">LOADING</span>
+                    </div>
                 </div>
             </div>
         </div>

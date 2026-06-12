@@ -7,6 +7,7 @@ import { ShieldUser } from 'lucide-react'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { MobileSplash } from '@/components/mobile/mobile-splash'
+import { cookies } from 'next/headers'
 
 export const metadata = {
   title: 'Login - Full-Stack App',
@@ -14,10 +15,13 @@ export const metadata = {
 }
 
 export default async function LoginPage() {
+  const cookieStore = await cookies()
+  const hasShownSplash = cookieStore.get('app_splash_shown')?.value === 'true'
+
   return (
     <div className="min-h-screen bg-white dark:bg-zinc-950 relative overflow-hidden flex flex-col font-sans">
       {/* Modern startup animated splash screen overlay */}
-      <MobileSplash sessionKey="login_splash_shown" />
+      <MobileSplash sessionKey="app_splash_shown" defaultShow={!hasShownSplash} />
 
       {/* Dynamic Background Elements - Light Edition */}
       <div className="absolute top-[-10%] left-[-10%] w-[45%] h-[45%] bg-blue-100/40 dark:bg-blue-900/10 blur-[130px] rounded-full animate-pulse" />
