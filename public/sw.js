@@ -8,12 +8,8 @@ const STATIC_CACHE = 'payfix-static-v2'
 const DYNAMIC_CACHE = 'payfix-dynamic-v2'
 const OFFLINE_QUEUE_NAME = 'payfix-offline-queue'
 
-// Static assets to cache
+// Static assets to cache - public files only to ensure reliable sw installation
 const STATIC_ASSETS = [
-    '/',
-    '/mobile',
-    '/mobile/attendance',
-    '/employee',
     '/offline',
     '/manifest.json',
     '/icons/icon-192x192.png',
@@ -77,15 +73,50 @@ self.addEventListener('fetch', (event) => {
         return
     }
 
+    // HTML/Document navigation requests - network first, fallback to offline page
+    // Using request.mode === 'navigate' and Accept header check for compatibility
+    const isNavigation = request.mode === 'navigate' || 
+                         (request.headers.get('accept')?.includes('text/html'))
+    
+    if (isNavigation) {
+        event.respondWith(networkFirstNavigation(request))
+        return
+    }
+
     // API requests - network first, then cache
     if (url.pathname.startsWith('/api/')) {
         event.respondWith(networkFirst(request))
         return
     }
 
-    // Static assets - cache first
+    // Static assets (JS, CSS, images, etc.) - cache first
     event.respondWith(cacheFirst(request))
 })
+
+// Network-first navigation strategy
+async function networkFirstNavigation(request) {
+    try {
+        // Always try to fetch from the network first
+        const networkResponse = await fetch(request)
+        return networkResponse
+    } catch (error) {
+        console.log('[SW] Navigation fetch failed, serving offline page:', error)
+        // Try to serve the offline page from cache
+        const offlineResponse = await caches.match('/offline')
+        if (offlineResponse) {
+            return offlineResponse
+        }
+        
+        // If offline page is not found, return a fallback response instead of throwing
+        return new Response(
+            '<!DOCTYPE html><html><head><title>Offline | PayFix</title><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;padding:2rem;text-align:center;background:#f8fafc;color:#0f172a;"><div style="max-width:400px;margin:4rem auto;background:white;padding:2.5rem;border-radius:1.5rem;box-shadow:0 10px 15px -3px rgba(0,0,0,0.05);border:1px solid #e2e8f0;"><h2 style="margin-top:0;font-weight:900;color:#e11d48;">Connection Lost</h2><p style="color:#64748b;font-size:0.95rem;line-height:1.6;">Your device is currently offline. Please check your internet connection.</p><button onclick="window.location.reload()" style="margin-top:1rem;background:#0ea5e9;color:white;border:none;padding:0.75rem 1.5rem;font-weight:700;border-radius:0.75rem;cursor:pointer;box-shadow:0 4px 6px -1px rgba(14,165,233,0.2);">Retry Connection</button></div></body></html>',
+            {
+                status: 503,
+                headers: { 'Content-Type': 'text/html' }
+            }
+        )
+    }
+}
 
 // Cache-first strategy
 async function cacheFirst(request) {
@@ -105,12 +136,7 @@ async function cacheFirst(request) {
 
         return networkResponse
     } catch (error) {
-        // Return offline page if available
-        const offlineResponse = await caches.match('/offline')
-        if (offlineResponse) {
-            return offlineResponse
-        }
-
+        console.error('[SW] Cache-first fetch failed:', error)
         throw error
     }
 }
