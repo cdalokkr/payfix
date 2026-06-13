@@ -118,11 +118,7 @@ export function MobileHistoryClient({ profile }: { profile: any }) {
 
         if (isAfter(day, today)) {
             status = 'future'
-        } else if (isHoliday) {
-            status = 'holiday'
-        } else if (approvedLeave) {
-            status = 'leave'
-        } else if (record) {
+        } else if (record && (!record.id?.startsWith('virtual_') || record.check_in || record.check_out)) {
             if (record.status === 'verified') {
                 status = 'present'
             } else if (record.status === 'rejected') {
@@ -130,6 +126,10 @@ export function MobileHistoryClient({ profile }: { profile: any }) {
             } else {
                 status = 'pending_verification'
             }
+        } else if (isHoliday) {
+            status = 'holiday'
+        } else if (approvedLeave) {
+            status = 'leave'
         } else if (isOffDay) {
             status = 'off_day'
         } else {

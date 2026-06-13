@@ -18,7 +18,7 @@ import { getRecordDayType } from "./attendance-columns"
 
 const attendanceEditSchema = z.object({
     status: z.enum(['pending', 'verified', 'rejected']),
-    dayType: z.enum(['Present', 'Half Day', 'Extra Day', 'Leave', 'Weekly Off', 'Holiday', 'Absent']),
+    dayType: z.enum(['Present', 'Half Day', 'Extra Day', 'On Leave', 'Weekly Off', 'Holiday', 'Absent']),
     remarks: z.string().optional(),
     checkIn: z.string().optional().or(z.literal('')),
     checkOut: z.string().optional().or(z.literal('')),
@@ -82,7 +82,7 @@ export function AttendanceEditDialog({
             } else if (resolvedType === 'Not marked') {
                 formDayType = 'Absent';
             } else if (resolvedType === 'Applied Leave') {
-                formDayType = 'Leave';
+                formDayType = 'On Leave';
             }
 
             reset({
@@ -104,7 +104,7 @@ export function AttendanceEditDialog({
         let remarks = values.remarks || '';
         
         // Auto-keyword injection to remarks for search compatibility
-        if (values.dayType === 'Leave') {
+        if (values.dayType === 'On Leave') {
             if (!remarks.toLowerCase().includes('leave')) {
                 remarks = remarks ? `Leave: ${remarks}` : 'Leave';
             }
@@ -234,7 +234,7 @@ export function AttendanceEditDialog({
                                     <SelectItem value="Present">Present</SelectItem>
                                     <SelectItem value="Half Day">Half Day</SelectItem>
                                     <SelectItem value="Extra Day">Extra Day</SelectItem>
-                                    <SelectItem value="Leave">Leave</SelectItem>
+                                    <SelectItem value="On Leave">On Leave</SelectItem>
                                     <SelectItem value="Weekly Off">Weekly Off</SelectItem>
                                     <SelectItem value="Holiday">Holiday</SelectItem>
                                     <SelectItem value="Absent">Absent</SelectItem>

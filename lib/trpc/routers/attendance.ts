@@ -246,8 +246,15 @@ export const attendanceRouter = router({
 
             // Insert notification for the employee
             const isApproved = input.status === 'verified'
-            const notifyTitle = isApproved ? 'Attendance Approved' : 'Attendance Rejected'
-            const notifyMessage = `Your attendance record for ${result.date} has been ${isApproved ? 'approved' : 'rejected'}${input.remarks ? `: "${input.remarks}"` : ''} by ${ctx.profile.full_name || ctx.profile.email}.`
+            const isExtraDay = result.is_extra_day
+            const notifyTitle = isApproved 
+                ? (isExtraDay ? 'Extra Day Approved' : 'Attendance Approved') 
+                : (isExtraDay ? 'Extra Day Rejected' : 'Attendance Rejected')
+            const notifyMessage = isApproved
+                ? (isExtraDay 
+                    ? `Your extra day attendance record for ${result.date} has been approved as an extra working day by ${ctx.profile.full_name || ctx.profile.email}.`
+                    : `Your attendance record for ${result.date} has been approved by ${ctx.profile.full_name || ctx.profile.email}.`)
+                : `Your attendance record for ${result.date} has been rejected${input.remarks ? `: "${input.remarks}"` : ''} by ${ctx.profile.full_name || ctx.profile.email}.`
 
             try {
                 await ctx.db.insert(notifications).values({

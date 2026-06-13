@@ -353,7 +353,7 @@ export function AttendanceTableToolbar<TData>({
                                 <SelectItem value="Present">Present</SelectItem>
                                 <SelectItem value="Half Day">Half Day</SelectItem>
                                 <SelectItem value="Weekly Off">Weekly Off</SelectItem>
-                                <SelectItem value="Leave">Leave</SelectItem>
+                                <SelectItem value="On Leave">On Leave</SelectItem>
                                 <SelectItem value="Absent">Absent</SelectItem>
                                 <SelectItem value="Holiday">Holiday</SelectItem>
                                 <SelectItem value="Extra Day">Extra Day</SelectItem>

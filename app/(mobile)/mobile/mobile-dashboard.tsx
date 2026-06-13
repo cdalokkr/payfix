@@ -418,20 +418,23 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
                                     </Button>
                                 </Link>
                             </div>
-                        ) : isTodayHoliday ? (
-                            <div className="p-6 rounded-[2rem] bg-amber-500/20 backdrop-blur-md border border-amber-500/30 text-center">
-                                <IconCalendarEvent className="w-10 h-10 mx-auto mb-3 text-amber-100" />
-                                <h4 className="text-sm font-black uppercase tracking-widest mb-1 text-amber-50">Holiday</h4>
-                                <p className="text-[11px] font-medium text-amber-100/80">{todayClosure?.reason || 'Office Closed'}</p>
-                            </div>
-                        ) : isTodayOffDay ? (
-                            <div className="p-6 rounded-[2rem] bg-indigo-500/20 backdrop-blur-md border border-indigo-500/30 text-center">
-                                <IconCalendarEvent className="w-10 h-10 mx-auto mb-3 text-indigo-100" />
-                                <h4 className="text-sm font-black uppercase tracking-widest mb-1 text-indigo-50">Weekly Off</h4>
-                                <p className="text-[11px] font-medium text-indigo-100/80">Scheduled Weekly Off</p>
-                            </div>
                         ) : (
                             <motion.div layout className="w-full space-y-3">
+                                {/* If today is holiday or off day and not clocked in, show info banner */}
+                                {(isTodayHoliday || isTodayOffDay) && !todayAttendance && (
+                                    <div className="p-4.5 rounded-[1.5rem] bg-white/10 border border-white/15 backdrop-blur-md text-center text-white space-y-1.5 shadow-md">
+                                        <div className="flex items-center justify-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-amber-200">
+                                            <IconCalendarEvent className="w-4 h-4" />
+                                            <span>{isTodayHoliday ? 'Office Holiday' : 'Weekly Off'}</span>
+                                        </div>
+                                        <p className="text-[10px] font-semibold text-white/80 leading-relaxed">
+                                            {isTodayHoliday ? (todayClosure?.reason || 'Office Closed') : 'Scheduled Weekly Off'}
+                                        </p>
+                                        <p className="text-[9px] font-bold text-white/50 uppercase tracking-widest leading-none pt-0.5">
+                                            Office Verified by default. Clock in only if working.
+                                        </p>
+                                    </div>
+                                )}
                                 {/* Location Loading State - Centered with Zoom Animation */}
                                 {isLocChecking ? (
                                     <motion.div

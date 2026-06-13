@@ -13,7 +13,7 @@ import { CheckCircle2, Clock, XCircle } from "lucide-react"
 
 export type DayType = 
     | 'Present' 
-    | 'Leave' 
+    | 'On Leave' 
     | 'Absent' 
     | 'Weekly Off' 
     | 'Holiday' 
@@ -43,7 +43,7 @@ export function getRecordDayType(record: any): DayType {
         } else {
             const remarks = (record.remarks || '').toLowerCase();
             if (remarks.includes('leave')) {
-                return 'Leave';
+                return 'On Leave';
             } else if (remarks.includes('weekly off') || remarks.includes('weekly_off')) {
                 return 'Weekly Off';
             } else if (remarks.includes('holiday')) {
@@ -241,7 +241,7 @@ export function createAttendanceColumns({
 
                 const dayTypeStyles: Record<string, string> = {
                     'Present': "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/30",
-                    'Leave': "bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-900/30",
+                    'On Leave': "bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-900/30",
                     'Weekly Off': "bg-slate-50 dark:bg-slate-900/30 text-slate-700 dark:text-slate-400 border-slate-200 dark:border-slate-800/30",
                     'Holiday': "bg-sky-50 dark:bg-sky-950/30 text-sky-700 dark:text-sky-400 border-sky-200 dark:border-sky-900/30",
                     'Extra Day': "bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-900/30",

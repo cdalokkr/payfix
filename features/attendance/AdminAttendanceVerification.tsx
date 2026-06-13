@@ -546,7 +546,7 @@ export function AdminAttendanceVerification() {
             
             if (dayType === 'Present') present++;
             if (dayType === 'Weekly Off') weekly_off++;
-            if (dayType === 'Leave') leave++;
+            if (dayType === 'On Leave') leave++;
             if (dayType === 'Absent') absent++;
             if (dayType === 'Holiday') holiday++;
             

@@ -160,14 +160,19 @@ export class AttendanceService {
                     let remarks = 'System Generated (Absent)'
 
                     if (matchedLeave) {
-                        status = 'leave'
+                        if (matchedLeave.status === 'approved') {
+                            status = 'verified'
+                            remarks = `Leave: ${matchedLeave.leave_type || 'Casual'} (approved)`
+                        } else {
+                            status = 'leave'
+                            remarks = `Leave: ${matchedLeave.leave_type || 'Casual'} (pending)`
+                        }
                         isHalfDay = matchedLeave.is_half_day || false
-                        remarks = `Leave: ${matchedLeave.leave_type || 'Casual'} (${matchedLeave.status})`
                     } else if (holidayReason) {
-                        status = 'holiday'
+                        status = 'verified'
                         remarks = `Holiday: ${holidayReason}`
                     } else if (isWeeklyOff) {
-                        status = 'weekly_off'
+                        status = 'verified'
                         remarks = 'Weekly Off'
                     }
 
