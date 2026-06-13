@@ -716,64 +716,67 @@ export function AdminAttendanceVerification() {
                     setVerificationDialog(prev => ({ ...prev, isOpen: open }))
                 }}
             >
-                <DialogContent className="max-w-[480px] p-6 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950">
-                    <DialogHeader>
-                        <DialogTitle className="text-lg font-bold flex items-center gap-2">
+                <DialogContent className="max-w-[500px] w-[95vw] sm:w-full p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-200/60 dark:border-slate-800/60 bg-white dark:bg-slate-950">
+                    <DialogHeader className="px-4 pt-4 pb-3 border-b border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-900/30">
+                        <DialogTitle className="text-base font-bold flex items-center gap-2">
+                            <div className={cn("p-1.5 rounded-xl shadow-sm", verificationDialog.action === 'verified' ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-500" : "bg-rose-500/10 text-rose-600 dark:text-rose-500")}>
+                                {verificationDialog.action === 'verified' ? <CheckCircleIcon className="w-4 h-4" /> : <XCircleIcon className="w-4 h-4" />}
+                            </div>
                             {verificationDialog.action === 'verified' ? 'Verify Attendance Record' : 'Reject Attendance Record'}
                         </DialogTitle>
-                        <DialogDescription className="text-sm text-muted-foreground mt-1">
+                        <DialogDescription className="text-xs font-medium text-muted-foreground ml-9 mt-0.5">
                             Please review the employee details below to proceed.
                         </DialogDescription>
                     </DialogHeader>
 
                     {verificationDialog.record && (
-                        <div className="space-y-4 my-4">
+                        <div className="px-4 py-3.5 space-y-3">
                             {/* Employee Card */}
-                            <div className="flex items-center gap-3 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800/60">
+                            <div className="flex items-center gap-3 p-2 rounded-xl bg-gradient-to-r from-slate-50 to-white dark:from-slate-900/80 dark:to-slate-900/40 border border-slate-200/60 dark:border-slate-800/80 shadow-sm transition-all hover:shadow-md">
                                 <ProfileInfoCell profile={verificationDialog.record.profile} />
                             </div>
 
                             {/* Attendance details grid */}
-                            <div className="grid grid-cols-2 gap-3 text-xs">
-                                <div className="p-3 rounded-lg border border-slate-100 dark:border-slate-800 bg-card">
-                                    <span className="text-muted-foreground block mb-0.5">Date</span>
-                                    <span className="font-bold text-slate-800 dark:text-slate-200">
-                                        {format(new Date(verificationDialog.record.date), 'MMMM dd, yyyy (EEEE)')}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                <div className="p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] flex flex-col justify-center transition-all hover:bg-slate-50 dark:hover:bg-slate-900">
+                                    <span className="text-[10px] font-semibold tracking-wider uppercase text-muted-foreground mb-0.5">Date</span>
+                                    <span className="font-bold text-slate-800 dark:text-slate-200 text-[13px]">
+                                        {format(new Date(verificationDialog.record.date), 'MMM dd, yyyy (EEE)')}
                                     </span>
                                 </div>
-                                <div className="p-3 rounded-lg border border-slate-100 dark:border-slate-800 bg-card">
-                                    <span className="text-muted-foreground block mb-0.5">Current Status</span>
-                                    <Badge variant="secondary" className="capitalize font-bold text-[9px] tracking-tight px-1.5 h-4.5 border-none bg-muted text-muted-foreground">
+                                <div className="p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] flex flex-col justify-center transition-all hover:bg-slate-50 dark:hover:bg-slate-900">
+                                    <span className="text-[10px] font-semibold tracking-wider uppercase text-muted-foreground mb-0.5">Current Status</span>
+                                    <Badge variant="secondary" className="w-max capitalize font-bold text-[9px] tracking-tight px-2 py-0.5 border-none bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
                                         {verificationDialog.record.status}
                                     </Badge>
                                 </div>
-                                <div className="p-3 rounded-lg border border-slate-100 dark:border-slate-850 bg-card">
-                                    <span className="text-muted-foreground block mb-0.5">Clock In</span>
-                                    <span className="font-bold text-emerald-600">
+                                <div className="p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] flex flex-col justify-center transition-all hover:bg-slate-50 dark:hover:bg-slate-900">
+                                    <span className="text-[10px] font-semibold tracking-wider uppercase text-muted-foreground mb-0.5">Clock In</span>
+                                    <span className="font-bold text-emerald-600 dark:text-emerald-500 text-[13px]">
                                         {verificationDialog.record.check_in 
                                             ? format(new Date(verificationDialog.record.check_in), 'hh:mm a') 
                                             : '—'}
                                     </span>
                                 </div>
-                                <div className="p-3 rounded-lg border border-slate-100 dark:border-slate-850 bg-card">
-                                    <span className="text-muted-foreground block mb-0.5">Clock Out</span>
-                                    <span className="font-bold text-amber-600">
+                                <div className="p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] flex flex-col justify-center transition-all hover:bg-slate-50 dark:hover:bg-slate-900">
+                                    <span className="text-[10px] font-semibold tracking-wider uppercase text-muted-foreground mb-0.5">Clock Out</span>
+                                    <span className="font-bold text-amber-600 dark:text-amber-500 text-[13px]">
                                         {verificationDialog.record.check_out 
                                             ? format(new Date(verificationDialog.record.check_out), 'hh:mm a') 
                                             : '—'}
                                     </span>
                                 </div>
-                                <div className="p-3 rounded-lg border border-slate-100 dark:border-slate-850 bg-card">
-                                    <span className="text-muted-foreground block mb-0.5">Total Working Hours</span>
-                                    <span className="font-black text-primary">
+                                <div className="p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] flex flex-col justify-center transition-all hover:bg-slate-50 dark:hover:bg-slate-900">
+                                    <span className="text-[10px] font-semibold tracking-wider uppercase text-muted-foreground mb-0.5">Working Hours</span>
+                                    <span className="font-black text-primary text-sm">
                                         {verificationDialog.record.working_hours 
                                             ? `${Number(verificationDialog.record.working_hours).toFixed(1)}h` 
                                             : '0.0h'}
                                     </span>
                                 </div>
-                                <div className="p-3 rounded-lg border border-slate-100 dark:border-slate-850 bg-card">
-                                    <span className="text-muted-foreground block mb-0.5">Day Type</span>
-                                    <span className="font-bold text-slate-800 dark:text-slate-200">
+                                <div className="p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] flex flex-col justify-center transition-all hover:bg-slate-50 dark:hover:bg-slate-900">
+                                    <span className="text-[10px] font-semibold tracking-wider uppercase text-muted-foreground mb-0.5">Day Type</span>
+                                    <span className="font-bold text-slate-800 dark:text-slate-200 text-[13px]">
                                         {verificationDialog.record.is_half_day ? 'Half Day' : 'Full Day'}
                                     </span>
                                 </div>
@@ -781,9 +784,9 @@ export function AdminAttendanceVerification() {
 
                             {/* Remarks / Leaves status */}
                             {verificationDialog.record.remarks && (
-                                <div className="p-3 rounded-lg bg-orange-500/5 border border-orange-500/10 text-xs">
-                                    <span className="text-orange-600 font-bold block mb-1">Remarks / Request Status</span>
-                                    <span className="text-slate-650 dark:text-slate-300 font-medium">
+                                <div className="p-2.5 rounded-xl bg-orange-500/10 border border-orange-500/20 shadow-sm transition-all hover:shadow-md">
+                                    <span className="text-[10px] font-bold tracking-wider uppercase text-orange-600 dark:text-orange-500 block mb-1">Remarks / Request Status</span>
+                                    <span className="text-slate-700 dark:text-slate-200 font-medium text-xs">
                                         {verificationDialog.record.remarks}
                                     </span>
                                 </div>
@@ -791,31 +794,31 @@ export function AdminAttendanceVerification() {
 
                             {/* Process status details with spinner */}
                             {verificationDialog.status === 'processing' && (
-                                <div className="flex flex-col items-center justify-center py-4 space-y-2">
-                                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                                    <span className="text-sm font-semibold text-muted-foreground animate-pulse">
+                                <div className="flex flex-col items-center justify-center py-3 space-y-2">
+                                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                                    <span className="text-xs font-semibold text-muted-foreground animate-pulse">
                                         Updating records...
                                     </span>
                                 </div>
                             )}
 
                             {verificationDialog.status === 'success' && (
-                                <div className="flex flex-col items-center justify-center py-4 space-y-2 text-emerald-650">
-                                    <CheckCircleIcon className="h-10 w-10 text-emerald-500" />
-                                    <span className="text-sm font-bold">
+                                <div className="flex flex-col items-center justify-center py-3 space-y-1.5 text-emerald-650 dark:text-emerald-500">
+                                    <CheckCircleIcon className="h-8 w-8 text-emerald-500" />
+                                    <span className="text-sm font-bold text-emerald-600 dark:text-emerald-500">
                                         Successfully {verificationDialog.action === 'verified' ? 'Approved & Verified' : 'Rejected'}!
                                     </span>
-                                    <span className="text-xs text-muted-foreground text-center">
+                                    <span className="text-[10px] text-muted-foreground text-center">
                                         The table has been updated in the background.
                                     </span>
                                 </div>
                             )}
 
                             {verificationDialog.status === 'error' && (
-                                <div className="flex flex-col items-center justify-center py-4 space-y-2 text-rose-650">
-                                    <XCircleIcon className="h-10 w-10 text-rose-500" />
-                                    <span className="text-sm font-bold">Failed to update</span>
-                                    <span className="text-xs text-muted-foreground text-center">
+                                <div className="flex flex-col items-center justify-center py-3 space-y-1.5 text-rose-650 dark:text-rose-500">
+                                    <XCircleIcon className="h-8 w-8 text-rose-500" />
+                                    <span className="text-sm font-bold text-rose-600 dark:text-rose-500">Failed to update</span>
+                                    <span className="text-[10px] text-muted-foreground text-center">
                                         {verificationDialog.message}
                                     </span>
                                 </div>
@@ -823,16 +826,18 @@ export function AdminAttendanceVerification() {
                         </div>
                     )}
 
-                    <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+                    <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-900/30 flex flex-col-reverse sm:flex-row justify-end gap-2 rounded-b-2xl">
                         {verificationDialog.status === 'idle' ? (
                             <>
                                 <Button 
+                                    className="w-full sm:w-auto h-8 text-xs font-medium"
                                     variant="outline" 
                                     onClick={() => setVerificationDialog(prev => ({ ...prev, isOpen: false }))}
                                 >
                                     Cancel
                                 </Button>
                                 <Button 
+                                    className="w-full sm:w-auto h-8 text-xs font-bold shadow-md"
                                     variant={verificationDialog.action === 'verified' ? 'default' : 'destructive'}
                                     onClick={() => handleExecuteVerification()}
                                 >
@@ -841,6 +846,7 @@ export function AdminAttendanceVerification() {
                             </>
                         ) : (
                             <Button 
+                                className="w-full sm:w-auto h-8 text-xs"
                                 variant="secondary" 
                                 disabled={verificationDialog.status === 'processing'}
                                 onClick={() => setVerificationDialog(prev => ({ ...prev, isOpen: false }))}
@@ -859,44 +865,47 @@ export function AdminAttendanceVerification() {
                     setBulkVerificationDialog(prev => ({ ...prev, isOpen: open }))
                 }}
             >
-                <DialogContent className="max-w-[480px] p-6 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950">
-                    <DialogHeader>
-                        <DialogTitle className="text-lg font-bold flex items-center gap-2">
+                <DialogContent className="max-w-[480px] w-[95vw] sm:w-full p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-200/60 dark:border-slate-800/60 bg-white dark:bg-slate-950">
+                    <DialogHeader className="px-4 pt-4 pb-3 border-b border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-900/30">
+                        <DialogTitle className="text-base font-bold flex items-center gap-2">
+                            <div className={cn("p-1.5 rounded-xl shadow-sm", bulkVerificationDialog.action === 'verified' ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-500" : "bg-rose-500/10 text-rose-600 dark:text-rose-500")}>
+                                {bulkVerificationDialog.action === 'verified' ? <CheckCircleIcon className="w-4 h-4" /> : <XCircleIcon className="w-4 h-4" />}
+                            </div>
                             {bulkVerificationDialog.action === 'verified' ? 'Bulk Verify Attendance' : 'Bulk Reject Attendance'}
                         </DialogTitle>
-                        <DialogDescription className="text-sm text-muted-foreground mt-1">
+                        <DialogDescription className="text-xs font-medium text-muted-foreground ml-9 mt-0.5">
                             You have selected {bulkVerificationDialog.totalRecords} record(s) for bulk processing.
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="space-y-4 my-4">
+                    <div className="px-4 py-3.5 space-y-3">
                         {bulkVerificationDialog.status === 'idle' && (
-                            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800/60 text-sm">
-                                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                            <div className="p-3 rounded-xl bg-gradient-to-r from-slate-50 to-white dark:from-slate-900 dark:to-slate-900/50 border border-slate-200/80 dark:border-slate-800/80 shadow-sm transition-all hover:shadow-md">
+                                <span className="font-bold text-slate-800 dark:text-slate-200 text-xs">
                                     Are you sure you want to {bulkVerificationDialog.action === 'verified' ? 'approve and verify' : 'reject'} {bulkVerificationDialog.totalRecords} selected record(s)?
                                 </span>
-                                <p className="text-xs text-muted-foreground mt-2">
+                                <p className="text-[11px] text-muted-foreground mt-1.5 font-medium">
                                     This action will process each record and update the logs accordingly.
                                 </p>
                             </div>
                         )}
 
                         {bulkVerificationDialog.status === 'processing' && (
-                            <div className="space-y-4 py-4">
+                            <div className="space-y-3 py-3">
                                 <div className="flex flex-col items-center justify-center space-y-2">
-                                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                                    <span className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
                                         Processing {bulkVerificationDialog.currentProgress + 1} of {bulkVerificationDialog.totalRecords}
                                     </span>
                                     {bulkVerificationDialog.currentRecordName && (
-                                        <span className="text-xs text-muted-foreground animate-pulse text-center">
-                                            Currently processing: <span className="font-semibold">{bulkVerificationDialog.currentRecordName}</span>
+                                        <span className="text-[10px] font-medium text-muted-foreground animate-pulse text-center">
+                                            Currently processing: <span className="font-bold">{bulkVerificationDialog.currentRecordName}</span>
                                         </span>
                                     )}
                                 </div>
 
                                 {/* Progress Bar */}
-                                <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                                <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden shadow-inner">
                                     <div 
                                         className="bg-primary h-full transition-all duration-300 ease-out"
                                         style={{ width: `${(bulkVerificationDialog.currentProgress / bulkVerificationDialog.totalRecords) * 100}%` }}
@@ -906,36 +915,38 @@ export function AdminAttendanceVerification() {
                         )}
 
                         {bulkVerificationDialog.status === 'success' && (
-                            <div className="flex flex-col items-center justify-center py-4 space-y-2 text-emerald-650">
-                                <CheckCircleIcon className="h-10 w-10 text-emerald-500" />
-                                <span className="text-sm font-bold text-emerald-600">Processing Completed!</span>
-                                <span className="text-xs text-muted-foreground text-center">
+                            <div className="flex flex-col items-center justify-center py-3 space-y-1.5 text-emerald-650 dark:text-emerald-500">
+                                <CheckCircleIcon className="h-8 w-8 text-emerald-500" />
+                                <span className="text-sm font-bold text-emerald-600 dark:text-emerald-500">Processing Completed!</span>
+                                <span className="text-[10px] text-muted-foreground text-center">
                                     {bulkVerificationDialog.message}
                                 </span>
                             </div>
                         )}
 
                         {bulkVerificationDialog.status === 'error' && (
-                            <div className="flex flex-col items-center justify-center py-4 space-y-2 text-rose-650">
-                                <XCircleIcon className="h-10 w-10 text-rose-500" />
-                                <span className="text-sm font-bold text-rose-600">Processing Failed</span>
-                                <span className="text-xs text-muted-foreground text-center">
+                            <div className="flex flex-col items-center justify-center py-3 space-y-1.5 text-rose-650 dark:text-rose-500">
+                                <XCircleIcon className="h-8 w-8 text-rose-500" />
+                                <span className="text-sm font-bold text-rose-600 dark:text-rose-500">Processing Failed</span>
+                                <span className="text-[10px] text-muted-foreground text-center">
                                     {bulkVerificationDialog.message}
                                 </span>
                             </div>
                         )}
                     </div>
 
-                    <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+                    <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-900/30 flex flex-col-reverse sm:flex-row justify-end gap-2 rounded-b-2xl">
                         {bulkVerificationDialog.status === 'idle' ? (
                             <>
                                 <Button 
+                                    className="w-full sm:w-auto h-8 text-xs font-medium"
                                     variant="outline" 
                                     onClick={() => setBulkVerificationDialog(prev => ({ ...prev, isOpen: false }))}
                                 >
                                     Cancel
                                 </Button>
                                 <Button 
+                                    className="w-full sm:w-auto h-8 text-xs font-bold shadow-md"
                                     variant={bulkVerificationDialog.action === 'verified' ? 'default' : 'destructive'}
                                     onClick={() => handleExecuteBulkVerification()}
                                 >
@@ -944,6 +955,7 @@ export function AdminAttendanceVerification() {
                             </>
                         ) : (
                             <Button 
+                                className="w-full sm:w-auto h-8 text-xs"
                                 variant="secondary" 
                                 disabled={bulkVerificationDialog.status === 'processing'}
                                 onClick={() => setBulkVerificationDialog(prev => ({ ...prev, isOpen: false }))}

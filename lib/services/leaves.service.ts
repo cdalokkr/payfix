@@ -34,8 +34,18 @@ export class LeavesService {
             with: {
                 profile: {
                     columns: {
+                        id: true,
                         email: true,
-                        full_name: true
+                        full_name: true,
+                        avatar_url: true,
+                        role: true
+                    },
+                    with: {
+                        designation: {
+                            columns: {
+                                name: true
+                            }
+                        }
                     }
                 }
             },

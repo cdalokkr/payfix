@@ -104,13 +104,16 @@ export function AttendanceTableToolbar<TData>({
                                     role="combobox"
                                     aria-expanded={employeeComboboxOpen}
                                     disabled={isLoading}
-                                    className="w-full h-10 rounded-xl border-slate-200 dark:border-slate-800 justify-between px-3 font-normal bg-transparent hover:bg-transparent text-left flex items-center shadow-none text-slate-700 dark:text-slate-250"
+                                    className={cn(
+                                        "w-full h-10 rounded-xl border-slate-200 dark:border-slate-800 justify-between px-3 font-normal bg-transparent hover:bg-transparent text-left flex items-center shadow-none text-slate-700 dark:text-slate-250",
+                                        employeeFilter !== 'all' && "border-indigo-500/50 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 font-semibold"
+                                    )}
                                 >
                                     {employeeFilter === 'all' ? (
-                                        <span className="text-slate-700 dark:text-slate-200 text-[11px] font-semibold">All Employees</span>
+                                        <span className="text-[11px] font-semibold">All Employees</span>
                                     ) : (() => {
                                         const selectedEmp = uniqueEmployees.find(e => e.id === employeeFilter)
-                                        if (!selectedEmp) return <span className="text-slate-500 text-[11px]">Select Employee...</span>
+                                        if (!selectedEmp) return <span className="text-[11px]">Select Employee...</span>
                                         return (
                                             <div className="flex items-center gap-2 overflow-hidden">
                                                 <div className="h-5 w-5 rounded-full overflow-hidden bg-muted flex items-center justify-center text-[8px] font-bold text-muted-foreground shrink-0">
@@ -120,8 +123,8 @@ export function AttendanceTableToolbar<TData>({
                                                         <span>{selectedEmp.full_name?.split(' ').map((n: any) => n[0]).join('').slice(0, 2).toUpperCase()}</span>
                                                     )}
                                                 </div>
-                                                <span className="text-[11px] font-semibold text-slate-850 dark:text-slate-250 truncate">
-                                                    {selectedEmp.full_name}
+                                                <span className="text-[11px] font-semibold truncate">
+                                                    {selectedEmp.full_name} - <span className="text-[10px] font-normal opacity-70">{selectedEmp.designation?.name || 'N/A'} ({selectedEmp.role})</span>
                                                 </span>
                                             </div>
                                         )
@@ -258,7 +261,8 @@ export function AttendanceTableToolbar<TData>({
                                     variant="outline"
                                     className={cn(
                                         "w-[240px] h-10 rounded-xl justify-start text-left font-normal border-slate-200 dark:border-slate-800",
-                                        !dateFilter ? "text-muted-foreground" : ""
+                                        !dateFilter ? "text-muted-foreground" : "",
+                                        dateFilter && "border-indigo-500/50 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 font-semibold"
                                     )}
                                     disabled={isLoading}
                                 >
