@@ -6,10 +6,10 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { trpc } from "@/lib/trpc/client"
-import { format } from "date-fns"
+import { format, differenceInCalendarDays } from "date-fns"
 import { Check, X, Search, Plane, Loader2, Calendar as CalendarIcon, Clock, CheckCircle2, XCircle, ChevronsUpDown, FileText } from "lucide-react"
 import { toast } from "sonner"
-import { ModernDialog, ModernDialogContent, ModernDialogHeader, ModernDialogTitle, ModernDialogDescription } from "@/components/ui/modern-dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { CompactMetricCard } from "@/components/dashboard/compact-metric-card"
 import { Textarea } from "@/components/ui/textarea"
@@ -319,74 +319,238 @@ export function AdminLeaveApproval() {
             </CardShell>
 
             {/* Approve Leave Dialog */}
-            <ModernDialog open={isApproveOpen} onOpenChange={setIsApproveOpen}>
-                <ModernDialogContent size="sm">
-                    <ModernDialogHeader>
-                        <ModernDialogTitle>Approve Leave Request</ModernDialogTitle>
-                        <ModernDialogDescription>Are you sure you want to approve this leave request?</ModernDialogDescription>
-                    </ModernDialogHeader>
+            <Dialog 
+                open={isApproveOpen} 
+                onOpenChange={(open) => {
+                    if (updateStatusMutation.isPending) return
+                    setIsApproveOpen(open)
+                }}
+            >
+                <DialogContent className="max-w-[500px] w-[95vw] sm:w-full p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-200/60 dark:border-slate-800/60 bg-white dark:bg-slate-950">
+                    <DialogHeader className="px-4 pt-4 pb-3 border-b border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-900/30">
+                        <DialogTitle className="text-base font-bold flex items-center gap-2">
+                            <div className="p-1.5 rounded-xl shadow-sm bg-emerald-500/10 text-emerald-600 dark:text-emerald-500">
+                                <CheckCircle2 className="w-4 h-4" />
+                            </div>
+                            Approve Leave Request
+                        </DialogTitle>
+                        <DialogDescription className="text-xs font-medium text-muted-foreground ml-9 mt-0.5">
+                            Please review the leave details below to proceed.
+                        </DialogDescription>
+                    </DialogHeader>
+
                     {selectedLeave && (
-                        <div className="flex items-center gap-3 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800/60 my-4 text-xs">
-                            <ProfileInfoCell profile={selectedLeave.profile} />
+                        <div className="px-4 py-3.5 space-y-3">
+                            {/* Employee Card */}
+                            <div className="flex items-center gap-3 p-2 rounded-xl bg-gradient-to-r from-slate-50 to-white dark:from-slate-900/80 dark:to-slate-900/40 border border-slate-200/60 dark:border-slate-800/80 shadow-sm transition-all hover:shadow-md">
+                                <ProfileInfoCell profile={selectedLeave.profile} />
+                            </div>
+
+                            {/* Leave details grid */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                <div className="p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] flex flex-col justify-center transition-all hover:bg-slate-50 dark:hover:bg-slate-900">
+                                    <span className="text-[10px] font-semibold tracking-wider uppercase text-muted-foreground mb-0.5">Leave Type</span>
+                                    <div className="flex flex-col items-start gap-0.5">
+                                        <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wider bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-1.5 py-0">
+                                            {selectedLeave.leave_type || 'N/A'}
+                                        </Badge>
+                                        {selectedLeave.is_half_day && (
+                                            <Badge variant="outline" className="text-[9px] h-4 bg-primary/5 border-primary/20 text-primary uppercase font-extrabold tracking-tight px-1 py-0 mt-0.5">
+                                                Half ({selectedLeave.half_day_period})
+                                            </Badge>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] flex flex-col justify-center transition-all hover:bg-slate-50 dark:hover:bg-slate-900">
+                                    <span className="text-[10px] font-semibold tracking-wider uppercase text-muted-foreground mb-0.5">Duration</span>
+                                    <span className="font-black text-primary text-sm">
+                                        {selectedLeave.is_half_day ? '0.5 Day' : `${differenceInCalendarDays(new Date(selectedLeave.end_date), new Date(selectedLeave.start_date)) + 1} Days`}
+                                    </span>
+                                </div>
+                                <div className="p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] flex flex-col justify-center transition-all hover:bg-slate-50 dark:hover:bg-slate-900">
+                                    <span className="text-[10px] font-semibold tracking-wider uppercase text-muted-foreground mb-0.5">Start Date</span>
+                                    <span className="font-bold text-slate-800 dark:text-slate-200 text-[13px]">
+                                        {format(new Date(selectedLeave.start_date), 'MMM dd, yyyy')}
+                                    </span>
+                                </div>
+                                <div className="p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] flex flex-col justify-center transition-all hover:bg-slate-50 dark:hover:bg-slate-900">
+                                    <span className="text-[10px] font-semibold tracking-wider uppercase text-muted-foreground mb-0.5">End Date</span>
+                                    <span className="font-bold text-slate-800 dark:text-slate-200 text-[13px]">
+                                        {format(new Date(selectedLeave.end_date), 'MMM dd, yyyy')}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Reason */}
+                            {selectedLeave.reason && (
+                                <div className="p-2.5 rounded-xl bg-orange-500/10 border border-orange-500/20 shadow-sm transition-all hover:shadow-md">
+                                    <span className="text-[10px] font-bold tracking-wider uppercase text-orange-600 dark:text-orange-500 block mb-1">Reason for Leave</span>
+                                    <span className="text-slate-700 dark:text-slate-200 font-medium text-xs font-normal">
+                                        {selectedLeave.reason}
+                                    </span>
+                                </div>
+                            )}
+
+                            {/* Show processing status if pending */}
+                            {updateStatusMutation.isPending && (
+                                <div className="flex flex-col items-center justify-center py-2 space-y-2">
+                                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                                    <span className="text-[10px] font-semibold text-muted-foreground animate-pulse">
+                                        Approving request...
+                                    </span>
+                                </div>
+                            )}
                         </div>
                     )}
-                    <div className="flex justify-end gap-3 pt-6 border-t mt-6">
-                        <Button variant="ghost" onClick={() => setIsApproveOpen(false)}>Cancel</Button>
-                        <Button
+
+                    <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-900/30 flex flex-col-reverse sm:flex-row justify-end gap-2 rounded-b-2xl">
+                        <Button 
+                            className="w-full sm:w-auto h-8 text-xs font-medium"
+                            variant="outline" 
+                            disabled={updateStatusMutation.isPending}
+                            onClick={() => setIsApproveOpen(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button 
+                            className="w-full sm:w-auto h-8 text-xs font-bold shadow-md"
+                            variant="default"
+                            disabled={updateStatusMutation.isPending}
                             onClick={() => {
                                 if (selectedLeave) {
                                     updateStatusMutation.mutate({ id: selectedLeave.id, status: 'approved', remarks: "" })
                                 }
                             }}
-                            disabled={updateStatusMutation.isPending}
-                            className="px-6 font-bold shadow-lg shadow-green-500/10 transition-all hover:scale-105"
                         >
-                            {updateStatusMutation.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
-                            Confirm Approval
+                            {updateStatusMutation.isPending && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
+                            Approve Leave
                         </Button>
                     </div>
-                </ModernDialogContent>
-            </ModernDialog>
+                </DialogContent>
+            </Dialog>
 
             {/* Rejection Reason Dialog */}
-            <ModernDialog open={isRejectOpen} onOpenChange={setIsRejectOpen}>
-                <ModernDialogContent size="md">
-                    <ModernDialogHeader>
-                        <ModernDialogTitle>Reject Leave Request</ModernDialogTitle>
-                        <ModernDialogDescription>Please provide a reason for rejecting this leave request.</ModernDialogDescription>
-                    </ModernDialogHeader>
+            <Dialog 
+                open={isRejectOpen} 
+                onOpenChange={(open) => {
+                    if (updateStatusMutation.isPending) return
+                    setIsRejectOpen(open)
+                }}
+            >
+                <DialogContent className="max-w-[500px] w-[95vw] sm:w-full p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-200/60 dark:border-slate-800/60 bg-white dark:bg-slate-950">
+                    <DialogHeader className="px-4 pt-4 pb-3 border-b border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-900/30">
+                        <DialogTitle className="text-base font-bold flex items-center gap-2">
+                            <div className="p-1.5 rounded-xl shadow-sm bg-rose-500/10 text-rose-600 dark:text-rose-500">
+                                <XCircle className="w-4 h-4" />
+                            </div>
+                            Reject Leave Request
+                        </DialogTitle>
+                        <DialogDescription className="text-xs font-medium text-muted-foreground ml-9 mt-0.5">
+                            Please provide a reason for rejecting this leave request.
+                        </DialogDescription>
+                    </DialogHeader>
+
                     {selectedLeave && (
-                        <div className="flex items-center gap-3 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800/60 my-4 text-xs">
-                            <ProfileInfoCell profile={selectedLeave.profile} />
+                        <div className="px-4 py-3.5 space-y-3.5">
+                            {/* Employee Card */}
+                            <div className="flex items-center gap-3 p-2 rounded-xl bg-gradient-to-r from-slate-50 to-white dark:from-slate-900/80 dark:to-slate-900/40 border border-slate-200/60 dark:border-slate-800/80 shadow-sm transition-all hover:shadow-md">
+                                <ProfileInfoCell profile={selectedLeave.profile} />
+                            </div>
+
+                            {/* Leave details grid */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                <div className="p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] flex flex-col justify-center transition-all hover:bg-slate-50 dark:hover:bg-slate-900">
+                                    <span className="text-[10px] font-semibold tracking-wider uppercase text-muted-foreground mb-0.5">Leave Type</span>
+                                    <div className="flex flex-col items-start gap-0.5">
+                                        <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wider bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-1.5 py-0">
+                                            {selectedLeave.leave_type || 'N/A'}
+                                        </Badge>
+                                        {selectedLeave.is_half_day && (
+                                            <Badge variant="outline" className="text-[9px] h-4 bg-primary/5 border-primary/20 text-primary uppercase font-extrabold tracking-tight px-1 py-0 mt-0.5">
+                                                Half ({selectedLeave.half_day_period})
+                                            </Badge>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] flex flex-col justify-center transition-all hover:bg-slate-50 dark:hover:bg-slate-900">
+                                    <span className="text-[10px] font-semibold tracking-wider uppercase text-muted-foreground mb-0.5">Duration</span>
+                                    <span className="font-black text-primary text-sm">
+                                        {selectedLeave.is_half_day ? '0.5 Day' : `${differenceInCalendarDays(new Date(selectedLeave.end_date), new Date(selectedLeave.start_date)) + 1} Days`}
+                                    </span>
+                                </div>
+                                <div className="p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] flex flex-col justify-center transition-all hover:bg-slate-50 dark:hover:bg-slate-900">
+                                    <span className="text-[10px] font-semibold tracking-wider uppercase text-muted-foreground mb-0.5">Start Date</span>
+                                    <span className="font-bold text-slate-800 dark:text-slate-200 text-[13px]">
+                                        {format(new Date(selectedLeave.start_date), 'MMM dd, yyyy')}
+                                    </span>
+                                </div>
+                                <div className="p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] flex flex-col justify-center transition-all hover:bg-slate-50 dark:hover:bg-slate-900">
+                                    <span className="text-[10px] font-semibold tracking-wider uppercase text-muted-foreground mb-0.5">End Date</span>
+                                    <span className="font-bold text-slate-800 dark:text-slate-200 text-[13px]">
+                                        {format(new Date(selectedLeave.end_date), 'MMM dd, yyyy')}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Reason */}
+                            {selectedLeave.reason && (
+                                <div className="p-2.5 rounded-xl bg-orange-500/10 border border-orange-500/20 shadow-sm transition-all hover:shadow-md">
+                                    <span className="text-[10px] font-bold tracking-wider uppercase text-orange-600 dark:text-orange-500 block mb-1">Reason for Leave</span>
+                                    <span className="text-slate-700 dark:text-slate-200 font-medium text-xs font-normal">
+                                        {selectedLeave.reason}
+                                    </span>
+                                </div>
+                            )}
+
+                            {/* Rejection Reason Form Field */}
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold tracking-wider uppercase text-muted-foreground block">Reason for Rejection</label>
+                                <Textarea
+                                    placeholder="Please provide the reason for rejecting this leave request..."
+                                    value={rejectionReason}
+                                    onChange={(e) => setRejectionReason(e.target.value)}
+                                    rows={3}
+                                    className="bg-background border border-slate-200 dark:border-slate-800/80 rounded-xl resize-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-0 transition-all text-xs"
+                                />
+                            </div>
+
+                            {/* Show processing status if pending */}
+                            {updateStatusMutation.isPending && (
+                                <div className="flex flex-col items-center justify-center py-2 space-y-2">
+                                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                                    <span className="text-[10px] font-semibold text-muted-foreground animate-pulse">
+                                        Rejecting request...
+                                    </span>
+                                </div>
+                            )}
                         </div>
                     )}
-                    <div className="space-y-4 pt-4">
-                        <Textarea
-                            placeholder="Reason for rejection..."
-                            value={rejectionReason}
-                            onChange={(e) => setRejectionReason(e.target.value)}
-                            rows={4}
-                            className="bg-background resize-none"
-                        />
-                        <div className="flex justify-end gap-3 pt-6 border-t mt-6">
-                            <Button variant="ghost" onClick={() => setIsRejectOpen(false)}>Cancel</Button>
-                            <Button
-                                variant="destructive"
-                                onClick={() => {
-                                    if (selectedLeave) {
-                                        updateStatusMutation.mutate({ id: selectedLeave.id, status: 'rejected', remarks: rejectionReason })
-                                    }
-                                }}
-                                disabled={!rejectionReason || updateStatusMutation.isPending}
-                                className="px-6 font-bold shadow-lg shadow-rose-500/10 transition-all hover:scale-105"
-                            >
-                                {updateStatusMutation.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
-                                Confirm Rejection
-                            </Button>
-                        </div>
+
+                    <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-900/30 flex flex-col-reverse sm:flex-row justify-end gap-2 rounded-b-2xl">
+                        <Button 
+                            className="w-full sm:w-auto h-8 text-xs font-medium"
+                            variant="outline" 
+                            disabled={updateStatusMutation.isPending}
+                            onClick={() => setIsRejectOpen(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button 
+                            className="w-full sm:w-auto h-8 text-xs font-bold shadow-md"
+                            variant="destructive"
+                            disabled={!rejectionReason || updateStatusMutation.isPending}
+                            onClick={() => {
+                                if (selectedLeave) {
+                                    updateStatusMutation.mutate({ id: selectedLeave.id, status: 'rejected', remarks: rejectionReason })
+                                }
+                            }}
+                        >
+                            {updateStatusMutation.isPending && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
+                            Confirm Reject
+                        </Button>
                     </div>
-                </ModernDialogContent>
-            </ModernDialog>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
