@@ -430,7 +430,7 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                                         <motion.div
                                             key={slip.id}
                                             variants={itemVars}
-                                            className="bg-white dark:bg-slate-900 rounded-[1.5rem] p-3 shadow-md border border-slate-100 dark:border-slate-800/50"
+                                            className="bg-white dark:bg-slate-900 rounded-[1.5rem] p-2.5 shadow-md border border-slate-100 dark:border-slate-800/50"
                                         >
                                             {/* Header: Month + Generated Badge */}
                                             <div className="flex items-center justify-between mb-3">
@@ -481,27 +481,27 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                                              {/* Attendance Stats */}
                                              <div className="grid grid-cols-6 gap-1 pt-3 border-t border-slate-100 dark:border-slate-800 text-center">
                                                  <div className="flex flex-col items-center justify-center py-2 px-0 rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/20">
-                                                     <span className="text-[8px] font-black uppercase tracking-tighter text-slate-400 dark:text-slate-500">Month</span>
+                                                     <span className="text-[9px] font-black uppercase tracking-tighter text-slate-400 dark:text-slate-500">Month</span>
                                                      <span className="text-sm font-black text-slate-800 dark:text-slate-200 mt-0.5">{bd?.total_working_days ?? slip.total_working_days ?? '—'}</span>
                                                  </div>
                                                  <div className="flex flex-col items-center justify-center py-2 px-0 rounded-xl border border-emerald-100 dark:border-emerald-950/40 bg-emerald-50/30 dark:bg-emerald-950/15">
-                                                     <span className="text-[8px] font-black uppercase tracking-tighter text-emerald-600/70 dark:text-emerald-500/50">Present</span>
+                                                     <span className="text-[9px] font-black uppercase tracking-tighter text-emerald-600/70 dark:text-emerald-500/50">Present</span>
                                                      <span className="text-sm font-black text-emerald-600 dark:text-emerald-400 mt-0.5">{slip.total_present_days ?? '—'}</span>
                                                  </div>
                                                  <div className="flex flex-col items-center justify-center py-2 px-0 rounded-xl border border-orange-100 dark:border-orange-950/40 bg-orange-50/30 dark:bg-orange-950/15">
-                                                     <span className="text-[8px] font-black uppercase tracking-tighter text-orange-600/70 dark:text-orange-500/50">Half</span>
+                                                     <span className="text-[9px] font-black uppercase tracking-tighter text-orange-600/70 dark:text-orange-500/50">Half</span>
                                                      <span className="text-sm font-black text-orange-500 dark:text-orange-400 mt-0.5">{bd?.half_days ?? slip.total_half_days ?? '—'}</span>
                                                  </div>
                                                  <div className="flex flex-col items-center justify-center py-2 px-0 rounded-xl border border-blue-100 dark:border-blue-950/40 bg-blue-50/30 dark:bg-blue-950/15">
-                                                     <span className="text-[8px] font-black uppercase tracking-tighter text-blue-600/70 dark:text-blue-500/50">Leave</span>
+                                                     <span className="text-[9px] font-black uppercase tracking-tighter text-blue-600/70 dark:text-blue-500/50">Leave</span>
                                                      <span className="text-sm font-black text-blue-600 dark:text-blue-400 mt-0.5">{slip.total_leaves ?? '—'}</span>
                                                  </div>
                                                  <div className="flex flex-col items-center justify-center py-2 px-0 rounded-xl border border-rose-100 dark:border-rose-950/40 bg-rose-50/30 dark:bg-rose-950/15">
-                                                     <span className="text-[8px] font-black uppercase tracking-tighter text-rose-600/70 dark:text-rose-500/50">Absent</span>
+                                                     <span className="text-[9px] font-black uppercase tracking-tighter text-rose-600/70 dark:text-rose-500/50">Absent</span>
                                                      <span className="text-sm font-black text-rose-600 dark:text-rose-400 mt-0.5">{bd?.absent_days ?? slip.total_absent_days ?? '—'}</span>
                                                  </div>
                                                  <div className="flex flex-col items-center justify-center py-2 px-0 rounded-xl border border-amber-100 dark:border-amber-950/40 bg-amber-50/30 dark:bg-amber-950/15">
-                                                     <span className="text-[8px] font-black uppercase tracking-tighter text-amber-600/70 dark:text-amber-500/50">Extra</span>
+                                                     <span className="text-[9px] font-black uppercase tracking-tighter text-amber-600/70 dark:text-amber-500/50">Extra</span>
                                                      <span className="text-sm font-black text-amber-600 dark:text-amber-400 mt-0.5">{bd?.extra_days ?? '0'}</span>
                                                  </div>
                                              </div>
