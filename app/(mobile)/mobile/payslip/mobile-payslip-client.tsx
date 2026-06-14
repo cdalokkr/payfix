@@ -288,7 +288,6 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                         <Receipt className="w-5 h-5 text-orange-500" />
                         <h1 className="text-lg font-black tracking-tight flex items-center gap-2">
                             My PaySlips
-                            {isFetching && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
                         </h1>
                     </div>
                 </header>
@@ -363,11 +362,26 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                             </Badge>
                         </div>
 
-                        {isLoading ? (
-                            <div className="space-y-3">
-                                {[1, 2].map(i => (
-                                    <div key={i} className="bg-slate-200/50 dark:bg-slate-800/50 animate-pulse h-36 rounded-2xl" />
-                                ))}
+                        {isLoading || isFetching ? (
+                            <div className="flex flex-col items-center justify-center min-h-[280px] p-6 bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-[1.5rem] shadow-sm space-y-4">
+                                <div className="relative flex items-center justify-center">
+                                    {/* Spinner animation */}
+                                    <motion.div
+                                        animate={{ rotate: 360 }}
+                                        transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}
+                                        className="w-12 h-12 rounded-full border-4 border-slate-100 dark:border-slate-800 border-t-orange-500 dark:border-t-orange-400"
+                                    />
+                                    {/* Inner glowing core */}
+                                    <div className="absolute w-4 h-4 rounded-full bg-orange-500/20 dark:bg-orange-400/20 blur-sm animate-pulse" />
+                                </div>
+                                <div className="text-center space-y-1">
+                                    <h4 className="text-sm font-black text-slate-800 dark:text-slate-200 tracking-wide animate-pulse">
+                                        Fetching Payslip Data...
+                                    </h4>
+                                    <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                                        Connecting to database
+                                    </p>
+                                </div>
                             </div>
                         ) : !payslips || payslips.length === 0 ? (
                             <motion.div
@@ -430,7 +444,7 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                                                     <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center shrink-0">
                                                         <Receipt className="w-5 h-5 text-orange-600 dark:text-orange-400" />
                                                     </div>
-                                                    <div className="text-sm font-black text-slate-900 dark:text-white leading-none">
+                                                    <div className="text-base font-black text-slate-900 dark:text-white leading-none">
                                                         {MONTHS[slip.month - 1]} {slip.year}
                                                     </div>
                                                 </div>
@@ -473,28 +487,28 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                                             {/* Attendance Stats */}
                                             <div className="grid grid-cols-6 gap-1 pt-3 border-t border-slate-100 dark:border-slate-800 text-center">
                                                 <div>
-                                                    <div className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">Month</div>
-                                                    <div className="text-[11px] font-bold text-slate-700 dark:text-slate-300">{bd?.total_working_days ?? slip.total_working_days ?? '—'}</div>
+                                                    <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Month</div>
+                                                    <div className="text-sm font-black text-slate-800 dark:text-slate-200 mt-0.5">{bd?.total_working_days ?? slip.total_working_days ?? '—'}</div>
                                                 </div>
                                                 <div>
-                                                    <div className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">Present</div>
-                                                    <div className="text-[11px] font-bold text-emerald-600">{slip.total_present_days ?? '—'}</div>
+                                                    <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Present</div>
+                                                    <div className="text-sm font-black text-emerald-600 mt-0.5">{slip.total_present_days ?? '—'}</div>
                                                 </div>
                                                 <div>
-                                                    <div className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">Half</div>
-                                                    <div className="text-[11px] font-bold text-orange-500">{bd?.half_days ?? slip.total_half_days ?? '—'}</div>
+                                                    <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Half</div>
+                                                    <div className="text-sm font-black text-orange-500 mt-0.5">{bd?.half_days ?? slip.total_half_days ?? '—'}</div>
                                                 </div>
                                                 <div>
-                                                    <div className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">Leave</div>
-                                                    <div className="text-[11px] font-bold text-blue-600">{slip.total_leaves ?? '—'}</div>
+                                                    <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Leave</div>
+                                                    <div className="text-sm font-black text-blue-600 mt-0.5">{slip.total_leaves ?? '—'}</div>
                                                 </div>
                                                 <div>
-                                                    <div className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">Absent</div>
-                                                    <div className="text-[11px] font-bold text-rose-600">{bd?.absent_days ?? slip.total_absent_days ?? '—'}</div>
+                                                    <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Absent</div>
+                                                    <div className="text-sm font-black text-rose-600 mt-0.5">{bd?.absent_days ?? slip.total_absent_days ?? '—'}</div>
                                                 </div>
                                                 <div>
-                                                    <div className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">Extra</div>
-                                                    <div className="text-[11px] font-bold text-amber-600">{bd?.extra_days ?? '0'}</div>
+                                                    <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Extra</div>
+                                                    <div className="text-sm font-black text-amber-600 mt-0.5">{bd?.extra_days ?? '0'}</div>
                                                 </div>
                                             </div>
 
@@ -502,17 +516,17 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                                             <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-3">
                                                 {cardEarnings.length > 0 && (
                                                     <div>
-                                                        <div className="text-[9px] font-black uppercase tracking-widest text-emerald-600 mb-1.5 flex items-center gap-1">
-                                                            <TrendingUp className="w-3 h-3" /> Earnings
+                                                        <div className="text-[11px] font-black uppercase tracking-wider text-emerald-600 mb-1.5 flex items-center gap-1">
+                                                            <TrendingUp className="w-3.5 h-3.5" /> Earnings
                                                         </div>
                                                         <div className="bg-emerald-50/50 dark:bg-emerald-500/5 rounded-xl border border-emerald-100/50 dark:border-emerald-500/10 overflow-hidden">
                                                             {cardEarnings.map((item, i) => (
-                                                                <div key={i} className={`flex justify-between px-3 py-1.5 text-[11px] ${i > 0 ? 'border-t border-emerald-100/50 dark:border-emerald-500/10' : ''}`}>
-                                                                    <span className="text-slate-500 font-medium">{item.label}</span>
+                                                                <div key={i} className={`flex justify-between px-3 py-2 text-xs ${i > 0 ? 'border-t border-emerald-100/50 dark:border-emerald-500/10' : ''}`}>
+                                                                    <span className="text-slate-500 dark:text-slate-400 font-semibold">{item.label}</span>
                                                                     <span className="font-bold tabular-nums text-slate-700 dark:text-slate-300">{formatCurr(item.amount)}</span>
                                                                 </div>
                                                             ))}
-                                                            <div className="flex justify-between px-3 py-1.5 text-[11px] border-t-2 border-emerald-200/60 dark:border-emerald-500/20 bg-emerald-100/40 dark:bg-emerald-500/10">
+                                                            <div className="flex justify-between px-3 py-2 text-sm border-t-2 border-emerald-200/60 dark:border-emerald-500/20 bg-emerald-100/40 dark:bg-emerald-500/10">
                                                                 <span className="font-black text-emerald-700 dark:text-emerald-400">Total Earnings</span>
                                                                 <span className="font-black text-emerald-700 dark:text-emerald-400 tabular-nums">{formatCurr(cardTotalEarnings)}</span>
                                                             </div>
@@ -521,17 +535,17 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                                                 )}
                                                 {cardDeductions.length > 0 && (
                                                     <div>
-                                                        <div className="text-[9px] font-black uppercase tracking-widest text-rose-600 mb-1.5 flex items-center gap-1">
-                                                            <TrendingDown className="w-3 h-3" /> Deductions
+                                                        <div className="text-[11px] font-black uppercase tracking-wider text-rose-600 mb-1.5 flex items-center gap-1">
+                                                            <TrendingDown className="w-3.5 h-3.5" /> Deductions
                                                         </div>
                                                         <div className="bg-rose-50/50 dark:bg-rose-500/5 rounded-xl border border-rose-100/50 dark:border-rose-500/10 overflow-hidden">
                                                             {cardDeductions.map((item, i) => (
-                                                                <div key={i} className={`flex justify-between px-3 py-1.5 text-[11px] ${i > 0 ? 'border-t border-rose-100/50 dark:border-rose-500/10' : ''}`}>
-                                                                    <span className="text-slate-500 font-medium">{item.label}</span>
+                                                                <div key={i} className={`flex justify-between px-3 py-2 text-xs ${i > 0 ? 'border-t border-rose-100/50 dark:border-rose-500/10' : ''}`}>
+                                                                    <span className="text-slate-500 dark:text-slate-400 font-semibold">{item.label}</span>
                                                                     <span className="font-bold tabular-nums text-rose-600">{formatCurr(item.amount)}</span>
                                                                 </div>
                                                             ))}
-                                                            <div className="flex justify-between px-3 py-1.5 text-[11px] border-t-2 border-rose-200/60 dark:border-rose-500/20 bg-rose-100/40 dark:bg-rose-500/10">
+                                                            <div className="flex justify-between px-3 py-2 text-sm border-t-2 border-rose-200/60 dark:border-rose-500/20 bg-rose-100/40 dark:bg-rose-500/10">
                                                                 <span className="font-black text-rose-700 dark:text-rose-400">Total Deductions</span>
                                                                 <span className="font-black text-rose-700 dark:text-rose-400 tabular-nums">{formatCurr(cardTotalDeductions)}</span>
                                                             </div>
@@ -542,8 +556,8 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
 
                                             {/* Net Pay */}
                                             <div className="mt-4 pt-4 border-t-2 border-dashed border-slate-200 dark:border-slate-800 flex justify-between items-center">
-                                                <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">Net Pay</span>
-                                                <span className="text-lg font-black text-emerald-600 dark:text-emerald-400 tracking-tight">{formatCurr(slip.take_home)}</span>
+                                                <span className="text-xs font-black uppercase tracking-wider text-slate-500">Net Pay</span>
+                                                <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight">{formatCurr(slip.take_home)}</span>
                                             </div>
 
                                             {/* Carry-Forward Notice */}
