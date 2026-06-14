@@ -352,15 +352,9 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
             </div>
 
             {/* Scrollable List */}
-            <div className="flex-1 overflow-y-auto px-4 pb-4 pt-4 space-y-4 hide-scrollbar">
+            <div className="flex-1 overflow-y-auto px-2.5 pb-4 pt-4 space-y-4 hide-scrollbar">
                 {activeTab === "monthly" ? (
                     <div className="space-y-4">
-                        <div className="flex items-center justify-between px-1">
-                            <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Salary Slips</h2>
-                            <Badge variant="secondary" className="bg-slate-200/50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-black rounded-lg">
-                                {payslips?.length || 0} Found
-                            </Badge>
-                        </div>
 
                         {isLoading || isFetching ? (
                             <div className="flex flex-col items-center justify-center min-h-[280px] p-6 bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-[1.5rem] shadow-sm space-y-4">
@@ -436,7 +430,7 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                                         <motion.div
                                             key={slip.id}
                                             variants={itemVars}
-                                            className="bg-white dark:bg-slate-900 rounded-[1.5rem] p-4 shadow-md border border-slate-100 dark:border-slate-800/50"
+                                            className="bg-white dark:bg-slate-900 rounded-[1.5rem] p-3 shadow-md border border-slate-100 dark:border-slate-800/50"
                                         >
                                             {/* Header: Month + Generated Badge */}
                                             <div className="flex items-center justify-between mb-3">
@@ -485,29 +479,29 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                                             </div>
 
                                              {/* Attendance Stats */}
-                                             <div className="grid grid-cols-6 gap-1.5 pt-3 border-t border-slate-100 dark:border-slate-800 text-center">
-                                                 <div className="flex flex-col items-center justify-center py-2 px-0.5 rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/20">
-                                                     <span className="text-[9px] font-black uppercase tracking-tight text-slate-400 dark:text-slate-500">Month</span>
+                                             <div className="grid grid-cols-6 gap-1 pt-3 border-t border-slate-100 dark:border-slate-800 text-center">
+                                                 <div className="flex flex-col items-center justify-center py-2 px-0 rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/20">
+                                                     <span className="text-[8px] font-black uppercase tracking-tighter text-slate-400 dark:text-slate-500">Month</span>
                                                      <span className="text-sm font-black text-slate-800 dark:text-slate-200 mt-0.5">{bd?.total_working_days ?? slip.total_working_days ?? '—'}</span>
                                                  </div>
-                                                 <div className="flex flex-col items-center justify-center py-2 px-0.5 rounded-xl border border-emerald-100 dark:border-emerald-950/40 bg-emerald-50/30 dark:bg-emerald-950/15">
-                                                     <span className="text-[9px] font-black uppercase tracking-tight text-emerald-600/70 dark:text-emerald-500/50">Present</span>
+                                                 <div className="flex flex-col items-center justify-center py-2 px-0 rounded-xl border border-emerald-100 dark:border-emerald-950/40 bg-emerald-50/30 dark:bg-emerald-950/15">
+                                                     <span className="text-[8px] font-black uppercase tracking-tighter text-emerald-600/70 dark:text-emerald-500/50">Present</span>
                                                      <span className="text-sm font-black text-emerald-600 dark:text-emerald-400 mt-0.5">{slip.total_present_days ?? '—'}</span>
                                                  </div>
-                                                 <div className="flex flex-col items-center justify-center py-2 px-0.5 rounded-xl border border-orange-100 dark:border-orange-950/40 bg-orange-50/30 dark:bg-orange-950/15">
-                                                     <span className="text-[9px] font-black uppercase tracking-tight text-orange-600/70 dark:text-orange-500/50">Half</span>
+                                                 <div className="flex flex-col items-center justify-center py-2 px-0 rounded-xl border border-orange-100 dark:border-orange-950/40 bg-orange-50/30 dark:bg-orange-950/15">
+                                                     <span className="text-[8px] font-black uppercase tracking-tighter text-orange-600/70 dark:text-orange-500/50">Half</span>
                                                      <span className="text-sm font-black text-orange-500 dark:text-orange-400 mt-0.5">{bd?.half_days ?? slip.total_half_days ?? '—'}</span>
                                                  </div>
-                                                 <div className="flex flex-col items-center justify-center py-2 px-0.5 rounded-xl border border-blue-100 dark:border-blue-950/40 bg-blue-50/30 dark:bg-blue-950/15">
-                                                     <span className="text-[9px] font-black uppercase tracking-tight text-blue-600/70 dark:text-blue-500/50">Leave</span>
+                                                 <div className="flex flex-col items-center justify-center py-2 px-0 rounded-xl border border-blue-100 dark:border-blue-950/40 bg-blue-50/30 dark:bg-blue-950/15">
+                                                     <span className="text-[8px] font-black uppercase tracking-tighter text-blue-600/70 dark:text-blue-500/50">Leave</span>
                                                      <span className="text-sm font-black text-blue-600 dark:text-blue-400 mt-0.5">{slip.total_leaves ?? '—'}</span>
                                                  </div>
-                                                 <div className="flex flex-col items-center justify-center py-2 px-0.5 rounded-xl border border-rose-100 dark:border-rose-950/40 bg-rose-50/30 dark:bg-rose-950/15">
-                                                     <span className="text-[9px] font-black uppercase tracking-tight text-rose-600/70 dark:text-rose-500/50">Absent</span>
+                                                 <div className="flex flex-col items-center justify-center py-2 px-0 rounded-xl border border-rose-100 dark:border-rose-950/40 bg-rose-50/30 dark:bg-rose-950/15">
+                                                     <span className="text-[8px] font-black uppercase tracking-tighter text-rose-600/70 dark:text-rose-500/50">Absent</span>
                                                      <span className="text-sm font-black text-rose-600 dark:text-rose-400 mt-0.5">{bd?.absent_days ?? slip.total_absent_days ?? '—'}</span>
                                                  </div>
-                                                 <div className="flex flex-col items-center justify-center py-2 px-0.5 rounded-xl border border-amber-100 dark:border-amber-950/40 bg-amber-50/30 dark:bg-amber-950/15">
-                                                     <span className="text-[9px] font-black uppercase tracking-tight text-amber-600/70 dark:text-amber-500/50">Extra</span>
+                                                 <div className="flex flex-col items-center justify-center py-2 px-0 rounded-xl border border-amber-100 dark:border-amber-950/40 bg-amber-50/30 dark:bg-amber-950/15">
+                                                     <span className="text-[8px] font-black uppercase tracking-tighter text-amber-600/70 dark:text-amber-500/50">Extra</span>
                                                      <span className="text-sm font-black text-amber-600 dark:text-amber-400 mt-0.5">{bd?.extra_days ?? '0'}</span>
                                                  </div>
                                              </div>
@@ -572,32 +566,32 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
 
                                             {/* Payment History Card */}
                                             {slip.payments && slip.payments.length > 0 && (
-                                                <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
-                                                    <div className="flex items-center justify-between text-slate-700 dark:text-slate-300 font-black text-[10px] uppercase tracking-wider">
-                                                        <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
-                                                            <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> Payment Transactions
-                                                        </div>
-                                                        <Badge variant="secondary" className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-[9px] py-0.5 px-2 rounded-md">
-                                                            {slip.payments.length} Paid
-                                                        </Badge>
-                                                    </div>
-                                                    
-                                                    <div className="space-y-2">
-                                                        {slip.payments.map((pm: any, pIdx: number) => (
-                                                            <div key={pm.id || pIdx} className="bg-slate-50 dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/50 p-3 rounded-xl text-[11px]">
-                                                                <div className="flex justify-between items-center font-bold">
-                                                                    <span className="text-slate-800 dark:text-slate-200 capitalize">{pm.paid_mode.replace('_', ' ')}</span>
-                                                                    <span className="text-emerald-600">{formatCurr(pm.amount)}</span>
-                                                                </div>
-                                                                <div className="grid grid-cols-2 gap-1 text-[10px] mt-1.5 text-slate-500 font-semibold border-t border-dashed border-slate-200/50 dark:border-slate-800/50 pt-1.5">
-                                                                    <div>Date: <span className="text-slate-700 dark:text-slate-300">{pm.pay_date}</span></div>
-                                                                    {pm.pay_reference_no && <div>Ref: <span className="text-slate-700 dark:text-slate-300 break-all">{pm.pay_reference_no}</span></div>}
-                                                                    {pm.payment_remarks && <div className="col-span-2 mt-0.5">Remarks: <span className="text-slate-700 dark:text-slate-300 font-normal">{pm.payment_remarks}</span></div>}
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
+                                                 <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
+                                                     <div className="flex items-center justify-between text-slate-700 dark:text-slate-300 font-black text-xs uppercase tracking-wider">
+                                                         <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                                                             <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> Payment Transactions
+                                                         </div>
+                                                         <Badge variant="secondary" className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-[10px] py-0.5 px-2 rounded-md">
+                                                             {slip.payments.length} Paid
+                                                         </Badge>
+                                                     </div>
+                                                     
+                                                     <div className="space-y-2">
+                                                         {slip.payments.map((pm: any, pIdx: number) => (
+                                                             <div key={pm.id || pIdx} className="bg-slate-50 dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/50 p-3 rounded-xl text-[13px]">
+                                                                 <div className="flex justify-between items-center font-bold">
+                                                                     <span className="text-slate-800 dark:text-slate-200 capitalize">{pm.paid_mode.replace('_', ' ')}</span>
+                                                                     <span className="text-emerald-600">{formatCurr(pm.amount)}</span>
+                                                                 </div>
+                                                                 <div className="grid grid-cols-2 gap-1 text-[11px] mt-1.5 text-slate-500 font-semibold border-t border-dashed border-slate-200/50 dark:border-slate-800/50 pt-1.5">
+                                                                     <div>Date: <span className="text-slate-700 dark:text-slate-300">{pm.pay_date}</span></div>
+                                                                     {pm.pay_reference_no && <div>Ref: <span className="text-slate-700 dark:text-slate-300 break-all">{pm.pay_reference_no}</span></div>}
+                                                                     {pm.payment_remarks && <div className="col-span-2 mt-0.5">Remarks: <span className="text-slate-700 dark:text-slate-300 font-normal">{pm.payment_remarks}</span></div>}
+                                                                 </div>
+                                                             </div>
+                                                         ))}
+                                                     </div>
+                                                 </div>
                                             )}
                                         </motion.div>
                                     )
