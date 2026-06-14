@@ -113,7 +113,7 @@ export function ActivityLogFeed({
                 {[...Array(skeletonCount)].map((_, i) => (
                     <div
                         key={i}
-                        className="flex items-start space-x-3 p-2.5 sm:p-3 rounded-xl bg-muted/20 border border-border/40 animate-pulse"
+                        className="flex items-start space-x-3 py-3 border-b border-border/40 last:border-0 animate-pulse"
                         style={{ animationDelay: `${i * 100}ms` }}
                     >
                         {/* Icon Skeleton */}
@@ -125,8 +125,8 @@ export function ActivityLogFeed({
                             {/* Header row skeleton */}
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                 <div className="flex items-center gap-2">
-                                    <Skeleton className="h-5 w-24 rounded-full" />
-                                    <Skeleton className="h-4 w-32" />
+                                    <Skeleton className="h-4 w-16 rounded-full" />
+                                    <Skeleton className="h-4 w-24 rounded-full" />
                                 </div>
                                 <Skeleton className="h-4 w-28 rounded-full" />
                             </div>
@@ -179,9 +179,8 @@ export function ActivityLogFeed({
                                 scale: { type: "spring", stiffness: 400, damping: 25 }
                             }}
                             className={cn(
-                                "flex items-start gap-3 p-2.5 sm:p-3 rounded-xl border transition-all duration-300",
-                                "bg-background/40 hover:bg-background/80 group hover:shadow-md",
-                                colorClass.split(' ').find(c => c.startsWith('border-')) || "border-border",
+                                "flex items-start gap-3 py-3 border-b border-border/40 last:border-0 transition-all duration-300",
+                                "group",
                                 innerClassName
                             )}
                         >
@@ -195,14 +194,6 @@ export function ActivityLogFeed({
                             <div className="flex-1 min-w-0">
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1">
                                     <div className="flex items-center gap-2 flex-wrap">
-                                        <Badge
-                                            className={cn(
-                                                "w-fit capitalize font-bold text-[10px] tracking-widest px-2 py-0.5",
-                                                colorClass
-                                            )}
-                                        >
-                                            {activity.activity_type.replace(/_/g, ' ')}
-                                        </Badge>
                                         {activity.profiles?.role && (
                                             <span className={cn(
                                                 "text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full",
@@ -216,11 +207,6 @@ export function ActivityLogFeed({
                                         {activity.profiles?.designation?.name && (
                                             <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 px-2 py-0.5 rounded-md">
                                                 {activity.profiles.designation.name}
-                                            </span>
-                                        )}
-                                        {activity.module && (
-                                            <span className="text-[10px] font-semibold text-primary/60 bg-primary/5 border border-primary/10 px-2 py-0.5 rounded-md uppercase tracking-tight">
-                                                {activity.module}
                                             </span>
                                         )}
                                     </div>

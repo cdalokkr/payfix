@@ -144,7 +144,7 @@ export function AdminOverview({
 
 
       {/* Critical Metrics - Compact Grid at Very Top */}
-      <div data-testid="critical-metrics" className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+      <div data-testid="critical-metrics" className="grid gap-3 grid-cols-2 lg:grid-cols-4">
         <Link href="/admin/users" className="block h-full">
           <MetricCard
             title="Total Users"

@@ -56,7 +56,7 @@ export function MetricCardSkeleton({ title, description, icon, iconBgColor, icon
                 )}
                 <div>
                     <div className="h-8 w-24 bg-muted/50 rounded-md animate-pulse mb-1" />
-                    <p className="text-xs text-muted-foreground/50">{description}</p>
+                    <p className="text-xs text-muted-foreground/50 hidden sm:block">{description}</p>
                 </div>
             </div>
         </div>
@@ -170,7 +170,7 @@ export function MetricCard({
                                     </h3>
                                 )}
                                 {description && (
-                                    <p className="text-xs text-muted-foreground/60 leading-tight line-clamp-1 group-hover:text-muted-foreground/80 transition-colors duration-300">
+                                    <p className="text-xs text-muted-foreground/60 leading-tight line-clamp-1 group-hover:text-muted-foreground/80 transition-colors duration-300 hidden sm:block">
                                         {description}
                                     </p>
                                 )}
