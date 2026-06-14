@@ -405,6 +405,29 @@ export async function createOptimizedContext(req?: Request) {
       cookieHash = await getCookieHash(cookieStore)
     }
 
+    // NEW OPTIMIZATION & CONCURRENCY FIX: Check cookie-hash based cache first to prevent device session conflicts
+    if (cookieHash) {
+      const cachedSession = getCachedSession(cookieHash)
+      if (cachedSession) {
+        const finalMetrics = endAuthTiming(metrics, {
+          userFound: true,
+          profileFound: !!cachedSession.profile,
+          cacheHit: true,
+          contextSize: cachedSession.metrics.contextSize
+        })
+
+        return {
+          get supabase() {
+            if (!_lazySupabase) _lazySupabase = createSupabaseClientSync(cookieStore as any);
+            return _lazySupabase;
+          },
+          user: cachedSession.user,
+          profile: cachedSession.profile,
+          metrics: finalMetrics
+        }
+      }
+    }
+
     if (!req || req.method !== 'GET') {
       const headerStore = await headers()
       authHeader = headerStore.get('authorization')
@@ -459,110 +482,6 @@ export async function createOptimizedContext(req?: Request) {
         },
         user: null,
         profile: null,
-        metrics: finalMetrics
-      }
-    }
-
-    // 2. PHASE 2 FAST PATH: Local JWT Decoding from Supabase SSR cookies
-    // Supabase SSR uses cookies named like 'sb-xxxx-auth-token' or 'sb-xxxx-auth-token.0'
-    const allAuthCookies = cookieStore.getAll().filter((c: any) => c.name.includes('-auth-token'))
-
-    if (allAuthCookies.length > 0) {
-      const decodedT0 = performance.now();
-      try {
-        // Find the "sharded" cookies (ending in .0, .1, etc.)
-        const shards = allAuthCookies.filter((c: any) => /\.\d+$/.test(c.name));
-
-        let authCookies: typeof allAuthCookies = [];
-        if (shards.length > 0) {
-          // If shards exist, prefer them exclusively
-          authCookies = shards;
-        } else {
-          // Otherwise use the root cookies (if multiple, e.g. different names, take all)
-          authCookies = allAuthCookies;
-        }
-
-        // Robustly reconstruct the session string from multiple cookies if fragmented
-        const sortedCookies = authCookies.sort((a: any, b: any) => {
-          // Sort by index suffix (e.g., .0, .1, .2)
-          const aMatch = a.name.match(/\.(\d+)$/);
-          const bMatch = b.name.match(/\.(\d+)$/);
-          const aIndex = aMatch ? parseInt(aMatch[1]) : -1;
-          const bIndex = bMatch ? parseInt(bMatch[1]) : -1;
-          return aIndex - bIndex;
-        });
-
-        const reconstructedValue = sortedCookies.map((c: any) => c.value).join('');
-
-        // Handle URL encoding if present
-        let sessionContent = reconstructedValue;
-        if (reconstructedValue.includes('%')) {
-          try {
-            sessionContent = decodeURIComponent(reconstructedValue);
-          } catch (e) {
-            // Already decoded or invalid encoding
-          }
-        }
-
-        // Debug: Log first 100 chars of decoded content
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`[AUTH-DEBUG] Cookie content (decoded): ${sessionContent.substring(0, 100)}...`);
-        }
-
-        const decodedUserId = decodeSupabaseToken(sessionContent)
-
-        if (decodedUserId) {
-          const userIdCached = getCachedSessionByUserId(decodedUserId)
-          if (userIdCached) {
-            const finalMetrics = endAuthTiming(metrics, {
-              userFound: true,
-              profileFound: !!userIdCached.profile,
-              cacheHit: true,
-              contextSize: userIdCached.metrics.contextSize
-            })
-
-            const tFastPath = performance.now();
-            const dt = tFastPath - t0;
-            if (process.env.NODE_ENV === 'development') {
-              console.log(`[AUTH-PERF] Fast-path complete: ${dt.toFixed(2)}ms. Return path start. Total diff: ${(performance.now() - t0).toFixed(2)}ms`);
-            }
-
-            return {
-              get supabase() {
-                if (!_lazySupabase) _lazySupabase = createSupabaseClientSync(cookieStore as any);
-                return _lazySupabase;
-              },
-              user: userIdCached.user,
-              profile: userIdCached.profile,
-              metrics: finalMetrics
-            }
-          }
-        }
-      } catch (err) {
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('[AUTH-PERF] Cookie fast-path extraction failed:', err);
-        }
-      }
-    }
-
-    // 3. CACHE MISS or fallback to hash-based cache
-    const cachedSession = getCachedSession(cookieHash)
-
-    if (cachedSession) {
-      const finalMetrics = endAuthTiming(metrics, {
-        userFound: true,
-        profileFound: !!cachedSession.profile,
-        cacheHit: true,
-        contextSize: cachedSession.metrics.contextSize
-      })
-
-      return {
-        get supabase() {
-          if (!_lazySupabase) _lazySupabase = createSupabaseClientSync(cookieStore as any);
-          return _lazySupabase;
-        },
-        user: cachedSession.user,
-        profile: cachedSession.profile,
         metrics: finalMetrics
       }
     }

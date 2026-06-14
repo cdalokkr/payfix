@@ -27,7 +27,7 @@ export function createSupabaseClientSync(cookieStore: Awaited<ReturnType<typeof 
     supabaseKey,
     {
       auth: {
-        autoRefreshToken: false,
+        autoRefreshToken: true,
         persistSession: false,
         detectSessionInUrl: false,
       },
