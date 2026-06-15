@@ -109,11 +109,11 @@ export function ActivityLogFeed({
 
     if (isLoading) {
         return (
-            <div className={cn("space-y-2.5", className)}>
+            <div className={cn("space-y-0.5", className)}>
                 {[...Array(skeletonCount)].map((_, i) => (
-                    <div
-                        key={i}
-                        className="flex items-start space-x-3 py-3 border-b border-border/40 last:border-0 animate-pulse"
+                     <div
+                         key={i}
+                         className="flex items-start space-x-3 py-1 border-b border-border/40 last:border-0 animate-pulse"
                         style={{ animationDelay: `${i * 100}ms` }}
                     >
                         {/* Icon Skeleton */}
@@ -160,7 +160,7 @@ export function ActivityLogFeed({
     }
 
     return (
-        <div className={cn("space-y-2.5", className)}>
+        <div className={cn("space-y-0.5", className)}>
             <AnimatePresence mode="sync">
                 {displayActivities.map((activity, index) => {
                     const Icon = getActivityIcon(activity.activity_type)
@@ -179,7 +179,7 @@ export function ActivityLogFeed({
                                 scale: { type: "spring", stiffness: 400, damping: 25 }
                             }}
                             className={cn(
-                                "flex items-start gap-3 py-3 border-b border-border/40 last:border-0 transition-all duration-300",
+                                "flex items-start gap-3 py-1 border-b border-border/40 last:border-0 transition-all duration-300",
                                 "group",
                                 innerClassName
                             )}
@@ -196,7 +196,7 @@ export function ActivityLogFeed({
                                     <div className="flex items-center gap-2 flex-wrap">
                                         {activity.profiles?.role && (
                                             <span className={cn(
-                                                "text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full",
+                                                "text-[10px] font-normal uppercase tracking-wider px-2 py-0.5 rounded-full",
                                                 activity.profiles.role === 'admin' && "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400",
                                                 activity.profiles.role === 'moderator' && "bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400",
                                                 activity.profiles.role === 'employee' && "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400"
@@ -205,20 +205,20 @@ export function ActivityLogFeed({
                                             </span>
                                         )}
                                         {activity.profiles?.designation?.name && (
-                                            <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 px-2 py-0.5 rounded-md">
+                                            <span className="text-[10px] font-normal text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 px-2 py-0.5 rounded-md">
                                                 {activity.profiles.designation.name}
                                             </span>
                                         )}
                                     </div>
-                                    <div className="flex items-center text-[11px] text-muted-foreground font-medium bg-muted/50 px-2 py-0.5 rounded-full w-fit">
+                                    <div className="flex items-center text-[11px] text-muted-foreground font-normal bg-muted/50 px-2 py-0.5 rounded-full w-fit">
                                         <Clock className="h-3 w-3 mr-1" />
                                         {activity.created_at && isValid(new Date(activity.created_at)) ? format(new Date(activity.created_at), "MMM dd, yyyy HH:mm:ss") : "N/A"}
                                     </div>
                                 </div>
-                                <p className="text-sm font-medium leading-relaxed tracking-tight text-foreground/90 break-words">
+                                <p className="text-sm leading-relaxed tracking-tight text-foreground/90 break-words">
                                     {/* Dynamic format: name - email - activity */}
                                     {activity.profiles?.full_name && (
-                                        <span className="font-bold text-foreground">{activity.profiles.full_name}</span>
+                                        <span className="font-normal text-foreground">{activity.profiles.full_name}</span>
                                     )}
                                     {activity.profiles?.full_name && activity.profiles?.email && ' - '}
                                     {activity.profiles?.email && (

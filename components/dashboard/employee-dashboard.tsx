@@ -36,9 +36,9 @@ function ActivitiesCard({ activities, loading }: ActivitiesCardProps) {
             title="Recent Activities"
             description="Your latest actions and updates"
             icon={Activity}
-            contentClassName="p-4"
+            contentClassName="p-2.5 pt-1"
         >
-            <div className="bg-background/30 rounded-2xl border border-primary/5 p-4">
+            <div className="bg-background/30 rounded-2xl border border-primary/5 p-2.5">
                 <ActivityLogFeed activities={activities} isLoading={loading} />
             </div>
         </CardShell>

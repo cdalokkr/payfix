@@ -81,7 +81,7 @@ export function RecentActivities({
     ).slice(0, 10)
 
     return (
-        <div className={cn("space-y-2 border border-border/50 rounded-2xl p-3 bg-background/50", className)}>
+        <div className={cn("space-y-1 border border-border/50 rounded-2xl p-2.5 bg-background/50", className)}>
             {sortedActivities.map((activity, index) => {
                 const Icon = getActivityIcon(activity.activity_type)
                 const role = activity.profiles?.role || 'user'
@@ -97,7 +97,7 @@ export function RecentActivities({
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: index * 0.05, duration: 0.3 }}
                         className={cn(
-                            "flex items-center space-x-3 p-2.5 rounded-xl transition-all duration-300 border border-transparent",
+                            "flex items-center space-x-3 p-2 rounded-xl transition-all duration-300 border border-transparent",
                             "group hover:shadow-sm",
                             isHighlighted
                                 ? "bg-primary/5 dark:bg-primary/10 hover:bg-primary/10 dark:hover:bg-primary/20 hover:border-primary/20 dark:hover:border-primary/30"
@@ -110,10 +110,10 @@ export function RecentActivities({
                             <Icon className="h-4 w-4" />
                         </div>
                         <div className="flex-1 min-w-0 pt-0.5">
-                            <p className="text-sm font-medium leading-relaxed tracking-tight">
+                            <p className="text-sm font-normal leading-relaxed tracking-tight">
                                 {activity.description || activity.activity_type}
                             </p>
-                            <p className="text-[11px] text-muted-foreground/70 mt-1 font-medium tracking-wide flex items-center gap-1.5">
+                            <p className="text-[11px] text-muted-foreground/70 mt-1 font-normal tracking-wide flex items-center gap-1.5">
                                 <span className="inline-block w-1 h-1 rounded-full bg-muted-foreground/30" />
                                 {activity.created_at && isValid(new Date(activity.created_at)) ? format(new Date(activity.created_at), "dd/MM/yyyy HH:mm:ss") : "N/A"}
                             </p>

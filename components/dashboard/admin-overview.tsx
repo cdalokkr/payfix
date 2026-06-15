@@ -442,9 +442,9 @@ export function AdminOverview({
           title="Recent Activities"
           description="Real-time update stream"
           icon={Activity}
-          contentClassName="p-4"
+          contentClassName="p-2.5 pt-1"
         >
-          <div className="bg-background/30 rounded-2xl border border-primary/5 p-4">
+          <div className="bg-background/30 rounded-2xl border border-primary/5 p-2.5">
             <ActivityLogFeed
               activities={recentActivities as any}
               isLoading={showSkeleton || !recentActivityDataReady}
