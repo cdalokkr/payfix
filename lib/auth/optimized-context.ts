@@ -372,6 +372,76 @@ export async function createOptimizedContext(req?: Request) {
 
   try {
     const t0 = performance.now();
+
+    // Check if middleware passed pre-authenticated session details via headers
+    let headerUserId: string | null = null
+    let headerUserEmail: string | null = null
+    let headerUserProfileStr: string | null = null
+
+    if (req) {
+      headerUserId = req.headers.get('x-user-id')
+      headerUserEmail = req.headers.get('x-user-email')
+      headerUserProfileStr = req.headers.get('x-user-profile')
+    } else {
+      try {
+        const headerStore = await headers()
+        headerUserId = headerStore.get('x-user-id')
+        headerUserEmail = headerStore.get('x-user-email')
+        headerUserProfileStr = headerStore.get('x-user-profile')
+      } catch (err) {
+        // cookies/headers functions throw in static build or context where headers are unavailable
+      }
+    }
+
+    if (headerUserId) {
+      try {
+        const profile = headerUserProfileStr ? JSON.parse(headerUserProfileStr) as Profile : null
+        const user = { id: headerUserId, email: headerUserEmail || '' } as User
+        
+        const finalMetrics = endAuthTiming(metrics, {
+          userFound: true,
+          profileFound: !!profile,
+          cacheHit: true,
+          contextSize: headerUserProfileStr ? headerUserProfileStr.length : 0
+        })
+
+        // Setup mock/lazy cookieStore so that tRPC context doesn't crash if it tries to read cookies later
+        if (req && req.method === 'GET') {
+          const cookieHeader = req.headers.get('cookie') || ''
+          const parsed = parseCookieHeader(cookieHeader)
+          cookieStore = {
+            getAll: () => parsed,
+            get: (name: string) => {
+              const match = parsed.find(c => c.name === name)
+              return match ? { name, value: match.value } : undefined
+            },
+            set: () => {}
+          } as any
+        } else {
+          try {
+            cookieStore = await cookies()
+          } catch (e) {
+            // Read-only/static shell
+          }
+        }
+
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[AUTH-HEADERS] Fast-path session resolved via headers for user: ${headerUserId} (profile role: ${profile?.role || 'none'})`)
+        }
+
+        return {
+          get supabase() {
+            if (!_lazySupabase) _lazySupabase = createSupabaseClientSync(cookieStore as any);
+            return _lazySupabase;
+          },
+          user,
+          profile,
+          metrics: finalMetrics
+        }
+      } catch (parseErr) {
+        console.warn('[AUTH-HEADERS] Error parsing user profile from headers:', parseErr)
+      }
+    }
     let authHeader: string | null = null;
     let t1 = t0;
 
@@ -664,9 +734,7 @@ export async function performLogout(userId?: string): Promise<{ success: boolean
       invalidateUserSession(userId)
       console.log(`[AUTH-LOGOUT] Server-side session cache invalidated for user: ${userId}`)
     } else {
-      // Clear server-side session cache for all users
-      invalidateAllSessions()
-      console.log('[AUTH-LOGOUT] Server-side session cache cleared for all users')
+      console.log('[AUTH-LOGOUT] Logout procedure executed for unauthenticated request (no userId), skipping server-side cache invalidation')
     }
 
     return { success: true }

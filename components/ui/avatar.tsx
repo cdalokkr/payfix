@@ -24,6 +24,7 @@ function Avatar({
 function AvatarImage({
   className,
   onLoadingStatusChange,
+  src,
   ...props
 }: React.ComponentProps<typeof AvatarPrimitive.Image>) {
   const [status, setStatus] = React.useState<"idle" | "loading" | "loaded" | "error">("loading")
@@ -40,6 +41,7 @@ function AvatarImage({
         setStatus(s)
         onLoadingStatusChange?.(s)
       }}
+      src={src === "" ? undefined : src}
       {...props}
     />
   )

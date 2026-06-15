@@ -60,10 +60,12 @@ export function LoginForm() {
             console.log('[LoginForm] Geolocation pre-warmed on mutate successfully:', coords)
           },
           (err) => {
-            if (err.code !== err.PERMISSION_DENIED) {
-              console.warn('[LoginForm] Geolocation pre-warm on mutate failed:', err)
-            } else {
+            if (err.code === err.PERMISSION_DENIED) {
               console.log('[LoginForm] Geolocation pre-warm on mutate skipped (permission not granted)')
+            } else if (err.code === err.TIMEOUT) {
+              console.log('[LoginForm] Geolocation pre-warm on mutate timed out (normal on desktop)')
+            } else {
+              console.log('[LoginForm] Geolocation pre-warm on mutate unavailable:', err.message || err.code)
             }
           },
           { enableHighAccuracy: true, timeout: 4000, maximumAge: 0 }

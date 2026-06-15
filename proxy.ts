@@ -141,8 +141,14 @@ export async function proxy(request: NextRequest) {
     // ============================================
     // 4. Authentication & Authorization
     // ============================================
+    // Anti-spoofing: Strip incoming request headers
+    const requestHeaders = new Headers(request.headers)
+    requestHeaders.delete('x-user-id')
+    requestHeaders.delete('x-user-email')
+    requestHeaders.delete('x-user-profile')
+
     let response = NextResponse.next({
-        request: { headers: request.headers },
+        request: { headers: requestHeaders },
     })
 
     const supabase = createServerClient(
@@ -161,7 +167,7 @@ export async function proxy(request: NextRequest) {
                 setAll(cookiesToSet) {
                     cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
                     response = NextResponse.next({
-                        request: { headers: request.headers },
+                        request: { headers: requestHeaders },
                     })
                     cookiesToSet.forEach(({ name, value, options }) =>
                         response.cookies.set(name, value, {
@@ -233,13 +239,18 @@ export async function proxy(request: NextRequest) {
         user = authData?.user || null
 
         if (user) {
-            // Fetch profile for role checks
+            // Fetch full profile (including designation) to forward downstream and role checks
             const { data: dbProfile } = await supabase
                 .from('profiles')
-                .select('role, status')
+                .select('*, designation:designations(*)')
                 .eq('id', user.id)
                 .single()
-            profile = dbProfile
+            profile = dbProfile ? {
+                ...dbProfile,
+                designation: Array.isArray(dbProfile.designation)
+                    ? dbProfile.designation[0] || null
+                    : dbProfile.designation
+            } : null
 
             if (cookieHash) {
                 proxySessionCache.set(cookieHash, {
@@ -252,6 +263,30 @@ export async function proxy(request: NextRequest) {
                 }
             }
         }
+    }
+
+    if (user) {
+        requestHeaders.set('x-user-id', user.id)
+        requestHeaders.set('x-user-email', user.email || '')
+        if (profile) {
+            requestHeaders.set('x-user-profile', JSON.stringify(profile))
+        }
+
+        const oldResponse = response
+        response = NextResponse.next({
+            request: { headers: requestHeaders },
+        })
+        oldResponse.cookies.getAll().forEach(cookie => {
+            response.cookies.set(cookie.name, cookie.value, {
+                path: cookie.path,
+                domain: cookie.domain,
+                maxAge: cookie.maxAge,
+                expires: cookie.expires,
+                secure: cookie.secure,
+                httpOnly: cookie.httpOnly,
+                sameSite: cookie.sameSite,
+            })
+        })
     }
 
     // Redirect to login if not authenticated on a protected route
