@@ -20,7 +20,7 @@ const navItems = [
     },
     {
         title: "Payroll",
-        href: "/employee/payroll/dashboard",
+        href: "/employee/payroll/leaves",
         icon: Banknote,
     },
     {

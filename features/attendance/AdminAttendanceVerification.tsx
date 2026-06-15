@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { trpc } from "@/lib/trpc/client"
-import { Search, Loader2, FileText, Save, Clock as ClockIcon, CheckCircle2 as CheckCircleIcon, XCircle as XCircleIcon, CalendarMinus as CalendarMinusIcon, Upload } from "lucide-react"
+import { Search, Loader2, FileText, Save, Clock as ClockIcon, CheckCircle2 as CheckCircleIcon, XCircle as XCircleIcon, CalendarMinus as CalendarMinusIcon, Upload, Users as UsersIcon } from "lucide-react"
 import { toast } from "sonner"
 import { getEventBroadcaster } from "@/lib/events/event-broadcaster"
 import { Label } from "@/components/ui/label"
@@ -528,10 +528,15 @@ export function AdminAttendanceVerification() {
         let holiday = 0;
         let extra_day = 0;
         let noOfficeOut = 0;
+        let officeIn = 0;
         
         list.forEach(a => {
             const dayType = getRecordDayType(a);
             const status = a.status as string;
+            
+            if (a.check_in) {
+                officeIn++;
+            }
             
             if (status === 'verified') {
                 verified++;
@@ -565,6 +570,7 @@ export function AdminAttendanceVerification() {
             holiday,
             extra_day,
             noOfficeOut,
+            officeIn,
             all: list.length
         };
     }, [searchFilteredAttendance])
@@ -579,11 +585,11 @@ export function AdminAttendanceVerification() {
 
     return (
         <div className="space-y-6">
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 <CompactMetricCard
-                    label="Pending"
-                    value={stats.pending}
-                    icon={ClockIcon}
+                    label="Office In"
+                    value={stats.officeIn}
+                    icon={UsersIcon}
                     theme="blue"
                     delay={0.1}
                     loading={isLoading || isFetching}
@@ -620,13 +626,21 @@ export function AdminAttendanceVerification() {
                     delay={0.5}
                     loading={isLoading || isFetching}
                 />
+                <CompactMetricCard
+                    label="On Leave"
+                    value={stats.leave}
+                    icon={CalendarMinusIcon}
+                    theme="rose"
+                    delay={0.6}
+                    loading={isLoading || isFetching}
+                />
             </div>
 
             <CardShell
                 title="Attendance Logs"
                 description="Review and verify employee attendance records for processing."
                 icon={FileText}
-                contentClassName="min-h-0 p-6 pt-2 h-full overflow-auto"
+                contentClassName="min-h-0 p-3 md:p-4 pt-1.5 md:pt-2 h-full overflow-auto"
                 headerActions={
                     <Button
                         variant="outline"
@@ -657,7 +671,7 @@ export function AdminAttendanceVerification() {
                         getRowId={getRowId}
                         rowSelection={rowSelection}
                         onRowSelectionChange={setRowSelection}
-                        className="[&_td]:px-1 [&_th]:px-1 [&_td]:py-1 md:[&_td]:px-1.5 md:[&_th]:px-1.5"
+                        className="[&_td]:px-2.5 [&_th]:px-2.5 [&_td]:py-1.5 md:[&_td]:px-3 md:[&_th]:px-3 md:[&_td]:py-2"
                         toolbar={(table) => (
                             <AttendanceTableToolbar
                                 table={table}

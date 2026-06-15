@@ -28,9 +28,8 @@ import {
   Camera,
   ShieldAlert
 } from 'lucide-react'
+import { CardShell } from '@/features/attendance/CardShell'
 import Link from 'next/link'
-
-
 
 interface ActivitiesCardProps {
   activities: UserActivity[]
@@ -39,29 +38,16 @@ interface ActivitiesCardProps {
 
 function ActivitiesCard({ activities, loading }: ActivitiesCardProps) {
   return (
-    <MetricCard
-      className="shadow-xl border-border/40"
-      gradientColor="from-purple-500/10 to-transparent"
-      delay={0.4}
-      disableHover={true}
-      borderColor="border-primary/10"
-      cardBgColor="bg-card/50"
+    <CardShell
+      title="Recent Activities"
+      description="Real-time update logs"
+      icon={Activity}
+      contentClassName="p-4"
     >
-      <div className="flex flex-col gap-6">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-purple-500/10 text-purple-700 dark:text-purple-400">
-            <Activity className="h-5 w-5" />
-          </div>
-          <div>
-            <h3 className="text-xl font-bold tracking-tight">Recent Activities</h3>
-            <p className="text-sm text-muted-foreground">Real-time update logs</p>
-          </div>
-        </div>
-        <div className="bg-background/30 rounded-2xl border border-primary/5 p-4">
-          <ActivityLogFeed activities={activities} isLoading={loading} />
-        </div>
+      <div className="bg-background/30 rounded-2xl border border-primary/5 p-4">
+        <ActivityLogFeed activities={activities} isLoading={loading} />
       </div>
-    </MetricCard>
+    </CardShell>
   )
 }
 

@@ -31,8 +31,8 @@ export function CardShell({
             "border-primary/10 overflow-hidden flex flex-col h-full bg-background/50 backdrop-blur-md pt-0 transition-all duration-300 group/shell cursor-default hover:border-primary/20 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.1)]",
             className
         )}>
-            <CardHeader className="border-b border-muted/20 bg-muted/50 transition-colors p-0 py-4 overflow-hidden group-hover/shell:bg-muted/80">
-                <div className="px-6 flex flex-col md:flex-row md:items-center justify-between gap-2 cursor-default">
+            <CardHeader className="border-b border-muted/20 bg-muted/50 transition-colors p-0 py-2.5 overflow-hidden group-hover/shell:bg-muted/80">
+                <div className="px-4 flex flex-col md:flex-row md:items-center justify-between gap-1.5 cursor-default">
                     <div className="flex items-center gap-3">
                         <div className="p-2 rounded-xl bg-primary/10 text-primary shadow-sm transition-transform duration-300 group-hover/shell:scale-110 group-hover/shell:rotate-3">
                             <Icon size={24} weight="duotone" className="h-6 w-6" />
@@ -49,9 +49,9 @@ export function CardShell({
                     )}
                 </div>
             </CardHeader>
-            <CardContent className={cn("p-4 flex flex-1 flex-col", contentClassName)}>
+            <CardContent className={cn("p-3 flex flex-1 flex-col", contentClassName)}>
                 {isInnerCard ? (
-                    <Card className="w-full p-4 md:p-6 bg-background/40 backdrop-blur-md border border-primary/5 hover:border-primary/10 shadow-inner rounded-3xl flex flex-col items-center justify-center overflow-hidden transition-all duration-500 hover:bg-background/60 h-full">
+                    <Card className="w-full p-3 md:p-4 bg-background/40 backdrop-blur-md border border-primary/5 hover:border-primary/10 shadow-inner rounded-2xl flex flex-col items-center justify-center overflow-hidden transition-all duration-500 hover:bg-background/60 h-full">
                         {children}
                     </Card>
                 ) : (

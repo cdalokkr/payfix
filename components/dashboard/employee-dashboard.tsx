@@ -23,6 +23,8 @@ import { useProfile } from "@/lib/context/profile-context"
 import { createClient } from "@/lib/supabase/client"
 import { motion } from "framer-motion"
 
+import { CardShell } from "@/features/attendance/CardShell"
+
 interface ActivitiesCardProps {
     activities: UserActivity[]
     loading: boolean
@@ -30,29 +32,16 @@ interface ActivitiesCardProps {
 
 function ActivitiesCard({ activities, loading }: ActivitiesCardProps) {
     return (
-        <MetricCard
-            className="shadow-xl border-border/40"
-            gradientColor="from-purple-500/10 to-indigo-500/5"
-            delay={0.4}
-            disableHover={true}
-            borderColor="border-primary/10"
-            cardBgColor="bg-card/50"
+        <CardShell
+            title="Recent Activities"
+            description="Your latest actions and updates"
+            icon={Activity}
+            contentClassName="p-4"
         >
-            <div className="flex flex-col gap-6">
-                <div className="flex items-center gap-3">
-                    <div className="p-2.5 rounded-xl bg-purple-500/10 text-purple-700 dark:text-purple-400">
-                        <Activity className="h-5 w-5" />
-                    </div>
-                    <div>
-                        <h3 className="text-xl font-bold tracking-tight">Recent Activities</h3>
-                        <p className="text-sm text-muted-foreground">Your latest actions and updates</p>
-                    </div>
-                </div>
-                <div className="bg-background/30 rounded-2xl border border-primary/5 p-4">
-                    <ActivityLogFeed activities={activities} isLoading={loading} />
-                </div>
+            <div className="bg-background/30 rounded-2xl border border-primary/5 p-4">
+                <ActivityLogFeed activities={activities} isLoading={loading} />
             </div>
-        </MetricCard>
+        </CardShell>
     )
 }
 
@@ -296,20 +285,6 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                                 <div>
                                     <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Leaves</p>
                                     <p className="text-sm font-semibold group-hover/action:font-black group-hover/action:text-purple-600 transition-all duration-300">Apply Leave</p>
-                                </div>
-                            </Link>
-
-                            {/* Payroll Dashboard */}
-                            <Link
-                                href="/employee/payroll/dashboard"
-                                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-emerald-200/40 bg-emerald-50/30 dark:bg-emerald-500/5 hover:bg-emerald-500/10 hover:border-emerald-500/40 hover:shadow-lg hover:shadow-emerald-500/5 transition-all duration-300 group/action cursor-pointer"
-                            >
-                                <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 group-hover/action:scale-115 group-hover/action:rotate-3 transition-all">
-                                    <IndianRupee className="h-5 w-5" />
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Pay Slips</p>
-                                    <p className="text-sm font-semibold group-hover/action:font-black group-hover/action:text-emerald-600 transition-all duration-300">Payroll Panel</p>
                                 </div>
                             </Link>
 

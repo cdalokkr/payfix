@@ -157,7 +157,7 @@ export function createAttendanceColumns({
                     </div>
                 )
             },
-            size: 65,
+            size: 50,
         },
         {
             accessorKey: "check_in",
@@ -172,7 +172,7 @@ export function createAttendanceColumns({
                     </div>
                 ) : <span className="text-muted-foreground/30 text-[10px]">--:--</span>
             },
-            size: 50,
+            size: 45,
         },
         {
             accessorKey: "check_out",
@@ -187,7 +187,7 @@ export function createAttendanceColumns({
                     </div>
                 ) : <span className="text-muted-foreground/30 text-[10px]">--:--</span>
             },
-            size: 50,
+            size: 45,
         },
         {
             accessorKey: "working_hours",
@@ -200,7 +200,7 @@ export function createAttendanceColumns({
                     </Badge>
                 ) : <span className="text-muted-foreground/30 text-[10px]">--</span>
             },
-            size: 35,
+            size: 30,
         },
         {
             id: "extra_hours",
@@ -225,7 +225,7 @@ export function createAttendanceColumns({
                     </span>
                 )
             },
-            size: 35,
+            size: 30,
         },
         {
             accessorKey: "status",
@@ -281,7 +281,7 @@ export function createAttendanceColumns({
                     </div>
                 )
             },
-            size: 75,
+            size: 60,
         },
         {
             id: "actions",
@@ -339,7 +339,7 @@ export function createAttendanceColumns({
                     </div>
                 )
             },
-            size: 65,
+            size: 55,
         },
     ]
 }

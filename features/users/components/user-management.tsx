@@ -33,10 +33,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Users } from 'lucide-react'
 import { getDefaultAvatarUrl } from '@/lib/utils/avatar-helper'
 import { getDisplayName } from '@/lib/utils/user-name'
 import { cn } from '@/lib/utils'
+import { CardShell } from '@/features/attendance/CardShell'
 
 type RouterOutputs = inferRouterOutputs<AppRouter>
 type UsersData = RouterOutputs['admin']['users']['getUsers']
@@ -358,85 +359,82 @@ export default function UserManagement({ initialData }: UserManagementProps) {
       description="Manage user accounts and permissions"
     >
       {/* User Table Card */}
-      <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle>All Users List</CardTitle>
-          <CardDescription className='text-muted-foreground text-sm'>
-            View and manage all user accounts. Use the table controls to sort, filter, and select users.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="[&_td:not(:first-child)]:px-3 [&_th:not(:first-child)]:px-3 [&_td]:py-3 [&_table]:text-xs">
-            {hasMounted ? (
-              <Tabs defaultValue="live" className="w-full" onValueChange={handleTabChange}>
-                <TabsList className="mb-4">
-                  <TabsTrigger value="live">Live Users</TabsTrigger>
-                  <TabsTrigger value="deleted">Deleted Users</TabsTrigger>
-                </TabsList>
-                <TabsContent value="live" className="mt-0 border-0 p-0 shadow-none">
-                  <DataTable
-                    columns={columns}
-                    data={filteredUsers}
-                    isLoading={isLoading}
-                    toolbar={renderLiveToolbar}
-                    recentlyUpdatedId={recentlyUpdatedId}
-                    rowSelection={rowSelection}
-                    onRowSelectionChange={setRowSelection}
-                    meta={{
-                      editingId: editingUser?.id,
-                      deletingId: deletingUser?.id,
-                      togglingUserId
-                    }}
-                  />
-                </TabsContent>
-                <TabsContent value="deleted" className="mt-0 border-0 p-0 shadow-none">
-                  <DataTable
-                    columns={deletedColumns}
-                    data={filteredUsers}
-                    isLoading={isLoading}
-                    toolbar={renderDeletedToolbar}
-                    recentlyUpdatedId={recentlyUpdatedId}
-                    rowSelection={rowSelection}
-                    onRowSelectionChange={setRowSelection}
-                    meta={{
-                      editingId: editingUser?.id,
-                      deletingId: deletingUser?.id,
-                      togglingUserId
-                    }}
-                  />
-                </TabsContent>
-              </Tabs>
-            ) : (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <Skeleton className="h-10 w-[250px]" />
-                  <Skeleton className="h-10 w-[100px]" />
-                </div>
-                <div className="rounded-md border h-96">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        {Array.from({ length: 9 }).map((_, i) => (
-                          <TableHead key={i}><Skeleton className="h-4 w-full" /></TableHead>
+      <CardShell
+        title="All Users List"
+        description="View and manage all user accounts. Use the table controls to sort, filter, and select users."
+        icon={Users}
+        contentClassName="min-h-0 p-3 md:p-4 pt-1.5 md:pt-2 h-full overflow-auto"
+      >
+        <div className="[&_td:not(:first-child)]:px-2 [&_th:not(:first-child)]:px-2 [&_td]:py-1.5 [&_table]:text-xs">
+          {hasMounted ? (
+            <Tabs defaultValue="live" className="w-full" onValueChange={handleTabChange}>
+              <TabsList className="mb-4">
+                <TabsTrigger value="live">Live Users</TabsTrigger>
+                <TabsTrigger value="deleted">Deleted Users</TabsTrigger>
+              </TabsList>
+              <TabsContent value="live" className="mt-0 border-0 p-0 shadow-none">
+                <DataTable
+                  columns={columns}
+                  data={filteredUsers}
+                  isLoading={isLoading}
+                  toolbar={renderLiveToolbar}
+                  recentlyUpdatedId={recentlyUpdatedId}
+                  rowSelection={rowSelection}
+                  onRowSelectionChange={setRowSelection}
+                  meta={{
+                    editingId: editingUser?.id,
+                    deletingId: deletingUser?.id,
+                    togglingUserId
+                  }}
+                />
+              </TabsContent>
+              <TabsContent value="deleted" className="mt-0 border-0 p-0 shadow-none">
+                <DataTable
+                  columns={deletedColumns}
+                  data={filteredUsers}
+                  isLoading={isLoading}
+                  toolbar={renderDeletedToolbar}
+                  recentlyUpdatedId={recentlyUpdatedId}
+                  rowSelection={rowSelection}
+                  onRowSelectionChange={setRowSelection}
+                  meta={{
+                    editingId: editingUser?.id,
+                    deletingId: deletingUser?.id,
+                    togglingUserId
+                  }}
+                />
+              </TabsContent>
+            </Tabs>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-10 w-[250px]" />
+                <Skeleton className="h-10 w-[100px]" />
+              </div>
+              <div className="rounded-md border h-96">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      {Array.from({ length: 9 }).map((_, i) => (
+                        <TableHead key={i}><Skeleton className="h-4 w-full" /></TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {Array.from({ length: 10 }).map((_, i) => (
+                      <TableRow key={i}>
+                        {Array.from({ length: 9 }).map((_, j) => (
+                          <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                         ))}
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {Array.from({ length: 10 }).map((_, i) => (
-                        <TableRow key={i}>
-                          {Array.from({ length: 9 }).map((_, j) => (
-                            <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
-                          ))}
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+            </div>
+          )}
+        </div>
+      </CardShell>
 
       {/* Add User Sheet */}
       {showAddUserSheet && (

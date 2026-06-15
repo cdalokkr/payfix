@@ -10,6 +10,8 @@ import { createDesignationColumns } from './designation-columns'
 import { DesignationTableToolbar } from './designation-table-toolbar'
 import { ModernAddDesignationForm } from './modern-add-designation-form'
 import { RowSelectionState } from '@tanstack/react-table'
+import { Briefcase } from 'lucide-react'
+import { CardShell } from '@/features/attendance/CardShell'
 
 interface DesignationManagementProps {
     initialData?: Designation[]
@@ -91,43 +93,40 @@ export default function DesignationManagement({ initialData }: DesignationManage
             heading="Designation Management"
             description="Setup and manage various job designations for your organization"
         >
-            <Card className="shadow-lg">
-                <CardHeader>
-                    <CardTitle>Designations List</CardTitle>
-                    <CardDescription className='text-muted-foreground text-sm'>
-                        Manage job designations and their associated roles.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="[&_td:not(:first-child)]:px-0.5 [&_th:not(:first-child)]:px-0.5 [&_td]:py-1.5 [&_table]:text-xs">
-                        {hasMounted ? (
-                            <DataTable
-                                columns={columns}
-                                data={filteredDesignations}
-                                isLoading={isLoading}
-                                toolbar={(table) => (
-                                    <DesignationTableToolbar
-                                        table={table}
-                                        onCreateDesignation={handleCreate}
-                                        isLoading={isLoading}
-                                        searchTerm={searchTerm}
-                                        onSearchChange={setSearchTerm}
-                                        roleFilter={roleFilter}
-                                        onRoleFilterChange={setRoleFilter}
-                                    />
-                                )}
-                                rowSelection={rowSelection}
-                                onRowSelectionChange={setRowSelection}
-                                recentlyUpdatedId={recentlyUpdatedId}
-                            />
-                        ) : (
-                            <div className="h-64 flex items-center justify-center">
-                                <span className="text-muted-foreground animate-pulse">Initializing table...</span>
-                            </div>
-                        )}
-                    </div>
-                </CardContent>
-            </Card>
+            <CardShell
+                title="Designations List"
+                description="Manage job designations and their associated roles."
+                icon={Briefcase}
+                contentClassName="min-h-0 p-3 md:p-4 pt-1.5 md:pt-2 h-full overflow-auto"
+            >
+                <div className="[&_td:not(:first-child)]:px-0.5 [&_th:not(:first-child)]:px-0.5 [&_td]:py-1.5 [&_table]:text-xs">
+                    {hasMounted ? (
+                        <DataTable
+                            columns={columns}
+                            data={filteredDesignations}
+                            isLoading={isLoading}
+                            toolbar={(table) => (
+                                <DesignationTableToolbar
+                                    table={table}
+                                    onCreateDesignation={handleCreate}
+                                    isLoading={isLoading}
+                                    searchTerm={searchTerm}
+                                    onSearchChange={setSearchTerm}
+                                    roleFilter={roleFilter}
+                                    onRoleFilterChange={setRoleFilter}
+                                />
+                            )}
+                            rowSelection={rowSelection}
+                            onRowSelectionChange={setRowSelection}
+                            recentlyUpdatedId={recentlyUpdatedId}
+                        />
+                    ) : (
+                        <div className="h-64 flex items-center justify-center">
+                            <span className="text-muted-foreground animate-pulse">Initializing table...</span>
+                        </div>
+                    )}
+                </div>
+            </CardShell>
 
             {/* Create Sheet */}
             {showAddSheet && (

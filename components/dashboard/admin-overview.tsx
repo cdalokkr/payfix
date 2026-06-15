@@ -50,6 +50,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 import { MetricCard } from '@/components/dashboard/metric-card'
 import { ActivityLogFeed } from '@/components/dashboard/activity-log-feed'
+import { CardShell } from '@/features/attendance/CardShell'
 
 
 
@@ -437,33 +438,20 @@ export function AdminOverview({
 
       {/* Recent Activities - Compact */}
       <div data-testid="detailed-content">
-        <MetricCard
-          className="shadow-xl"
-          gradientColor="from-primary/5 to-transparent"
-          delay={0.6}
-          disableHover={true}
-          borderColor="border-primary/10"
-          cardBgColor="bg-card/50"
+        <CardShell
+          title="Recent Activities"
+          description="Real-time update stream"
+          icon={Activity}
+          contentClassName="p-4"
         >
-          <div className="flex flex-col gap-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-primary/10 text-primary">
-                <Activity className="h-5 w-5" />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold tracking-tight">Recent Activities</h3>
-                <p className="text-sm text-muted-foreground">Real-time update stream</p>
-              </div>
-            </div>
-            <div className="bg-background/30 rounded-2xl border border-primary/5 p-4">
-              <ActivityLogFeed
-                activities={recentActivities as any}
-                isLoading={showSkeleton || !recentActivityDataReady}
-                maxItems={10}
-              />
-            </div>
+          <div className="bg-background/30 rounded-2xl border border-primary/5 p-4">
+            <ActivityLogFeed
+              activities={recentActivities as any}
+              isLoading={showSkeleton || !recentActivityDataReady}
+              maxItems={10}
+            />
           </div>
-        </MetricCard>
+        </CardShell>
       </div>
 
       {/* Modern Add User Form with Built-in Sheet */}

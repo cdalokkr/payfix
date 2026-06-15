@@ -82,13 +82,6 @@ export const adminNavItems: NavGroup[] = [
     icon: "Banknote",
     items: [
       {
-        title: "Dashboard",
-        href: "/admin/payroll/dashboard",
-        icon: "LayoutDashboard",
-        moduleId: "payroll",
-        description: "Payroll overview and statistics"
-      },
-      {
         title: "Attendance",
         href: "/admin/payroll/attendance",
         icon: "CalendarCheck",
@@ -132,7 +125,7 @@ export const adminNavItems: NavGroup[] = [
         description: "Generate and view payslips"
       },
       {
-        title: "Settings",
+        title: "Office Settings",
         href: "/admin/payroll/settings",
         icon: "Settings",
         moduleId: "settings",
@@ -247,13 +240,6 @@ export const moderatorNavItems: NavGroup[] = [
     icon: "Banknote",
     items: [
       {
-        title: "Dashboard",
-        href: "/moderator/payroll/dashboard",
-        icon: "LayoutDashboard",
-        moduleId: "payroll",
-        description: "Payroll overview"
-      },
-      {
         title: "Attendance",
         href: "/moderator/payroll/attendance",
         icon: "CalendarCheck",
@@ -365,13 +351,6 @@ export const employeeNavItems: NavGroup[] = [
     label: "Payroll",
     icon: "Banknote",
     items: [
-      {
-        title: "Dashboard",
-        href: "/employee/payroll/dashboard",
-        icon: "LayoutDashboard",
-        moduleId: "payroll",
-        description: "Your payroll overview"
-      },
       {
         title: "Attendance History",
         href: "/employee/attendance-history",

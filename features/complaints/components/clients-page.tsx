@@ -4,9 +4,10 @@ import { useState, useMemo, useCallback, useEffect, useRef } from "react"
 import { trpc } from "@/lib/trpc/client"
 import { Sheet } from "@/components/ui/sheet"
 import { toast } from "sonner"
-import { Loader2 } from "lucide-react"
+import { Loader2, Building2 } from "lucide-react"
 import { DashboardPageLayout } from "@/components/dashboard/dashboard-page-layout"
 import { cn } from "@/lib/utils"
+import { CardShell } from "@/features/attendance/CardShell"
 
 // Table imports
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -185,103 +186,100 @@ export default function ClientsPage() {
       heading="Clients" 
       description="Manage your client directory"
     >
-      <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle>All Clients List</CardTitle>
-          <CardDescription className="text-muted-foreground text-sm">
-            View and manage all client accounts. Use the table controls to search, filter, and select clients.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="[&_td:not(:first-child)]:px-3 [&_th:not(:first-child)]:px-3 [&_td]:py-3 [&_table]:text-xs">
-            {hasMounted ? (
-              <Tabs defaultValue="active" className="w-full" onValueChange={(val) => {
-                setActiveTab(val as 'active' | 'inactive')
-                setRowSelection({})
-              }}>
-                <TabsList className="mb-4">
-                  <TabsTrigger value="active">Active Clients</TabsTrigger>
-                  <TabsTrigger value="inactive">Inactive Clients</TabsTrigger>
-                </TabsList>
-                <TabsContent value="active" className="mt-0 border-0 p-0 shadow-none">
-                  <DataTable
-                    columns={columns}
-                    data={clients}
-                    isLoading={isLoading}
-                    toolbar={(table: TanstackTable<any>) => (
-                      <ClientsTableToolbar
-                        table={table}
-                        onCreateClient={handleCreateClient}
-                        isLoading={isLoading}
-                        searchTerm={searchTerm}
-                        onSearchChange={setSearchTerm}
-                      />
-                    )}
-                    recentlyUpdatedId={recentlyUpdatedId}
-                    rowSelection={rowSelection}
-                    onRowSelectionChange={setRowSelection}
-                    meta={{
-                      editingId: editingClient?.id,
-                      deletingId: deletingClient?.id,
-                      togglingUserId: statusToggleClient?.id
-                    }}
-                  />
-                </TabsContent>
-                <TabsContent value="inactive" className="mt-0 border-0 p-0 shadow-none">
-                  <DataTable
-                    columns={inactiveColumns}
-                    data={clients}
-                    isLoading={isLoading}
-                    toolbar={(table: TanstackTable<any>) => (
-                      <ClientsTableToolbar
-                        table={table}
-                        isLoading={isLoading}
-                        searchTerm={searchTerm}
-                        onSearchChange={setSearchTerm}
-                      />
-                    )}
-                    recentlyUpdatedId={recentlyUpdatedId}
-                    rowSelection={rowSelection}
-                    onRowSelectionChange={setRowSelection}
-                    meta={{
-                      editingId: editingClient?.id,
-                      deletingId: deletingClient?.id,
-                      togglingUserId: statusToggleClient?.id
-                    }}
-                  />
-                </TabsContent>
-              </Tabs>
-            ) : (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <Skeleton className="h-10 w-[250px]" />
-                  <Skeleton className="h-10 w-[100px]" />
-                </div>
-                <div className="rounded-md border h-96">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        {Array.from({ length: 6 }).map((_, i) => (
-                          <TableHead key={i}><Skeleton className="h-4 w-full" /></TableHead>
+      <CardShell
+        title="All Clients List"
+        description="View and manage all client accounts. Use the table controls to search, filter, and select clients."
+        icon={Building2}
+        contentClassName="min-h-0 p-3 md:p-4 pt-1.5 md:pt-2 h-full overflow-auto"
+      >
+        <div className="[&_td:not(:first-child)]:px-2 [&_th:not(:first-child)]:px-2 [&_td]:py-1.5 [&_table]:text-xs">
+          {hasMounted ? (
+            <Tabs defaultValue="active" className="w-full" onValueChange={(val) => {
+              setActiveTab(val as 'active' | 'inactive')
+              setRowSelection({})
+            }}>
+              <TabsList className="mb-4">
+                <TabsTrigger value="active">Active Clients</TabsTrigger>
+                <TabsTrigger value="inactive">Inactive Clients</TabsTrigger>
+              </TabsList>
+              <TabsContent value="active" className="mt-0 border-0 p-0 shadow-none">
+                <DataTable
+                  columns={columns}
+                  data={clients}
+                  isLoading={isLoading}
+                  toolbar={(table: TanstackTable<any>) => (
+                    <ClientsTableToolbar
+                      table={table}
+                      onCreateClient={handleCreateClient}
+                      isLoading={isLoading}
+                      searchTerm={searchTerm}
+                      onSearchChange={setSearchTerm}
+                    />
+                  )}
+                  recentlyUpdatedId={recentlyUpdatedId}
+                  rowSelection={rowSelection}
+                  onRowSelectionChange={setRowSelection}
+                  meta={{
+                    editingId: editingClient?.id,
+                    deletingId: deletingClient?.id,
+                    togglingUserId: statusToggleClient?.id
+                  }}
+                />
+              </TabsContent>
+              <TabsContent value="inactive" className="mt-0 border-0 p-0 shadow-none">
+                <DataTable
+                  columns={inactiveColumns}
+                  data={clients}
+                  isLoading={isLoading}
+                  toolbar={(table: TanstackTable<any>) => (
+                    <ClientsTableToolbar
+                      table={table}
+                      isLoading={isLoading}
+                      searchTerm={searchTerm}
+                      onSearchChange={setSearchTerm}
+                    />
+                  )}
+                  recentlyUpdatedId={recentlyUpdatedId}
+                  rowSelection={rowSelection}
+                  onRowSelectionChange={setRowSelection}
+                  meta={{
+                    editingId: editingClient?.id,
+                    deletingId: deletingClient?.id,
+                    togglingUserId: statusToggleClient?.id
+                  }}
+                />
+              </TabsContent>
+            </Tabs>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-10 w-[250px]" />
+                <Skeleton className="h-10 w-[100px]" />
+              </div>
+              <div className="rounded-md border h-96">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <TableHead key={i}><Skeleton className="h-4 w-full" /></TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {Array.from({ length: 10 }).map((_, i) => (
+                      <TableRow key={i}>
+                        {Array.from({ length: 6 }).map((_, j) => (
+                          <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                         ))}
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {Array.from({ length: 10 }).map((_, i) => (
-                        <TableRow key={i}>
-                          {Array.from({ length: 6 }).map((_, j) => (
-                            <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
-                          ))}
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+            </div>
+          )}
+        </div>
+      </CardShell>
 
       {/* Add Client Sheet */}
       {showCreateSheet && (
