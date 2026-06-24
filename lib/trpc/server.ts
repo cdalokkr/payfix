@@ -31,6 +31,14 @@ export const createContext = async (opts?: { req: Request }) => {
     const tenantSchema = reqHeaders.get('x-tenant-schema') || null;
     const tenantBrand = reqHeaders.get('x-tenant-brand') || 'PayFix';
 
+    console.log('[TRPC-CONTEXT] Header extraction:', {
+        tenantId,
+        tenantSlug,
+        tenantSchema,
+        tenantBrand,
+        hasOptsReq: !!opts?.req
+    });
+
     // Record timing for performance monitoring
     const duration = performance.now() - startTime
     authCallTimes.push(duration)
