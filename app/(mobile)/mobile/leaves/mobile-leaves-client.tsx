@@ -97,7 +97,7 @@ export function MobileLeavesClient({ profile }: { profile: any }) {
         let approved = 0
         let pending = 0
         
-        leaves.forEach((leave) => {
+        leaves.forEach((leave: any) => {
             const duration = getLeaveDuration(leave)
             if (leave.status === 'approved') {
                 approved += duration

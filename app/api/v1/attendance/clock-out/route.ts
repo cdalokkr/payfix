@@ -85,4 +85,4 @@ export const POST = withTenantContext(async (req: NextRequest) => {
             { status: err.message?.includes('header') || err.message?.includes('token') ? 401 : 400 }
         )
     }
-}
+})

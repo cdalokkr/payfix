@@ -126,7 +126,7 @@ export const ticketsRouter = router({
                 columns: { id: true, full_name: true, avatar_url: true },
               },
             },
-            orderBy: (ticketResolutions, { desc }) => [desc(ticketResolutions.created_at)],
+            orderBy: (ticketResolutions: any, { desc }: any) => [desc(ticketResolutions.created_at)],
           },
           callLogs: {
             with: {
@@ -134,7 +134,7 @@ export const ticketsRouter = router({
                 columns: { id: true, full_name: true, avatar_url: true },
               },
             },
-            orderBy: (callLogs, { desc }) => [desc(callLogs.created_at)],
+            orderBy: (callLogs: any, { desc }: any) => [desc(callLogs.created_at)],
           },
         },
       })
@@ -351,7 +351,7 @@ export const ticketsRouter = router({
             },
           },
           resolutions: {
-            orderBy: (ticketResolutions, { desc }) => [desc(ticketResolutions.created_at)],
+            orderBy: (ticketResolutions: any, { desc }: any) => [desc(ticketResolutions.created_at)],
             limit: 1,
           },
         },

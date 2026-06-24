@@ -81,4 +81,4 @@ export const POST = withTenantContext(async (req: NextRequest) => {
             { status: 500 }
         )
     }
-}
+})

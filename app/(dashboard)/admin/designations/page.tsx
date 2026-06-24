@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 }
 
 export default async function DesignationsPage() {
-    let initialData = undefined
+    let initialData: any = undefined
 
     try {
         // Prefetch designations on the server for instant loading/hydration

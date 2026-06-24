@@ -107,10 +107,10 @@ export const complaintsRouter = router({
                     columns: { id: true, full_name: true, avatar_url: true },
                   },
                 },
-                orderBy: (ticketResolutions, { desc }) => [desc(ticketResolutions.created_at)],
+                orderBy: (ticketResolutions: any, { desc }: any) => [desc(ticketResolutions.created_at)],
               },
             },
-            orderBy: (tickets, { desc }) => [desc(tickets.created_at)],
+            orderBy: (tickets: any, { desc }: any) => [desc(tickets.created_at)],
           },
           callLogs: {
             with: {
@@ -118,7 +118,7 @@ export const complaintsRouter = router({
                 columns: { id: true, full_name: true, avatar_url: true },
               },
             },
-            orderBy: (callLogs, { desc }) => [desc(callLogs.created_at)],
+            orderBy: (callLogs: any, { desc }: any) => [desc(callLogs.created_at)],
           },
         },
       })

@@ -57,7 +57,7 @@ export const clientsRouter = router({
         where: eq(clients.id, input.id),
         with: {
           complaints: {
-            orderBy: (complaints, { desc }) => [desc(complaints.created_at)],
+            orderBy: (complaints: any, { desc }: any) => [desc(complaints.created_at)],
             limit: 20,
           },
         },

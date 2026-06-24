@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
                     columns: { name: true }
                 }
             },
-            orderBy: (p, { asc }) => [asc(p.full_name)]
+            orderBy: (p: any, { asc }: any) => [asc(p.full_name)]
         })
 
         if (employees.length === 0) {
@@ -132,7 +132,7 @@ async function generateDailyTemplateExcelJS(
     const lastDay = new Date(year, month, 0).getDate()
 
     let sr = 1
-    const dataRows = []
+    const dataRows: any[] = []
     for (const emp of employees) {
         for (let d = 1; d <= lastDay; d++) {
             const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`

@@ -4,6 +4,7 @@
 // ============================================
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { resolveTenant } from '@/lib/tenant/resolver'
 
 // ============================================
 // Request Validation
@@ -96,6 +97,55 @@ function getProxyCookieHash(request: NextRequest): string {
 // ============================================
 export async function proxy(request: NextRequest) {
     const pathname = request.nextUrl.pathname
+    const hostname = request.headers.get('host') || ''
+    const url = request.nextUrl.clone()
+
+    // 1. Resolve Tenant from Hostname
+    const tenant = await resolveTenant(hostname);
+    
+    // Redirect if tenant not found but trying to access subdomains
+    const mainDomain = process.env.NEXT_PUBLIC_MAIN_DOMAIN || 'payfix.com';
+    const isMainDomain = hostname === mainDomain || hostname === `www.${mainDomain}` || hostname.endsWith('.vercel.app');
+    
+    if (!tenant && !isMainDomain) {
+        return new NextResponse('Workspace Not Found', { status: 404 });
+    }
+
+    // 2. Gatekeeper: Expiry and Suspension Check
+    if (tenant) {
+        const isExpiredPage = pathname === '/trial-expired';
+        
+        const isSuspended = tenant.status === 'suspended' || tenant.status === 'cancelled';
+        let isTrialExpired = false;
+        
+        if (tenant.status === 'trial') {
+            const trialExpiry = new Date(tenant.trial_start);
+            trialExpiry.setDate(trialExpiry.getDate() + tenant.trial_duration_days);
+            if (Date.now() > trialExpiry.getTime()) {
+                isTrialExpired = true;
+            }
+        }
+
+        if (isSuspended || isTrialExpired) {
+            if (!isExpiredPage && !pathname.startsWith('/api/')) {
+                const expiredUrl = new URL('/trial-expired', request.url);
+                return NextResponse.redirect(expiredUrl);
+            }
+        } else {
+            // Redirect away from /trial-expired if active
+            if (isExpiredPage) {
+                const homeUrl = new URL('/', request.url);
+                return NextResponse.redirect(homeUrl);
+            }
+        }
+    }
+
+    // 3. Dynamic Manifest Rewrite
+    if (pathname === '/manifest.json' && tenant) {
+        url.pathname = '/api/manifest';
+        url.searchParams.set('tenant', tenant.slug);
+        return NextResponse.rewrite(url);
+    }
 
     // ============================================
     // 1. Request Validation
@@ -146,6 +196,27 @@ export async function proxy(request: NextRequest) {
     requestHeaders.delete('x-user-id')
     requestHeaders.delete('x-user-email')
     requestHeaders.delete('x-user-profile')
+
+    // Strip incoming client-side tenant headers to prevent header injection
+    requestHeaders.delete('x-tenant-id')
+    requestHeaders.delete('x-tenant-slug')
+    requestHeaders.delete('x-tenant-db-url')
+    requestHeaders.delete('x-tenant-schema')
+    requestHeaders.delete('x-tenant-brand')
+    requestHeaders.delete('x-tenant-theme')
+
+    if (tenant) {
+        requestHeaders.set('x-tenant-id', tenant.id);
+        requestHeaders.set('x-tenant-slug', tenant.slug);
+        requestHeaders.set('x-tenant-db-url', tenant.database_url || '');
+        requestHeaders.set('x-tenant-schema', tenant.tenant_schema || '');
+        requestHeaders.set('x-tenant-brand', tenant.branding?.app_name || tenant.company_name);
+        requestHeaders.set('x-tenant-theme', JSON.stringify({
+            primary: tenant.branding?.primary_color || '#4f46e5',
+            secondary: tenant.branding?.secondary_color || '#0f172a',
+            logo: tenant.branding?.logo_url || '/logo.png'
+        }));
+    }
 
     let response = NextResponse.next({
         request: { headers: requestHeaders },
@@ -416,6 +487,12 @@ export async function proxy(request: NextRequest) {
             console.warn(`[PROXY-AUTH] Employee route access denied for role ${profile.role}. Redirecting to /${profile.role}`)
             return redirectWithCookies('/' + profile.role)
         }
+    }
+
+    if (tenant && response) {
+        response.headers.set('x-tenant-id', tenant.id);
+        response.headers.set('x-tenant-slug', tenant.slug);
+        response.headers.set('x-tenant-brand', tenant.branding?.app_name || tenant.company_name);
     }
 
     // ============================================

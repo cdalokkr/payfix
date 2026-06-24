@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 }
 
 export default async function UsersPage() {
-  let initialData = undefined
+  let initialData: any = undefined
 
   try {
     // Prefetch all users on the server for instant loading/hydration
