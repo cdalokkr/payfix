@@ -9,7 +9,7 @@ import { db } from '@/lib/db'
 import type { Profile } from '@/types'
 import { cache } from 'react'
 
-import { headers } from 'next/headers'
+import { headers, cookies } from 'next/headers'
 import { tenantStorage } from '@/lib/tenant/store'
 
 let createContextCallCount = 0
@@ -25,11 +25,32 @@ export const createContext = async (opts?: { req: Request }) => {
 
     // Extract tenant context from headers
     const reqHeaders = opts?.req ? new Headers(opts.req.headers) : await headers();
-    const tenantId = reqHeaders.get('x-tenant-id');
-    const tenantSlug = reqHeaders.get('x-tenant-slug');
-    const tenantDbUrl = reqHeaders.get('x-tenant-db-url') || null;
-    const tenantSchema = reqHeaders.get('x-tenant-schema') || null;
-    const tenantBrand = reqHeaders.get('x-tenant-brand') || 'PayFix';
+    let tenantId = reqHeaders.get('x-tenant-id');
+    let tenantSlug = reqHeaders.get('x-tenant-slug');
+    let tenantDbUrl = reqHeaders.get('x-tenant-db-url') || null;
+    let tenantSchema = reqHeaders.get('x-tenant-schema') || null;
+    let tenantBrand = reqHeaders.get('x-tenant-brand') || 'PayFix';
+
+    // Fail-safe fallback: If headers are missing (e.g. during Next.js server component rendering), resolve from cookie
+    if (!tenantSlug) {
+      try {
+        const cookieStore = await cookies();
+        const fallbackSlug = cookieStore.get('tenant_fallback')?.value;
+        if (fallbackSlug) {
+          const { resolveTenant } = await import('@/lib/tenant/resolver');
+          const tenant = await resolveTenant(fallbackSlug);
+          if (tenant) {
+            tenantId = tenant.id;
+            tenantSlug = tenant.slug;
+            tenantDbUrl = tenant.database_url || null;
+            tenantSchema = tenant.tenant_schema || null;
+            tenantBrand = tenant.branding?.app_name || tenant.company_name;
+          }
+        }
+      } catch (cookieErr) {
+        console.error('[TRPC-CONTEXT] Error reading fallback cookie:', cookieErr);
+      }
+    }
 
     console.log('[TRPC-CONTEXT] Header extraction:', {
         tenantId,
