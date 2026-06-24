@@ -347,12 +347,30 @@ export async function proxy(request: NextRequest) {
         user = authData?.user || null
 
         if (user) {
-            // Fetch full profile (including designation) to forward downstream and role checks
-            const { data: dbProfile } = await supabase
-                .from('profiles')
-                .select('*, designation:designations(*)')
-                .eq('id', user.id)
-                .single()
+            // Fetch full profile (including designation) dynamically from tenant schema or public fallback
+            let dbProfile: any = null;
+            if (tenant && tenant.tenant_schema) {
+                const { data: rpcData, error: rpcError } = await supabase.rpc('get_profile_from_schema', {
+                    schema_name: tenant.tenant_schema,
+                    user_id: user.id
+                });
+                if (!rpcError && rpcData) {
+                    dbProfile = rpcData;
+                } else if (rpcError) {
+                    console.error('[PROXY-RPC] Error calling get_profile_from_schema:', rpcError);
+                }
+            }
+
+            // Fallback to public schema for non-tenant requests or if RPC failed
+            if (!dbProfile) {
+                const { data: fallbackProfile } = await supabase
+                    .from('profiles')
+                    .select('*, designation:designations(*)')
+                    .eq('id', user.id)
+                    .single();
+                dbProfile = fallbackProfile;
+            }
+
             profile = dbProfile ? {
                 ...dbProfile,
                 designation: Array.isArray(dbProfile.designation)
