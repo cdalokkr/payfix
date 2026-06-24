@@ -100,8 +100,45 @@ export async function proxy(request: NextRequest) {
     const hostname = request.headers.get('host') || ''
     const url = request.nextUrl.clone()
 
-    // 1. Resolve Tenant from Hostname
-    const tenant = await resolveTenant(hostname);
+    // 1. Resolve Tenant from Hostname or Fallbacks (Query Param / Cookie) for testing environments
+    let tenant = await resolveTenant(hostname);
+    let resolvedViaFallback = false;
+    const queryTenant = request.nextUrl.searchParams.get('tenant');
+    const cookieTenant = request.cookies.get('tenant_fallback')?.value;
+
+    // Handle explicit tenant clearing
+    if (queryTenant === 'none') {
+        const cleanUrl = new URL(request.url);
+        cleanUrl.searchParams.delete('tenant');
+        const response = NextResponse.redirect(cleanUrl);
+        response.cookies.delete('tenant_fallback');
+        return response;
+    }
+
+    if (!tenant) {
+        const fallbackSlug = queryTenant || cookieTenant;
+        if (fallbackSlug) {
+            tenant = await resolveTenant(fallbackSlug);
+            if (tenant) {
+                resolvedViaFallback = true;
+            }
+        }
+    }
+
+    // Redirect to clean URL if tenant was passed via query parameter to prevent URL cluttering
+    if (queryTenant && tenant && queryTenant === tenant.slug) {
+        const cleanUrl = new URL(request.url);
+        cleanUrl.searchParams.delete('tenant');
+        const response = NextResponse.redirect(cleanUrl);
+        response.cookies.set('tenant_fallback', tenant.slug, {
+            path: '/',
+            maxAge: 60 * 60 * 24 * 7, // 1 week
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+        });
+        return response;
+    }
     
     // Redirect if tenant not found but trying to access subdomains
     const mainDomain = process.env.NEXT_PUBLIC_MAIN_DOMAIN || 'payfix.com';
