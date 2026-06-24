@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { db } from '@/lib/db'
 import { profiles } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
+import { withTenantContext } from '@/lib/tenant/with-context'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -13,7 +14,7 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     }
 })
 
-export async function POST(req: NextRequest) {
+export const POST = withTenantContext(async (req: NextRequest) => {
     try {
         const body = await req.json()
         const { email, password } = body

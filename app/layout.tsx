@@ -41,7 +41,7 @@ export const metadata: Metadata = {
   keywords: ['Next.js', 'Supabase', 'tRPC', 'React', 'Tailwind CSS', 'Attendance', 'PWA'],
   authors: [{ name: 'PayFix' }],
   creator: 'PayFix',
-  manifest: '/manifest.json',
+  manifest: '/api/manifest',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
@@ -66,11 +66,23 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({
+import { headers } from 'next/headers'
+
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const headersList = await headers()
+  const themeHeader = headersList.get('x-tenant-theme')
+  
+  let theme = { primary: '#4f46e5', secondary: '#0f172a', logo: '/logo.png' }
+  if (themeHeader) {
+    try {
+      theme = JSON.parse(themeHeader)
+    } catch {}
+  }
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -81,6 +93,23 @@ export default function RootLayout({
                 var isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
                 document.cookie = "pwa_standalone=" + isStandalone + "; path=/; max-age=31536000; SameSite=Lax";
               })();
+            `,
+          }}
+        />
+        {/* Dynamic theme style overrides */}
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
+              :root {
+                --primary: ${theme.primary};
+                --sidebar-primary: ${theme.primary};
+                --ring: ${theme.primary}50;
+              }
+              .dark {
+                --primary: ${theme.primary};
+                --sidebar-primary: ${theme.primary};
+                --ring: ${theme.primary}50;
+              }
             `,
           }}
         />

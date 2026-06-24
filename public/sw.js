@@ -11,7 +11,7 @@ const OFFLINE_QUEUE_NAME = 'payfix-offline-queue'
 // Static assets to cache - public files only to ensure reliable sw installation
 const STATIC_ASSETS = [
     '/offline',
-    '/manifest.json',
+    '/api/manifest',
     '/icons/icon-192x192.png',
     '/icons/icon-512x512.png',
 ]

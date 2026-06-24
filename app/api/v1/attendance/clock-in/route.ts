@@ -7,8 +7,9 @@ import { getLocalDateIST } from '@/lib/utils/date-utils'
 import { db } from '@/lib/db'
 import { profiles, notifications } from '@/lib/db/schema'
 import { eq, or } from 'drizzle-orm'
+import { withTenantContext } from '@/lib/tenant/with-context'
 
-export async function POST(req: NextRequest) {
+export const POST = withTenantContext(async (req: NextRequest) => {
     try {
         const authHeader = req.headers.get('Authorization')
         const { user, profile } = await validateBearerToken(authHeader)

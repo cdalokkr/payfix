@@ -9,6 +9,9 @@ import { db } from '@/lib/db'
 import type { Profile } from '@/types'
 import { cache } from 'react'
 
+import { headers } from 'next/headers'
+import { tenantStorage } from '@/lib/tenant/store'
+
 let createContextCallCount = 0
 const authCallTimes: number[] = []
 const MAX_AUTH_TIMES = 100
@@ -19,6 +22,14 @@ export const createContext = async (opts?: { req: Request }) => {
 
   try {
     const context = await createOptimizedContext(opts?.req)
+
+    // Extract tenant context from headers
+    const reqHeaders = opts?.req ? new Headers(opts.req.headers) : await headers();
+    const tenantId = reqHeaders.get('x-tenant-id');
+    const tenantSlug = reqHeaders.get('x-tenant-slug');
+    const tenantDbUrl = reqHeaders.get('x-tenant-db-url') || null;
+    const tenantSchema = reqHeaders.get('x-tenant-schema') || null;
+    const tenantBrand = reqHeaders.get('x-tenant-brand') || 'PayFix';
 
     // Record timing for performance monitoring
     const duration = performance.now() - startTime
@@ -43,6 +54,13 @@ export const createContext = async (opts?: { req: Request }) => {
       db: db,
       user: context.user,
       profile: context.profile,
+      tenant: tenantId && tenantSlug ? {
+        tenantId,
+        slug: tenantSlug,
+        databaseUrl: tenantDbUrl,
+        tenantSchema,
+        brandName: tenantBrand
+      } : null,
       performance: {
         contextCreationTime: duration,
         cacheHit: context.metrics.cacheHit,
@@ -77,6 +95,7 @@ export const createContext = async (opts?: { req: Request }) => {
       db: db,
       user: null,
       profile: null,
+      tenant: null,
       performance: {
         contextCreationTime: duration,
         cacheHit: false,
@@ -118,11 +137,19 @@ const t = initTRPC.context<Context>().create({
   }
 })
 
+// Middleware to run tRPC procedures inside the resolved tenant context
+const tenantContextMiddleware = t.middleware(async ({ ctx, next }) => {
+  if (ctx.tenant) {
+    return tenantStorage.run(ctx.tenant, () => next());
+  }
+  return next();
+});
+
 export const router = t.router
-export const publicProcedure = t.procedure
+export const publicProcedure = t.procedure.use(tenantContextMiddleware)
 export const createCallerFactory = t.createCallerFactory
 
-export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
+export const protectedProcedure = publicProcedure.use(async ({ ctx, next }) => {
   // Performance check - warn if context creation was slow
   if (ctx.performance?.contextCreationTime > 200) {
     console.warn(`[AUTH-PROC] Slow context in protectedProcedure: ${ctx.performance.contextCreationTime.toFixed(2)}ms`)
