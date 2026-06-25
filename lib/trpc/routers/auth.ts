@@ -220,7 +220,7 @@ export const authRouter = router({
         // But we can return the response and log activity concurrently if we structure it right
 
         // Fetch profile and last logout in parallel for maximum performance
-        const [profileData, lastLogoutResult] = await Promise.all([
+        let [profileData, lastLogoutResult] = await Promise.all([
           ctx.db.query.profiles.findFirst({
             where: eq(profiles.id, data.user.id),
             with: { designation: true }
@@ -236,17 +236,53 @@ export const authRouter = router({
         // Profile fetch success, but we haven't checked status yet.
         // Activity logging will happen later if user is active.
 
-        // Handle profile fetch failure - still allow login but with warning
+        // Handle profile fetch failure — try tenant-schema fallback before giving up
         if (!profileData) {
-          console.warn('[Auth] Profile fetch failed for user:', data.user.id)
-          return {
-            success: true,
-            profile: null as any,
-            user: {
-              id: data.user.id,
-              email: data.user.email
-            },
-            warning: 'Profile not found. Please contact administrator.'
+          console.warn('[Auth] Profile not found via ctx.db for user:', data.user.id,
+            '| Tenant context:', ctx.tenant ? `${ctx.tenant.slug} (${ctx.tenant.tenantSchema})` : 'NONE')
+
+          // Tenant-schema fallback: If tenant context exists, directly query the tenant schema
+          // This handles edge cases where AsyncLocalStorage context might not propagate correctly
+          if (ctx.tenant?.tenantSchema) {
+            try {
+              const { sql: sqlTag } = await import('drizzle-orm');
+              const { centralDb } = await import('@/lib/db');
+              const schemaName = ctx.tenant.tenantSchema;
+
+              const fallbackResult = await centralDb.execute(sqlTag`
+                SELECT p.*, row_to_json(d.*) as designation
+                FROM ${sqlTag.raw(schemaName)}.profiles p
+                LEFT JOIN ${sqlTag.raw(schemaName)}.designations d ON d.id = p.designation_id
+                WHERE p.id = ${data.user.id}
+                LIMIT 1;
+              `);
+
+              if (fallbackResult[0]) {
+                console.log('[Auth] Profile found via tenant-schema fallback:', ctx.tenant.tenantSchema);
+                const fbProfile = fallbackResult[0] as any;
+                // Parse designation if it's a JSON string
+                if (typeof fbProfile.designation === 'string') {
+                  try { fbProfile.designation = JSON.parse(fbProfile.designation); } catch {}
+                }
+                profileData = fbProfile;
+              }
+            } catch (fallbackErr) {
+              console.error('[Auth] Tenant-schema fallback query failed:', fallbackErr);
+            }
+          }
+
+          // If still no profile after fallback, return warning
+          if (!profileData) {
+            console.warn('[Auth] Profile definitively not found for user:', data.user.id)
+            return {
+              success: true,
+              profile: null as any,
+              user: {
+                id: data.user.id,
+                email: data.user.email
+              },
+              warning: 'Profile not found. Please contact administrator.'
+            }
           }
         }
 
