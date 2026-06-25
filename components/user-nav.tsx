@@ -8,11 +8,7 @@ import {
 } from "lucide-react"
 
 import { Profile } from "@/types"
-import {
-    Avatar,
-    AvatarFallback,
-    AvatarImage,
-} from "@/components/ui/avatar"
+import { UserAvatar } from "@/components/user-avatar"
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -74,21 +70,17 @@ function UserNavComponent({ user }: UserNavProps) {
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <div
-                        className="relative h-8 w-8 rounded-full hover:bg-muted hover:ring-2 hover:ring-primary transition-all outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        className="relative h-8 w-8 rounded-full hover:bg-muted hover:ring-2 hover:ring-primary transition-all outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-pointer"
                         suppressHydrationWarning
                     >
-                        <Avatar className="h-8 w-8">
-                            <AvatarImage src={user?.avatar_url || ''} alt={displayName} />
-                            <AvatarFallback className="bg-primary/10 text-primary font-semibold">{initials}</AvatarFallback>
-                        </Avatar>
+                        <UserAvatar src={user?.avatar_url} alt={displayName} initials={initials} className="h-8 w-8" />
                     </div>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56" align="end">
                     <div className="flex items-center justify-start gap-2 p-2">
-                        <Avatar className="h-8 w-8">
-                            <AvatarImage src={user?.avatar_url || ''} alt={displayName} />
-                            <AvatarFallback className="bg-primary/10 text-primary font-semibold">{initials}</AvatarFallback>
-                        </Avatar>
+                        <div className="h-8 w-8 shrink-0">
+                            <UserAvatar src={user?.avatar_url} alt={displayName} initials={initials} className="h-8 w-8" />
+                        </div>
                         <div className="flex flex-col space-y-1 leading-none">
                             {displayName && <p className="font-medium text-sm">{displayName}</p>}
                             {displayEmail && (

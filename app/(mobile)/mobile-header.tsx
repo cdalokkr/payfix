@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
+import { UserAvatar } from "@/components/user-avatar"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -80,14 +80,11 @@ export function MobileHeader({ profile }: MobileHeaderProps) {
                 {/* Header content */}
                 <div className="relative max-w-md mx-auto px-4 h-14 flex items-center justify-between">
                     {/* Left: Avatar & Greeting - check pending before photo update */}
-                    <button onClick={handleAvatarClick} className="flex items-center gap-3 group text-left">
+                    <button onClick={handleAvatarClick} className="flex items-center gap-3 group text-left cursor-pointer">
                         <div className="relative">
-                            <Avatar className="h-9 w-9 ring-2 ring-primary/20 group-hover:ring-primary/40 transition-all">
-                                <AvatarImage src={profile.avatar_url || ''} alt={profile.full_name || ''} />
-                                <AvatarFallback className="text-sm font-medium bg-gradient-to-br from-primary/20 to-primary/10 text-primary">
-                                    {getInitials()}
-                                </AvatarFallback>
-                            </Avatar>
+                            <div className="h-9 w-9 rounded-full ring-2 ring-primary/20 group-hover:ring-primary/40 transition-all overflow-hidden">
+                                <UserAvatar src={profile.avatar_url} alt={profile.full_name || ''} initials={getInitials()} className="h-9 w-9" />
+                            </div>
                             {/* Pending indicator if request exists */}
                             {pendingRequest ? (
                                 <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-amber-500 rounded-full ring-2 ring-white dark:ring-slate-900 animate-pulse" />
