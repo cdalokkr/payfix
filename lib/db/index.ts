@@ -26,15 +26,27 @@ export const centralDb = drizzle(client, { schema });
  * Intercepts query methods at runtime and switches connection contexts
  * dynamically based on the request's AsyncLocalStorage context.
  */
+// Track which tenant was last logged to avoid log spam
+let lastLoggedTenant = '';
+
 export const db = new Proxy({} as any, {
     get(target, prop, receiver) {
         const context = tenantStorage.getStore();
         if (context && context.tenantId) {
+            // Log routing decision (only on change to avoid spam)
+            if (lastLoggedTenant !== context.tenantSchema) {
+                console.log(`[DB-PROXY] Routing to tenant DB: ${context.tenantSchema} (tenant: ${context.slug})`);
+                lastLoggedTenant = context.tenantSchema || '';
+            }
             const tenantDb = getTenantDb(context.tenantId, context.databaseUrl, context.tenantSchema);
             return Reflect.get(tenantDb, prop, receiver);
         }
         
         // Fallback context (build time, CLI seeding, migrations, or local admin scripts)
+        if (lastLoggedTenant !== 'centralDb') {
+            console.warn('[DB-PROXY] No tenant context — falling back to centralDb (public schema)');
+            lastLoggedTenant = 'centralDb';
+        }
         return Reflect.get(centralDb, prop, receiver);
     }
 });

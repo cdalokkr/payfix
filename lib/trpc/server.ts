@@ -169,8 +169,15 @@ const t = initTRPC.context<Context>().create({
 // Middleware to run tRPC procedures inside the resolved tenant context
 const tenantContextMiddleware = t.middleware(async ({ ctx, next }) => {
   if (ctx.tenant) {
-    return tenantStorage.run(ctx.tenant, () => next());
+    console.log('[TENANT-MW] Running with tenant context:', ctx.tenant.slug, ctx.tenant.tenantSchema);
+    return tenantStorage.run(ctx.tenant, () => {
+      // Verify context is actually active inside run()
+      const verify = tenantStorage.getStore();
+      console.log('[TENANT-MW] Inside run() - context active:', !!verify, verify?.tenantSchema);
+      return next();
+    });
   }
+  console.warn('[TENANT-MW] No tenant context — queries will use centralDb');
   return next();
 });
 
