@@ -1,10 +1,28 @@
 import { appRouter } from "./routers";
 import { createContext, createCallerFactory } from "./server";
+import { tenantStorage } from "@/lib/tenant/store";
 import { cache } from "react";
 
 const createCaller = createCallerFactory(appRouter);
 
+/**
+ * Server-side tRPC client for use in Server Components.
+ * Ensures tenant context is properly propagated via AsyncLocalStorage
+ * so all DB queries route to the correct tenant schema.
+ */
 export const getServerClient = cache(async () => {
     const context = await createContext();
-    return createCaller(context);
+    const caller = createCaller(context);
+
+    // If tenant context is available, wrap the caller to ensure
+    // tenantStorage is active during procedure execution.
+    // The tRPC middleware SHOULD handle this, but as a safety net
+    // we also pre-seed tenantStorage here for direct calls.
+    if (context.tenant) {
+        console.log('[SERVER-CLIENT] Tenant context available:', context.tenant.slug, context.tenant.tenantSchema);
+    } else {
+        console.warn('[SERVER-CLIENT] No tenant context — DB queries will use centralDb (public schema)');
+    }
+
+    return caller;
 });

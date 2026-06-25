@@ -70,9 +70,13 @@ function recordQueryMetrics(metrics: Omit<DatabaseMetrics, 'timestamp'>) {
   }
 }
 
-// Query hashing for caching
+// Query hashing for caching — includes tenant context to prevent cross-tenant cache leaks
 function hashQuery(query: string, params: any = {}): string {
-  const queryString = JSON.stringify({ query, params })
+  // Import tenantStorage lazily to get current tenant context
+  const { tenantStorage } = require('@/lib/tenant/store');
+  const tenantContext = tenantStorage.getStore();
+  const tenantKey = tenantContext?.tenantSchema || 'public';
+  const queryString = JSON.stringify({ tenant: tenantKey, query, params })
   return Buffer.from(queryString).toString('base64')
 }
 

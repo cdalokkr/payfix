@@ -100,7 +100,8 @@ export const adminDashboardRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const metrics = startDashboardTiming('getUnifiedDashboardData')
-      const cacheKey = `unified-dashboard-${ctx.user.id}-${input.analyticsDays}-${input.activitiesLimit}-${input.priority}-${input.localDate || 'no-date'}-v${cacheVersion}`
+      const tenantKey = ctx.tenant?.slug || 'default'
+      const cacheKey = `unified-dashboard-${tenantKey}-${ctx.user.id}-${input.analyticsDays}-${input.activitiesLimit}-${input.priority}-${input.localDate || 'no-date'}-v${cacheVersion}`
 
       try {
         // Check local request cache first (including concurrent in-progress promises)

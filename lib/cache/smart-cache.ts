@@ -7,6 +7,7 @@ import { db } from '@/lib/db'
 import { officeSettings, officeLocations, designations, officeClosures } from '@/lib/db/schema'
 import { eq, gte, sql, desc } from 'drizzle-orm'
 import { smartCacheManager } from './smart-cache-manager'
+import { tenantStorage } from '@/lib/tenant/store'
 
 const CACHE_NAMESPACES = {
     SETTINGS: 'static:settings',
@@ -19,13 +20,20 @@ const CACHE_NAMESPACES = {
 const TTL_1_HOUR = 60 * 60 * 1000
 const TTL_24_HOURS = 24 * 60 * 60 * 1000
 
+// Helper: generate tenant-scoped cache key to prevent cross-tenant data leaks
+function tenantCacheKey(key: string): string {
+    const ctx = tenantStorage.getStore();
+    const prefix = ctx?.tenantSchema || 'public';
+    return `${prefix}:${key}`;
+}
+
 export class SmartCache {
     /**
      * Get office settings cached
      * Strict column projection: selects only required settings attributes
      */
     static async getOfficeSettingsCached() {
-        const cacheKey = 'office_settings'
+        const cacheKey = tenantCacheKey('office_settings')
         const cached = await smartCacheManager.get<any>(cacheKey, CACHE_NAMESPACES.SETTINGS)
         if (cached) return cached
 
@@ -59,7 +67,7 @@ export class SmartCache {
      * Strict column projection: selects only geofencing coordinate metrics
      */
     static async getOfficeLocationsCached() {
-        const cacheKey = 'active_locations'
+        const cacheKey = tenantCacheKey('active_locations')
         const cached = await smartCacheManager.get<any[]>(cacheKey, CACHE_NAMESPACES.LOCATIONS)
         if (cached) return cached
 
@@ -90,7 +98,7 @@ export class SmartCache {
      * Strict column projection
      */
     static async getDesignationsCached() {
-        const cacheKey = 'all_designations'
+        const cacheKey = tenantCacheKey('all_designations')
         const cached = await smartCacheManager.get<any[]>(cacheKey, CACHE_NAMESPACES.DESIGNATIONS)
         if (cached) return cached
 
@@ -120,7 +128,7 @@ export class SmartCache {
      * Strict column projection
      */
     static async getOfficeClosuresCached() {
-        const cacheKey = 'all_closures'
+        const cacheKey = tenantCacheKey('all_closures')
         const cached = await smartCacheManager.get<any[]>(cacheKey, CACHE_NAMESPACES.CLOSURES)
         if (cached) return cached
 
