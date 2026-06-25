@@ -198,7 +198,9 @@ export function LoginForm() {
         const isMobileViewport = typeof window !== 'undefined' && (window.innerWidth < 768 || isMobileDevice)
 
         // Role-based redirect
-        if (data.profile.role === 'admin') {
+        if (data.profile.role === 'super_admin') {
+          redirectPath = '/superadmin'
+        } else if (data.profile.role === 'admin') {
           redirectPath = '/admin'
         } else if (data.profile.role === 'moderator') {
           // Moderator is only redirected to mobile layout if launching standalone PWA
