@@ -101,7 +101,8 @@ export function getTenantDb(tenantId: string, databaseUrl: string | null, schema
 
     const connectionParams: Record<string, any> = {};
     if (!databaseUrl && schemaName) {
-        connectionParams.search_path = schemaName.replace(/[^a-zA-Z0-9_]/g, '');
+        const safeSchemaName = schemaName.replace(/[^a-zA-Z0-9_]/g, '');
+        connectionParams.search_path = `${safeSchemaName}, public`;
     }
 
     const client = postgres(targetDbUrl, {
