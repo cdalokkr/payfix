@@ -27,6 +27,11 @@ export default async function HomePage() {
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
+            <Link href="/signup">
+              <Button variant="outline" className="gap-2">
+                Sign Up
+              </Button>
+            </Link>
             <Link href="/login">
               <Button className="gap-2">
                 <LogIn /> Login
@@ -51,6 +56,11 @@ export default async function HomePage() {
             <Link href="/login">
               <Button size="lg" className="gap-2 w-full sm:w-auto">
                 <LogIn /> Get Started
+              </Button>
+            </Link>
+            <Link href="/signup">
+              <Button size="lg" variant="outline" className="w-full sm:w-auto">
+                Create Workspace
               </Button>
             </Link>
           </div>

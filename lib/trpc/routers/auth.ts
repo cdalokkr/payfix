@@ -12,6 +12,7 @@ import { eq, and, desc, count } from 'drizzle-orm'
 import { performLogout, preSeedSessionCache } from '@/lib/auth/optimized-context'
 import { formatActivityDescription } from '@/lib/utils/activity-logger'
 import { queryManager } from '@/lib/db/optimized-query-manager'
+import { createClient } from '@supabase/supabase-js'
 
 // Custom error types for specific validation scenarios
 const AuthErrorTypes = {
@@ -419,6 +420,95 @@ export const authRouter = router({
           message: 'Network error or service unavailable. Please check your connection and try again.',
           cause: { type: AuthErrorTypes.NETWORK_ERROR, field: 'none' }
         })
+      }
+    }),
+
+  registerTenant: publicProcedure
+    .input(z.object({
+      companyName: z.string().min(2).max(100),
+      slug: z.string().min(3).max(30).regex(/^[a-z0-9-]+$/, {
+        message: 'Subdomain must contain only lowercase letters, numbers, and hyphens'
+      }),
+      adminEmail: z.string().email(),
+      adminPassword: z.string().min(8),
+    }))
+    .mutation(async ({ input }) => {
+      // 1. Verify if subdomain is already registered
+      const { resolveTenant } = await import('@/lib/tenant/resolver');
+      const existingTenant = await resolveTenant(input.slug);
+      if (existingTenant) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Subdomain is already taken. Please try another one.',
+        });
+      }
+
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+      if (!supabaseUrl || !supabaseServiceKey) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Authentication and database setup is missing server configuration',
+        });
+      }
+
+      // Create service role client to bypass user creation restrictions
+      const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      });
+
+      // 2. Create the Supabase auth user
+      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        email: input.adminEmail,
+        password: input.adminPassword,
+        email_confirm: true,
+        user_metadata: {
+          full_name: `${input.companyName} Admin`,
+          status: 'active'
+        }
+      });
+
+      if (authError) {
+        console.error('[Signup] Auth user creation failed:', authError);
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: authError.message || 'Failed to register admin user',
+        });
+      }
+
+      const adminUserId = authData.user.id;
+
+      try {
+        // 3. Provision the schema, tables, and admin profile
+        const { provisionTenant } = await import('@/lib/tenant/provisioning');
+        // By default, trial duration is 14 days
+        const result = await provisionTenant(input.slug, input.companyName, input.adminEmail, 14, adminUserId);
+
+        return {
+          success: true,
+          tenantId: result.tenantId,
+          slug: result.slug,
+          message: 'Workspace successfully registered!'
+        };
+      } catch (error: any) {
+        console.error('[Signup] Provisioning failed, rolling back auth user:', error);
+        
+        // Rollback the created Supabase auth user if database provisioning fails
+        try {
+          await supabaseAdmin.auth.admin.deleteUser(adminUserId);
+          console.log('[Signup] Successfully deleted rolled-back auth user:', adminUserId);
+        } catch (deleteError) {
+          console.error('[Signup] Failed to delete rolled-back auth user:', deleteError);
+        }
+
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error.message || 'Failed to set up workspace database',
+        });
       }
     }),
 

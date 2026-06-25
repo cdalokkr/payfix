@@ -10,6 +10,7 @@ export const tenantPlans = pgTable('tenant_plans', {
     
     // Hard limits
     max_employees: integer('max_employees').default(10).notNull(),
+    max_moderators: integer('max_moderators').default(2).notNull(), 
     max_storage_gb: integer('max_storage_gb').default(1).notNull(),
     
     // Feature flags enabled on this tier (e.g. { biometric: true, geofencing: true })
@@ -39,6 +40,9 @@ export const tenants = pgTable('tenants', {
     trial_extended: boolean('trial_extended').default(false).notNull(),
     
     plan_id: uuid('plan_id').references(() => tenantPlans.id),
+    max_employees_override: integer('max_employees_override'),
+    max_moderators_override: integer('max_moderators_override'),
+    license_expires_at: timestamp('license_expires_at', { withTimezone: true }).notNull(),
     admin_email: text('admin_email').notNull(),
     
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),

@@ -19,10 +19,12 @@ import { salaryRouter } from './salary'
 import { clientsRouter } from './clients'
 import { complaintsRouter } from './complaints'
 import { ticketsRouter } from './tickets'
+import { superadminRouter } from './superadmin'
 
 export const appRouter = router({
   auth: authRouter,
   profile: profileRouter,
+  superadmin: superadminRouter,
   admin: router({
     users: adminUsersRouter,
     dashboard: adminDashboardRouter,

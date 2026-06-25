@@ -16,6 +16,7 @@ export interface TenantMetadata {
     trial_duration_days: number;
     trial_extended: boolean;
     admin_email: string;
+    license_expires_at: Date;
     branding?: {
         app_name: string;
         short_name: string | null;
@@ -99,6 +100,7 @@ export async function resolveTenant(hostname: string): Promise<TenantMetadata | 
             trial_duration_days: tenantRecord.trial_duration_days,
             trial_extended: tenantRecord.trial_extended,
             admin_email: tenantRecord.admin_email,
+            license_expires_at: tenantRecord.license_expires_at,
             branding: brandingRecord ? {
                 app_name: brandingRecord.app_name,
                 short_name: brandingRecord.short_name,

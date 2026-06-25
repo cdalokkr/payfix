@@ -16,6 +16,10 @@ export const profileRouter = router({
     return ctx.profile as any as import('@/types').Profile
   }),
 
+  getTenantInfo: protectedProcedure.query(({ ctx }) => {
+    return ctx.tenant;
+  }),
+
   update: protectedProcedure
     .input(profileUpdateSchema)
     .mutation(async ({ input, ctx }) => {

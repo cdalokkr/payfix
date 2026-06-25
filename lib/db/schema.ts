@@ -2,7 +2,7 @@ import { pgTable, uuid, text, timestamp, varchar, date, numeric, integer, boolea
 import { relations } from 'drizzle-orm';
 
 // Enums
-export const userRoleEnum = pgEnum('user_role', ['admin', 'moderator', 'employee']);
+export const userRoleEnum = pgEnum('user_role', ['super_admin', 'admin', 'moderator', 'employee']);
 export const activityTypeEnum = pgEnum('activity_type', ['login', 'logout', 'profile_update', 'data_view', 'data_edit', 'data_delete', 'data_create', 'password_change']);
 
 export const attendanceSourceEnum = pgEnum('attendance_source', ['mobile', 'biometric', 'manual', 'bulk']);

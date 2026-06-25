@@ -8,6 +8,9 @@ import { Profile, Module } from '../../../types'
 import { formatActivityDescription, ChangedField } from '@/lib/utils/activity-logger'
 import { getDefaultAvatarUrl, isDefaultAvatar } from '@/lib/utils/avatar-helper'
 import { invalidateUserSession } from '@/lib/auth/optimized-context'
+import { masterDb } from '@/lib/db/master-connection'
+import { tenants, tenantPlans } from '@/lib/db/master-schema'
+import { TRPCError } from '@trpc/server'
 import { profiles, designations, activities, userStatusHistory } from '@/lib/db/schema'
 import { eq, or, ilike, and, ne, desc, count, sql, SQL } from 'drizzle-orm'
 
@@ -440,7 +443,64 @@ export const adminUsersRouter = router({
   createUser: adminProcedure
     .input(createUserSchema)
     .mutation(async ({ ctx, input }) => {
-      if (!ctx.supabase) throw new Error('Supabase client not available')
+      if (!ctx.supabase) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Supabase client not available' })
+
+      // 1. Enforce Plan Limits check if tenant context is present
+      if (ctx.tenant?.tenantId) {
+        try {
+          const tenantRow = await masterDb
+            .select()
+            .from(tenants)
+            .leftJoin(tenantPlans, eq(tenants.plan_id, tenantPlans.id))
+            .where(eq(tenants.id, ctx.tenant.tenantId))
+            .limit(1);
+
+          if (tenantRow[0]) {
+            const { tenants: tenantRecord, tenant_plans: planRecord } = tenantRow[0];
+
+            // Determine employee and moderator limits (with custom overrides support)
+            const maxEmployees = tenantRecord.max_employees_override !== null
+              ? tenantRecord.max_employees_override
+              : (planRecord?.max_employees ?? 5); // default 5 for trial fallback
+
+            const maxModerators = tenantRecord.max_moderators_override !== null
+              ? tenantRecord.max_moderators_override
+              : (planRecord?.max_moderators ?? 2); // default 2 for trial fallback
+
+            if (input.role === 'employee') {
+              const currentEmployees = await ctx.db
+                .select({ count: count() })
+                .from(profiles)
+                .where(eq(profiles.role, 'employee'));
+
+              const empCount = currentEmployees[0]?.count || 0;
+              if (empCount >= maxEmployees) {
+                throw new TRPCError({
+                  code: 'BAD_REQUEST',
+                  message: `Employee limit reached. Your plan allows a maximum of ${maxEmployees} employees.`,
+                });
+              }
+            } else if (input.role === 'moderator') {
+              const currentModerators = await ctx.db
+                .select({ count: count() })
+                .from(profiles)
+                .where(eq(profiles.role, 'moderator'));
+
+              const modCount = currentModerators[0]?.count || 0;
+              if (modCount >= maxModerators) {
+                throw new TRPCError({
+                  code: 'BAD_REQUEST',
+                  message: `Moderator limit reached. Your plan allows a maximum of ${maxModerators} moderators.`,
+                });
+              }
+            }
+          }
+        } catch (limitErr) {
+          if (limitErr instanceof TRPCError) throw limitErr;
+          console.error('[CreateUser] Error verifying plan limits:', limitErr);
+          // Don't block user creation on unexpected central db lookup failures, but log it
+        }
+      }
 
       // Check if user already exists using Drizzle
       const existingProfile = await ctx.db.query.profiles.findFirst({
@@ -449,7 +509,10 @@ export const adminUsersRouter = router({
       })
 
       if (existingProfile) {
-        throw new Error(`A user with email ${input.email} already exists`)
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `A user with email ${input.email} already exists`,
+        });
       }
 
       // Create auth user (Keep Supabase for Auth)

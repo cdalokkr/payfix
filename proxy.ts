@@ -150,26 +150,31 @@ export async function proxy(request: NextRequest) {
 
     // 2. Gatekeeper: Expiry and Suspension Check
     if (tenant) {
-        const isExpiredPage = pathname === '/trial-expired';
+        const isExpiredPage = pathname === '/license-expired';
         
         const isSuspended = tenant.status === 'suspended' || tenant.status === 'cancelled';
-        let isTrialExpired = false;
+        let isLicenseExpired = false;
         
-        if (tenant.status === 'trial') {
+        if (tenant.license_expires_at) {
+            const expiryTime = new Date(tenant.license_expires_at).getTime();
+            if (Date.now() > expiryTime) {
+                isLicenseExpired = true;
+            }
+        } else if (tenant.status === 'trial') {
             const trialExpiry = new Date(tenant.trial_start);
             trialExpiry.setDate(trialExpiry.getDate() + tenant.trial_duration_days);
             if (Date.now() > trialExpiry.getTime()) {
-                isTrialExpired = true;
+                isLicenseExpired = true;
             }
         }
 
-        if (isSuspended || isTrialExpired) {
+        if (isSuspended || isLicenseExpired) {
             if (!isExpiredPage && !pathname.startsWith('/api/')) {
-                const expiredUrl = new URL('/trial-expired', request.url);
+                const expiredUrl = new URL('/license-expired', request.url);
                 return NextResponse.redirect(expiredUrl);
             }
         } else {
-            // Redirect away from /trial-expired if active
+            // Redirect away from /license-expired if active
             if (isExpiredPage) {
                 const homeUrl = new URL('/', request.url);
                 return NextResponse.redirect(homeUrl);
@@ -241,6 +246,7 @@ export async function proxy(request: NextRequest) {
     requestHeaders.delete('x-tenant-schema')
     requestHeaders.delete('x-tenant-brand')
     requestHeaders.delete('x-tenant-theme')
+    requestHeaders.delete('x-tenant-license-expires-at')
 
     if (tenant) {
         requestHeaders.set('x-tenant-id', tenant.id);
@@ -248,6 +254,7 @@ export async function proxy(request: NextRequest) {
         requestHeaders.set('x-tenant-db-url', tenant.database_url || '');
         requestHeaders.set('x-tenant-schema', tenant.tenant_schema || '');
         requestHeaders.set('x-tenant-brand', tenant.branding?.app_name || tenant.company_name);
+        requestHeaders.set('x-tenant-license-expires-at', tenant.license_expires_at ? new Date(tenant.license_expires_at).toISOString() : '');
         requestHeaders.set('x-tenant-theme', JSON.stringify({
             primary: tenant.branding?.primary_color || '#4f46e5',
             secondary: tenant.branding?.secondary_color || '#0f172a',
@@ -309,10 +316,11 @@ export async function proxy(request: NextRequest) {
     }
 
     // Protected routes based on role prefixes
+    const isSuperAdminRoute = pathname.startsWith('/superadmin')
     const isAdminRoute = pathname.startsWith('/admin')
     const isModeratorRoute = pathname.startsWith('/moderator')
     const isEmployeeRoute = pathname.startsWith('/employee')
-    const isProtectedRoute = isAdminRoute || isModeratorRoute || isEmployeeRoute
+    const isProtectedRoute = isSuperAdminRoute || isAdminRoute || isModeratorRoute || isEmployeeRoute
 
     const isLoginRoute = pathname === '/login'
     const isDeactiveAccountRoute = pathname === '/deactive-account'
@@ -429,7 +437,9 @@ export async function proxy(request: NextRequest) {
             return addSecurityHeaders(response, request)
         }
 
-        if (profile?.role === 'admin') {
+        if (profile?.role === 'super_admin') {
+            return redirectWithCookies('/superadmin')
+        } else if (profile?.role === 'admin') {
             return redirectWithCookies('/admin')
         } else if (profile?.role === 'moderator') {
             const isStandalonePwa = request.cookies.get('pwa_standalone')?.value === 'true'
@@ -535,17 +545,22 @@ export async function proxy(request: NextRequest) {
             return redirectWithCookies('/')
         }
 
-        if (isAdminRoute && profile.role !== 'admin') {
+        if (isSuperAdminRoute && profile.role !== 'super_admin') {
+            console.warn(`[PROXY-AUTH] Super Admin route access denied for role ${profile.role}. Redirecting to /${profile.role}`)
+            return redirectWithCookies('/' + profile.role)
+        }
+
+        if (isAdminRoute && profile.role !== 'admin' && profile.role !== 'super_admin') {
             console.warn(`[PROXY-AUTH] Admin route access denied for role ${profile.role}. Redirecting to /${profile.role}`)
             return redirectWithCookies('/' + profile.role)
         }
 
-        if (isModeratorRoute && profile.role !== 'moderator' && profile.role !== 'admin') {
+        if (isModeratorRoute && profile.role !== 'moderator' && profile.role !== 'admin' && profile.role !== 'super_admin') {
             console.warn(`[PROXY-AUTH] Moderator route access denied for role ${profile.role}. Redirecting to /${profile.role}`)
             return redirectWithCookies('/' + profile.role)
         }
 
-        if (isEmployeeRoute && profile.role !== 'employee' && profile.role !== 'moderator' && profile.role !== 'admin') {
+        if (isEmployeeRoute && profile.role !== 'employee' && profile.role !== 'moderator' && profile.role !== 'admin' && profile.role !== 'super_admin') {
             console.warn(`[PROXY-AUTH] Employee route access denied for role ${profile.role}. Redirecting to /${profile.role}`)
             return redirectWithCookies('/' + profile.role)
         }

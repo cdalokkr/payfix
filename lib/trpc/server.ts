@@ -30,6 +30,7 @@ export const createContext = async (opts?: { req: Request }) => {
     let tenantDbUrl = reqHeaders.get('x-tenant-db-url') || null;
     let tenantSchema = reqHeaders.get('x-tenant-schema') || null;
     let tenantBrand = reqHeaders.get('x-tenant-brand') || 'PayFix';
+    let tenantLicenseExpiresAt = reqHeaders.get('x-tenant-license-expires-at') || null;
 
     // Fail-safe fallback: If headers are missing (e.g. during Next.js server component rendering), resolve from cookie
     if (!tenantSlug) {
@@ -45,6 +46,7 @@ export const createContext = async (opts?: { req: Request }) => {
             tenantDbUrl = tenant.database_url || null;
             tenantSchema = tenant.tenant_schema || null;
             tenantBrand = tenant.branding?.app_name || tenant.company_name;
+            tenantLicenseExpiresAt = tenant.license_expires_at ? new Date(tenant.license_expires_at).toISOString() : null;
           }
         }
       } catch (cookieErr) {
@@ -88,7 +90,8 @@ export const createContext = async (opts?: { req: Request }) => {
         slug: tenantSlug,
         databaseUrl: tenantDbUrl,
         tenantSchema,
-        brandName: tenantBrand
+        brandName: tenantBrand,
+        licenseExpiresAt: tenantLicenseExpiresAt
       } : null,
       performance: {
         contextCreationTime: duration,
@@ -231,8 +234,23 @@ export const protectedProcedure = publicProcedure.use(async ({ ctx, next }) => {
   })
 })
 
+export const superAdminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  if (ctx.profile.role !== 'super_admin') {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'Super Admin access required',
+      cause: {
+        performance: ctx.performance,
+        userRole: ctx.profile.role,
+        requiredRole: 'super_admin'
+      }
+    })
+  }
+  return next({ ctx })
+})
+
 export const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
-  if (ctx.profile.role !== 'admin') {
+  if (ctx.profile.role !== 'admin' && ctx.profile.role !== 'super_admin') {
     throw new TRPCError({
       code: 'FORBIDDEN',
       cause: {
@@ -246,7 +264,7 @@ export const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
 })
 
 export const moderatorProcedure = protectedProcedure.use(async ({ ctx, next }) => {
-  if (ctx.profile.role !== 'admin' && ctx.profile.role !== 'moderator') {
+  if (ctx.profile.role !== 'admin' && ctx.profile.role !== 'moderator' && ctx.profile.role !== 'super_admin') {
     throw new TRPCError({
       code: 'FORBIDDEN',
       cause: {

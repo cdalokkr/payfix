@@ -7,6 +7,7 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { UserNav } from "@/components/user-nav"
 import { NotificationBell } from "@/components/dashboard/notification-bell"
 import { Profile } from "@/types"
+import { trpc } from "@/lib/trpc/client"
 
 interface TopBarProps {
   className?: string
@@ -14,6 +15,43 @@ interface TopBarProps {
 }
 
 function TopBarComponent({ className, user }: TopBarProps) {
+  const { data: tenantInfo } = trpc.profile.getTenantInfo.useQuery(undefined, {
+    enabled: !!user && user.role === "admin",
+  });
+
+  const licenseExpiresAt = tenantInfo?.licenseExpiresAt;
+
+  const getLicenseBadge = () => {
+    if (!licenseExpiresAt || !user || user.role !== "admin") return null;
+    const days = Math.ceil((new Date(licenseExpiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    
+    const formattedDate = new Date(licenseExpiresAt).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+
+    if (days <= 0) {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-500/10 text-red-500 border border-red-500/20 shadow-sm animate-pulse">
+          Licence Expired
+        </span>
+      );
+    } else if (days <= 3) {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20 shadow-sm">
+          Licence Expires in {days} {days === 1 ? 'day' : 'days'}
+        </span>
+      );
+    } else {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 shadow-sm">
+          Valid until: {formattedDate}
+        </span>
+      );
+    }
+  };
+
   return (
     <header
       className={cn(
@@ -26,6 +64,7 @@ function TopBarComponent({ className, user }: TopBarProps) {
           "-ml-1 h-9 w-9 hover:bg-sidebar-accent/50 transition-colors",
           user?.role === 'employee' && "hidden lg:flex"
         )} />
+        {getLicenseBadge()}
       </div>
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2 pr-2 border-r border-border/40">
