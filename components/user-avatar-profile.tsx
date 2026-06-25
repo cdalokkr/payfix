@@ -3,7 +3,7 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { Profile } from '@/types';
-import { getDefaultAvatarUrl } from '@/lib/utils/avatar-helper';
+import { getDefaultAvatarUrl, isDefaultAvatar } from '@/lib/utils/avatar-helper';
 import React, { useEffect, useMemo, useState } from 'react'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -46,12 +46,15 @@ function UserAvatarProfileComponent({
     return user.avatar_url || getDefaultAvatarUrl(user.sex);
   }, [user]);
 
-  const [isLoaded, setIsLoaded] = useState(() => (avatarUrl && typeof window !== 'undefined') ? loadedImageUrls.has(avatarUrl) : false)
+  const [isLoaded, setIsLoaded] = useState(() => {
+    if (avatarUrl && isDefaultAvatar(avatarUrl)) return true;
+    return (avatarUrl && typeof window !== 'undefined') ? loadedImageUrls.has(avatarUrl) : false;
+  });
 
   // Handle URL changes and caching
   useEffect(() => {
     if (avatarUrl) {
-      if (loadedImageUrls.has(avatarUrl)) {
+      if (isDefaultAvatar(avatarUrl) || loadedImageUrls.has(avatarUrl)) {
         setIsLoaded(true);
       } else {
         setIsLoaded(false);
