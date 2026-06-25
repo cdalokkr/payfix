@@ -142,7 +142,13 @@ export async function proxy(request: NextRequest) {
     
     // Redirect if tenant not found but trying to access subdomains
     const mainDomain = process.env.NEXT_PUBLIC_MAIN_DOMAIN || 'payfix.com';
-    const isMainDomain = hostname === mainDomain || hostname === `www.${mainDomain}` || hostname.endsWith('.vercel.app');
+    const hostWithoutPort = hostname.split(':')[0].toLowerCase();
+    const isMainDomain = 
+        hostWithoutPort === mainDomain || 
+        hostWithoutPort === `www.${mainDomain}` || 
+        hostWithoutPort.endsWith('.vercel.app') ||
+        hostWithoutPort === 'localhost' ||
+        hostWithoutPort === '127.0.0.1';
     
     if (!tenant && !isMainDomain) {
         return new NextResponse('Workspace Not Found', { status: 404 });
