@@ -348,6 +348,15 @@ export async function proxy(request: NextRequest) {
 
     // Optimized resolution with memory caching to bypass slow Supabase network calls
     const cookieHash = getProxyCookieHash(request)
+
+    // Invalidate proxy session cache immediately if this is a logout request
+    if (cookieHash && pathname.includes('auth.logout')) {
+        proxySessionCache.delete(cookieHash)
+        if (process.env.NODE_ENV === 'development') {
+            console.log(`[PROXY-CACHE] Invalidated session on logout for hash ${cookieHash.substring(0, 8)}...`)
+        }
+    }
+
     let cached = cookieHash ? proxySessionCache.get(cookieHash) : null
 
     if (cached && Date.now() > cached.expiresAt) {

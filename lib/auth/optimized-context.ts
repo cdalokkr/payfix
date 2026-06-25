@@ -705,6 +705,9 @@ export function getAuthPerformanceStats() {
 
 // Invalidate session cache (call on logout or session refresh)
 export function invalidateUserSession(userId: string): void {
+  // Clear the userId-based session cache
+  userIdSessionCache.delete(userId)
+
   const hash = userToHashCache.get(userId)
   if (hash) {
     const cacheKey = CONTEXT_CACHE_PREFIX + hash
