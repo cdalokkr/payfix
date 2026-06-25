@@ -30,6 +30,7 @@ async function run() {
         console.log(`[Migration] Schema ${schemaName} created.`);
 
         // 2. Clone table structures dynamically from public schema
+        // Complete list matching schema.ts — dependency order (referenced tables first)
         const tables = [
             'designations',
             'profiles',
@@ -42,12 +43,21 @@ async function run() {
             'office_settings',
             'office_closures',
             'employee_settings',
+            'biometric_devices',
+            'office_locations',
+            'user_mpin',
+            'push_subscriptions',
+            'profile_photo_requests',
+            'employee_salary_setup',
+            'employee_advances',
+            'monthly_attendance_summary',
+            'clients',
             'complaints',
-            'support_tickets',
-            'ticket_messages',
+            'tickets',
+            'ticket_assignments',
+            'ticket_resolutions',
             'call_logs',
-            'salary_slips',
-            'salary_templates'
+            'salary_payments',
         ];
 
         for (const table of tables) {

@@ -337,7 +337,7 @@ export async function proxy(request: NextRequest) {
         }
     } else {
         const tStart = performance.now()
-        let authData = null
+        let authData: { user: any } | null = null
         try {
             const { data } = await supabase.auth.getUser()
             authData = data
@@ -422,6 +422,13 @@ export async function proxy(request: NextRequest) {
 
     // Redirect authenticated users from login page to their dashboard
     if (user && isLoginRoute) {
+        // Guard: If user has no profile, let them stay on login page to prevent redirect loop
+        // This happens when auth user exists but profile entry is missing in tenant schema
+        if (!profile) {
+            console.warn(`[PROXY-AUTH] Authenticated user ${user.id} has no profile — staying on login page to prevent redirect loop`)
+            return addSecurityHeaders(response, request)
+        }
+
         if (profile?.role === 'admin') {
             return redirectWithCookies('/admin')
         } else if (profile?.role === 'moderator') {

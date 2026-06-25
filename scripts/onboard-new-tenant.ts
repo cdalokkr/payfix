@@ -1,6 +1,6 @@
 import './env-config';
 import { provisionTenant } from '../lib/tenant/provisioning';
-import { db } from '../lib/db';
+import { centralDb } from '../lib/db/index';
 import { sql } from 'drizzle-orm';
 import { createClient } from '@supabase/supabase-js';
 
@@ -34,13 +34,8 @@ async function run() {
     });
 
     try {
-        // Step 1: Provision the tenant database schema and registry
-        console.log(`[Onboarding] Step 1: Provisioning tenant database schema and registry...`);
-        const provisionResult = await provisionTenant(slug, companyName, adminEmail);
-        console.log(`[Onboarding] Step 1 Complete: Schema ${provisionResult.schemaName} created and registered.`);
-
-        // Step 2: Create Supabase Auth User
-        console.log(`[Onboarding] Step 2: Creating Supabase auth user...`);
+        // Step 1: Create Supabase Auth User FIRST (we need the userId for provisioning)
+        console.log(`[Onboarding] Step 1: Creating Supabase auth user...`);
         
         // List users to check if user already exists
         const { data: usersList, error: listError } = await supabase.auth.admin.listUsers();
@@ -73,38 +68,44 @@ async function run() {
             console.log(`[Onboarding] Auth user created successfully with ID: ${userId}`);
         }
 
-        // Step 3: Insert the admin profile into the tenant schema
-        console.log(`[Onboarding] Step 3: Creating admin profile inside tenant schema...`);
-        
-        // Find designation ID in the tenant schema
-        const schemaName = provisionResult.schemaName;
-        const designResult = await db.execute(sql`
-            SELECT id FROM ${sql.raw(schemaName)}.designations 
-            WHERE role = 'admin' LIMIT 1;
-        `);
-        
-        const designationId = designResult[0]?.id;
-        if (!designationId) {
-            throw new Error(`Admin designation not found in tenant schema ${schemaName}`);
-        }
+        // Step 2: Provision the tenant database schema and registry
+        // Now passes adminUserId so provisioning creates the admin profile directly
+        console.log(`[Onboarding] Step 2: Provisioning tenant database schema, registry, and admin profile...`);
+        const provisionResult = await provisionTenant(slug, companyName, adminEmail, 14, userId);
+        console.log(`[Onboarding] Step 2 Complete: Schema ${provisionResult.schemaName} created, registered, and admin profile inserted.`);
 
-        // Check if profile already exists in tenant schema
-        const existingProfile = await db.execute(sql`
-            SELECT id FROM ${sql.raw(schemaName)}.profiles 
+        // Step 3: Verify the profile was actually created
+        console.log(`[Onboarding] Step 3: Verifying admin profile...`);
+        const schemaName = provisionResult.schemaName;
+        const verifyProfile = await centralDb.execute(sql`
+            SELECT id, email, role, status FROM ${sql.raw(schemaName)}.profiles 
             WHERE id = ${userId} LIMIT 1;
         `);
 
-        if (existingProfile.length > 0) {
-            console.log(`[Onboarding] Profile already exists in tenant schema.`);
+        if (verifyProfile.length > 0) {
+            console.log(`[Onboarding] ✅ Admin profile verified:`, verifyProfile[0]);
         } else {
-            await db.execute(sql`
-                INSERT INTO ${sql.raw(schemaName)}.profiles (
-                    id, email, full_name, role, status, designation_id, created_at, updated_at
-                ) VALUES (
-                    ${userId}, ${adminEmail}, 'Administrator', 'admin', 'active', ${designationId}, NOW(), NOW()
-                );
+            console.error(`[Onboarding] ⚠️ WARNING: Admin profile not found in ${schemaName}.profiles — inserting now...`);
+            
+            // Fallback: Insert profile directly
+            const designResult = await centralDb.execute(sql`
+                SELECT id FROM ${sql.raw(schemaName)}.designations WHERE role = 'admin' LIMIT 1;
             `);
-            console.log(`[Onboarding] Admin profile created successfully in tenant schema.`);
+            const designationId = designResult[0]?.id;
+            
+            if (designationId) {
+                await centralDb.execute(sql`
+                    INSERT INTO ${sql.raw(schemaName)}.profiles (
+                        id, email, full_name, role, status, designation_id, created_at, updated_at
+                    ) VALUES (
+                        ${userId}, ${adminEmail}, 'Administrator', 'admin', 'active', ${designationId}, NOW(), NOW()
+                    )
+                    ON CONFLICT (id) DO NOTHING;
+                `);
+                console.log(`[Onboarding] ✅ Admin profile inserted via fallback.`);
+            } else {
+                console.error(`[Onboarding] ❌ CRITICAL: Admin designation not found in ${schemaName}!`);
+            }
         }
 
         console.log(`==================================================`);

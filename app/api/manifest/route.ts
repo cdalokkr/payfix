@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { resolveTenant } from '@/lib/tenant/resolver';
+import { resolveTenant, type TenantMetadata } from '@/lib/tenant/resolver';
 
 export async function GET(request: NextRequest) {
     const tenantSlug = request.headers.get('x-tenant-slug') 
         || request.nextUrl.searchParams.get('tenant');
         
-    let tenant = null;
+    let tenant: TenantMetadata | null = null;
     if (tenantSlug) {
         // Resolve tenant branding from central DB using slug
         tenant = await resolveTenant(tenantSlug);
