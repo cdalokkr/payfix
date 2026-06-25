@@ -99,19 +99,18 @@ export function getTenantDb(tenantId: string, databaseUrl: string | null, schema
 
     console.log(`[DB Router] Initializing new connection pool for: ${cacheKey}`);
 
+    const connectionParams: Record<string, any> = {};
+    if (!databaseUrl && schemaName) {
+        connectionParams.search_path = schemaName.replace(/[^a-zA-Z0-9_]/g, '');
+    }
+
     const client = postgres(targetDbUrl, {
         prepare: false,
         max: databaseUrl ? 10 : 4, // More connections for custom external DBs, fewer for shared schemas
         idle_timeout: 20,
         connect_timeout: 15,
         max_lifetime: 60 * 30, // Refresh connections every 30 minutes
-        onconnect: async (conn) => {
-            if (!databaseUrl && schemaName) {
-                // Safely set the schema search path for the connection session
-                const safeSchemaName = schemaName.replace(/[^a-zA-Z0-9_]/g, '');
-                await conn.unsafe(`SET search_path TO ${safeSchemaName}`);
-            }
-        }
+        connection: connectionParams
     });
 
     const db = drizzle(client, { schema });
