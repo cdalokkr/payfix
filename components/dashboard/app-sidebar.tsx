@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation"
 import { GalleryVerticalEnd } from "lucide-react"
 
 import { UserRole, Profile, Module } from "@/types"
-import { adminNavItems, moderatorNavItems, employeeNavItems, NavGroup } from "./nav-items"
+import { adminNavItems, moderatorNavItems, employeeNavItems, superAdminNavItems, NavGroup } from "./nav-items"
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
 import {
@@ -34,7 +34,9 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 export function AppSidebar({ role, tenants, defaultTenant, onTenantSwitch, user, ...props }: AppSidebarProps) {
   let navGroups: NavGroup[] = []
 
-  if (role === "admin") {
+  if (role === "super_admin") {
+    navGroups = superAdminNavItems
+  } else if (role === "admin") {
     navGroups = adminNavItems
   } else if (role === "moderator") {
     navGroups = moderatorNavItems

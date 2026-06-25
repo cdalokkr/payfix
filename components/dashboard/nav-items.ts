@@ -442,3 +442,19 @@ export const userNavItems: NavItem[] = [
     moduleId: "settings",
   },
 ];
+
+export const superAdminNavItems: NavGroup[] = [
+  {
+    label: "Platform",
+    icon: "ShieldUser",
+    items: [
+      {
+        title: "Control Plane",
+        href: "/superadmin",
+        icon: "ShieldUser",
+        moduleId: "superadmin",
+        description: "Manage workspaces and plans"
+      }
+    ]
+  }
+];
