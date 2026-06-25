@@ -3,7 +3,7 @@
 // ============================================
 export type Module = 'dashboard' | 'users' | 'reports' | 'settings' | 'analytics' | 'notifications' | 'billing' | 'profile' | 'attendance' | 'leaves' | 'payroll' | 'complaints' | 'tickets' | 'clients'
 
-export type UserRole = 'admin' | 'moderator' | 'employee'
+export type UserRole = 'super_admin' | 'admin' | 'moderator' | 'employee'
 
 export type ActivityType = 'login' | 'logout' | 'profile_update' | 'data_view' | 'data_edit' | 'data_delete' | 'create_user'
 

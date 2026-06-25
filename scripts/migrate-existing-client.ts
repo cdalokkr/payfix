@@ -125,6 +125,7 @@ async function run() {
             trial_end: trialEnd,
             trial_duration_days: 365 * 10,
             admin_email: adminEmail,
+            license_expires_at: trialEnd,
         }).returning();
 
         // Register default branding settings

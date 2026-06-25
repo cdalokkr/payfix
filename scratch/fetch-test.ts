@@ -1,4 +1,4 @@
-async function test() {
+(async function runFetchTest() {
     const url = 'https://payfix-git-develop-corebitdigital.vercel.app/avatars/default-male.png';
     console.log(`Fetching ${url}...`);
     try {
@@ -11,5 +11,4 @@ async function test() {
     } catch (err: any) {
         console.error('Error fetching:', err);
     }
-}
-test();
+})();

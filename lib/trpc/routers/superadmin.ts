@@ -179,7 +179,7 @@ export const superadminRouter = router({
       priceMonthly: z.string(),
       maxEmployees: z.number().int().min(1),
       maxModerators: z.number().int().min(1),
-      features: z.record(z.any()).default({}),
+      features: z.record(z.string(), z.any()).default({}),
     }))
     .mutation(async ({ input }) => {
       try {
