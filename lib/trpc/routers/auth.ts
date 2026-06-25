@@ -220,9 +220,14 @@ export const authRouter = router({
         // We need the profile for the role in activity log, so we fetch profile first
         // But we can return the response and log activity concurrently if we structure it right
 
-        // Fetch profile and last logout in parallel for maximum performance
+        // Fetch profile and last logout in parallel for maximum performance.
+        // IMPORTANT: Profile is ALWAYS fetched from centralDb (public schema) during login.
+        // Super-admin users only exist in public.profiles, not in tenant schemas.
+        // Using ctx.db here would route to a tenant schema if a tenant_fallback cookie is set,
+        // causing super_admin login to fail silently.
+        const { centralDb: loginCentralDb } = await import('@/lib/db');
         let [profileData, lastLogoutResult] = await Promise.all([
-          ctx.db.query.profiles.findFirst({
+          loginCentralDb.query.profiles.findFirst({
             where: eq(profiles.id, data.user.id),
             with: { designation: true }
           }),
@@ -272,7 +277,26 @@ export const authRouter = router({
             }
           }
 
-          // If still no profile after fallback, return warning
+          // CRITICAL: Public-schema fallback — always check public.profiles regardless of tenant context.
+          // Super-admins and platform-level users ONLY exist in public.profiles, not in any tenant schema.
+          // This prevents super_admin login failing when a tenant_fallback cookie is present.
+          if (!profileData) {
+            try {
+              const { centralDb } = await import('@/lib/db');
+              const publicProfile = await centralDb.query.profiles.findFirst({
+                where: (p, { eq }) => eq(p.id, data.user.id),
+                with: { designation: true }
+              });
+              if (publicProfile) {
+                console.log('[Auth] Profile found via public.profiles fallback for user:', data.user.id, '| role:', publicProfile.role);
+                profileData = publicProfile;
+              }
+            } catch (publicFallbackErr) {
+              console.error('[Auth] Public profiles fallback query failed:', publicFallbackErr);
+            }
+          }
+
+          // If still no profile after all fallbacks, return warning
           if (!profileData) {
             console.warn('[Auth] Profile definitively not found for user:', data.user.id)
             return {

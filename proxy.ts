@@ -48,7 +48,7 @@ function addSecurityHeaders(response: NextResponse, request: NextRequest): NextR
 
     // Prevent caching of authenticated pages
     const pathname = request.nextUrl.pathname
-    if (pathname.startsWith('/admin') || pathname.startsWith('/moderator') || pathname.startsWith('/employee') || pathname.startsWith('/mobile') || pathname.startsWith('/dashboard')) {
+    if (pathname.startsWith('/admin') || pathname.startsWith('/moderator') || pathname.startsWith('/employee') || pathname.startsWith('/mobile') || pathname.startsWith('/dashboard') || pathname.startsWith('/superadmin')) {
         response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
         response.headers.set('Pragma', 'no-cache')
         response.headers.set('Expires', '0')
@@ -89,6 +89,21 @@ function getProxyCookieHash(request: NextRequest): string {
         return (hash >>> 0).toString(16)
     } catch {
         return ''
+    }
+}
+
+// ============================================
+// Role to Dashboard Path Mapping
+// Maps DB role values to their correct URL paths.
+// NOTE: 'super_admin' maps to /superadmin (no underscore in URL).
+// ============================================
+function roleToDashboardPath(role: string): string {
+    switch (role) {
+        case 'super_admin': return '/superadmin'
+        case 'admin':       return '/admin'
+        case 'moderator':   return '/moderator'
+        case 'employee':    return '/employee'
+        default:            return '/moderator'
     }
 }
 
@@ -526,9 +541,9 @@ export async function proxy(request: NextRequest) {
                 return redirectWithCookies('/moderator')
             }
         } else if (profile.role !== 'employee') {
-            // Other roles (like admin) are not allowed on /mobile, redirect to their home
-            console.log(`[PROXY-MOBILE] Non-mobile role ${profile.role} accessing mobile route ${pathname}, redirecting to /${profile.role}`)
-            return redirectWithCookies('/' + profile.role)
+            // Other roles (like admin/super_admin) are not allowed on /mobile, redirect to their home
+            console.log(`[PROXY-MOBILE] Non-mobile role ${profile.role} accessing mobile route ${pathname}, redirecting to ${roleToDashboardPath(profile.role)}`)
+            return redirectWithCookies(roleToDashboardPath(profile.role))
         }
     }
 
@@ -552,23 +567,23 @@ export async function proxy(request: NextRequest) {
         }
 
         if (isSuperAdminRoute && profile.role !== 'super_admin') {
-            console.warn(`[PROXY-AUTH] Super Admin route access denied for role ${profile.role}. Redirecting to /${profile.role}`)
-            return redirectWithCookies('/' + profile.role)
+            console.warn(`[PROXY-AUTH] Super Admin route access denied for role ${profile.role}. Redirecting to ${roleToDashboardPath(profile.role)}`)
+            return redirectWithCookies(roleToDashboardPath(profile.role))
         }
 
         if (isAdminRoute && profile.role !== 'admin' && profile.role !== 'super_admin') {
-            console.warn(`[PROXY-AUTH] Admin route access denied for role ${profile.role}. Redirecting to /${profile.role}`)
-            return redirectWithCookies('/' + profile.role)
+            console.warn(`[PROXY-AUTH] Admin route access denied for role ${profile.role}. Redirecting to ${roleToDashboardPath(profile.role)}`)
+            return redirectWithCookies(roleToDashboardPath(profile.role))
         }
 
         if (isModeratorRoute && profile.role !== 'moderator' && profile.role !== 'admin' && profile.role !== 'super_admin') {
-            console.warn(`[PROXY-AUTH] Moderator route access denied for role ${profile.role}. Redirecting to /${profile.role}`)
-            return redirectWithCookies('/' + profile.role)
+            console.warn(`[PROXY-AUTH] Moderator route access denied for role ${profile.role}. Redirecting to ${roleToDashboardPath(profile.role)}`)
+            return redirectWithCookies(roleToDashboardPath(profile.role))
         }
 
         if (isEmployeeRoute && profile.role !== 'employee' && profile.role !== 'moderator' && profile.role !== 'admin' && profile.role !== 'super_admin') {
-            console.warn(`[PROXY-AUTH] Employee route access denied for role ${profile.role}. Redirecting to /${profile.role}`)
-            return redirectWithCookies('/' + profile.role)
+            console.warn(`[PROXY-AUTH] Employee route access denied for role ${profile.role}. Redirecting to ${roleToDashboardPath(profile.role)}`)
+            return redirectWithCookies(roleToDashboardPath(profile.role))
         }
     }
 
