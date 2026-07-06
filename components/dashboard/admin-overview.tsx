@@ -45,7 +45,6 @@ import {
   Bell
 } from 'lucide-react'
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import { Skeleton } from '@/components/ui/skeleton'
 
 import { MetricCard } from '@/components/dashboard/metric-card'
@@ -229,129 +228,129 @@ export function AdminOverview({
       {/* Expanded Quick Actions Grid (Cohesive Full-Width Layout) */}
       <div className="grid grid-cols-1 gap-6" data-testid="quick-actions-row">
         <MetricCard
-          className="shadow-xl border-border/40"
-          gradientColor="from-primary/10 to-transparent"
+          className="shadow-sm border-border/30"
+          gradientColor="from-primary/5 to-transparent"
           delay={0.3}
           disableHover={true}
-          borderColor="border-primary/10"
-          cardBgColor="bg-card/50"
+          borderColor="border-border/30"
+          cardBgColor="bg-card/40"
         >
           <div className="flex flex-col gap-4 h-full">
             <div className="flex items-center gap-2">
-              <div className="h-6 w-1 bg-primary rounded-full" />
-              <h3 className="text-xl font-bold tracking-tight">Quick Actions</h3>
+              <div className="h-5 w-1 bg-primary rounded-full" />
+              <h3 className="text-lg font-bold font-display tracking-tight text-foreground select-none">Quick Actions</h3>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 py-2">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 py-2">
               {/* Add User Item */}
               <div
                 onClick={() => setShowAddUserSheet(true)}
-                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-blue-200/40 bg-blue-50/30 dark:bg-blue-500/5 hover:bg-blue-500/10 hover:border-blue-500/40 hover:shadow-lg hover:shadow-blue-500/5 transition-all duration-300 group/admin-action cursor-pointer"
+                className="flex items-center gap-3 p-3 rounded-2xl border border-border/40 bg-card hover:bg-muted/30 hover:border-blue-500/20 active:scale-[0.98] transition-all duration-150 group/admin-action cursor-pointer shadow-xs"
               >
-                <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-700 dark:text-blue-400 group-hover/admin-action:scale-115 group-hover/admin-action:rotate-3 transition-all">
+                <div className="p-2 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 group-hover/admin-action:scale-105 transition-transform duration-200 flex-shrink-0">
                   <UserPlus className="h-5 w-5" />
                 </div>
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">New User</p>
-                  <p className="text-sm font-semibold group-hover/admin-action:font-black group-hover/admin-action:text-primary transition-all duration-300">Create User</p>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5 select-none">New User</p>
+                  <p className="text-sm font-semibold font-display text-foreground group-hover/admin-action:text-primary transition-colors truncate">Create User</p>
                 </div>
               </div>
 
               {/* Attendance Logs */}
               <Link
                 href="/admin/payroll/attendance"
-                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-amber-200/40 bg-amber-50/30 dark:bg-amber-500/5 hover:bg-amber-500/10 hover:border-amber-500/40 hover:shadow-lg hover:shadow-amber-500/5 transition-all duration-300 group/admin-action cursor-pointer"
+                className="flex items-center gap-3 p-3 rounded-2xl border border-border/40 bg-card hover:bg-muted/30 hover:border-amber-500/20 active:scale-[0.98] transition-all duration-150 group/admin-action cursor-pointer shadow-xs"
               >
-                <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 group-hover/admin-action:scale-115 group-hover/admin-action:rotate-3 transition-all">
+                <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 group-hover/admin-action:scale-105 transition-transform duration-200 flex-shrink-0">
                   <Clock className="h-5 w-5" />
                 </div>
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Logs</p>
-                  <p className="text-sm font-semibold group-hover/admin-action:font-black group-hover/admin-action:text-primary transition-all duration-300">Attendance</p>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5 select-none">Logs</p>
+                  <p className="text-sm font-semibold font-display text-foreground group-hover/admin-action:text-primary transition-colors truncate">Attendance</p>
                 </div>
               </Link>
 
               {/* Leave Requests */}
               <Link
                 href="/admin/payroll/leaves"
-                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-purple-200/40 bg-purple-50/30 dark:bg-purple-500/5 hover:bg-purple-500/10 hover:border-purple-500/40 hover:shadow-lg hover:shadow-purple-500/5 transition-all duration-300 group/admin-action cursor-pointer"
+                className="flex items-center gap-3 p-3 rounded-2xl border border-border/40 bg-card hover:bg-muted/30 hover:border-purple-500/20 active:scale-[0.98] transition-all duration-150 group/admin-action cursor-pointer shadow-xs"
               >
-                <div className="p-1.5 rounded-lg bg-purple-500/10 text-purple-700 dark:text-purple-400 group-hover/admin-action:scale-115 group-hover/admin-action:-rotate-3 transition-all">
+                <div className="p-2 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 group-hover/admin-action:scale-105 transition-transform duration-200 flex-shrink-0">
                   <Calendar className="h-5 w-5" />
                 </div>
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Approvals</p>
-                  <p className="text-sm font-semibold group-hover/admin-action:font-black group-hover/admin-action:text-primary transition-all duration-300">Leave Requests</p>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5 select-none">Approvals</p>
+                  <p className="text-sm font-semibold font-display text-foreground group-hover/admin-action:text-primary transition-colors truncate">Leave Requests</p>
                 </div>
               </Link>
 
               {/* Photo Approvals */}
               <Link
                 href="/admin/photo-approvals"
-                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-emerald-200/40 bg-emerald-50/30 dark:bg-emerald-500/5 hover:bg-emerald-500/10 hover:border-emerald-500/40 hover:shadow-lg hover:shadow-emerald-500/5 transition-all duration-300 group/admin-action cursor-pointer"
+                className="flex items-center gap-3 p-3 rounded-2xl border border-border/40 bg-card hover:bg-muted/30 hover:border-emerald-500/20 active:scale-[0.98] transition-all duration-150 group/admin-action cursor-pointer shadow-xs"
               >
-                <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 group-hover/admin-action:scale-115 group-hover/admin-action:rotate-3 transition-all">
+                <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover/admin-action:scale-105 transition-transform duration-200 flex-shrink-0">
                   <Camera className="h-5 w-5" />
                 </div>
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Verification</p>
-                  <p className="text-sm font-semibold group-hover/admin-action:font-black group-hover/admin-action:text-primary transition-all duration-300">Photo Approvals</p>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5 select-none">Verification</p>
+                  <p className="text-sm font-semibold font-display text-foreground group-hover/admin-action:text-primary transition-colors truncate">Photo Approvals</p>
                 </div>
               </Link>
 
               {/* Support Helpdesk */}
               <Link
                 href="/admin/tickets"
-                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-indigo-200/40 bg-indigo-50/30 dark:bg-indigo-500/5 hover:bg-indigo-500/10 hover:border-indigo-500/40 hover:shadow-lg hover:shadow-indigo-500/5 transition-all duration-300 group/admin-action cursor-pointer"
+                className="flex items-center gap-3 p-3 rounded-2xl border border-border/40 bg-card hover:bg-muted/30 hover:border-indigo-500/20 active:scale-[0.98] transition-all duration-150 group/admin-action cursor-pointer shadow-xs"
               >
-                <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 group-hover/admin-action:scale-115 group-hover/admin-action:-rotate-3 transition-all">
+                <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 group-hover/admin-action:scale-105 transition-transform duration-200 flex-shrink-0">
                   <Ticket className="h-5 w-5" />
                 </div>
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Helpdesk</p>
-                  <p className="text-sm font-semibold group-hover/admin-action:font-black group-hover/admin-action:text-primary transition-all duration-300">Support Tickets</p>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5 select-none">Helpdesk</p>
+                  <p className="text-sm font-semibold font-display text-foreground group-hover/admin-action:text-primary transition-colors truncate">Support Tickets</p>
                 </div>
               </Link>
 
               {/* Client Manager */}
               <Link
                 href="/admin/clients"
-                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-pink-200/40 bg-pink-50/30 dark:bg-pink-500/5 hover:bg-pink-500/10 hover:border-pink-500/40 hover:shadow-lg hover:shadow-pink-500/5 transition-all duration-300 group/admin-action cursor-pointer"
+                className="flex items-center gap-3 p-3 rounded-2xl border border-border/40 bg-card hover:bg-muted/30 hover:border-pink-500/20 active:scale-[0.98] transition-all duration-150 group/admin-action cursor-pointer shadow-xs"
               >
-                <div className="p-1.5 rounded-lg bg-pink-500/10 text-pink-700 dark:text-pink-400 group-hover/admin-action:scale-115 group-hover/admin-action:rotate-3 transition-all">
+                <div className="p-2 rounded-xl bg-pink-500/10 text-pink-600 dark:text-pink-400 group-hover/admin-action:scale-105 transition-transform duration-200 flex-shrink-0">
                   <Briefcase className="h-5 w-5" />
                 </div>
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Business</p>
-                  <p className="text-sm font-semibold group-hover/admin-action:font-black group-hover/admin-action:text-primary transition-all duration-300">Client Manager</p>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5 select-none">Business</p>
+                  <p className="text-sm font-semibold font-display text-foreground group-hover/admin-action:text-primary transition-colors truncate">Client Manager</p>
                 </div>
               </Link>
 
               {/* Reports Item */}
               <Link
                 href="/admin/reports"
-                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-orange-200/40 bg-orange-50/30 dark:bg-orange-500/5 hover:bg-orange-500/10 hover:border-orange-500/40 hover:shadow-lg hover:shadow-orange-500/5 transition-all duration-300 group/admin-action cursor-pointer"
+                className="flex items-center gap-3 p-3 rounded-2xl border border-border/40 bg-card hover:bg-muted/30 hover:border-orange-500/20 active:scale-[0.98] transition-all duration-150 group/admin-action cursor-pointer shadow-xs"
               >
-                <div className="p-1.5 rounded-lg bg-orange-500/10 text-orange-700 dark:text-orange-400 group-hover/admin-action:scale-115 group-hover/admin-action:-rotate-3 transition-all">
+                <div className="p-2 rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400 group-hover/admin-action:scale-105 transition-transform duration-200 flex-shrink-0">
                   <BarChart3 className="h-5 w-5" />
                 </div>
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Reports</p>
-                  <p className="text-sm font-semibold group-hover/admin-action:font-black group-hover/admin-action:text-primary transition-all duration-300">Analytics Panel</p>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5 select-none">Reports</p>
+                  <p className="text-sm font-semibold font-display text-foreground group-hover/admin-action:text-primary transition-colors truncate">Analytics Panel</p>
                 </div>
               </Link>
 
               {/* Analytics Item */}
               <Link
                 href="/admin/analytics"
-                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-purple-200/40 bg-purple-50/30 dark:bg-purple-500/5 hover:bg-purple-500/10 hover:border-purple-500/40 hover:shadow-lg hover:shadow-purple-500/5 transition-all duration-300 group/admin-action cursor-pointer"
+                className="flex items-center gap-3 p-3 rounded-2xl border border-border/40 bg-card hover:bg-muted/30 hover:border-purple-500/20 active:scale-[0.98] transition-all duration-150 group/admin-action cursor-pointer shadow-xs"
               >
-                <div className="p-1.5 rounded-lg bg-purple-500/10 text-purple-700 dark:text-purple-400 group-hover/admin-action:scale-115 group-hover/admin-action:rotate-3 transition-all">
+                <div className="p-2 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 group-hover/admin-action:scale-105 transition-transform duration-200 flex-shrink-0">
                   <TrendingUp className="h-5 w-5" />
                 </div>
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5">Statistics</p>
-                  <p className="text-sm font-semibold group-hover/admin-action:font-black group-hover/admin-action:text-primary transition-all duration-300">Insights & Trends</p>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 leading-none mb-1.5 select-none">Statistics</p>
+                  <p className="text-sm font-semibold font-display text-foreground group-hover/admin-action:text-primary transition-colors truncate">Insights & Trends</p>
                 </div>
               </Link>
             </div>
@@ -359,82 +358,7 @@ export function AdminOverview({
         </MetricCard>
       </div>
 
-      {/* Critical Metrics - Compact Grid */}
-      <div data-testid="critical-metrics" className="hidden">
-        <Link href="/admin/users" className="block h-full">
-          <MetricCard
-            title="Total Users"
-            value={magicCardsDataReady && !showSkeleton ? stats.totalUsers : 0}
-            description="Registered system users"
-            icon={<Users />}
-            loading={showSkeleton || !magicCardsDataReady}
-            iconBgColor="bg-blue-500/20"
-            iconColor="text-blue-700 dark:text-blue-400"
-            borderColor="border-blue-200/50 dark:border-blue-900/50"
-            gradientColor="from-blue-500/10 to-blue-500/5"
-            cardBgColor="bg-blue-50/50 dark:bg-blue-950/20"
-            delay={0.2}
-          />
-        </Link>
 
-        <MetricCard
-          title="Administrators"
-          value={magicCardsDataReady && !showSkeleton ? stats.adminCount : 0}
-          description="System superusers"
-          icon={<ShieldUser />}
-          loading={showSkeleton || !magicCardsDataReady}
-          iconBgColor="bg-amber-500/20"
-          iconColor="text-amber-700 dark:text-amber-400"
-          borderColor="border-amber-200/50 dark:border-amber-900/50"
-          gradientColor="from-amber-500/10 to-amber-500/5"
-          cardBgColor="bg-amber-50/50 dark:bg-amber-950/20"
-          delay={0.3}
-        />
-
-        <MetricCard
-          title="Moderators"
-          value={magicCardsDataReady && !showSkeleton ? stats.moderatorCount : 0}
-          description="Sub-administrators"
-          icon={<UserStar />}
-          loading={showSkeleton || !magicCardsDataReady}
-          iconBgColor="bg-purple-500/20"
-          iconColor="text-purple-700 dark:text-purple-400"
-          borderColor="border-purple-200/50 dark:border-purple-900/50"
-          gradientColor="from-purple-500/10 to-purple-500/5"
-          cardBgColor="bg-purple-50/50 dark:bg-purple-950/20"
-          delay={0.4}
-        />
-
-        {stats.employeeCount > 0 ? (
-          <MetricCard
-            title="Employees"
-            value={magicCardsDataReady && !showSkeleton ? stats.employeeCount : 0}
-            description="Staff members"
-            icon={<SquareUser />}
-            loading={showSkeleton || !magicCardsDataReady}
-            iconBgColor="bg-emerald-500/20"
-            iconColor="text-emerald-700 dark:text-emerald-400"
-            borderColor="border-emerald-200/50 dark:border-emerald-900/50"
-            gradientColor="from-emerald-500/10 to-emerald-500/5"
-            cardBgColor="bg-emerald-50/50 dark:bg-emerald-950/20"
-            delay={0.5}
-          />
-        ) : (
-          <MetricCard
-            title="Active Users"
-            value={magicCardsDataReady && !showSkeleton ? activeUsers : 0}
-            description="Active in last 7 days"
-            icon={<TrendingUp />}
-            loading={showSkeleton || !magicCardsDataReady}
-            iconBgColor="bg-green-500/20"
-            iconColor="text-green-700 dark:text-green-400"
-            borderColor="border-green-200/50 dark:border-green-900/50"
-            gradientColor="from-green-500/10 to-green-500/5"
-            cardBgColor="bg-green-50/50 dark:bg-green-950/20"
-            delay={0.5}
-          />
-        )}
-      </div>
 
       {/* Recent Activities - Compact */}
       <div data-testid="detailed-content">

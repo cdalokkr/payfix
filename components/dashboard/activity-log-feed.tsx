@@ -1,7 +1,6 @@
 "use client"
 
 import React from 'react'
-import { motion, AnimatePresence } from "framer-motion"
 import { format, isValid } from "date-fns"
 import { cn } from "@/lib/utils"
 import {
@@ -161,77 +160,66 @@ export function ActivityLogFeed({
 
     return (
         <div className={cn("space-y-0.5", className)}>
-            <AnimatePresence mode="sync">
-                {displayActivities.map((activity, index) => {
-                    const Icon = getActivityIcon(activity.activity_type)
-                    const colorClass = getActivityTypeColor(activity.activity_type)
+            {displayActivities.map((activity, index) => {
+                const Icon = getActivityIcon(activity.activity_type)
+                const colorClass = getActivityTypeColor(activity.activity_type)
 
-                    return (
-                        <motion.div
-                            key={activity.id}
-                            initial={{ opacity: 0, scale: 0.8 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.9 }}
-                            layout="position"
-                            transition={{
-                                layout: { type: "spring", stiffness: 300, damping: 30 },
-                                opacity: { duration: 0.25 },
-                                scale: { type: "spring", stiffness: 400, damping: 25 }
-                            }}
-                            className={cn(
-                                "flex items-start gap-3 py-1 border-b border-border/40 last:border-0 transition-all duration-300",
-                                "group",
-                                innerClassName
-                            )}
-                        >
-                            <div className={cn(
-                                "mt-0.5 p-1.5 rounded-lg shadow-sm transition-transform duration-300 group-hover:scale-110 flex-shrink-0",
-                                colorClass.split(' ').filter(c => c.startsWith('bg-') || c.startsWith('text-')).join(' ')
-                            )}>
-                                <Icon className="h-5 w-5" />
-                            </div>
+                return (
+                    <div
+                        key={activity.id}
+                        className={cn(
+                            "flex items-start gap-3 py-2 border-b border-border/20 last:border-0 transition-all duration-200 animate-fade-in",
+                            "group",
+                            innerClassName
+                        )}
+                    >
+                        <div className={cn(
+                            "mt-0.5 p-1.5 rounded-lg shadow-xs transition-transform duration-200 group-hover:scale-105 flex-shrink-0",
+                            colorClass.split(' ').filter(c => c.startsWith('bg-') || c.startsWith('text-')).join(' ')
+                        )}>
+                            <Icon className="h-4 w-4" />
+                        </div>
 
-                            <div className="flex-1 min-w-0">
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        {activity.profiles?.role && (
-                                            <span className={cn(
-                                                "text-[10px] font-normal uppercase tracking-wider px-2 py-0.5 rounded-full",
-                                                activity.profiles.role === 'admin' && "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400",
-                                                activity.profiles.role === 'moderator' && "bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400",
-                                                activity.profiles.role === 'employee' && "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400"
-                                            )}>
-                                                {activity.profiles.role}
-                                            </span>
-                                        )}
-                                        {activity.profiles?.designation?.name && (
-                                            <span className="text-[10px] font-normal text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 px-2 py-0.5 rounded-md">
-                                                {activity.profiles.designation.name}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="flex items-center text-[11px] text-muted-foreground font-normal bg-muted/50 px-2 py-0.5 rounded-full w-fit">
-                                        <Clock className="h-3 w-3 mr-1" />
-                                        {activity.created_at && isValid(new Date(activity.created_at)) ? format(new Date(activity.created_at), "MMM dd, yyyy HH:mm:ss") : "N/A"}
-                                    </div>
+                        <div className="flex-1 min-w-0">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-1">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                    {activity.profiles?.role && (
+                                        <span className={cn(
+                                            "text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full select-none",
+                                            activity.profiles.role === 'admin' && "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400",
+                                            activity.profiles.role === 'moderator' && "bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400",
+                                            activity.profiles.role === 'employee' && "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400"
+                                        )}>
+                                            {activity.profiles.role}
+                                        </span>
+                                    )}
+                                    {activity.profiles?.designation?.name && (
+                                        <span className="text-[9px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border border-blue-200/20 dark:border-blue-500/20 px-2 py-0.5 rounded-md select-none">
+                                            {activity.profiles.designation.name}
+                                        </span>
+                                    )}
                                 </div>
-                                <p className="text-sm leading-relaxed tracking-tight text-foreground/90 break-words">
-                                    {/* Dynamic format: name - email - activity */}
-                                    {activity.profiles?.full_name && (
-                                        <span className="font-normal text-foreground">{activity.profiles.full_name}</span>
-                                    )}
-                                    {activity.profiles?.full_name && activity.profiles?.email && ' - '}
-                                    {activity.profiles?.email && (
-                                        <span className="text-primary/70">[{activity.profiles.email}]</span>
-                                    )}
-                                    {(activity.profiles?.full_name || activity.profiles?.email) && ' - '}
-                                    <span className="text-foreground/80">{activity.description || "No description provided"}</span>
-                                </p>
+                                <div className="flex items-center text-[10px] text-muted-foreground/80 font-medium bg-muted/30 px-2 py-0.5 rounded-full w-fit select-none">
+                                    <Clock className="h-3 w-3 mr-1" />
+                                    {activity.created_at && isValid(new Date(activity.created_at)) ? format(new Date(activity.created_at), "MMM dd, yyyy HH:mm:ss") : "N/A"}
+                                </div>
                             </div>
-                        </motion.div>
-                    )
-                })}
-            </AnimatePresence>
+                            <p className="text-xs sm:text-[13px] leading-relaxed tracking-tight text-foreground/80 break-words font-medium">
+                                {/* Dynamic format: name - email - activity */}
+                                {activity.profiles?.full_name && (
+                                    <span className="font-semibold text-foreground">{activity.profiles.full_name}</span>
+                                )}
+                                {activity.profiles?.full_name && activity.profiles?.email && ' - '}
+                                {activity.profiles?.email && (
+                                    <span className="text-primary/80 font-semibold hover:underline cursor-pointer">[{activity.profiles.email}]</span>
+                                )}
+                                {(activity.profiles?.full_name || activity.profiles?.email) && ' - '}
+                                <span className="text-foreground/70 font-normal">{activity.description || "No description provided"}</span>
+                            </p>
+                        </div>
+                    </div>
+                )
+            })}
         </div>
     )
 }
