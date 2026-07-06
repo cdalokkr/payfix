@@ -152,7 +152,7 @@ const nextConfig: NextConfig = {
       },
     ],
     // Optimize image loading
-    minimumCacheTTL: 60,
+    minimumCacheTTL: 2592000,
   },
 
   // Server external packages - packages that should not be bundled

@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Building2, Globe, Mail, Lock, AlertCircle, ArrowLeft } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import Image from "next/image";
 import { toast } from "sonner";
 
 import { trpc } from "@/lib/trpc/client";
@@ -99,7 +100,7 @@ export default function SignupPage() {
         <div className="container mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 sm:gap-3 group">
             <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white dark:bg-zinc-900 rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform duration-300 overflow-hidden border border-gray-100 dark:border-zinc-800">
-              <img src="/icons/icon-192x192.png" alt="PayFix" className="w-full h-full object-cover" />
+              <Image src="/icons/icon-192x192.png" alt="PayFix" width={40} height={40} className="w-full h-full object-cover" />
             </div>
             <div className="flex flex-col">
               <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-zinc-100 tracking-tight leading-none">

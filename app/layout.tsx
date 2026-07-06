@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter } from 'next/font/google'
+import { Inter, Outfit } from 'next/font/google'
 import './globals.css'
 import { TRPCProvider } from '@/lib/trpc/provider'
 import { ThemeProvider } from '@/components/theme-provider'
@@ -20,6 +20,13 @@ const inter = Inter({
   display: 'swap', // Optimize font loading
   preload: true,
   variable: '--font-inter',
+})
+
+const outfit = Outfit({
+  subsets: ['latin'],
+  display: 'swap',
+  preload: true,
+  variable: '--font-outfit',
 })
 
 export const viewport: Viewport = {
@@ -114,7 +121,7 @@ export default async function RootLayout({
           }}
         />
       </head>
-      <body className={`${inter.variable} font-sans antialiased`} suppressHydrationWarning={true}>
+      <body className={`${inter.variable} ${outfit.variable} font-sans antialiased`} suppressHydrationWarning={true}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

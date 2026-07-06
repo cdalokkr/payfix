@@ -92,6 +92,9 @@
 }
 
 @theme inline {
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -141,7 +144,11 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display, var(--font-outfit)), sans-serif;
   }
 }
 
@@ -402,16 +409,16 @@
   /* Glassmorphism Preset */
   .premium-glass-card {
     background: rgba(255, 255, 255, 0.45);
-    backdrop-filter: blur(16px) saturate(120%);
-    -webkit-backdrop-filter: blur(16px) saturate(120%);
+    backdrop-filter: blur(8px) saturate(120%);
+    -webkit-backdrop-filter: blur(8px) saturate(120%);
     border: 1px solid rgba(255, 255, 255, 0.25);
     box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.04);
   }
 
   .dark .premium-glass-card {
     background: rgba(15, 12, 30, 0.45);
-    backdrop-filter: blur(16px) saturate(120%);
-    -webkit-backdrop-filter: blur(16px) saturate(120%);
+    backdrop-filter: blur(8px) saturate(120%);
+    -webkit-backdrop-filter: blur(8px) saturate(120%);
     border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
   }
@@ -431,13 +438,6 @@
   }
 }
 
-/* Base button active state */
-button:active:not([data-slot="accordion-trigger"]) {
-  transform: scale(0.96);
-  opacity: 0.9;
-  transition: transform 0.1s ease, opacity 0.1s ease;
-}
-
 /* Mobile-Specific Interactions */
 @layer components {
   .mobile-nav-item {
@@ -451,12 +451,6 @@ button:active:not([data-slot="accordion-trigger"]) {
 
 /* Mobile-specific media queries */
 @media (max-width: 640px) {
-
-  /* Improve scroll performance on mobile */
-  * {
-    -webkit-overflow-scrolling: touch;
-  }
-
   /* Better button spacing on mobile */
   .mobile-button-spacing {
     margin: 0.5rem;

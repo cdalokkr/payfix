@@ -4,6 +4,7 @@ body {
 
 :root {
   --font-sans: var(--font-inter);
+  --font-display: var(--font-outfit);
   --header-height: calc(var(--spacing) * 12 + 1px);
 }
 

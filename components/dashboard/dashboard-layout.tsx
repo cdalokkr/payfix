@@ -10,14 +10,12 @@ import { TopBar } from './top-bar'
 import { StatusBar } from './status-bar'
 import { BottomNav } from './bottom-nav'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { ProfileProvider } from '@/lib/context/profile-context'
 import { Profile } from '@/types'
 import { cn } from '@/lib/utils'
 import { useDashboardCacheInvalidation } from '@/hooks/use-dashboard-cache-invalidation'
 import { NotificationToastListener } from './notification-toast-listener'
-import { motion, AnimatePresence } from 'framer-motion'
 
 // Dynamic imports for heavy dashboard components to reduce initial bundle size
 const AdminOverview = dynamic(
@@ -113,69 +111,16 @@ function getInitialProfile(): Profile | null {
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname()
-  const [contentLoading, setContentLoading] = useState(true)
-  const [showDialog, setShowDialog] = useState(false)
   const [storedProfile, setStoredProfile] = useState<Profile | null>(null)
-  const [loadingTimeout, setLoadingTimeout] = useState(false)
-  const [isInitialLoad, setIsInitialLoad] = useState(true)
-  const [isLoginFlow, setIsLoginFlow] = useState(false)
-  const [dashboardDataLoaded, setDashboardDataLoaded] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
-  // Detect if this is a fresh login (no stored profile in this session)
+  // Detect and set stored profile
   useEffect(() => {
-    const sessionProfile = sessionStorage.getItem('sessionProfile');
     const initialProfile = getInitialProfile();
-
     if (initialProfile) {
       setStoredProfile(initialProfile);
-      // Check if this is a fresh login by checking session storage
-      if (!sessionProfile) {
-        setIsLoginFlow(true);
-        sessionStorage.setItem('sessionProfile', JSON.stringify(initialProfile));
-      }
     }
-
-    // Set a timeout to force close the splash screen after 10 seconds
-    const timeout = setTimeout(() => {
-      setLoadingTimeout(true);
-      setIsInitialLoad(false);
-    }, 10000); // 10 seconds max
-
-    return () => clearTimeout(timeout);
   }, [])
-
-  // Track when dashboard data starts loading
-  useEffect(() => {
-    if (storedProfile && isLoginFlow) {
-      // Start tracking dashboard data loading
-      setContentLoading(true);
-      setIsInitialLoad(true);
-
-      // Set up a listener for when dashboard data is loaded
-      const handleDashboardLoad = () => {
-        setDashboardDataLoaded(true);
-        setContentLoading(false);
-        setIsInitialLoad(false);
-        setIsLoginFlow(false);
-      };
-
-      // Listen for dashboard data loading events
-      window.addEventListener('dashboardDataLoaded', handleDashboardLoad);
-
-      // Auto-trigger after 3 seconds if no explicit load event
-      const autoTimeout = setTimeout(() => {
-        if (!dashboardDataLoaded) {
-          handleDashboardLoad();
-        }
-      }, 3000);
-
-      return () => {
-        window.removeEventListener('dashboardDataLoaded', handleDashboardLoad);
-        clearTimeout(autoTimeout);
-      };
-    }
-  }, [storedProfile, isLoginFlow, dashboardDataLoaded])
 
   // Listen for logout event to stop fetching data
   useEffect(() => {
@@ -203,11 +148,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   // Enable real-time cache invalidation for dashboard data (disabled for managers as their hook already handles it)
   useDashboardCacheInvalidation(profile?.role === 'admin' || profile?.role === 'moderator' || storedProfile?.role === 'admin' || storedProfile?.role === 'moderator')
 
-  // Memoize the setContentLoading callback to prevent unnecessary re-renders
-  const handleLoadingChange = useCallback((loading: boolean) => {
-    setContentLoading(loading)
-  }, [])
-
   useEffect(() => {
     if (profile) {
       const currentStored = getInitialProfile()
@@ -215,44 +155,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         setStoredProfile(profile)
         localStorage.setItem('userProfile', JSON.stringify(profile))
       }
-      // Close splash screen once we have profile data
-      setContentLoading(false)
-      setIsInitialLoad(false)
     }
-    // Close splash screen if profile query fails
-    if (profileError && !initialProfile) {
-      setContentLoading(false)
-      setIsInitialLoad(false)
-    }
-  }, [profile, profileError, initialProfile])
-
-  // Loading messages for the splash screen
-  const loadingMessages = [
-    "Loading profile data...",
-    "Fetching dashboard metrics...",
-    "Loading recent activities...",
-  ]
-
-  const [currentMessageIndex, setCurrentMessageIndex] = useState(0)
-
-  useEffect(() => {
-    if ((contentLoading && isInitialLoad && !loadingTimeout) || (isLoginFlow && !dashboardDataLoaded)) {
-      const timer = setTimeout(() => setShowDialog(true), 300)
-      return () => clearTimeout(timer)
-    } else if (!contentLoading || loadingTimeout || dashboardDataLoaded) {
-      setShowDialog(false)
-    }
-  }, [contentLoading, isInitialLoad, loadingTimeout, isLoginFlow, dashboardDataLoaded])
-
-  useEffect(() => {
-    if (!contentLoading || !isInitialLoad || loadingTimeout) return
-
-    const interval = setInterval(() => {
-      setCurrentMessageIndex((prev) => (prev + 1) % loadingMessages.length)
-    }, 1500)
-
-    return () => clearInterval(interval)
-  }, [contentLoading, isInitialLoad, loadingTimeout, loadingMessages.length])
+  }, [profile])
 
   // Mock tenant data - in a real app, this would come from an API
   const tenants = useMemo(() => [
@@ -278,116 +182,59 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   // Show loading dialog while role is being determined (but don't block the UI)
   if (!currentRole && (pathname === '/admin' || pathname === '/user')) {
     return (
-      <>
-        <Dialog
-          open={showDialog}
-        >
-          <DialogContent showCloseButton={false} className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Loading your profile...</DialogTitle>
-              <DialogDescription>
-                Please wait while we prepare your dashboard.
-              </DialogDescription>
-            </DialogHeader>
-          </DialogContent>
-        </Dialog>
-        <SidebarProvider>
-          <AppSidebar
-            role="employee"
-            tenants={tenants}
-            defaultTenant={defaultTenant}
-            onTenantSwitch={handleTenantSwitch}
-            user={null}
-          />
-          <SidebarInset className="flex flex-col min-h-screen">
-            <TopBar user={null} />
-            <div className="flex-1 w-full pt-6 pb-4 px-4">
-              <div className="min-h-full p-4 md:p-6 lg:p-8 space-y-6 scroll-smooth-touch mobile-optimized">
-                <div className="bg-background/50 backdrop-blur-sm rounded-lg border border-border/20 shadow-sm p-6 md:p-8">
-                  <div className="text-center">
-                    <h2 className="text-xl font-bold mb-4">Loading your dashboard...</h2>
-                    <p className="text-muted-foreground">Please wait while we prepare your content.</p>
-                  </div>
+      <SidebarProvider>
+        <AppSidebar
+          role="employee"
+          tenants={tenants}
+          defaultTenant={defaultTenant}
+          onTenantSwitch={handleTenantSwitch}
+          user={null}
+        />
+        <SidebarInset className="flex flex-col min-h-screen">
+          <TopBar user={null} />
+          <div className="flex-1 w-full pt-6 pb-4 px-4">
+            <div className="min-h-full p-4 md:p-6 lg:p-8 space-y-6 scroll-smooth-touch mobile-optimized">
+              <div className="bg-background/50 backdrop-blur-sm rounded-lg border border-border/20 shadow-sm p-6 md:p-8">
+                <div className="text-center">
+                  <h2 className="text-xl font-bold mb-4">Loading your dashboard...</h2>
+                  <p className="text-muted-foreground">Please wait while we prepare your content.</p>
                 </div>
               </div>
             </div>
-            <StatusBar />
-          </SidebarInset>
-        </SidebarProvider>
-      </>
+          </div>
+          <StatusBar />
+        </SidebarInset>
+      </SidebarProvider>
     )
   }
 
   return (
-    <>
-      <Dialog
-        open={showDialog && (contentLoading || (isLoginFlow && !dashboardDataLoaded)) && (pathname === '/admin' || pathname === '/user')}
-      >
-        <DialogContent showCloseButton={false} className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {loadingTimeout ? 'Dashboard Loading Issue' : 'Welcome to Your Dashboard'}
-            </DialogTitle>
-            <DialogDescription>
-              {loadingTimeout
-                ? 'We\'re having trouble loading your dashboard. You can still access the main features while we resolve this issue.'
-                : isLoginFlow
-                  ? 'Initializing your dashboard with all necessary data...'
-                  : loadingMessages[currentMessageIndex]
-              }
-            </DialogDescription>
-          </DialogHeader>
-          {(loadingTimeout || (isLoginFlow && !dashboardDataLoaded)) && (
-            <div className="mt-4">
-              <Button
-                onClick={() => {
-                  setLoadingTimeout(false)
-                  setContentLoading(false)
-                  setIsInitialLoad(false)
-                  setDashboardDataLoaded(true)
-                  setIsLoginFlow(false)
-                }}
-                className="w-full"
-              >
-                {loadingTimeout ? 'Continue to Dashboard' : 'Skip Loading & Continue'}
-              </Button>
+    <ProfileProvider value={profileContextValue}>
+      {/* Listen for real-time notification events and show toasts */}
+      <NotificationToastListener />
+      <SidebarProvider>
+        <AppSidebar
+          role={currentRole || 'employee'}
+          tenants={tenants}
+          defaultTenant={defaultTenant}
+          onTenantSwitch={handleTenantSwitch}
+          user={currentUser}
+          className={cn(currentRole === 'employee' && "hidden lg:flex")}
+        />
+        <SidebarInset className="flex flex-col h-screen overflow-hidden">
+          <TopBar user={currentUser} />
+          <div className="flex-1 overflow-y-auto pt-6 pb-20 lg:pb-4 scroll-smooth">
+            <div
+              key={pathname}
+              className="w-full animate-fade-in"
+            >
+              {children || <DashboardContent profile={profile} isLoading={profileLoading} onLoadingChange={handleLoadingChange} />}
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
-      <ProfileProvider value={profileContextValue}>
-        {/* Listen for real-time notification events and show toasts */}
-        <NotificationToastListener />
-        <SidebarProvider>
-          <AppSidebar
-            role={currentRole || 'employee'}
-            tenants={tenants}
-            defaultTenant={defaultTenant}
-            onTenantSwitch={handleTenantSwitch}
-            user={currentUser}
-            className={cn(currentRole === 'employee' && "hidden lg:flex")}
-          />
-          <SidebarInset className="flex flex-col h-screen overflow-hidden">
-            <TopBar user={currentUser} />
-            <div className="flex-1 overflow-y-auto pt-6 pb-20 lg:pb-4 scroll-smooth">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={pathname}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
-                  className="w-full"
-                >
-                  {children || <DashboardContent profile={profile} isLoading={profileLoading} onLoadingChange={handleLoadingChange} />}
-                </motion.div>
-              </AnimatePresence>
-            </div>
-            <BottomNav />
-            <StatusBar className="hidden lg:flex" />
-          </SidebarInset>
-        </SidebarProvider>
-      </ProfileProvider>
-    </>
+          </div>
+          <BottomNav />
+          <StatusBar className="hidden lg:flex" />
+        </SidebarInset>
+      </SidebarProvider>
+    </ProfileProvider>
   )
 }
