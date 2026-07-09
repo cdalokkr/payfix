@@ -112,7 +112,7 @@ export function UserOverview({
               {/* Attendance Logs */}
               <Link
                 href="/moderator/payroll/attendance"
-                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-blue-200/40 bg-blue-50/30 dark:bg-blue-500/5 hover:bg-blue-500/10 hover:border-blue-600 dark:hover:border-blue-500 hover:shadow-lg hover:shadow-blue-500/5 transition-all duration-300 group/mod-action cursor-pointer"
+                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-blue-200/40 bg-[#FFFFFF] dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:border-blue-600 dark:hover:border-blue-500 hover:shadow-lg hover:shadow-blue-500/5 transition-all duration-300 group/mod-action cursor-pointer"
               >
                 <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-700 dark:text-blue-400 group-hover/mod-action:scale-115 group-hover/mod-action:rotate-3 transition-all">
                   <Clock className="h-5 w-5" />
@@ -126,7 +126,7 @@ export function UserOverview({
               {/* Leave Requests */}
               <Link
                 href="/moderator/payroll/leaves"
-                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-purple-200/40 bg-purple-50/30 dark:bg-purple-500/5 hover:bg-purple-500/10 hover:border-purple-600 dark:hover:border-purple-500 hover:shadow-lg hover:shadow-purple-500/5 transition-all duration-300 group/mod-action cursor-pointer"
+                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-purple-200/40 bg-[#FFFFFF] dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:border-purple-600 dark:hover:border-purple-500 hover:shadow-lg hover:shadow-purple-500/5 transition-all duration-300 group/mod-action cursor-pointer"
               >
                 <div className="p-1.5 rounded-lg bg-purple-500/10 text-purple-700 dark:text-purple-400 group-hover/mod-action:scale-115 group-hover/mod-action:-rotate-3 transition-all">
                   <Calendar className="h-5 w-5" />
@@ -140,7 +140,7 @@ export function UserOverview({
               {/* Photo Approvals */}
               <Link
                 href="/moderator/photo-approvals"
-                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-emerald-200/40 bg-emerald-50/30 dark:bg-emerald-500/5 hover:bg-emerald-500/10 hover:border-emerald-600 dark:hover:border-emerald-500 hover:shadow-lg hover:shadow-emerald-500/5 transition-all duration-300 group/mod-action cursor-pointer"
+                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-emerald-200/40 bg-[#FFFFFF] dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:border-emerald-600 dark:hover:border-emerald-500 hover:shadow-lg hover:shadow-emerald-500/5 transition-all duration-300 group/mod-action cursor-pointer"
               >
                 <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 group-hover/mod-action:scale-115 group-hover/mod-action:rotate-3 transition-all">
                   <Camera className="h-5 w-5" />
@@ -154,7 +154,7 @@ export function UserOverview({
               {/* Support Helpdesk */}
               <Link
                 href="/moderator/tickets"
-                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-amber-200/40 bg-amber-50/30 dark:bg-amber-500/5 hover:bg-amber-500/10 hover:border-amber-600 dark:hover:border-amber-500 hover:shadow-lg hover:shadow-amber-500/5 transition-all duration-300 group/mod-action cursor-pointer"
+                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-amber-200/40 bg-[#FFFFFF] dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:border-amber-600 dark:hover:border-amber-500 hover:shadow-lg hover:shadow-amber-500/5 transition-all duration-300 group/mod-action cursor-pointer"
               >
                 <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 group-hover/mod-action:scale-115 group-hover/mod-action:-rotate-3 transition-all">
                   <Ticket className="h-5 w-5" />
@@ -168,7 +168,7 @@ export function UserOverview({
               {/* Client Manager */}
               <Link
                 href="/moderator/clients"
-                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-pink-200/40 bg-pink-50/30 dark:bg-pink-500/5 hover:bg-pink-500/10 hover:border-pink-600 dark:hover:border-pink-500 hover:shadow-lg hover:shadow-pink-500/5 transition-all duration-300 group/mod-action cursor-pointer"
+                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-pink-200/40 bg-[#FFFFFF] dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:border-pink-600 dark:hover:border-pink-500 hover:shadow-lg hover:shadow-pink-500/5 transition-all duration-300 group/mod-action cursor-pointer"
               >
                 <div className="p-1.5 rounded-lg bg-pink-500/10 text-pink-700 dark:text-pink-400 group-hover/mod-action:scale-115 group-hover/mod-action:rotate-3 transition-all">
                   <Briefcase className="h-5 w-5" />
@@ -182,7 +182,7 @@ export function UserOverview({
               {/* Settings Profile */}
               <Link
                 href="/moderator/profile"
-                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-indigo-200/40 bg-indigo-50/30 dark:bg-indigo-500/5 hover:bg-indigo-500/10 hover:border-indigo-600 dark:hover:border-indigo-500 hover:shadow-lg hover:shadow-indigo-500/5 transition-all duration-300 group/mod-action cursor-pointer"
+                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-indigo-200/40 bg-[#FFFFFF] dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:border-indigo-600 dark:hover:border-indigo-500 hover:shadow-lg hover:shadow-indigo-500/5 transition-all duration-300 group/mod-action cursor-pointer"
               >
                 <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 group-hover/mod-action:scale-115 group-hover/mod-action:-rotate-3 transition-all">
                   <User className="h-5 w-5" />
@@ -196,7 +196,7 @@ export function UserOverview({
               {/* Analytics Insights */}
               <Link
                 href="/moderator/reports"
-                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-orange-200/40 bg-orange-50/30 dark:bg-orange-500/5 hover:bg-orange-500/10 hover:border-orange-600 dark:hover:border-orange-500 hover:shadow-lg hover:shadow-orange-500/5 transition-all duration-300 group/mod-action cursor-pointer"
+                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-orange-200/40 bg-[#FFFFFF] dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:border-orange-600 dark:hover:border-orange-500 hover:shadow-lg hover:shadow-orange-500/5 transition-all duration-300 group/mod-action cursor-pointer"
               >
                 <div className="p-1.5 rounded-lg bg-orange-500/10 text-orange-700 dark:text-orange-400 group-hover/mod-action:scale-115 group-hover/mod-action:rotate-3 transition-all">
                   <BarChart3 className="h-5 w-5" />
@@ -210,7 +210,7 @@ export function UserOverview({
               {/* Statistics Panel */}
               <Link
                 href="/moderator/analytics"
-                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-teal-200/40 bg-teal-50/30 dark:bg-teal-500/5 hover:bg-teal-500/10 hover:border-teal-600 dark:hover:border-teal-500 hover:shadow-lg hover:shadow-teal-500/5 transition-all duration-300 group/mod-action cursor-pointer"
+                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-teal-200/40 bg-[#FFFFFF] dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:border-teal-600 dark:hover:border-teal-500 hover:shadow-lg hover:shadow-teal-500/5 transition-all duration-300 group/mod-action cursor-pointer"
               >
                 <div className="p-1.5 rounded-lg bg-teal-500/10 text-teal-700 dark:text-teal-400 group-hover/mod-action:scale-115 group-hover/mod-action:-rotate-3 transition-all">
                   <TrendingUp className="h-5 w-5" />

@@ -6,7 +6,7 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { ShieldUser } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+
 
 export const metadata = {
   title: 'Login - Full-Stack App',
@@ -49,36 +49,29 @@ export default async function LoginPage() {
       <main className="relative z-10 flex-1 flex items-center justify-center p-4 sm:p-6">
         <div className="w-full max-w-[440px] animate-in fade-in zoom-in duration-700">
           <div className="relative group">
-            {/* Glow Effect */}
-            <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-[1.5rem] sm:rounded-[2rem] border-2 border-blue-100 dark:border-blue-900/50 shadow-lg hover:shadow-xl transform-gpu group-hover:scale-[1.02]  blur opacity-20 group-hover:opacity-30 transition duration-1000 group-hover:duration-200"></div>
-
-            <Card className="relative bg-white/80 dark:bg-zinc-900/80 border-primary/20 dark:border-zinc-800 backdrop-blur-2xl rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.05)] border">
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-30" />
-
-              <CardHeader className="pt-4 pb-2 justify-center border-b border-gray-200 dark:border-zinc-800 px-4 sm:px-6">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="flex-shrink-0 p-2 rounded-xl sm:rounded-2xl bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30 shadow-sm">
-                    <ShieldUser className="h-6 w-6 sm:h-8 sm:h-8 text-blue-600" />
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                    <CardTitle className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900 dark:text-zinc-100 truncate">
-                      Welcome Back
-                    </CardTitle>
-                    <CardDescription className="text-gray-500 dark:text-zinc-400 text-xs sm:text-sm leading-relaxed truncate">
-                      Enter credentials to access
-                    </CardDescription>
-                  </div>
+            <div className="relative bg-[#FFFFFF] dark:bg-zinc-900 border-x border-b border-t-[5px] border-primary dark:border-primary backdrop-blur-2xl rounded-xl sm:rounded-2xl overflow-hidden shadow-none hover:shadow-[0_40px_80px_-15px_rgba(37,99,235,0.2)] dark:hover:shadow-[0_40px_80px_-15px_rgba(0,0,0,0.55)] transition-all duration-300 flex flex-col">
+              <div className="pt-4 pb-3 justify-center border-b border-primary/10 dark:border-primary/20 px-4 sm:px-5 flex flex-col items-center text-center gap-2.5 bg-primary/[0.04] dark:bg-primary/[0.08]">
+                <div className="flex-shrink-0 p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30 shadow-sm">
+                  <ShieldUser className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600" />
                 </div>
-              </CardHeader>
+                <div className="flex flex-col items-center">
+                  <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900 dark:text-zinc-100">
+                    Welcome Back
+                  </h2>
+                  <p className="text-xs sm:text-sm text-gray-500 dark:text-zinc-400 mt-1">
+                    Enter credentials to access
+                  </p>
+                </div>
+              </div>
 
-              <CardContent className="px-5 sm:px-8 pb-6">
+              <div className="px-5 sm:px-8 pb-4 pt-4">
                 <LoginForm />
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
 
           {/* Footer Info */}
-          <p className="mt-6 sm:mt-8 text-center text-gray-500 dark:text-zinc-400 text-xs sm:text-sm px-4">
+          <p className="mt-4 sm:mt-5 text-center text-gray-500 dark:text-zinc-400 text-xs sm:text-sm px-4">
             &copy; {new Date().getFullYear()} PayFix Mobile. All rights reserved.
           </p>
         </div>

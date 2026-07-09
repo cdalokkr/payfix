@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Building2, Globe, Mail, Lock, AlertCircle, ArrowLeft } from "lucide-react";
+import { Building2, Globe, Mail, Lock, AlertCircle, ArrowLeft, Phone } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import Image from "next/image";
@@ -15,7 +15,6 @@ import { trpc } from "@/lib/trpc/client";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel, FieldError, FieldGroup, FieldSet } from "@/components/ui/field";
 import { LoginButton } from "@/components/ui/async-button";
 
@@ -26,7 +25,12 @@ const signupSchema = z.object({
     .max(30, "Subdomain must be under 30 characters")
     .regex(/^[a-z0-9-]+$/, "Only lowercase letters, numbers, and hyphens allowed"),
   adminEmail: z.string().email("Invalid email address"),
+  contactNo: z.string().min(10, "Contact number must be at least 10 digits").max(15, "Contact number is too long"),
   adminPassword: z.string().min(8, "Password must be at least 8 characters"),
+  confirmPassword: z.string().min(8, "Confirm password must be at least 8 characters"),
+}).refine((data) => data.adminPassword === data.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"],
 });
 
 type SignupInput = z.infer<typeof signupSchema>;
@@ -42,7 +46,9 @@ export default function SignupPage() {
       companyName: '',
       slug: '',
       adminEmail: '',
+      contactNo: '',
       adminPassword: '',
+      confirmPassword: '',
     },
     mode: "onChange"
   });
@@ -78,7 +84,8 @@ export default function SignupPage() {
     }
 
     try {
-      await registerMutation.mutateAsync(data);
+      const { companyName, slug, adminEmail, adminPassword } = data;
+      await registerMutation.mutateAsync({ companyName, slug, adminEmail, adminPassword });
     } catch (err) {
       // Handled by onError
     }
@@ -117,24 +124,24 @@ export default function SignupPage() {
 
       {/* Signup Form Container */}
       <main className="relative z-10 flex-1 flex items-center justify-center p-4 sm:p-6 my-4">
-        <div className="w-full max-w-[480px] animate-in fade-in zoom-in duration-700">
+        <div className="w-full max-w-[640px] animate-in fade-in zoom-in duration-700">
           <div className="relative group">
-            {/* Glow Border */}
-            <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-[1.5rem] sm:rounded-[2rem] border-2 border-blue-100 dark:border-blue-900/50 shadow-lg hover:shadow-xl transform-gpu group-hover:scale-[1.01] blur opacity-20 group-hover:opacity-30 transition duration-1000 group-hover:duration-200"></div>
+            <div className="relative bg-[#FFFFFF] dark:bg-zinc-900 border-x border-b border-t-[5px] border-primary dark:border-primary backdrop-blur-2xl rounded-xl sm:rounded-2xl overflow-hidden shadow-none hover:shadow-[0_40px_80px_-15px_rgba(37,99,235,0.2)] dark:hover:shadow-[0_40px_80px_-15px_rgba(0,0,0,0.55)] transition-all duration-300 flex flex-col">
+              <div className="pt-4 pb-3 justify-center border-b border-primary/10 dark:border-primary/20 px-4 sm:px-5 flex flex-col items-center text-center gap-2.5 bg-primary/[0.04] dark:bg-primary/[0.08]">
+                <div className="flex-shrink-0 p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30 shadow-sm">
+                  <Building2 className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600" />
+                </div>
+                <div className="flex flex-col items-center">
+                  <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900 dark:text-zinc-100">
+                    Register Your Workspace
+                  </h2>
+                  <p className="text-xs sm:text-sm text-gray-500 dark:text-zinc-400 mt-1">
+                    Start your 14-day free trial. Setup requires no credit card.
+                  </p>
+                </div>
+              </div>
 
-            <Card className="relative bg-white/80 dark:bg-zinc-900/80 border-primary/20 dark:border-zinc-800 backdrop-blur-2xl rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.05)] border">
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-30" />
-
-              <CardHeader className="pt-5 pb-3 border-b border-gray-100 dark:border-zinc-800 px-5 sm:px-8">
-                <CardTitle className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900 dark:text-zinc-100">
-                  Register Your Workspace
-                </CardTitle>
-                <CardDescription className="text-gray-500 dark:text-zinc-400 text-xs sm:text-sm">
-                  Start your 14-day free trial. Setup requires no credit card.
-                </CardDescription>
-              </CardHeader>
-
-              <CardContent className="px-5 sm:px-8 py-6">
+              <div className="px-5 sm:px-8 pb-4 pt-4">
                 <AnimatePresence>
                   {signupError && (
                     <motion.div
@@ -155,100 +162,154 @@ export default function SignupPage() {
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4" noValidate>
                   <FieldSet className="border-none p-0 m-0">
                     <FieldGroup className="space-y-4">
-                      {/* Company Name */}
-                      <Field data-invalid={!!form.formState.errors.companyName}>
-                        <FieldLabel htmlFor="companyName" className="text-gray-700 dark:text-zinc-300 font-medium ml-1">Company Name</FieldLabel>
-                        <div className="relative group/input">
-                          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within/input:text-primary text-gray-400">
-                            <Building2 className="h-5 w-5" />
+                      {/* Row 1: Company Name & Subdomain Slug */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Company Name */}
+                        <Field data-invalid={!!form.formState.errors.companyName}>
+                          <FieldLabel htmlFor="companyName" className="text-gray-700 dark:text-zinc-300 font-medium ml-1">Company Name</FieldLabel>
+                          <div className="relative group/input">
+                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-primary">
+                              <Building2 className="h-5 w-5" />
+                            </div>
+                            <Input
+                              id="companyName"
+                              placeholder="e.g. Acme Corp"
+                              className="pl-12 h-12 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100 focus-visible:border-primary focus-visible:ring-primary/20 focus-visible:ring-[3px] transition-all rounded-xl shadow-sm"
+                              disabled={asyncState === 'loading' || form.formState.isSubmitting}
+                              {...form.register('companyName')}
+                            />
                           </div>
-                          <Input
-                            id="companyName"
-                            placeholder="e.g. Acme Corp"
-                            className="pl-12 h-12 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all rounded-xl shadow-sm"
-                            disabled={asyncState === 'loading' || form.formState.isSubmitting}
-                            {...form.register('companyName')}
-                          />
-                        </div>
-                        {form.formState.errors.companyName && (
-                          <FieldError className="text-red-600 mt-1 ml-1" errors={[{
-                            message: form.formState.errors.companyName.message
-                          }]} />
-                        )}
-                      </Field>
+                          {form.formState.errors.companyName && (
+                            <FieldError className="text-red-600 mt-1 ml-1" errors={[{
+                              message: form.formState.errors.companyName.message
+                            }]} />
+                          )}
+                        </Field>
 
-                      {/* Subdomain / Slug */}
-                      <Field data-invalid={!!form.formState.errors.slug}>
-                        <FieldLabel htmlFor="slug" className="text-gray-700 dark:text-zinc-300 font-medium ml-1">Subdomain Slug</FieldLabel>
-                        <div className="relative group/input flex items-center">
-                          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400">
-                            <Globe className="h-5 w-5" />
+                        {/* Subdomain / Slug */}
+                        <Field data-invalid={!!form.formState.errors.slug}>
+                          <FieldLabel htmlFor="slug" className="text-gray-700 dark:text-zinc-300 font-medium ml-1">Subdomain Slug</FieldLabel>
+                          <div className="relative group/input flex items-center">
+                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-primary">
+                              <Globe className="h-5 w-5" />
+                            </div>
+                            <Input
+                              id="slug"
+                              placeholder="acme"
+                              className="pl-12 h-12 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100 focus-visible:border-primary focus-visible:ring-primary/20 focus-visible:ring-[3px] transition-all rounded-xl shadow-sm w-full pr-28"
+                              disabled={asyncState === 'loading' || form.formState.isSubmitting}
+                              {...form.register('slug')}
+                              onChange={(e) => {
+                                form.setValue('slug', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''));
+                              }}
+                            />
+                            <span className="absolute right-4 text-xs font-bold text-gray-400 bg-gray-100 dark:bg-zinc-800 py-1 px-2 rounded-lg pointer-events-none">
+                              .payfix.com
+                            </span>
                           </div>
-                          <Input
-                            id="slug"
-                            placeholder="acme"
-                            className="pl-12 h-12 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all rounded-xl shadow-sm w-full pr-28"
-                            disabled={asyncState === 'loading' || form.formState.isSubmitting}
-                            {...form.register('slug')}
-                            onChange={(e) => {
-                              form.setValue('slug', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''));
-                            }}
-                          />
-                          <span className="absolute right-4 text-xs font-bold text-gray-400 bg-gray-100 dark:bg-zinc-800 py-1 px-2 rounded-lg pointer-events-none">
-                            .payfix.com
-                          </span>
-                        </div>
-                        {form.formState.errors.slug && (
-                          <FieldError className="text-red-600 mt-1 ml-1" errors={[{
-                            message: form.formState.errors.slug.message
-                          }]} />
-                        )}
-                      </Field>
+                          {form.formState.errors.slug && (
+                            <FieldError className="text-red-600 mt-1 ml-1" errors={[{
+                              message: form.formState.errors.slug.message
+                            }]} />
+                          )}
+                        </Field>
+                      </div>
 
-                      {/* Admin Email */}
-                      <Field data-invalid={!!form.formState.errors.adminEmail}>
-                        <FieldLabel htmlFor="adminEmail" className="text-gray-700 dark:text-zinc-300 font-medium ml-1">Admin Email Address</FieldLabel>
-                        <div className="relative group/input">
-                          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400">
-                            <Mail className="h-5 w-5" />
+                      {/* Row 2: Admin Email & Contact Number */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Admin Email */}
+                        <Field data-invalid={!!form.formState.errors.adminEmail}>
+                          <FieldLabel htmlFor="adminEmail" className="text-gray-700 dark:text-zinc-300 font-medium ml-1">Admin Email Address</FieldLabel>
+                          <div className="relative group/input">
+                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-primary">
+                              <Mail className="h-5 w-5" />
+                            </div>
+                            <Input
+                              id="adminEmail"
+                              type="email"
+                              placeholder="admin@company.com"
+                              className="pl-12 h-12 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100 focus-visible:border-primary focus-visible:ring-primary/20 focus-visible:ring-[3px] transition-all rounded-xl shadow-sm"
+                              disabled={asyncState === 'loading' || form.formState.isSubmitting}
+                              {...form.register('adminEmail')}
+                            />
                           </div>
-                          <Input
-                            id="adminEmail"
-                            type="email"
-                            placeholder="admin@company.com"
-                            className="pl-12 h-12 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all rounded-xl shadow-sm"
-                            disabled={asyncState === 'loading' || form.formState.isSubmitting}
-                            {...form.register('adminEmail')}
-                          />
-                        </div>
-                        {form.formState.errors.adminEmail && (
-                          <FieldError className="text-red-600 mt-1 ml-1" errors={[{
-                            message: form.formState.errors.adminEmail.message
-                          }]} />
-                        )}
-                      </Field>
+                          {form.formState.errors.adminEmail && (
+                            <FieldError className="text-red-600 mt-1 ml-1" errors={[{
+                              message: form.formState.errors.adminEmail.message
+                            }]} />
+                          )}
+                        </Field>
 
-                      {/* Admin Password */}
-                      <Field data-invalid={!!form.formState.errors.adminPassword}>
-                        <FieldLabel htmlFor="adminPassword" className="text-gray-700 dark:text-zinc-300 font-medium ml-1">Admin Password</FieldLabel>
-                        <div className="relative group/input">
-                          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400 z-10">
-                            <Lock className="h-5 w-5" />
+                        {/* Contact Number */}
+                        <Field data-invalid={!!form.formState.errors.contactNo}>
+                          <FieldLabel htmlFor="contactNo" className="text-gray-700 dark:text-zinc-300 font-medium ml-1">Contact Number</FieldLabel>
+                          <div className="relative group/input">
+                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-primary">
+                              <Phone className="h-5 w-5" />
+                            </div>
+                            <Input
+                              id="contactNo"
+                              type="text"
+                              placeholder="e.g. +91 99999 99999"
+                              className="pl-12 h-12 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100 focus-visible:border-primary focus-visible:ring-primary/20 focus-visible:ring-[3px] transition-all rounded-xl shadow-sm"
+                              disabled={asyncState === 'loading' || form.formState.isSubmitting}
+                              {...form.register('contactNo')}
+                            />
                           </div>
-                          <PasswordInput
-                            id="adminPassword"
-                            placeholder="••••••••"
-                            className="pl-12 h-12 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all rounded-xl shadow-sm"
-                            disabled={asyncState === 'loading' || form.formState.isSubmitting}
-                            {...form.register('adminPassword')}
-                          />
-                        </div>
-                        {form.formState.errors.adminPassword && (
-                          <FieldError className="text-red-600 mt-1 ml-1" errors={[{
-                            message: form.formState.errors.adminPassword.message
-                          }]} />
-                        )}
-                      </Field>
+                          {form.formState.errors.contactNo && (
+                            <FieldError className="text-red-600 mt-1 ml-1" errors={[{
+                              message: form.formState.errors.contactNo.message
+                            }]} />
+                          )}
+                        </Field>
+                      </div>
+
+                      {/* Row 3: Admin Password & Confirm Password */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Admin Password */}
+                        <Field data-invalid={!!form.formState.errors.adminPassword}>
+                          <FieldLabel htmlFor="adminPassword" className="text-gray-700 dark:text-zinc-300 font-medium ml-1">Admin Password</FieldLabel>
+                          <div className="relative group/input">
+                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-primary z-10">
+                              <Lock className="h-5 w-5" />
+                            </div>
+                            <PasswordInput
+                              id="adminPassword"
+                              placeholder="••••••••"
+                              className="pl-12 h-12 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100 focus-visible:border-primary focus-visible:ring-primary/20 focus-visible:ring-[3px] transition-all rounded-xl shadow-sm"
+                              disabled={asyncState === 'loading' || form.formState.isSubmitting}
+                              {...form.register('adminPassword')}
+                            />
+                          </div>
+                          {form.formState.errors.adminPassword && (
+                            <FieldError className="text-red-600 mt-1 ml-1" errors={[{
+                              message: form.formState.errors.adminPassword.message
+                            }]} />
+                          )}
+                        </Field>
+
+                        {/* Confirm Password */}
+                        <Field data-invalid={!!form.formState.errors.confirmPassword}>
+                          <FieldLabel htmlFor="confirmPassword" className="text-gray-700 dark:text-zinc-300 font-medium ml-1">Confirm Password</FieldLabel>
+                          <div className="relative group/input">
+                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-primary z-10">
+                              <Lock className="h-5 w-5" />
+                            </div>
+                            <PasswordInput
+                              id="confirmPassword"
+                              placeholder="••••••••"
+                              className="pl-12 h-12 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100 focus-visible:border-primary focus-visible:ring-primary/20 focus-visible:ring-[3px] transition-all rounded-xl shadow-sm"
+                              disabled={asyncState === 'loading' || form.formState.isSubmitting}
+                              {...form.register('confirmPassword')}
+                            />
+                          </div>
+                          {form.formState.errors.confirmPassword && (
+                            <FieldError className="text-red-600 mt-1 ml-1" errors={[{
+                              message: form.formState.errors.confirmPassword.message
+                            }]} />
+                          )}
+                        </Field>
+                      </div>
                     </FieldGroup>
                   </FieldSet>
 
@@ -270,15 +331,15 @@ export default function SignupPage() {
                   </LoginButton>
                 </form>
 
-                <div className="text-center pt-4 border-t border-gray-100 dark:border-zinc-850 mt-6 flex justify-between items-center text-xs text-gray-500">
+                <div className="text-center pt-3 border-t border-primary/10 dark:border-primary/20 mt-5 flex justify-between items-center text-xs text-gray-500">
                   <Link href="/login" className="flex items-center gap-1.5 hover:text-blue-600 dark:hover:text-blue-400 font-semibold transition-colors">
                     <ArrowLeft className="h-3.5 w-3.5" />
                     Back to Login
                   </Link>
                   <span>Trial includes 5 employees, 2 mods</span>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
         </div>
       </main>

@@ -276,7 +276,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                             {/* Attendance Clock In */}
                             <Link
                                 href="/employee/attendance-history"
-                                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-blue-200/40 bg-blue-50/30 dark:bg-blue-500/5 hover:bg-blue-500/10 hover:border-blue-600 dark:hover:border-blue-500 hover:shadow-lg hover:shadow-blue-500/5 transition-all duration-300 group/action cursor-pointer"
+                                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-blue-200/40 bg-[#FFFFFF] dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:border-blue-600 dark:hover:border-blue-500 hover:shadow-lg hover:shadow-blue-500/5 transition-all duration-300 group/action cursor-pointer"
                             >
                                 <div className="p-1.5 rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 group-hover/action:scale-115 group-hover/action:rotate-3 transition-all">
                                     <Clock className="h-5 w-5" />
@@ -290,7 +290,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                             {/* Leaves Application */}
                             <Link
                                 href="/employee/payroll/leaves"
-                                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-purple-200/40 bg-purple-50/30 dark:bg-purple-500/5 hover:bg-purple-500/10 hover:border-purple-600 dark:hover:border-purple-500 hover:shadow-lg hover:shadow-purple-500/5 transition-all duration-300 group/action cursor-pointer"
+                                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-purple-200/40 bg-[#FFFFFF] dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:border-purple-600 dark:hover:border-purple-500 hover:shadow-lg hover:shadow-purple-500/5 transition-all duration-300 group/action cursor-pointer"
                             >
                                 <div className="p-1.5 rounded-lg bg-purple-100 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400 group-hover/action:scale-115 group-hover/action:-rotate-3 transition-all">
                                     <Calendar className="h-5 w-5" />
@@ -304,7 +304,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                             {/* Support Tickets */}
                             <Link
                                 href="/employee/tickets"
-                                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-amber-200/40 bg-amber-50/30 dark:bg-amber-500/5 hover:bg-amber-500/10 hover:border-amber-600 dark:hover:border-amber-500 hover:shadow-lg hover:shadow-amber-500/5 transition-all duration-300 group/action cursor-pointer"
+                                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-amber-200/40 bg-[#FFFFFF] dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:border-amber-600 dark:hover:border-amber-500 hover:shadow-lg hover:shadow-amber-500/5 transition-all duration-300 group/action cursor-pointer"
                             >
                                 <div className="p-1.5 rounded-lg bg-amber-100 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400 group-hover/action:scale-115 group-hover/action:-rotate-3 transition-all">
                                     <Ticket className="h-5 w-5" />
@@ -318,7 +318,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                             {/* Profile Settings */}
                             <Link
                                 href="/employee/profile"
-                                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-indigo-200/40 bg-indigo-50/30 dark:bg-indigo-500/5 hover:bg-indigo-500/10 hover:border-indigo-600 dark:hover:border-indigo-500 hover:shadow-lg hover:shadow-indigo-500/5 transition-all duration-300 group/action cursor-pointer"
+                                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-indigo-200/40 bg-[#FFFFFF] dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:border-indigo-600 dark:hover:border-indigo-500 hover:shadow-lg hover:shadow-indigo-500/5 transition-all duration-300 group/action cursor-pointer"
                             >
                                 <div className="p-1.5 rounded-lg bg-indigo-100 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400 group-hover/action:scale-115 group-hover/action:rotate-3 transition-all">
                                     <User className="h-5 w-5" />
@@ -332,7 +332,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                             {/* Reports & Insights */}
                             <Link
                                 href="/employee/reports"
-                                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-rose-200/40 bg-rose-50/30 dark:bg-rose-500/5 hover:bg-rose-500/10 hover:border-rose-600 dark:hover:border-rose-500 hover:shadow-lg hover:shadow-rose-500/5 transition-all duration-300 group/action cursor-pointer"
+                                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-rose-200/40 bg-[#FFFFFF] dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:border-rose-600 dark:hover:border-rose-500 hover:shadow-lg hover:shadow-rose-500/5 transition-all duration-300 group/action cursor-pointer"
                             >
                                 <div className="p-1.5 rounded-lg bg-rose-100 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400 group-hover/action:scale-115 group-hover/action:-rotate-3 transition-all">
                                     <BarChart3 className="h-5 w-5" />
