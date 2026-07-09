@@ -37,8 +37,9 @@ function ActivitiesCard({ activities, loading }: ActivitiesCardProps) {
             description="Your latest actions and updates"
             icon={Activity}
             contentClassName="p-2.5 pt-1"
+            className="bg-[#FFFFFF] dark:bg-zinc-900"
         >
-            <div className="bg-background/30 rounded-2xl border border-primary/5 p-2.5">
+            <div className="bg-[#FFFFFF] dark:bg-zinc-950/40 rounded-2xl border border-primary/5 p-2.5">
                 <ActivityLogFeed activities={activities} isLoading={loading} />
             </div>
         </CardShell>
@@ -178,9 +179,12 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                         loading={todayLoading}
                         iconBgColor="bg-blue-500/15"
                         iconColor="text-blue-600 dark:text-blue-400"
-                        borderColor="border-blue-500/10"
+                        borderColor="border-x-gray-200/80 border-b-gray-200/80 dark:border-x-zinc-800 dark:border-b-zinc-800"
                         gradientColor="from-blue-500/10 to-cyan-500/5"
-                        cardBgColor="bg-blue-50/20 dark:bg-blue-950/10"
+                        cardBgColor="bg-[#FFFFFF] dark:bg-zinc-900"
+                        topBorderColor="border-t-blue-600 dark:border-t-blue-400"
+                        hoverBorderColor="hover:border-t-blue-600 hover:border-x-blue-500/30 hover:border-b-blue-500/30 dark:hover:border-t-blue-400 dark:hover:border-x-blue-500/40 dark:hover:border-b-blue-500/40"
+                        hoverShadowColor="hover:shadow-[0_8px_30px_rgba(37,99,235,0.12)] dark:hover:shadow-[0_8px_30px_rgba(96,165,250,0.2)]"
                         delay={0.1}
                     />
                 </Link>
@@ -195,9 +199,12 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                         loading={leavesLoading}
                         iconBgColor="bg-purple-500/15"
                         iconColor="text-purple-600 dark:text-purple-400"
-                        borderColor="border-purple-500/10"
+                        borderColor="border-x-gray-200/80 border-b-gray-200/80 dark:border-x-zinc-800 dark:border-b-zinc-800"
                         gradientColor="from-purple-500/10 to-indigo-500/5"
-                        cardBgColor="bg-purple-50/20 dark:bg-purple-950/10"
+                        cardBgColor="bg-[#FFFFFF] dark:bg-zinc-900"
+                        topBorderColor="border-t-purple-600 dark:border-t-purple-400"
+                        hoverBorderColor="hover:border-t-purple-600 hover:border-x-purple-500/30 hover:border-b-purple-500/30 dark:hover:border-t-purple-400 dark:hover:border-x-purple-500/40 dark:hover:border-b-purple-500/40"
+                        hoverShadowColor="hover:shadow-[0_8px_30px_rgba(124,58,237,0.12)] dark:hover:shadow-[0_8px_30px_rgba(167,139,250,0.2)]"
                         delay={0.15}
                     />
                 </Link>
@@ -211,9 +218,12 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                     loading={notificationsLoading}
                     iconBgColor="bg-amber-500/15"
                     iconColor="text-amber-600 dark:text-amber-400"
-                    borderColor="border-amber-500/10"
+                    borderColor="border-x-gray-200/80 border-b-gray-200/80 dark:border-x-zinc-800 dark:border-b-zinc-800"
                     gradientColor="from-amber-500/10 to-red-500/5"
-                    cardBgColor="bg-amber-50/20 dark:bg-amber-950/10"
+                    cardBgColor="bg-[#FFFFFF] dark:bg-zinc-900"
+                    topBorderColor="border-t-amber-600 dark:border-t-amber-400"
+                    hoverBorderColor="hover:border-t-amber-600 hover:border-x-amber-500/30 hover:border-b-amber-500/30 dark:hover:border-t-amber-400 dark:hover:border-x-amber-500/40 dark:hover:border-b-amber-500/40"
+                    hoverShadowColor="hover:shadow-[0_8px_30px_rgba(217,119,6,0.12)] dark:hover:shadow-[0_8px_30px_rgba(251,191,36,0.2)]"
                     delay={0.2}
                 />
 
@@ -230,9 +240,12 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                     loading={sessionLoading}
                     iconBgColor="bg-rose-500/15"
                     iconColor="text-rose-600 dark:text-rose-400"
-                    borderColor="border-rose-500/10"
+                    borderColor="border-x-gray-200/80 border-b-gray-200/80 dark:border-x-zinc-800 dark:border-b-zinc-800"
                     gradientColor="from-rose-500/10 to-pink-500/5"
-                    cardBgColor="bg-rose-50/20 dark:bg-rose-950/10"
+                    cardBgColor="bg-[#FFFFFF] dark:bg-zinc-900"
+                    topBorderColor="border-t-rose-600 dark:border-t-rose-400"
+                    hoverBorderColor="hover:border-t-rose-600 hover:border-x-rose-500/30 hover:border-b-rose-500/30 dark:hover:border-t-rose-400 dark:hover:border-x-rose-500/40 dark:hover:border-b-rose-500/40"
+                    hoverShadowColor="hover:shadow-[0_8px_30px_rgba(225,29,72,0.12)] dark:hover:shadow-[0_8px_30px_rgba(248,113,113,0.2)]"
                     delay={0.25}
                 />
             </div>
@@ -263,7 +276,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                             {/* Attendance Clock In */}
                             <Link
                                 href="/employee/attendance-history"
-                                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-blue-200/40 bg-blue-50/30 dark:bg-blue-500/5 hover:bg-blue-500/10 hover:border-blue-500/40 hover:shadow-lg hover:shadow-blue-500/5 transition-all duration-300 group/action cursor-pointer"
+                                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-blue-200/40 bg-blue-50/30 dark:bg-blue-500/5 hover:bg-blue-500/10 hover:border-blue-600 dark:hover:border-blue-500 hover:shadow-lg hover:shadow-blue-500/5 transition-all duration-300 group/action cursor-pointer"
                             >
                                 <div className="p-1.5 rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 group-hover/action:scale-115 group-hover/action:rotate-3 transition-all">
                                     <Clock className="h-5 w-5" />
@@ -277,7 +290,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                             {/* Leaves Application */}
                             <Link
                                 href="/employee/payroll/leaves"
-                                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-purple-200/40 bg-purple-50/30 dark:bg-purple-500/5 hover:bg-purple-500/10 hover:border-purple-500/40 hover:shadow-lg hover:shadow-purple-500/5 transition-all duration-300 group/action cursor-pointer"
+                                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-purple-200/40 bg-purple-50/30 dark:bg-purple-500/5 hover:bg-purple-500/10 hover:border-purple-600 dark:hover:border-purple-500 hover:shadow-lg hover:shadow-purple-500/5 transition-all duration-300 group/action cursor-pointer"
                             >
                                 <div className="p-1.5 rounded-lg bg-purple-100 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400 group-hover/action:scale-115 group-hover/action:-rotate-3 transition-all">
                                     <Calendar className="h-5 w-5" />
@@ -291,7 +304,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                             {/* Support Tickets */}
                             <Link
                                 href="/employee/tickets"
-                                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-amber-200/40 bg-amber-50/30 dark:bg-amber-500/5 hover:bg-amber-500/10 hover:border-amber-500/40 hover:shadow-lg hover:shadow-amber-500/5 transition-all duration-300 group/action cursor-pointer"
+                                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-amber-200/40 bg-amber-50/30 dark:bg-amber-500/5 hover:bg-amber-500/10 hover:border-amber-600 dark:hover:border-amber-500 hover:shadow-lg hover:shadow-amber-500/5 transition-all duration-300 group/action cursor-pointer"
                             >
                                 <div className="p-1.5 rounded-lg bg-amber-100 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400 group-hover/action:scale-115 group-hover/action:-rotate-3 transition-all">
                                     <Ticket className="h-5 w-5" />
@@ -305,7 +318,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                             {/* Profile Settings */}
                             <Link
                                 href="/employee/profile"
-                                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-indigo-200/40 bg-indigo-50/30 dark:bg-indigo-500/5 hover:bg-indigo-500/10 hover:border-indigo-500/40 hover:shadow-lg hover:shadow-indigo-500/5 transition-all duration-300 group/action cursor-pointer"
+                                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-indigo-200/40 bg-indigo-50/30 dark:bg-indigo-500/5 hover:bg-indigo-500/10 hover:border-indigo-600 dark:hover:border-indigo-500 hover:shadow-lg hover:shadow-indigo-500/5 transition-all duration-300 group/action cursor-pointer"
                             >
                                 <div className="p-1.5 rounded-lg bg-indigo-100 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400 group-hover/action:scale-115 group-hover/action:rotate-3 transition-all">
                                     <User className="h-5 w-5" />
@@ -319,7 +332,7 @@ export default function EmployeeDashboard({ initialData }: { initialData?: any }
                             {/* Reports & Insights */}
                             <Link
                                 href="/employee/reports"
-                                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-rose-200/40 bg-rose-50/30 dark:bg-rose-500/5 hover:bg-rose-500/10 hover:border-rose-500/40 hover:shadow-lg hover:shadow-rose-500/5 transition-all duration-300 group/action cursor-pointer"
+                                className="flex items-center gap-2.5 p-2.5 rounded-xl border border-rose-200/40 bg-rose-50/30 dark:bg-rose-500/5 hover:bg-rose-500/10 hover:border-rose-600 dark:hover:border-rose-500 hover:shadow-lg hover:shadow-rose-500/5 transition-all duration-300 group/action cursor-pointer"
                             >
                                 <div className="p-1.5 rounded-lg bg-rose-100 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400 group-hover/action:scale-115 group-hover/action:-rotate-3 transition-all">
                                     <BarChart3 className="h-5 w-5" />

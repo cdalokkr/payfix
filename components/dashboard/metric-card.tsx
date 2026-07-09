@@ -24,9 +24,12 @@ export interface MetricCardProps {
     }
     disableHover?: boolean
     padding?: string
+    topBorderColor?: string
+    hoverBorderColor?: string
+    hoverShadowColor?: string
 }
 
-export function MetricCardSkeleton({ title, description, icon, iconBgColor, iconColor, borderColor, gradientColor, cardBgColor }: {
+export function MetricCardSkeleton({ title, description, icon, iconBgColor, iconColor, borderColor, gradientColor, cardBgColor, topBorderColor, hoverBorderColor, hoverShadowColor }: {
     title?: string
     description?: string
     icon?: React.ReactNode
@@ -35,9 +38,20 @@ export function MetricCardSkeleton({ title, description, icon, iconBgColor, icon
     borderColor?: string
     gradientColor?: string
     cardBgColor?: string
+    topBorderColor?: string
+    hoverBorderColor?: string
+    hoverShadowColor?: string
 }) {
     return (
-        <div className={`h-full relative overflow-hidden rounded-xl border ${borderColor || 'border-transparent'} p-3 ${cardBgColor || 'bg-background/60'} backdrop-blur-md`}>
+        <div className={cn(
+            "h-full relative overflow-hidden rounded-xl border p-3 backdrop-blur-md",
+            topBorderColor ? "border-t-[5px]" : "",
+            borderColor || 'border-transparent',
+            topBorderColor,
+            hoverBorderColor,
+            hoverShadowColor,
+            cardBgColor || 'bg-background/60'
+        )}>
             <div className="flex flex-col h-full justify-between gap-2">
                 {(title || icon) && (
                     <div className="flex justify-between items-start">
@@ -78,7 +92,10 @@ export function MetricCard({
     className,
     trend,
     disableHover = false,
-    padding = "p-4"
+    padding = "p-4",
+    topBorderColor,
+    hoverBorderColor,
+    hoverShadowColor
 }: MetricCardProps) {
     const [isHovered, setIsHovered] = useState(false)
 
@@ -86,8 +103,14 @@ export function MetricCard({
         <div
             className={cn(
                 "h-full relative overflow-hidden transition-all duration-300 ease-out rounded-2xl border bg-background/40 backdrop-blur-md shadow-xs",
-                !disableHover && "hover:-translate-y-1 hover:shadow-md hover:border-primary/10",
+                topBorderColor ? "border-t-[5px]" : "",
+                !disableHover && "hover:-translate-y-1",
+                !disableHover && !hoverShadowColor && "hover:shadow-md",
+                !disableHover && !hoverBorderColor && "hover:border-primary/10",
                 borderColor || 'border-border/50',
+                topBorderColor,
+                hoverBorderColor,
+                hoverShadowColor,
                 cardBgColor,
                 className
             )}

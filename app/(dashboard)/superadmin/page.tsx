@@ -227,9 +227,12 @@ export default function SuperAdminPage() {
           loading={loadingTenants}
           iconBgColor="bg-blue-500/20"
           iconColor="text-blue-700 dark:text-blue-400"
-          borderColor="border-blue-200/50 dark:border-blue-900/50"
+          borderColor="border-x-gray-200/80 border-b-gray-200/80 dark:border-x-zinc-800 dark:border-b-zinc-800"
           gradientColor="from-blue-500/10 to-blue-500/5"
-          cardBgColor="bg-blue-50/50 dark:bg-blue-950/20"
+          cardBgColor="bg-[#FFFFFF] dark:bg-zinc-900"
+          topBorderColor="border-t-blue-700 dark:border-t-blue-500"
+          hoverBorderColor="hover:border-t-blue-700 hover:border-x-blue-500/30 hover:border-b-blue-500/30 dark:hover:border-t-blue-500 dark:hover:border-x-blue-500/40 dark:hover:border-b-blue-500/40"
+          hoverShadowColor="hover:shadow-[0_8px_30px_rgba(29,78,216,0.12)] dark:hover:shadow-[0_8px_30px_rgba(59,130,246,0.2)]"
           delay={0.2}
           padding="p-3 sm:p-3.5"
         />
@@ -241,9 +244,12 @@ export default function SuperAdminPage() {
           loading={loadingTenants}
           iconBgColor="bg-emerald-500/20"
           iconColor="text-emerald-700 dark:text-emerald-400"
-          borderColor="border-emerald-200/50 dark:border-emerald-900/50"
+          borderColor="border-x-gray-200/80 border-b-gray-200/80 dark:border-x-zinc-800 dark:border-b-zinc-800"
           gradientColor="from-emerald-500/10 to-emerald-500/5"
-          cardBgColor="bg-emerald-50/50 dark:bg-emerald-950/20"
+          cardBgColor="bg-[#FFFFFF] dark:bg-zinc-900"
+          topBorderColor="border-t-emerald-700 dark:border-t-emerald-500"
+          hoverBorderColor="hover:border-t-emerald-700 hover:border-x-emerald-500/30 hover:border-b-emerald-500/30 dark:hover:border-t-emerald-500 dark:hover:border-x-emerald-500/40 dark:hover:border-b-emerald-500/40"
+          hoverShadowColor="hover:shadow-[0_8px_30px_rgba(4,120,87,0.12)] dark:hover:shadow-[0_8px_30px_rgba(16,185,129,0.2)]"
           delay={0.3}
           padding="p-3 sm:p-3.5"
         />
@@ -255,9 +261,12 @@ export default function SuperAdminPage() {
           loading={loadingTenants}
           iconBgColor="bg-rose-500/20"
           iconColor="text-rose-700 dark:text-rose-400"
-          borderColor="border-rose-200/50 dark:border-rose-900/50"
+          borderColor="border-x-gray-200/80 border-b-gray-200/80 dark:border-x-zinc-800 dark:border-b-zinc-800"
           gradientColor="from-rose-500/10 to-rose-500/5"
-          cardBgColor="bg-rose-50/50 dark:bg-rose-950/20"
+          cardBgColor="bg-[#FFFFFF] dark:bg-zinc-900"
+          topBorderColor="border-t-rose-700 dark:border-t-rose-500"
+          hoverBorderColor="hover:border-t-rose-700 hover:border-x-rose-500/30 hover:border-b-rose-500/30 dark:hover:border-t-rose-500 dark:hover:border-x-rose-500/40 dark:hover:border-b-rose-500/40"
+          hoverShadowColor="hover:shadow-[0_8px_30px_rgba(225,29,72,0.12)] dark:hover:shadow-[0_8px_30px_rgba(248,113,113,0.2)]"
           delay={0.4}
           padding="p-3 sm:p-3.5"
         />
@@ -269,9 +278,12 @@ export default function SuperAdminPage() {
           loading={loadingPlans}
           iconBgColor="bg-amber-500/20"
           iconColor="text-amber-700 dark:text-amber-400"
-          borderColor="border-amber-200/50 dark:border-amber-900/50"
+          borderColor="border-x-gray-200/80 border-b-gray-200/80 dark:border-x-zinc-800 dark:border-b-zinc-800"
           gradientColor="from-amber-500/10 to-amber-500/5"
-          cardBgColor="bg-amber-50/50 dark:bg-amber-950/20"
+          cardBgColor="bg-[#FFFFFF] dark:bg-zinc-900"
+          topBorderColor="border-t-amber-700 dark:border-t-amber-500"
+          hoverBorderColor="hover:border-t-amber-700 hover:border-x-amber-500/30 hover:border-b-amber-500/30 dark:hover:border-t-amber-500 dark:hover:border-x-amber-500/40 dark:hover:border-b-amber-500/40"
+          hoverShadowColor="hover:shadow-[0_8px_30px_rgba(217,119,6,0.12)] dark:hover:shadow-[0_8px_30px_rgba(245,158,11,0.2)]"
           delay={0.5}
           padding="p-3 sm:p-3.5"
         />
