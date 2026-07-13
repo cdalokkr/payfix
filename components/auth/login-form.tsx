@@ -5,48 +5,65 @@ import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { loginSchema, type LoginInput } from "@/lib/validations/auth"
-import { Mail, Lock, AlertCircle } from "lucide-react"
+import { Mail, ArrowRight, AlertCircle, Check } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
+import Link from "next/link"
 
-import { LoginButton } from "@/components/ui/async-button"
-import { Input } from "@/components/ui/input"
-import { PasswordInput } from "@/components/ui/password-input"
-import {
-  Field,
-  FieldLabel,
-  FieldDescription,
-  FieldError,
-  FieldGroup,
-  FieldSet,
-} from "@/components/ui/field"
-import { Card, CardContent } from "@/components/ui/card"
-import { cn } from "@/lib/utils"
+import { Input } from "@/components/auth/ui/input"
+import { PasswordInput } from "@/components/auth/ui/password-input"
+import { Checkbox } from "@/components/auth/ui/checkbox"
+import { Button } from "@/components/auth/ui/button"
+import { GoogleIcon, MicrosoftIcon } from "@/components/auth/ui/icons"
 import { trpc } from "@/lib/trpc/client"
+import { useToast } from "@/components/auth/ui/Toast"
+import { cn } from "@/lib/utils"
+import { LoginButton } from "@/components/ui/async-button"
 
+const stagger = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.05, delayChildren: 0.1 } },
+}
 
+const fadeUp = {
+  hidden: { opacity: 0, y: 10 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] as const },
+  },
+}
 
 export function LoginForm() {
   const router = useRouter()
   const utils = trpc.useUtils()
-  const [isLoading, setIsLoading] = useState(false)
-  const [asyncState, setAsyncState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
+  const { toast } = useToast()
+  const [buttonState, setButtonState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
+  const loading = buttonState === 'loading'
   const [authError, setAuthError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({})
 
-
-
-  const form = useForm<LoginInput>({
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    formState: { errors, isValid, isSubmitted },
+  } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
+    mode: "onChange",
     defaultValues: {
-      email: '',
-      password: '',
+      email: "",
+      password: "",
     },
-    mode: "onChange"
   })
+
+  const remember = watch("remember" as any) || false
 
   const loginMutation = trpc.auth.login.useMutation({
     onMutate: () => {
-      setAsyncState('loading')
+      setButtonState('loading')
+      setAuthError(null)
+      setFieldErrors({})
       // Pre-warm geolocation in background right after submission (if permitted previously)
       if (typeof window !== 'undefined' && navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
@@ -74,9 +91,8 @@ export function LoginForm() {
     },
     onError: (error) => {
       console.log('[LoginForm] Login error:', error)
-      setAsyncState('error')
-      // Reset back to idle after a delay for error state
-      setTimeout(() => setAsyncState('idle'), 2000)
+      setButtonState('error')
+      setTimeout(() => setButtonState('idle'), 2000)
 
       const baseErrorMessage = 'Invalid email or password'
       const errorData = error.data as { field?: string } | undefined
@@ -106,10 +122,15 @@ export function LoginForm() {
       }
     },
     onSuccess: async (data) => {
-      setAsyncState('success')
       setAuthError(null)
       setFieldErrors({})
-      setIsLoading(false)
+      setButtonState('success')
+
+      toast({
+        type: "success",
+        title: "Signed In Successfully!",
+        description: "Welcome back to your workspace.",
+      })
 
       console.log('[LoginForm] Login successful, data:', {
         success: data?.success,
@@ -144,9 +165,6 @@ export function LoginForm() {
         }
       }
 
-      // Prefetch bypassed to prevent duplicate server/client database load concurrency.
-      // Next.js Server Components prefetch this data during page render, making client prefetch redundant.
-
       // Optimized: Pre-populate the tRPC cache for the profile and last session so the dashboard feels instant
       if (data?.profile) {
         utils.profile.get.setData(undefined, data.profile as any)
@@ -157,21 +175,20 @@ export function LoginForm() {
             lastLogin: new Date().toISOString(),
             lastLogout: (data as any).lastLogout,
             joinedAt: data.profile.created_at,
-            totalActivities: 0, // Will be updated on next fetch, but prevents null/skeleton flash
+            totalActivities: 0,
           })
         }
       }
 
-      let redirectPath = '/moderator' // Default for non-admin users
+      let redirectPath = '/moderator'
 
       if (data?.profile) {
         try {
           localStorage.setItem('userProfile', JSON.stringify(data.profile))
           sessionStorage.setItem('sessionProfile', JSON.stringify(data.profile))
 
-          // OPTIMIZED: Use link[rel=preload] for browser-level priority avatar loading
+          // Preload avatar
           if (data.profile.avatar_url) {
-            // Method 1: Inject a <link rel="preload"> into head (browser prioritizes this)
             const existingLink = document.querySelector(`link[href="${data.profile.avatar_url}"]`)
             if (!existingLink) {
               const link = document.createElement('link')
@@ -181,32 +198,25 @@ export function LoginForm() {
               link.setAttribute('fetchpriority', 'high')
               document.head.appendChild(link)
             }
-
-            // Method 2: Also use Image() for cache warming
             const img = new Image()
             img.src = data.profile.avatar_url
             img.fetchPriority = 'high'
-            console.log('[LoginForm] Preloading avatar with high priority:', data.profile.avatar_url)
           }
         } catch (storageError) {
           console.warn('[LoginForm] Failed to store profile in storage:', storageError)
         }
 
-        // Detect mobile device and PWA standalone mode client-side to short-circuit redirects
         const isMobileDevice = typeof window !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile/i.test(navigator.userAgent)
         const isPwaStandalone = typeof window !== 'undefined' && (window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true)
         const isMobileViewport = typeof window !== 'undefined' && (window.innerWidth < 768 || isMobileDevice)
 
-        // Role-based redirect
         if (data.profile.role === 'super_admin') {
           redirectPath = '/superadmin'
         } else if (data.profile.role === 'admin') {
           redirectPath = '/admin'
         } else if (data.profile.role === 'moderator') {
-          // Moderator is only redirected to mobile layout if launching standalone PWA
           redirectPath = (isMobileViewport && isPwaStandalone) ? '/mobile' : '/moderator'
         } else if (data.profile.role === 'employee') {
-          // Employee is always redirected to mobile layout on mobile screens
           redirectPath = isMobileViewport ? '/mobile' : '/employee'
         } else {
           redirectPath = '/moderator'
@@ -222,149 +232,167 @@ export function LoginForm() {
     setAuthError(null)
     setFieldErrors({})
 
-    // INSTANT CHECK: If no network, show error immediately without sending request
     if (!navigator.onLine) {
-      setAsyncState('error')
       setAuthError('No internet connection. Please check your network and try again.')
-      setTimeout(() => setAsyncState('idle'), 2000)
       return
     }
-
-    setIsLoading(true)
 
     try {
       await loginMutation.mutateAsync(data)
     } catch (error) {
-      setIsLoading(false)
-      throw error
+      // Handled by onError
     }
   }
 
-  const hasFormErrors = Object.keys(form.formState.errors).length > 0
-
   return (
-    <div className="w-full space-y-4">
-      {/* General Error Display */}
-      <AnimatePresence>
-        {authError && !fieldErrors.email && !fieldErrors.password && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            className="p-4 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30"
-            role="alert"
-          >
-            <div className="flex items-center gap-3 text-red-600 dark:text-red-400">
-              <AlertCircle className="h-5 w-5 flex-shrink-0" />
-              <span className="text-sm font-medium">{authError}</span>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <form
-        onSubmit={form.handleSubmit(onSubmit)}
-        className="space-y-6"
-        noValidate
+    <motion.div
+      initial={{ opacity: 0, scale: 0.96, y: 20 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+      className="glass-panel auth-popup-card w-full max-w-[440px] rounded-[24px] border border-white/60 p-4 sm:p-6 dark:border-slate-800/50"
+    >
+      <motion.div
+        variants={stagger}
+        initial="hidden"
+        animate="show"
       >
-        <div className="space-y-6">
-          <FieldSet className="border-none p-0 m-0">
-            <FieldGroup className="space-y-4">
-              {/* Email Field */}
-              <Field data-invalid={!!fieldErrors.email || !!form.formState.errors.email}>
-                <FieldLabel htmlFor="email" className="text-gray-700 dark:text-zinc-300 font-medium ml-1">Email Address</FieldLabel>
-                <div className="relative group/input">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within/input:text-primary text-primary">
-                    <Mail className="h-5 w-5" />
-                  </div>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="name@company.com"
-                    className="pl-12 h-12 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100 placeholder:text-gray-400 dark:placeholder:text-zinc-500 focus-visible:border-primary focus-visible:ring-primary/20 focus-visible:ring-[3px] transition-all rounded-xl shadow-sm"
-                    autoComplete="email"
-                    disabled={isLoading || form.formState.isSubmitting}
-                    {...form.register('email')}
-                    onChange={(e) => {
-                      form.setValue('email', e.target.value)
-                      if (e.target.value && (authError || fieldErrors.email)) {
-                        setAuthError(null)
-                        setFieldErrors(prev => ({ ...prev, email: undefined }))
-                      }
-                    }}
-                  />
-                </div>
-                {(fieldErrors.email || form.formState.errors.email) && (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                    <FieldError className="text-red-600 mt-1.5 ml-1" errors={[{
-                      message: fieldErrors.email || form.formState.errors.email?.message
-                    }]} />
-                  </motion.div>
-                )}
-              </Field>
+        {/* Heading */}
+        <motion.div variants={fadeUp} className="text-center sm:text-left mb-5">
+          <h2 className="flex items-center justify-center sm:justify-start gap-2 text-[24px] font-bold tracking-[-0.02em] text-slate-900 dark:text-white">
+            Welcome Back!{" "}
+            <motion.span
+              animate={{ rotate: [0, 14, -8, 14, 0] }}
+              transition={{
+                duration: 1.6,
+                repeat: Infinity,
+                repeatDelay: 3,
+              }}
+              className="inline-block origin-[70%_70%]"
+            >
+              👋
+            </motion.span>
+          </h2>
+          <p className="mt-2 text-[14px] text-slate-500 dark:text-slate-400">
+            Sign in to your secure PayFix workspace.
+          </p>
+        </motion.div>
 
-              {/* Password Field */}
-              <Field data-invalid={!!fieldErrors.password || !!form.formState.errors.password}>
-                <div className="flex items-center justify-between ml-1">
-                  <FieldLabel htmlFor="password" className="text-gray-700 dark:text-zinc-300 font-medium">Password</FieldLabel>
-                  <button type="button" className="text-xs text-blue-600 hover:text-blue-500 transition-colors font-semibold">Forgot?</button>
-                </div>
-                <div className="relative group/input">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within/input:text-primary text-primary z-10">
-                    <Lock className="h-5 w-5" />
-                  </div>
-                  <PasswordInput
-                    id="password"
-                    placeholder="••••••••"
-                    className="pl-12 h-12 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100 placeholder:text-gray-400 dark:placeholder:text-zinc-500 focus-visible:border-primary focus-visible:ring-primary/20 focus-visible:ring-[3px] transition-all rounded-xl shadow-sm"
-                    autoComplete="current-password"
-                    disabled={isLoading || form.formState.isSubmitting}
-                    {...form.register('password')}
-                    onChange={(e) => {
-                      form.setValue('password', e.target.value)
-                      if (e.target.value && (authError || fieldErrors.password)) {
-                        setAuthError(null)
-                        setFieldErrors(prev => ({ ...prev, password: undefined }))
-                      }
-                    }}
-                  />
-                </div>
-                {(fieldErrors.password || form.formState.errors.password) && (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                    <FieldError className="text-red-600 mt-1.5 ml-1" errors={[{
-                      message: fieldErrors.password || form.formState.errors.password?.message
-                    }]} />
-                  </motion.div>
-                )}
-              </Field>
-            </FieldGroup>
-          </FieldSet>
-        </div>
+        <AnimatePresence>
+          {authError && !fieldErrors.email && !fieldErrors.password && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="p-3 mb-4 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 flex items-center gap-2.5 text-[12px] sm:text-[13px] font-medium text-red-600 dark:text-red-400"
+              role="alert"
+            >
+              <AlertCircle className="h-5 w-5 flex-shrink-0" />
+              <span>{authError}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        <LoginButton
-          type="submit"
-          state={asyncState}
-          loadingText="Verifying..."
-          successText="Welcome Back!"
-          errorText={hasFormErrors ? "Fix errors" : "Login failed"}
-          hasFormErrors={hasFormErrors}
-          successDuration={2000}
-          className="w-full h-12 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold shadow-[0_0_20px_rgba(37,99,235,0.3)] transition-all duration-300"
-          size="lg"
-          disabled={form.formState.isSubmitting || isLoading}
-          variant="primary"
-          showToast={true}
+        {/* Form */}
+        <motion.form
+          variants={fadeUp}
+          onSubmit={handleSubmit(onSubmit)}
+          className="space-y-3.5"
+          noValidate
         >
-          {form.formState.isSubmitting || isLoading ? "Signing in..." : "Sign In"}
-        </LoginButton>
-      </form>
+          <Input
+            label="Email Address"
+            type="email"
+            id="login-email"
+            icon={<Mail size={16} />}
+            error={fieldErrors.email || errors.email?.message}
+            autoComplete="email"
+            disabled={loading}
+            {...register("email")}
+          />
 
-      {/* Additional Info */}
-      <div className="text-center pt-1 pb-0">
-        <p className="text-xs text-gray-500">
-          Need an account? <span className="text-blue-600 dark:text-blue-400 font-semibold cursor-pointer hover:underline">Contact Support</span>
-        </p>
-      </div>
-    </div>
+          <PasswordInput
+            label="Password"
+            id="login-password"
+            error={fieldErrors.password || errors.password?.message}
+            autoComplete="current-password"
+            disabled={loading}
+            {...register("password")}
+          />
+
+          <div className="flex items-center justify-between pt-1">
+            <Checkbox
+              checked={remember}
+              onChange={(checked) => setValue("remember" as any, checked)}
+              label="Remember me"
+            />
+            <Link
+              href="#"
+              className="text-[13px] font-semibold text-brand-primary hover:text-brand-hover transition-colors"
+            >
+              Forgot password?
+            </Link>
+          </div>
+
+          <LoginButton
+            type="submit"
+            state={buttonState}
+            disabled={isSubmitted && !isValid}
+            loadingText="Verifying identity..."
+            successText="Access granted!"
+            errorText="Invalid credentials"
+            className="btn-primary h-[38px] rounded-[10px] text-[14px] font-semibold mt-2 group w-full flex items-center justify-center"
+            icons={{
+              idle: null
+            }}
+          >
+            <span className="flex items-center justify-center gap-2">
+              Sign In
+              <ArrowRight
+                size={16}
+                className="transition-transform duration-300 group-hover:translate-x-1"
+              />
+            </span>
+          </LoginButton>
+        </motion.form>
+
+        {/* Divider */}
+        <motion.div
+          variants={fadeUp}
+          className="my-5 flex items-center gap-3 select-none"
+        >
+          <div className="h-px flex-1 bg-slate-200/70 dark:bg-slate-800/70" />
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            or continue with
+          </span>
+          <div className="h-px flex-1 bg-slate-200/70 dark:bg-slate-800/70" />
+        </motion.div>
+
+        {/* Social buttons */}
+        <motion.div variants={fadeUp} className="grid grid-cols-2 gap-3">
+          <Button variant="secondary" type="button" fullWidth>
+            <GoogleIcon className="h-4 w-4" />
+            <span className="text-[13px] font-semibold">Google</span>
+          </Button>
+          <Button variant="secondary" type="button" fullWidth>
+            <MicrosoftIcon className="h-4 w-4" />
+            <span className="text-[13px] font-semibold">Microsoft</span>
+          </Button>
+        </motion.div>
+
+        {/* Footer */}
+        <motion.p
+          variants={fadeUp}
+          className="mt-5 text-center text-[13px] text-slate-500 dark:text-slate-400 select-none"
+        >
+          Don&apos;t have an account?{" "}
+          <Link
+            href="/signup"
+            className="font-semibold text-brand-primary hover:text-brand-hover transition-colors"
+          >
+            Sign up
+          </Link>
+        </motion.p>
+      </motion.div>
+    </motion.div>
   )
 }
