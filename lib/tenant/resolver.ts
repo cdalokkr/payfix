@@ -48,8 +48,9 @@ export async function resolveTenant(hostname: string): Promise<TenantMetadata | 
     let isSubdomain = false;
     let slug = '';
     
-    // Normalize hostname
-    const host = hostname.toLowerCase().trim();
+    // Normalize hostname and strip port if present
+    const host = hostname.split(':')[0].toLowerCase().trim();
+
 
     if (host.endsWith(mainDomain)) {
         const subdomain = host.replace(`.${mainDomain}`, '');
@@ -74,6 +75,24 @@ export async function resolveTenant(hostname: string): Promise<TenantMetadata | 
                     eq(tenants.slug, host)
                 ),
             });
+        }
+
+        // Fallback: If no tenant is resolved, check if it's a main domain / localhost / IP.
+        // If so, fall back to the 'primary' tenant context.
+        if (!tenantRecord) {
+            const isMainDomain = 
+                host === mainDomain || 
+                host === `www.${mainDomain}` || 
+                host.endsWith('.vercel.app') ||
+                host === 'localhost' ||
+                host === '127.0.0.1' ||
+                host === '10.88.130.226';
+
+            if (isMainDomain) {
+                tenantRecord = await masterDb.query.tenants.findFirst({
+                    where: eq(tenants.slug, 'primary'),
+                });
+            }
         }
 
         if (!tenantRecord) {
