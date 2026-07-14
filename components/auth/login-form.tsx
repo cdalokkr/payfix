@@ -272,7 +272,7 @@ export function LoginForm() {
               👋
             </motion.span>
           </h2>
-          <p className="mt-2 text-[14px] text-slate-500 dark:text-slate-400">
+          <p className="hidden sm:block mt-2 text-[14px] text-slate-500 dark:text-slate-400">
             Sign in to your secure PayFix workspace.
           </p>
         </motion.div>

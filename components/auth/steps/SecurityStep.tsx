@@ -51,7 +51,7 @@ export default function SecurityStep({
         <h2 className="text-[22px] font-bold tracking-[-0.02em] text-slate-900 dark:text-white">
           Secure Your Account
         </h2>
-        <p className="text-[14px] text-slate-500 dark:text-slate-400 mt-1.5">
+        <p className="hidden sm:block text-[14px] text-slate-500 dark:text-slate-400 mt-1.5">
           Set a strong password to protect your account
         </p>
       </div>

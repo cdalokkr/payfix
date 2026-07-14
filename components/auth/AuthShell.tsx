@@ -85,7 +85,7 @@ export default function AuthShell({
                 </>
               )}
             </h1>
-            <p className="text-[13px] sm:text-[14px] text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+            <p className="hidden sm:block text-[13px] sm:text-[14px] text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
               {variant === "login"
                 ? "Access attendance, payroll, leave, tasks and HR operations from one secure workspace."
                 : "Create your company's secure HR workspace and start managing your workforce in minutes."}

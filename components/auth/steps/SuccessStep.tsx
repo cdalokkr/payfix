@@ -119,7 +119,7 @@ export default function SuccessStep({ slug }: { slug?: string }) {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.35, duration: 0.4 }}
-        className="text-[14px] text-slate-500 dark:text-slate-400 mt-3 leading-relaxed max-w-[320px] mx-auto"
+        className="hidden sm:block text-[14px] text-slate-500 dark:text-slate-400 mt-3 leading-relaxed max-w-[320px] mx-auto"
       >
         Your account has been created. You can now sign in and start managing
         your workforce.

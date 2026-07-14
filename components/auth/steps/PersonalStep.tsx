@@ -66,7 +66,7 @@ export default function PersonalStep({
         <h2 className="text-[20px] sm:text-[22px] font-bold tracking-[-0.02em] text-slate-900 dark:text-white">
           Create Your Account
         </h2>
-        <p className="text-[13px] sm:text-[14px] text-slate-500 dark:text-slate-400 mt-1.5">
+        <p className="hidden sm:block text-[13px] sm:text-[14px] text-slate-500 dark:text-slate-400 mt-1.5">
           Let&apos;s start with your personal information
         </p>
       </div>
