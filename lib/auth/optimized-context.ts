@@ -321,6 +321,47 @@ async function preloadProfile(profileId: string): Promise<Profile | null> {
         result = tenantResult || centralResult
       }
 
+      // Universal schema scan fallback if profile still not found
+      if (!result) {
+        try {
+          const { sql: sqlTag } = await import('drizzle-orm')
+          const activeTenants = await centralDb.execute(sqlTag`
+            SELECT tenant_schema FROM public.tenants 
+            WHERE tenant_schema IS NOT NULL AND status IN ('active', 'trial');
+          `)
+
+          for (const tRow of activeTenants) {
+            const schemaName = tRow.tenant_schema as string
+
+            try {
+              const scanResult = await centralDb.execute(sqlTag`
+                SELECT p.*, row_to_json(d.*) as designation
+                FROM ${sqlTag.raw(schemaName)}.profiles p
+                LEFT JOIN ${sqlTag.raw(schemaName)}.designations d ON d.id = p.designation_id
+                WHERE p.id = ${profileId}
+                LIMIT 1;
+              `)
+
+              if (scanResult[0]) {
+                const fbProfile = scanResult[0] as any
+                if (typeof fbProfile.designation === 'string') {
+                  try { fbProfile.designation = JSON.parse(fbProfile.designation); } catch {}
+                }
+                result = fbProfile
+                if (process.env.NODE_ENV === 'development') {
+                  console.log(`[AUTH-PERF] Profile found via Universal Schema Scan in: ${schemaName}`)
+                }
+                break
+              }
+            } catch (tErr) {
+              // Ignore individual schema query errors
+            }
+          }
+        } catch (scanErr) {
+          console.error('[AUTH] Universal schema scan failed:', scanErr)
+        }
+      }
+
       const duration = performance.now() - startTime
       if (process.env.NODE_ENV === 'development' && duration > 100) {
         console.log(`[AUTH-PERF] Drizzle profile fetch: ${duration.toFixed(2)}ms`)

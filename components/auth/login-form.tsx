@@ -126,6 +126,43 @@ export function LoginForm() {
       setFieldErrors({})
       setButtonState('success')
 
+      // If the login mutation discovered a different tenant slug, set the cookie and hard-reload/redirect
+      if (data && (data as any).tenantSlug) {
+        const discoveredSlug = (data as any).tenantSlug
+        console.log('[LoginForm] Discovered user belongs to tenant:', discoveredSlug)
+        
+        // Set fallback cookie
+        document.cookie = `tenant_fallback=${discoveredSlug}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`
+        
+        let redirectPath = '/admin'
+        if (data.profile) {
+          const isMobileDevice = typeof window !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile/i.test(navigator.userAgent)
+          const isPwaStandalone = typeof window !== 'undefined' && (window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true)
+          const isMobileViewport = typeof window !== 'undefined' && (window.innerWidth < 768 || isMobileDevice)
+
+          if (data.profile.role === 'super_admin') {
+            redirectPath = '/superadmin'
+          } else if (data.profile.role === 'admin') {
+            redirectPath = '/admin'
+          } else if (data.profile.role === 'moderator') {
+            redirectPath = (isMobileViewport && isPwaStandalone) ? '/mobile' : '/moderator'
+          } else if (data.profile.role === 'employee') {
+            redirectPath = isMobileViewport ? '/mobile' : '/employee'
+          }
+        }
+        
+        toast({
+          type: "success",
+          title: "Signed In Successfully!",
+          description: `Switching workspace context to ${discoveredSlug}...`,
+        })
+
+        setTimeout(() => {
+          window.location.href = redirectPath
+        }, 800)
+        return
+      }
+
       toast({
         type: "success",
         title: "Signed In Successfully!",

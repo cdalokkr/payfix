@@ -277,6 +277,48 @@ export const authRouter = router({
             }
           }
 
+          // Schema-scan fallback: Look for the user's profile across all other tenant schemas
+          if (!profileData) {
+            try {
+              const { centralDb } = await import('@/lib/db');
+              const { sql: sqlTag } = await import('drizzle-orm');
+              const activeTenants = await centralDb.execute(sqlTag`
+                SELECT tenant_schema, slug FROM public.tenants 
+                WHERE tenant_schema IS NOT NULL AND status IN ('active', 'trial');
+              `);
+
+              for (const tRow of activeTenants) {
+                const schemaName = tRow.tenant_schema as string;
+                if (schemaName === ctx.tenant?.tenantSchema) continue;
+
+                try {
+                  const searchResult = await centralDb.execute(sqlTag`
+                    SELECT p.*, row_to_json(d.*) as designation
+                    FROM ${sqlTag.raw(schemaName)}.profiles p
+                    LEFT JOIN ${sqlTag.raw(schemaName)}.designations d ON d.id = p.designation_id
+                    WHERE p.id = ${data.user.id}
+                    LIMIT 1;
+                  `);
+
+                  if (searchResult[0]) {
+                    console.log(`[Auth] Profile successfully discovered in alternative schema: ${schemaName}`);
+                    const fbProfile = searchResult[0] as any;
+                    if (typeof fbProfile.designation === 'string') {
+                      try { fbProfile.designation = JSON.parse(fbProfile.designation); } catch {}
+                    }
+                    profileData = fbProfile;
+                    (data as any).discoveredTenantSlug = tRow.slug;
+                    break;
+                  }
+                } catch (tErr) {
+                  // Ignore schema query error
+                }
+              }
+            } catch (scanErr) {
+              console.error('[Auth] Schema scan failed:', scanErr);
+            }
+          }
+
           // CRITICAL: Public-schema fallback — always check public.profiles regardless of tenant context.
           // Super-admins and platform-level users ONLY exist in public.profiles, not in any tenant schema.
           // This prevents super_admin login failing when a tenant_fallback cookie is present.
@@ -371,6 +413,7 @@ export const authRouter = router({
             id: data.user.id,
             email: data.user.email
           },
+          tenantSlug: (data as any).discoveredTenantSlug || null,
           warning: null as string | null
         }
       } catch (error) {
