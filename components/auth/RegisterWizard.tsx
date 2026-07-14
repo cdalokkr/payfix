@@ -65,6 +65,12 @@ export default function RegisterWizard() {
       slug: finalData.workspaceName,
       adminEmail: finalData.email,
       adminPassword: finalData.password,
+      firstName: finalData.firstName,
+      lastName: finalData.lastName,
+      phone: finalData.phone,
+      country: finalData.country,
+      industry: finalData.industry,
+      teamSize: finalData.teamSize,
     });
   }
 

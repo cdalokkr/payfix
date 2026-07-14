@@ -44,6 +44,9 @@ export const tenants = pgTable('tenants', {
     max_moderators_override: integer('max_moderators_override'),
     license_expires_at: timestamp('license_expires_at', { withTimezone: true }).notNull(),
     admin_email: text('admin_email').notNull(),
+    country: text('country'),
+    industry: text('industry'),
+    team_size: varchar('team_size', { length: 50 }),
     
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),

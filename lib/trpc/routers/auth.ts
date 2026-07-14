@@ -455,6 +455,12 @@ export const authRouter = router({
       }),
       adminEmail: z.string().email(),
       adminPassword: z.string().min(8),
+      firstName: z.string().optional(),
+      lastName: z.string().optional(),
+      phone: z.string().optional(),
+      country: z.string().optional(),
+      industry: z.string().optional(),
+      teamSize: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       // 1. Verify if subdomain is already registered
@@ -486,12 +492,15 @@ export const authRouter = router({
       });
 
       // 2. Create the Supabase auth user
+      const fullName = input.firstName && input.lastName 
+        ? `${input.firstName} ${input.lastName}`.trim() 
+        : (input.firstName || input.lastName || `${input.companyName} Admin`);
       const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
         email: input.adminEmail,
         password: input.adminPassword,
         email_confirm: true,
         user_metadata: {
-          full_name: `${input.companyName} Admin`,
+          full_name: fullName,
           status: 'active'
         }
       });
@@ -510,7 +519,21 @@ export const authRouter = router({
         // 3. Provision the schema, tables, and admin profile
         const { provisionTenant } = await import('@/lib/tenant/provisioning');
         // By default, trial duration is 14 days
-        const result = await provisionTenant(input.slug, input.companyName, input.adminEmail, 14, adminUserId);
+        const result = await provisionTenant(
+          input.slug,
+          input.companyName,
+          input.adminEmail,
+          14,
+          adminUserId,
+          {
+            firstName: input.firstName,
+            lastName: input.lastName,
+            phone: input.phone,
+            country: input.country,
+            industry: input.industry,
+            teamSize: input.teamSize,
+          }
+        );
 
         return {
           success: true,

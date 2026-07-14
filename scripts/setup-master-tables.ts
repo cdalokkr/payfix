@@ -38,11 +38,23 @@ async function run() {
                 trial_extended BOOLEAN DEFAULT false NOT NULL,
                 plan_id UUID REFERENCES public.tenant_plans(id) ON DELETE SET NULL,
                 admin_email TEXT NOT NULL,
+                country TEXT,
+                industry TEXT,
+                team_size VARCHAR(50),
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             );
         `);
         console.log('[Setup] Table public.tenants verified/created.');
+
+        // Alter tenants table to add new columns if they don't exist
+        await centralDb.execute(sql`
+            ALTER TABLE public.tenants 
+            ADD COLUMN IF NOT EXISTS country TEXT,
+            ADD COLUMN IF NOT EXISTS industry TEXT,
+            ADD COLUMN IF NOT EXISTS team_size VARCHAR(50);
+        `);
+        console.log('[Setup] Table public.tenants migration complete (added country, industry, team_size columns if missing).');
 
         // 3. Create tenant_branding table
         await centralDb.execute(sql`

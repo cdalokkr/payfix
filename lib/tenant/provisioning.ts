@@ -20,7 +20,15 @@ export async function provisionTenant(
     companyName: string,
     adminEmail: string,
     trialDurationDays = 14,
-    adminUserId?: string  // Optional: if auth user already created, pass ID to insert profile
+    adminUserId?: string,  // Optional: if auth user already created, pass ID to insert profile
+    additionalData?: {
+        firstName?: string;
+        lastName?: string;
+        phone?: string;
+        country?: string;
+        industry?: string;
+        teamSize?: string;
+    }
 ) {
     // 1. Strict Alphanumeric Validation on the slug
     const safeSlug = slug.toLowerCase().trim().replace(/[^a-z0-9-]/g, '');
@@ -115,12 +123,15 @@ export async function provisionTenant(
             
             const designationId = designResult[0]?.id;
             if (designationId) {
+                const firstName = additionalData?.firstName || '';
+                const lastName = additionalData?.lastName || '';
+                const fullName = firstName && lastName ? `${firstName} ${lastName}`.trim() : (firstName || lastName || 'Administrator');
                 await centralDb.execute(sql`
                     INSERT INTO ${sql.raw(schemaName)}.profiles (
-                        id, email, full_name, role, status, designation_id, created_at, updated_at
+                        id, email, full_name, role, status, designation_id, first_name, last_name, mobile_no, created_at, updated_at
                     ) VALUES (
-                        ${adminUserId}, ${adminEmail}, 'Administrator', 'admin', 'active', 
-                        ${designationId}, NOW(), NOW()
+                        ${adminUserId}, ${adminEmail}, ${fullName}, 'admin', 'active', 
+                        ${designationId}, ${firstName || null}, ${lastName || null}, ${additionalData?.phone || null}, NOW(), NOW()
                     )
                     ON CONFLICT (id) DO NOTHING;
                 `);
@@ -148,6 +159,9 @@ export async function provisionTenant(
             trial_duration_days: trialDurationDays,
             admin_email: adminEmail,
             license_expires_at: trialEnd,
+            country: additionalData?.country || null,
+            industry: additionalData?.industry || null,
+            team_size: additionalData?.teamSize || null,
         }).returning();
 
         // Register default branding settings
