@@ -3,7 +3,7 @@ import type { Profile } from '@/types'
 import type { User } from '@supabase/supabase-js'
 import { cookies, headers } from 'next/headers'
 import { createHash } from 'crypto'
-import { db } from '@/lib/db'
+import { db, centralDb } from '@/lib/db'
 import { profiles, designations } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { decodeJwt } from 'jose'
@@ -299,11 +299,27 @@ async function preloadProfile(profileId: string): Promise<Profile | null> {
     try {
       const startTime = performance.now()
 
-      // Primary Key lookups are the fastest possible queries in Postgres
-      const result = await db.query.profiles.findFirst({
+      // Check centralDb first to see if this is a platform-wide super_admin
+      const centralResult = await centralDb.query.profiles.findFirst({
         where: eq(profiles.id, profileId),
         with: { designation: true }
       })
+
+      let result = null
+
+      if (centralResult && centralResult.role === 'super_admin') {
+        result = centralResult
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[AUTH-PERF] Resolved super_admin via centralDb: ${profileId}`)
+        }
+      } else {
+        // Query mapped tenant DB
+        const tenantResult = await db.query.profiles.findFirst({
+          where: eq(profiles.id, profileId),
+          with: { designation: true }
+        })
+        result = tenantResult || centralResult
+      }
 
       const duration = performance.now() - startTime
       if (process.env.NODE_ENV === 'development' && duration > 100) {

@@ -387,7 +387,23 @@ export async function proxy(request: NextRequest) {
         if (user) {
             // Fetch full profile (including designation) dynamically from tenant schema or public fallback
             let dbProfile: any = null;
-            if (tenant && tenant.tenant_schema) {
+
+            // Check public.profiles first to see if this is a platform-wide super_admin
+            const { data: publicProfile } = await supabase
+                .from('profiles')
+                .select('*, designation:designations(*)')
+                .eq('id', user.id)
+                .maybeSingle();
+
+            if (publicProfile && publicProfile.role === 'super_admin') {
+                dbProfile = publicProfile;
+                if (process.env.NODE_ENV === 'development') {
+                    console.log(`[PROXY-AUTH] Super Admin resolved via public.profiles for user: ${user.id}`);
+                }
+            }
+
+            // If not a super_admin, look up in tenant-specific schema if tenant context exists
+            if (!dbProfile && tenant && tenant.tenant_schema) {
                 const { data: rpcData, error: rpcError } = await supabase.rpc('get_profile_from_schema', {
                     schema_name: tenant.tenant_schema,
                     user_id: user.id
@@ -399,14 +415,9 @@ export async function proxy(request: NextRequest) {
                 }
             }
 
-            // Fallback to public schema for non-tenant requests or if RPC failed
-            if (!dbProfile) {
-                const { data: fallbackProfile } = await supabase
-                    .from('profiles')
-                    .select('*, designation:designations(*)')
-                    .eq('id', user.id)
-                    .single();
-                dbProfile = fallbackProfile;
+            // Fallback to public schema profile if not found in tenant schema
+            if (!dbProfile && publicProfile) {
+                dbProfile = publicProfile;
             }
 
             profile = dbProfile ? {
