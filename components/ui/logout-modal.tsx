@@ -87,13 +87,21 @@ export function LogoutModal({ isOpen, onOpenChange }: LogoutModalProps) {
               localStorage.removeItem('userProfile')
               sessionStorage.removeItem('sessionProfile')
 
+              // Clear geolocation data cached during login
+              sessionStorage.removeItem('mobileUserCoords')
+              sessionStorage.removeItem('mobileGeofenceTimestamp')
+
+              // Clear tenant_fallback cookie to prevent stale tenant context on next login
+              document.cookie = 'tenant_fallback=; path=/; max-age=0; SameSite=Lax'
+              document.cookie = 'tenant_fallback=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax'
+
               // Clear React Query cache is deferred to the redirect step to prevent refetching while components are still mounted
 
               // Clear prefetch status and multi-tier cache
               clearAllPrefetchStatus()
               clearCacheByTier()
 
-              console.log('[LOGOUT-MODAL] Client-side cleanup completed')
+              console.log('[LOGOUT-MODAL] Client-side cleanup completed (including tenant_fallback cookie)')
             } catch (error) {
               console.warn('[LOGOUT-MODAL] Client cleanup warning:', error)
             }
@@ -139,6 +147,9 @@ export function LogoutModal({ isOpen, onOpenChange }: LogoutModalProps) {
           // Secure fallback: always clear and redirect
           localStorage.clear()
           sessionStorage.clear()
+          // Clear tenant_fallback cookie
+          document.cookie = 'tenant_fallback=; path=/; max-age=0; SameSite=Lax'
+          document.cookie = 'tenant_fallback=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax'
           try {
             queryClient.setDefaultOptions({
               queries: {

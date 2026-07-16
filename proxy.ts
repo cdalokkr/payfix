@@ -140,6 +140,22 @@ export async function proxy(request: NextRequest) {
         }
     }
 
+    // Override primary catch-all with tenant_fallback cookie.
+    // When accessing via localhost or *.vercel.app, the hostname resolves to 'primary' (the
+    // platform tenant). But if a user previously logged in and their profile was discovered
+    // in a different tenant schema, a tenant_fallback cookie was set. We must respect it
+    // so admins/moderators/employees access their own business workspace, not primary.
+    if (tenant && tenant.slug === 'primary' && cookieTenant && cookieTenant !== 'primary') {
+        const overrideTenant = await resolveTenant(cookieTenant);
+        if (overrideTenant) {
+            tenant = overrideTenant;
+            resolvedViaFallback = true;
+            if (process.env.NODE_ENV === 'development') {
+                console.log(`[PROXY-TENANT] Overriding primary catch-all with tenant_fallback cookie: ${cookieTenant} → ${overrideTenant.tenant_schema}`);
+            }
+        }
+    }
+
     // Redirect to clean URL if tenant was passed via query parameter to prevent URL cluttering
     if (queryTenant && tenant && queryTenant === tenant.slug) {
         const cleanUrl = new URL(request.url);
@@ -357,6 +373,15 @@ export async function proxy(request: NextRequest) {
         }
     }
 
+    // Invalidate proxy session cache on login requests to prevent stale profile=null from being served
+    // After a successful login, the next page navigation must re-resolve the profile from the DB
+    if (cookieHash && pathname.includes('auth.login') && request.method === 'POST') {
+        proxySessionCache.delete(cookieHash)
+        if (process.env.NODE_ENV === 'development') {
+            console.log(`[PROXY-CACHE] Invalidated stale session on login for hash ${cookieHash.substring(0, 8)}...`)
+        }
+    }
+
     let cached = cookieHash ? proxySessionCache.get(cookieHash) : null
 
     if (cached && Date.now() > cached.expiresAt) {
@@ -415,7 +440,52 @@ export async function proxy(request: NextRequest) {
                 }
             }
 
-            // Fallback to public schema profile if not found in tenant schema
+            // Cross-schema scan fallback: If profile not found in current tenant schema,
+            // scan ALL active tenant schemas in a single DB round-trip via RPC.
+            // This handles new signups where the user registered on a different tenant
+            // but is logging in from localhost/Vercel (which resolves to primary).
+            // Uses SECURITY DEFINER function to bypass RLS and avoid PostgREST restrictions.
+            if (!dbProfile) {
+                const { data: scanResult, error: scanError } = await supabase.rpc('find_profile_across_schemas', {
+                    target_user_id: user.id
+                });
+
+                if (!scanError && scanResult) {
+                    dbProfile = scanResult;
+                    if (process.env.NODE_ENV === 'development') {
+                        console.log(`[PROXY-AUTH] Cross-schema scan found profile in: ${scanResult.tenant_schema} (slug: ${scanResult.tenant_slug})`);
+                    }
+
+                    // CRITICAL: Override tenant context to the user's actual workspace.
+                    // Without this, all tRPC/API calls would route to tenant_primary,
+                    // showing wrong data or empty dashboards.
+                    if (scanResult.tenant_slug && scanResult.tenant_slug !== tenant?.slug) {
+                        const discoveredTenant = await resolveTenant(scanResult.tenant_slug);
+                        if (discoveredTenant) {
+                            tenant = discoveredTenant;
+                            // Update request headers so downstream tRPC handlers use correct tenant
+                            requestHeaders.set('x-tenant-id', discoveredTenant.id);
+                            requestHeaders.set('x-tenant-slug', discoveredTenant.slug);
+                            requestHeaders.set('x-tenant-db-url', discoveredTenant.database_url || '');
+                            requestHeaders.set('x-tenant-schema', discoveredTenant.tenant_schema || '');
+                            requestHeaders.set('x-tenant-brand', discoveredTenant.branding?.app_name || discoveredTenant.company_name);
+                            requestHeaders.set('x-tenant-license-expires-at', discoveredTenant.license_expires_at ? new Date(discoveredTenant.license_expires_at).toISOString() : '');
+                            requestHeaders.set('x-tenant-theme', JSON.stringify({
+                                primary: discoveredTenant.branding?.primary_color || '#4f46e5',
+                                secondary: discoveredTenant.branding?.secondary_color || '#0f172a',
+                                logo: discoveredTenant.branding?.logo_url || '/logo.png'
+                            }));
+                            if (process.env.NODE_ENV === 'development') {
+                                console.log(`[PROXY-TENANT] Switched tenant context: primary → ${discoveredTenant.slug} (${discoveredTenant.tenant_schema}) for user ${user.id}`);
+                            }
+                        }
+                    }
+                } else if (scanError) {
+                    console.error('[PROXY-AUTH] Cross-schema scan RPC error:', scanError);
+                }
+            }
+
+            // Fallback to public schema profile if not found in any tenant schema
             if (!dbProfile && publicProfile) {
                 dbProfile = publicProfile;
             }
@@ -462,6 +532,20 @@ export async function proxy(request: NextRequest) {
                 sameSite: cookie.sameSite,
             })
         })
+
+        // Set tenant_fallback cookie when user's profile was discovered in a different tenant.
+        // This ensures all subsequent requests route to the correct workspace without re-scanning.
+        // EXCEPT on logout — delete the cookie so the next login starts with clean tenant state.
+        if (pathname.includes('auth.logout')) {
+            response.cookies.delete('tenant_fallback');
+        } else if (profile?.tenant_slug && profile.tenant_slug !== 'primary') {
+            response.cookies.set('tenant_fallback', profile.tenant_slug, {
+                path: '/',
+                maxAge: 60 * 60 * 24 * 7, // 1 week
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+            });
+        }
     }
 
     // Redirect to login if not authenticated on a protected route
