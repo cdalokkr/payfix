@@ -119,4 +119,22 @@ export function getTenantDb(tenantId: string, databaseUrl: string | null, schema
     
     return db;
 }
+
+/**
+ * Clears cached connections and lockout state for a deleted tenant.
+ * Called by deprovisionTenant() during tenant deletion.
+ */
+export function clearTenantConnectionCache(tenantId: string, schemaName: string): void {
+    // Clear connection pool entries matching this tenant
+    for (const [key, cached] of connectionPoolCache.entries()) {
+        if (key.includes(tenantId) || key.includes(schemaName)) {
+            try { cached.client.end(); } catch { /* ignore */ }
+            connectionPoolCache.delete(key);
+            console.log(`[DB Router] Cleared connection pool for deleted tenant: ${key}`);
+        }
+    }
+    // Clear lockout cache
+    tenantLockoutCache.delete(tenantId);
+}
+
 export { refreshTenantLockoutState };

@@ -33,6 +33,10 @@ export default function SuperAdminPage() {
   });
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
 
+  // Delete tenant states
+  const [deletingTenant, setDeletingTenant] = useState<any | null>(null);
+  const [deleteConfirmSlug, setDeleteConfirmSlug] = useState("");
+
   // Queries
   const { data: tenantsList, isLoading: loadingTenants } = trpc.superadmin.listTenants.useQuery();
   const { data: plansList, isLoading: loadingPlans } = trpc.superadmin.listPlans.useQuery();
@@ -78,6 +82,21 @@ export default function SuperAdminPage() {
     },
     onError: (err) => {
       toast.error(err.message || "Failed to update plan");
+    }
+  });
+
+  const deleteTenantMutation = trpc.superadmin.deleteTenant.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Tenant deleted successfully! ${data.deletedUsers} auth users removed.`);
+      if (data.warnings && data.warnings.length > 0) {
+        toast.warning(`Completed with ${data.warnings.length} warning(s). Check server logs.`);
+      }
+      setDeletingTenant(null);
+      setDeleteConfirmSlug("");
+      utils.superadmin.listTenants.invalidate();
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to delete tenant");
     }
   });
 
@@ -421,6 +440,16 @@ export default function SuperAdminPage() {
                           >
                             <Power className="h-4 w-4" />
                           </button>
+
+                          {['suspended', 'cancelled'].includes(tenant.status) && tenant.slug !== 'primary' && (
+                            <button
+                              onClick={() => { setDeletingTenant(tenant); setDeleteConfirmSlug(""); }}
+                              className="p-2 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white rounded-lg transition-colors"
+                              title="Delete tenant permanently"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );
@@ -683,6 +712,68 @@ export default function SuperAdminPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Tenant Confirmation Dialog */}
+      {deletingTenant && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-card text-card-foreground border border-border rounded-2xl max-w-md w-full p-6 shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-full bg-red-500/10">
+                <Trash2 className="h-5 w-5 text-red-500" />
+              </div>
+              <h3 className="text-lg font-bold">Delete Tenant Permanently</h3>
+            </div>
+
+            <div className="space-y-3 mb-6">
+              <p className="text-sm text-muted-foreground">
+                This will permanently delete <strong className="text-foreground">{deletingTenant.companyName}</strong> and cannot be undone.
+              </p>
+              <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-3 text-xs text-red-400 space-y-1">
+                <p>• Drop database schema <code className="bg-red-500/10 px-1 rounded">{deletingTenant.tenantSchema}</code> and all {27} business tables</p>
+                <p>• Delete all auth user accounts belonging to this tenant</p>
+                <p>• Remove branding, trial tracking, and tenant record</p>
+                <p>• Clear all cached connections and resolver entries</p>
+              </div>
+              <div className="pt-2">
+                <label className="text-sm font-medium text-muted-foreground block mb-1.5">
+                  Type <code className="bg-secondary px-1.5 py-0.5 rounded text-foreground font-bold">{deletingTenant.slug}</code> to confirm:
+                </label>
+                <input
+                  type="text"
+                  value={deleteConfirmSlug}
+                  onChange={(e) => setDeleteConfirmSlug(e.target.value)}
+                  placeholder={deletingTenant.slug}
+                  className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => { setDeletingTenant(null); setDeleteConfirmSlug(""); }}
+                className="py-2.5 px-4 bg-secondary hover:bg-secondary/80 text-secondary-foreground font-semibold rounded-xl text-sm transition-colors"
+                disabled={deleteTenantMutation.isPending}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteTenantMutation.mutate({
+                  tenantId: deletingTenant.id,
+                  confirmSlug: deleteConfirmSlug,
+                })}
+                disabled={deleteConfirmSlug !== deletingTenant.slug || deleteTenantMutation.isPending}
+                className="py-2.5 px-5 bg-red-600 hover:bg-red-700 disabled:bg-red-600/30 disabled:text-red-400/50 text-white font-bold rounded-xl text-sm transition-colors flex items-center gap-2"
+              >
+                {deleteTenantMutation.isPending && (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                )}
+                Delete Forever
+              </button>
+            </div>
           </div>
         </div>
       )}

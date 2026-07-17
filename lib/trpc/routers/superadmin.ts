@@ -238,4 +238,82 @@ export const superadminRouter = router({
         });
       }
     }),
+
+  // 7. Delete a tenant and all associated data (schema, users, branding)
+  deleteTenant: superAdminProcedure
+    .input(z.object({
+      tenantId: z.string().uuid(),
+      confirmSlug: z.string().min(1), // User must type the tenant slug to confirm
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        // Look up tenant to validate
+        const tenant = await masterDb.query.tenants.findFirst({
+          where: eq(tenants.id, input.tenantId),
+        });
+
+        if (!tenant) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Tenant not found',
+          });
+        }
+
+        // Safety: Prevent deleting the primary platform tenant
+        if (tenant.slug === 'primary') {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'Cannot delete the primary platform tenant',
+          });
+        }
+
+        // Safety: Confirmation slug must match
+        if (input.confirmSlug !== tenant.slug) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Confirmation slug "${input.confirmSlug}" does not match tenant slug "${tenant.slug}"`,
+          });
+        }
+
+        // Safety: Only allow deletion of suspended or cancelled tenants
+        if (!['suspended', 'cancelled'].includes(tenant.status)) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: `Tenant must be suspended or cancelled before deletion. Current status: ${tenant.status}`,
+          });
+        }
+
+        if (!tenant.tenant_schema) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'Tenant has no schema assigned — cannot deprovision',
+          });
+        }
+
+        // Execute full deprovision
+        const { deprovisionTenant } = await import('@/lib/tenant/provisioning');
+        const result = await deprovisionTenant(
+          tenant.id,
+          tenant.tenant_schema,
+          tenant.slug
+        );
+
+        if (result.errors.length > 0) {
+          console.warn(`[SUPERADMIN] Tenant ${tenant.slug} deleted with ${result.errors.length} warnings:`, result.errors);
+        }
+
+        return {
+          success: true,
+          deletedUsers: result.deletedUsers,
+          warnings: result.errors,
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        console.error('[SUPERADMIN] deleteTenant error:', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to delete tenant',
+        });
+      }
+    }),
 });

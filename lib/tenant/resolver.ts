@@ -145,3 +145,15 @@ export async function resolveTenant(hostname: string): Promise<TenantMetadata | 
         return null;
     }
 }
+
+/**
+ * Clears resolver cache entries for a deleted tenant.
+ * Called by deprovisionTenant() during tenant deletion.
+ */
+export function clearResolverCache(slug: string): void {
+    for (const [key] of resolverCache.entries()) {
+        if (key === slug || key.includes(slug)) {
+            resolverCache.delete(key);
+        }
+    }
+}

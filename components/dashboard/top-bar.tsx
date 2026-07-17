@@ -80,8 +80,12 @@ function TopBarComponent({ className, user }: TopBarProps) {
       </div>
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2 pr-2 border-r border-border/40">
-          <NotificationBell />
-          <div className="h-6 w-px bg-border/40" />
+          {user?.role !== 'super_admin' && (
+            <>
+              <NotificationBell />
+              <div className="h-6 w-px bg-border/40" />
+            </>
+          )}
           <ThemeToggle />
         </div>
         <UserNav user={user || null} />
