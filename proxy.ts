@@ -535,8 +535,10 @@ export async function proxy(request: NextRequest) {
 
         // Manage tenant_fallback cookie based on user's actual workspace:
         // - On logout: delete it for clean re-login
-        // - On non-primary profile: set it so future requests route to correct workspace
-        // - On primary profile with stale cookie: delete it to stop unnecessary cross-schema scans
+        // - On cross-schema discovered profile: set cookie to the discovered tenant
+        // - On stale cookie (user's profile is NOT in the tenant the cookie points to): delete it
+        //   Stale detection: if cookie says 'testname' but tenant resolved to something else
+        //   (tenant.slug !== cookieTenant), the profile was found elsewhere via cross-schema scan
         if (pathname.includes('auth.logout')) {
             response.cookies.delete('tenant_fallback');
         } else if (profile?.tenant_slug && profile.tenant_slug !== 'primary') {
@@ -546,8 +548,9 @@ export async function proxy(request: NextRequest) {
                 secure: process.env.NODE_ENV === 'production',
                 sameSite: 'lax',
             });
-        } else if (cookieTenant && cookieTenant !== 'primary') {
-            // User belongs to primary but stale tenant_fallback exists from a previous session.
+        } else if (cookieTenant && cookieTenant !== 'primary' && tenant?.slug !== cookieTenant) {
+            // User belongs to primary but stale tenant_fallback exists from a different session.
+            // tenant.slug !== cookieTenant proves the cookie override didn't match the user's actual workspace.
             // Clear it so future requests don't override to the wrong tenant.
             response.cookies.delete('tenant_fallback');
         }
