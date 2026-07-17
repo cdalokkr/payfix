@@ -103,7 +103,7 @@ function roleToDashboardPath(role: string): string {
         case 'admin':       return '/admin'
         case 'moderator':   return '/moderator'
         case 'employee':    return '/employee'
-        default:            return '/moderator'
+        default:            return '/admin'
     }
 }
 
@@ -533,9 +533,10 @@ export async function proxy(request: NextRequest) {
             })
         })
 
-        // Set tenant_fallback cookie when user's profile was discovered in a different tenant.
-        // This ensures all subsequent requests route to the correct workspace without re-scanning.
-        // EXCEPT on logout — delete the cookie so the next login starts with clean tenant state.
+        // Manage tenant_fallback cookie based on user's actual workspace:
+        // - On logout: delete it for clean re-login
+        // - On non-primary profile: set it so future requests route to correct workspace
+        // - On primary profile with stale cookie: delete it to stop unnecessary cross-schema scans
         if (pathname.includes('auth.logout')) {
             response.cookies.delete('tenant_fallback');
         } else if (profile?.tenant_slug && profile.tenant_slug !== 'primary') {
@@ -545,6 +546,10 @@ export async function proxy(request: NextRequest) {
                 secure: process.env.NODE_ENV === 'production',
                 sameSite: 'lax',
             });
+        } else if (cookieTenant && cookieTenant !== 'primary') {
+            // User belongs to primary but stale tenant_fallback exists from a previous session.
+            // Clear it so future requests don't override to the wrong tenant.
+            response.cookies.delete('tenant_fallback');
         }
     }
 
@@ -585,8 +590,8 @@ export async function proxy(request: NextRequest) {
             }
             return redirectWithCookies('/employee')
         } else {
-            // Fallback to moderator dashboard for unknown roles
-            return redirectWithCookies('/moderator')
+            // Fallback to admin dashboard for unknown roles
+            return redirectWithCookies('/admin')
         }
     }
 

@@ -217,7 +217,7 @@ export function LoginForm() {
         }
       }
 
-      let redirectPath = '/moderator'
+      let redirectPath = '/admin'
 
       if (data?.profile) {
         try {
@@ -256,7 +256,7 @@ export function LoginForm() {
         } else if (data.profile.role === 'employee') {
           redirectPath = isMobileViewport ? '/mobile' : '/employee'
         } else {
-          redirectPath = '/moderator'
+          redirectPath = '/admin'
         }
       }
 

@@ -8,6 +8,7 @@ import { UserNav } from "@/components/user-nav"
 import { NotificationBell } from "@/components/dashboard/notification-bell"
 import { Profile } from "@/types"
 import { trpc } from "@/lib/trpc/client"
+import { Building2 } from "lucide-react"
 
 interface TopBarProps {
   className?: string
@@ -16,7 +17,7 @@ interface TopBarProps {
 
 function TopBarComponent({ className, user }: TopBarProps) {
   const { data: tenantInfo } = trpc.profile.getTenantInfo.useQuery(undefined, {
-    enabled: !!user && user.role === "admin",
+    enabled: !!user,
   });
 
   const licenseExpiresAt = tenantInfo?.licenseExpiresAt;
@@ -64,6 +65,17 @@ function TopBarComponent({ className, user }: TopBarProps) {
           "-ml-1 h-9 w-9 hover:bg-sidebar-accent/50 transition-colors",
           user?.role === 'employee' && "hidden lg:flex"
         )} />
+        {tenantInfo?.brandName && (
+          <>
+            <div className="h-6 w-px bg-border/40 hidden sm:block" />
+            <div className="hidden sm:flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-muted-foreground/70 shrink-0" />
+              <span className="text-sm font-semibold text-foreground/90 truncate max-w-[200px]">
+                {tenantInfo.brandName}
+              </span>
+            </div>
+          </>
+        )}
         {getLicenseBadge()}
       </div>
       <div className="flex items-center gap-4">
