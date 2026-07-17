@@ -3,15 +3,26 @@ import { db } from '@/lib/db'
 import { profiles } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+let _supabase: ReturnType<typeof createClient> | null = null;
 
-const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-        autoRefreshToken: false,
-        persistSession: false,
+function getSupabaseClient() {
+    if (!_supabase) {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+        if (!supabaseUrl || !supabaseAnonKey) {
+            throw new Error('Supabase environment variables NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY are missing.')
+        }
+
+        _supabase = createClient(supabaseUrl, supabaseAnonKey, {
+            auth: {
+                autoRefreshToken: false,
+                persistSession: false,
+            }
+        })
     }
-})
+    return _supabase
+}
 
 export interface AuthenticatedContext {
     user: any
@@ -32,7 +43,7 @@ export async function validateBearerToken(authHeader: string | null): Promise<Au
         throw new Error('Token payload is empty.')
     }
 
-    const { data, error } = await supabase.auth.getUser(token)
+    const { data, error } = await getSupabaseClient().auth.getUser(token)
     const user = data?.user || null
 
     if (error || !user) {
