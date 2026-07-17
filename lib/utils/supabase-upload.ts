@@ -1,29 +1,17 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
-let _supabase: ReturnType<typeof createClient> | null = null;
-
+// Lazy singleton: created on first use at runtime, not at build time
+let _supabase: SupabaseClient | null = null;
 function getSupabase() {
     if (!_supabase) {
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-        if (!supabaseUrl || !supabaseAnonKey) {
-            throw new Error('Supabase environment variables NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY are missing.')
-        }
-        _supabase = createClient(supabaseUrl, supabaseAnonKey, {
-            auth: {
-                autoRefreshToken: false,
-                persistSession: false,
-            }
-        })
+        _supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            { auth: { autoRefreshToken: false, persistSession: false } }
+        );
     }
     return _supabase;
 }
-
-export const supabase = new Proxy({} as any, {
-    get(_, prop, receiver) {
-        return Reflect.get(getSupabase(), prop, receiver);
-    }
-});
 
 /**
  * Upload a file to Supabase Storage
@@ -44,7 +32,7 @@ export async function uploadAvatar(
         const filePath = fileName
 
         // Upload file to Supabase Storage
-        const { data, error } = await supabase.storage
+        const { data, error } = await getSupabase().storage
             .from(bucket)
             .upload(filePath, file, {
                 cacheControl: '3600',
@@ -57,7 +45,7 @@ export async function uploadAvatar(
         }
 
         // Get public URL
-        const { data: { publicUrl } } = supabase.storage
+        const { data: { publicUrl } } = getSupabase().storage
             .from(bucket)
             .getPublicUrl(filePath)
 
@@ -90,7 +78,7 @@ export async function deleteAvatar(
             return
         }
 
-        const { error } = await supabase.storage
+        const { error } = await getSupabase().storage
             .from(bucket)
             .remove([fileName])
 

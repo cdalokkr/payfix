@@ -1,27 +1,19 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { db } from '@/lib/db'
 import { profiles } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 
-let _supabase: ReturnType<typeof createClient> | null = null;
-
-function getSupabaseClient() {
+// Lazy singleton: created on first use at runtime, not at build time
+let _supabase: SupabaseClient | null = null;
+function getSupabase() {
     if (!_supabase) {
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-        if (!supabaseUrl || !supabaseAnonKey) {
-            throw new Error('Supabase environment variables NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY are missing.')
-        }
-
-        _supabase = createClient(supabaseUrl, supabaseAnonKey, {
-            auth: {
-                autoRefreshToken: false,
-                persistSession: false,
-            }
-        })
+        _supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            { auth: { autoRefreshToken: false, persistSession: false } }
+        );
     }
-    return _supabase
+    return _supabase;
 }
 
 export interface AuthenticatedContext {
@@ -43,7 +35,7 @@ export async function validateBearerToken(authHeader: string | null): Promise<Au
         throw new Error('Token payload is empty.')
     }
 
-    const { data, error } = await getSupabaseClient().auth.getUser(token)
+    const { data, error } = await getSupabase().auth.getUser(token)
     const user = data?.user || null
 
     if (error || !user) {
