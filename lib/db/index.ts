@@ -4,22 +4,35 @@ import * as schema from './schema';
 import { getTenantDb } from './tenant-connection';
 import { tenantStorage } from '../tenant/store';
 
-const connectionString = process.env.DATABASE_URL!;
+// Lazy singleton: connection is only created on first use at runtime,
+// NOT during module evaluation at build time (Vercel build has no DATABASE_URL).
+let _client: postgres.Sql | null = null;
+let _centralDb: ReturnType<typeof drizzle> | null = null;
 
-if (!connectionString) {
-    throw new Error('DATABASE_URL environment variable is missing.');
+function getCentralDb() {
+    if (!_centralDb) {
+        const connectionString = process.env.DATABASE_URL;
+        if (!connectionString) {
+            throw new Error('DATABASE_URL environment variable is missing.');
+        }
+        _client = postgres(connectionString, {
+            prepare: false,
+            max: 20,
+            idle_timeout: 20,
+            connect_timeout: 30,
+            max_lifetime: 60 * 30 // 30 minutes
+        });
+        _centralDb = drizzle(_client, { schema });
+    }
+    return _centralDb;
 }
 
-// Default central database connection pool
-const client = postgres(connectionString, {
-    prepare: false,
-    max: 20,
-    idle_timeout: 20,
-    connect_timeout: 30,
-    max_lifetime: 60 * 30 // 30 minutes
+// Re-export centralDb as a getter-backed proxy so existing imports keep working
+export const centralDb = new Proxy({} as any, {
+    get(_, prop, receiver) {
+        return Reflect.get(getCentralDb(), prop, receiver);
+    }
 });
-
-export const centralDb = drizzle(client, { schema });
 
 /**
  * Proxy database client.
@@ -47,6 +60,6 @@ export const db = new Proxy({} as any, {
             console.warn('[DB-PROXY] No tenant context — falling back to centralDb (public schema)');
             lastLoggedTenant = 'centralDb';
         }
-        return Reflect.get(centralDb, prop, receiver);
+        return Reflect.get(getCentralDb(), prop, receiver);
     }
 });
