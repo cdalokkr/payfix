@@ -23,7 +23,7 @@ export const tenants = pgTable('tenants', {
     slug: varchar('slug', { length: 63 }).notNull().unique(), // Subdomain prefix, e.g. "acme"
     company_name: text('company_name').notNull(),
     custom_domain: text('custom_domain').unique(),           // e.g. "hr.acme.com"
-    status: text('status').notNull().default('trial'),       // trial | active | suspended | cancelled
+    status: text('status').notNull().default('trial'),       // pending_setup | trial | active | suspended | cancelled
     
     // Database credentials/routing:
     // If databaseUrl is null, connection falls back to Central Shared DB targeting the specific schema

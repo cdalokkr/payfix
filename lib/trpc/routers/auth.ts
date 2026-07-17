@@ -526,12 +526,8 @@ export const authRouter = router({
         });
       }
 
-      // Create service role client to bypass user creation restrictions
       const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
+        auth: { autoRefreshToken: false, persistSession: false }
       });
 
       // 2. Create the Supabase auth user
@@ -559,45 +555,142 @@ export const authRouter = router({
       const adminUserId = authData.user.id;
 
       try {
-        // 3. Provision the schema, tables, and admin profile
-        const { provisionTenant } = await import('@/lib/tenant/provisioning');
-        // By default, trial duration is 14 days
-        const result = await provisionTenant(
-          input.slug,
-          input.companyName,
-          input.adminEmail,
-          14,
-          adminUserId,
-          {
-            firstName: input.firstName,
-            lastName: input.lastName,
-            phone: input.phone,
-            country: input.country,
-            industry: input.industry,
-            teamSize: input.teamSize,
-          }
-        );
+        // 3. Register tenant in control plane with status 'pending_setup' (NO schema provisioning)
+        const { masterDb } = await import('@/lib/db/master-connection');
+        const { tenants, tenantBranding } = await import('@/lib/db/master-schema');
+
+        const safeSlug = input.slug.toLowerCase().trim().replace(/[^a-z0-9-]/g, '');
+        const schemaName = `tenant_${safeSlug.replace(/-/g, '_')}`;
+        const trialStart = new Date();
+        const trialEnd = new Date();
+        trialEnd.setDate(trialStart.getDate() + 14);
+
+        const [newTenant] = await masterDb.insert(tenants).values({
+          slug: safeSlug,
+          company_name: input.companyName,
+          tenant_schema: schemaName,
+          status: 'pending_setup',
+          trial_start: trialStart,
+          trial_end: trialEnd,
+          trial_duration_days: 14,
+          admin_email: input.adminEmail,
+          license_expires_at: trialEnd,
+          country: input.country || null,
+          industry: input.industry || null,
+          team_size: input.teamSize || null,
+        }).returning();
+
+        // 4. Register default branding
+        await masterDb.insert(tenantBranding).values({
+          tenant_id: newTenant.id,
+          app_name: input.companyName,
+          short_name: input.companyName.substring(0, 15),
+        });
+
+        console.log(`[Signup] Tenant ${safeSlug} registered (pending_setup). Auth user: ${adminUserId}`);
 
         return {
           success: true,
-          tenantId: result.tenantId,
-          slug: result.slug,
-          message: 'Workspace successfully registered!'
+          tenantId: newTenant.id,
+          slug: safeSlug,
+          message: 'Account created! Please login to set up your workspace.'
         };
       } catch (error: any) {
-        console.error('[Signup] Provisioning failed, rolling back auth user:', error);
-        
-        // Rollback the created Supabase auth user if database provisioning fails
+        console.error('[Signup] Registration failed, rolling back auth user:', error);
         try {
           await supabaseAdmin.auth.admin.deleteUser(adminUserId);
-          console.log('[Signup] Successfully deleted rolled-back auth user:', adminUserId);
         } catch (deleteError) {
           console.error('[Signup] Failed to delete rolled-back auth user:', deleteError);
         }
-
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to set up workspace database',
+          message: error.message || 'Failed to register workspace',
+        });
+      }
+    }),
+
+  // Provision workspace schema on first login (called from /setup page)
+  provisionWorkspace: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      const { masterDb } = await import('@/lib/db/master-connection');
+      const { tenants } = await import('@/lib/db/master-schema');
+
+      // Find the tenant for this user
+      const tenant = await masterDb.query.tenants.findFirst({
+        where: eq(tenants.admin_email, ctx.user.email),
+      });
+
+      if (!tenant) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'No workspace found for your account',
+        });
+      }
+
+      if (tenant.status !== 'pending_setup') {
+        // Already provisioned — just return success
+        return { 
+          success: true, 
+          alreadyProvisioned: true,
+          slug: tenant.slug 
+        };
+      }
+
+      // Lock the tenant row to prevent concurrent provisioning
+      const { centralDb } = await import('@/lib/db');
+      const { sql } = await import('drizzle-orm');
+      const locked = await centralDb.execute(
+        sql`SELECT id FROM public.tenants WHERE id = ${tenant.id} AND status = 'pending_setup' FOR UPDATE SKIP LOCKED`
+      );
+
+      if (locked.length === 0) {
+        // Another request is already provisioning
+        return { success: true, alreadyProvisioned: true, slug: tenant.slug };
+      }
+
+      try {
+        const { provisionTenant } = await import('@/lib/tenant/provisioning');
+        
+        // Run provisioning (schema + tables + seeding + admin profile)
+        // Skip tenant record creation since it already exists (pass skipRegistration flag)
+        const safeSlug = tenant.slug;
+        const schemaName = tenant.tenant_schema!;
+
+        // Provision schema and tables
+        await provisionTenant(
+          safeSlug,
+          tenant.company_name,
+          tenant.admin_email!,
+          tenant.trial_duration_days || 14,
+          ctx.user.id,
+          {}, // additionalData already stored in user_metadata
+        );
+
+        // The provisionTenant function also creates a duplicate tenant record.
+        // We need to clean up: delete the duplicate and update the original.
+        // Actually, let's just update the existing record status instead.
+        // The provisionTenant creates a NEW tenant record — so delete the duplicate.
+        await centralDb.execute(
+          sql`DELETE FROM public.tenants WHERE slug = ${safeSlug} AND id != ${tenant.id}`
+        );
+
+        // Update original tenant to 'trial' status
+        await masterDb.update(tenants)
+          .set({ status: 'trial', updated_at: new Date() })
+          .where(eq(tenants.id, tenant.id));
+
+        console.log(`[Provision] Workspace ${safeSlug} provisioned successfully for user ${ctx.user.id}`);
+
+        return {
+          success: true,
+          alreadyProvisioned: false,
+          slug: safeSlug,
+        };
+      } catch (error: any) {
+        console.error(`[Provision] Failed to provision workspace:`, error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to set up workspace. Please try again.',
         });
       }
     }),

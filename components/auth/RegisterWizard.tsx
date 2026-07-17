@@ -35,8 +35,8 @@ export default function RegisterWizard() {
       goTo(4);
       toast({
         type: "success",
-        title: "Registration Complete!",
-        description: "Your workspace has been successfully initialized.",
+        title: "Account Created!",
+        description: "Sign in to set up your workspace.",
       });
     },
   });

@@ -357,7 +357,8 @@ export async function proxy(request: NextRequest) {
     const isAdminRoute = pathname.startsWith('/admin')
     const isModeratorRoute = pathname.startsWith('/moderator')
     const isEmployeeRoute = pathname.startsWith('/employee')
-    const isProtectedRoute = isSuperAdminRoute || isAdminRoute || isModeratorRoute || isEmployeeRoute
+    const isSetupRoute = pathname === '/setup'
+    const isProtectedRoute = isSuperAdminRoute || isAdminRoute || isModeratorRoute || isEmployeeRoute || isSetupRoute
 
     const isLoginRoute = pathname === '/login'
     const isDeactiveAccountRoute = pathname === '/deactive-account'
@@ -563,9 +564,13 @@ export async function proxy(request: NextRequest) {
 
     // Redirect authenticated users from login page to their dashboard
     if (user && isLoginRoute) {
-        // Guard: If user has no profile, let them stay on login page to prevent redirect loop
-        // This happens when auth user exists but profile entry is missing in tenant schema
+        // Guard: If user has no profile, check if they have a pending_setup tenant
         if (!profile) {
+            // Check if this user has a pending_setup tenant to redirect to /setup
+            if (tenant && tenant.status === 'pending_setup') {
+                console.log(`[PROXY-AUTH] User ${user.id} has pending_setup tenant ${tenant.slug} — redirecting to /setup`)
+                return redirectWithCookies('/setup')
+            }
             console.warn(`[PROXY-AUTH] Authenticated user ${user.id} has no profile — staying on login page to prevent redirect loop`)
             return addSecurityHeaders(response, request)
         }
@@ -661,6 +666,24 @@ export async function proxy(request: NextRequest) {
 
     // Status and Role-based access control for authenticated users
     if (user && (isProtectedRoute || isDeactiveAccountRoute)) {
+        // /setup route is special — allowed for authenticated users with pending_setup tenant, even without a profile
+        if (isSetupRoute) {
+            if (tenant && tenant.status === 'pending_setup') {
+                // User is on /setup with a pending_setup tenant — allow access
+                return addSecurityHeaders(response, request)
+            } else {
+                // Tenant already provisioned — redirect to dashboard
+                const dashPath = profile ? roleToDashboardPath(profile.role) : '/login'
+                return redirectWithCookies(dashPath)
+            }
+        }
+
+        // For dashboard routes: if tenant is pending_setup, redirect to /setup
+        if (tenant && tenant.status === 'pending_setup' && !isSetupRoute) {
+            console.log(`[PROXY-AUTH] Tenant ${tenant.slug} is pending_setup — redirecting to /setup`)
+            return redirectWithCookies('/setup')
+        }
+
         if (!profile) {
             console.warn(`[PROXY-AUTH] Redirecting to /login because no profile was found for authenticated user: ${user.id}`)
             return redirectWithCookies('/login')

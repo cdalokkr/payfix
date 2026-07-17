@@ -168,6 +168,11 @@ function isPublicRoute(path: string): boolean {
 
 // Get required role for different routes
 function getRequiredRoleForRoute(path: string): string | null {
+  // Super admin routes require super_admin role
+  if (path.startsWith('/superadmin')) {
+    return 'super_admin'
+  }
+
   // Admin routes require admin role
   if (path.startsWith('/admin')) {
     return 'admin'
@@ -199,6 +204,7 @@ function getRequiredRoleForRoute(path: string): string | null {
 // Check if user has required permission
 function hasPermission(userRole: string, requiredRole: string): boolean {
   const roleHierarchy: Record<string, number> = {
+    'super_admin': 4,
     'admin': 3,
     'moderator': 2,
     'employee': 1,
