@@ -89,7 +89,7 @@ export default function SuperAdminPage() {
     onSuccess: (data) => {
       toast.success(`Tenant deleted successfully! ${data.deletedUsers} auth users removed.`);
       if (data.warnings && data.warnings.length > 0) {
-        toast.warning(`Completed with ${data.warnings.length} warning(s). Check server logs.`);
+        data.warnings.forEach((w: string) => toast.warning(w));
       }
       setDeletingTenant(null);
       setDeleteConfirmSlug("");
@@ -444,8 +444,9 @@ export default function SuperAdminPage() {
                           {['suspended', 'cancelled'].includes(tenant.status) && tenant.slug !== 'primary' && (
                             <button
                               onClick={() => { setDeletingTenant(tenant); setDeleteConfirmSlug(""); }}
-                              className="p-2 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white rounded-lg transition-colors"
+                              className="p-2 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               title="Delete tenant permanently"
+                              disabled={deleteTenantMutation.isPending}
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>

@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm';
+import { sql, eq } from 'drizzle-orm';
 import { masterDb } from '@/lib/db/master-connection';
 import { tenants, tenantBranding } from '@/lib/db/master-schema';
 import { centralDb } from '@/lib/db';
