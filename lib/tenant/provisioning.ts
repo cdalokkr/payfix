@@ -30,6 +30,7 @@ export async function provisionTenant(
         teamSize?: string;
     },
     onProgress?: (step: string, message: string) => void,
+    skipRegistration = false,  // If true, skip tenant+branding insert (record already exists)
 ) {
     // 1. Strict Alphanumeric Validation on the slug
     const safeSlug = slug.toLowerCase().trim().replace(/[^a-z0-9-]/g, '');
@@ -149,49 +150,56 @@ export async function provisionTenant(
             }
         }
 
-        console.log(`[Provisioning] Schema ${schemaName} populated successfully.`);
+        let tenantId = 'existing';
+        let resultSlug = safeSlug;
 
-        // 6. Register in Central Control Plane Table (public.tenants)
-        onProgress?.('registering', 'Finalizing workspace registration...');
-        const trialStart = new Date();
-        const trialEnd = new Date();
-        trialEnd.setDate(trialStart.getDate() + trialDurationDays);
+        if (!skipRegistration) {
+            // 6. Register in Central Control Plane Table (public.tenants)
+            onProgress?.('registering', 'Finalizing workspace registration...');
+            const trialStart = new Date();
+            const trialEnd = new Date();
+            trialEnd.setDate(trialStart.getDate() + trialDurationDays);
 
-        // We run these inserts on the masterDb (which maps to public central schema)
-        const [newTenant] = await masterDb.insert(tenants).values({
-            slug: safeSlug,
-            company_name: companyName,
-            tenant_schema: schemaName,
-            status: 'trial',
-            trial_start: trialStart,
-            trial_end: trialEnd,
-            trial_duration_days: trialDurationDays,
-            admin_email: adminEmail,
-            license_expires_at: trialEnd,
-            country: additionalData?.country || null,
-            industry: additionalData?.industry || null,
-            team_size: additionalData?.teamSize || null,
-        }).returning();
+            // We run these inserts on the masterDb (which maps to public central schema)
+            const [newTenant] = await masterDb.insert(tenants).values({
+                slug: safeSlug,
+                company_name: companyName,
+                tenant_schema: schemaName,
+                status: 'trial',
+                trial_start: trialStart,
+                trial_end: trialEnd,
+                trial_duration_days: trialDurationDays,
+                admin_email: adminEmail,
+                license_expires_at: trialEnd,
+                country: additionalData?.country || null,
+                industry: additionalData?.industry || null,
+                team_size: additionalData?.teamSize || null,
+            }).returning();
 
-        // Register default branding settings
-        await masterDb.insert(tenantBranding).values({
-            tenant_id: newTenant.id,
-            app_name: companyName,
-            short_name: companyName.substring(0, 15),
-            primary_color: '#4f46e5',
-            secondary_color: '#0f172a',
-            accent_color: '#f59e0b',
-            background_color: '#020617',
-            theme_color: '#020617',
-        });
+            // Register default branding settings
+            await masterDb.insert(tenantBranding).values({
+                tenant_id: newTenant.id,
+                app_name: companyName,
+                short_name: companyName.substring(0, 15),
+                primary_color: '#4f46e5',
+                secondary_color: '#0f172a',
+                accent_color: '#f59e0b',
+                background_color: '#020617',
+                theme_color: '#020617',
+            });
 
-        console.log(`[Provisioning] Tenant ${safeSlug} successfully registered in control plane.`);
+            tenantId = newTenant.id;
+            console.log(`[Provisioning] Tenant ${safeSlug} successfully registered in control plane.`);
+        } else {
+            onProgress?.('registering', 'Finalizing workspace...');
+            console.log(`[Provisioning] Schema ${schemaName} provisioned (skipRegistration=true, tenant record already exists).`);
+        }
         
         return {
             success: true,
-            tenantId: newTenant.id,
+            tenantId,
             schemaName,
-            slug: safeSlug
+            slug: resultSlug
         };
 
     } catch (err: any) {

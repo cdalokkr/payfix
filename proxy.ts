@@ -140,24 +140,27 @@ export async function proxy(request: NextRequest) {
         }
     }
 
-    // Override primary catch-all with tenant_fallback cookie.
+    // Override primary catch-all with tenant_fallback cookie OR query parameter.
     // When accessing via localhost or *.vercel.app, the hostname resolves to 'primary' (the
     // platform tenant). But if a user previously logged in and their profile was discovered
     // in a different tenant schema, a tenant_fallback cookie was set. We must respect it
     // so admins/moderators/employees access their own business workspace, not primary.
-    if (tenant && tenant.slug === 'primary' && cookieTenant && cookieTenant !== 'primary') {
-        const overrideTenant = await resolveTenant(cookieTenant);
+    // Also handle ?tenant=xxx query param for signup redirect flows.
+    const overrideSlug = queryTenant || cookieTenant;
+    if (tenant && tenant.slug === 'primary' && overrideSlug && overrideSlug !== 'primary') {
+        const overrideTenant = await resolveTenant(overrideSlug);
         if (overrideTenant) {
             tenant = overrideTenant;
             resolvedViaFallback = true;
             if (process.env.NODE_ENV === 'development') {
-                console.log(`[PROXY-TENANT] Overriding primary catch-all with tenant_fallback cookie: ${cookieTenant} → ${overrideTenant.tenant_schema}`);
+                console.log(`[PROXY-TENANT] Overriding primary catch-all with ${queryTenant ? 'query param' : 'cookie'}: ${overrideSlug} → ${overrideTenant.tenant_schema}`);
             }
         }
     }
 
     // Redirect to clean URL if tenant was passed via query parameter to prevent URL cluttering
-    if (queryTenant && tenant && queryTenant === tenant.slug) {
+    // and persist the tenant choice in a cookie for subsequent requests
+    if (queryTenant && tenant && tenant.slug === queryTenant) {
         const cleanUrl = new URL(request.url);
         cleanUrl.searchParams.delete('tenant');
         const response = NextResponse.redirect(cleanUrl);

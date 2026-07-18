@@ -134,8 +134,9 @@ export function LoginForm() {
         // Set fallback cookie
         document.cookie = `tenant_fallback=${discoveredSlug}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`
         
-        let redirectPath = '/admin'
-        if (data.profile) {
+        // Use server-provided redirect path (e.g. /setup for pending_setup tenants)
+        let redirectPath = (data as any).redirectTo || '/admin'
+        if (!((data as any).redirectTo) && data.profile) {
           const isMobileDevice = typeof window !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile/i.test(navigator.userAgent)
           const isPwaStandalone = typeof window !== 'undefined' && (window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true)
           const isMobileViewport = typeof window !== 'undefined' && (window.innerWidth < 768 || isMobileDevice)
@@ -151,10 +152,14 @@ export function LoginForm() {
           }
         }
         
+        const toastDescription = (data as any).redirectTo === '/setup' 
+          ? `Setting up your workspace...` 
+          : `Switching workspace context to ${discoveredSlug}...`
+
         toast({
           type: "success",
-          title: "Signed In Successfully!",
-          description: `Switching workspace context to ${discoveredSlug}...`,
+          title: (data as any).redirectTo === '/setup' ? "Welcome!" : "Signed In Successfully!",
+          description: toastDescription,
         })
 
         setTimeout(() => {

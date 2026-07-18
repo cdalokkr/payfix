@@ -338,9 +338,38 @@ export const authRouter = router({
             }
           }
 
-          // If still no profile after all fallbacks, return warning
+          // If still no profile after all fallbacks, check for pending_setup tenant
           if (!profileData) {
             console.warn('[Auth] Profile definitively not found for user:', data.user.id)
+
+            // Check if this user has a pending_setup tenant (new signup, first login)
+            try {
+              const { masterDb: mDb } = await import('@/lib/db/master-connection');
+              const { tenants: tenantsTable } = await import('@/lib/db/master-schema');
+              const pendingTenant = await mDb.query.tenants.findFirst({
+                where: and(
+                  eq(tenantsTable.admin_email, data.user.email!),
+                  eq(tenantsTable.status, 'pending_setup')
+                ),
+              });
+
+              if (pendingTenant) {
+                console.log(`[Auth] User ${data.user.id} has pending_setup tenant: ${pendingTenant.slug} — redirecting to /setup`);
+                return {
+                  success: true,
+                  profile: null as any,
+                  user: {
+                    id: data.user.id,
+                    email: data.user.email
+                  },
+                  redirectTo: '/setup',
+                  tenantSlug: pendingTenant.slug,
+                }
+              }
+            } catch (lookupErr) {
+              console.error('[Auth] Error checking pending_setup tenant:', lookupErr);
+            }
+
             return {
               success: true,
               profile: null as any,
@@ -651,33 +680,30 @@ export const authRouter = router({
       try {
         const { provisionTenant } = await import('@/lib/tenant/provisioning');
         
-        // Run provisioning (schema + tables + seeding + admin profile)
-        // Skip tenant record creation since it already exists (pass skipRegistration flag)
         const safeSlug = tenant.slug;
-        const schemaName = tenant.tenant_schema!;
 
-        // Provision schema and tables
+        // Provision schema and tables (skipRegistration=true since tenant record already exists)
         await provisionTenant(
           safeSlug,
           tenant.company_name,
           tenant.admin_email!,
           tenant.trial_duration_days || 14,
           ctx.user.id,
-          {}, // additionalData already stored in user_metadata
+          {}, // additionalData already in user_metadata
+          undefined, // onProgress
+          true, // skipRegistration — tenant record already created during signup
         );
 
-        // The provisionTenant function also creates a duplicate tenant record.
-        // We need to clean up: delete the duplicate and update the original.
-        // Actually, let's just update the existing record status instead.
-        // The provisionTenant creates a NEW tenant record — so delete the duplicate.
-        await centralDb.execute(
-          sql`DELETE FROM public.tenants WHERE slug = ${safeSlug} AND id != ${tenant.id}`
-        );
-
-        // Update original tenant to 'trial' status
+        // Update tenant status from pending_setup → trial
         await masterDb.update(tenants)
           .set({ status: 'trial', updated_at: new Date() })
           .where(eq(tenants.id, tenant.id));
+
+        // Clear resolver cache so new status is picked up immediately
+        try {
+          const { clearResolverCache } = await import('@/lib/tenant/resolver');
+          clearResolverCache();
+        } catch {}
 
         console.log(`[Provision] Workspace ${safeSlug} provisioned successfully for user ${ctx.user.id}`);
 
