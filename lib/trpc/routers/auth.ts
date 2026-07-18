@@ -277,45 +277,27 @@ export const authRouter = router({
             }
           }
 
-          // Schema-scan fallback: Look for the user's profile across all other tenant schemas
+          // Schema-scan fallback: Look for the user's profile across all other tenant schemas via DB function (extremely fast)
           if (!profileData) {
             try {
               const { centralDb } = await import('@/lib/db');
               const { sql: sqlTag } = await import('drizzle-orm');
-              const activeTenants = await centralDb.execute(sqlTag`
-                SELECT tenant_schema, slug FROM public.tenants 
-                WHERE tenant_schema IS NOT NULL AND status IN ('active', 'trial');
+              const scanResult = await centralDb.execute(sqlTag`
+                SELECT public.find_profile_across_schemas(${data.user.id}::uuid) as profile;
               `);
 
-              for (const tRow of activeTenants) {
-                const schemaName = tRow.tenant_schema as string;
-                if (schemaName === ctx.tenant?.tenantSchema) continue;
-
-                try {
-                  const searchResult = await centralDb.execute(sqlTag`
-                    SELECT p.*, row_to_json(d.*) as designation
-                    FROM ${sqlTag.raw(schemaName)}.profiles p
-                    LEFT JOIN ${sqlTag.raw(schemaName)}.designations d ON d.id = p.designation_id
-                    WHERE p.id = ${data.user.id}
-                    LIMIT 1;
-                  `);
-
-                  if (searchResult[0]) {
-                    console.log(`[Auth] Profile successfully discovered in alternative schema: ${schemaName}`);
-                    const fbProfile = searchResult[0] as any;
-                    if (typeof fbProfile.designation === 'string') {
-                      try { fbProfile.designation = JSON.parse(fbProfile.designation); } catch {}
-                    }
-                    profileData = fbProfile;
-                    (data as any).discoveredTenantSlug = tRow.slug;
-                    break;
-                  }
-                } catch (tErr) {
-                  // Ignore schema query error
+              const profileJson = scanResult[0]?.profile;
+              if (profileJson) {
+                console.log(`[Auth] Profile successfully discovered across schemas via DB function: ${profileJson.tenant_schema}`);
+                const fbProfile = profileJson as any;
+                if (typeof fbProfile.designation === 'string') {
+                  try { fbProfile.designation = JSON.parse(fbProfile.designation); } catch {}
                 }
+                profileData = fbProfile;
+                (data as any).discoveredTenantSlug = fbProfile.tenant_slug;
               }
             } catch (scanErr) {
-              console.error('[Auth] Schema scan failed:', scanErr);
+              console.error('[Auth] Fast schema scan failed:', scanErr);
             }
           }
 
@@ -346,38 +328,106 @@ export const authRouter = router({
             try {
               const { masterDb: mDb } = await import('@/lib/db/master-connection');
               const { tenants: tenantsTable } = await import('@/lib/db/master-schema');
-              const pendingTenant = await mDb.query.tenants.findFirst({
-                where: and(
-                  eq(tenantsTable.admin_email, data.user.email!),
-                  eq(tenantsTable.status, 'pending_setup')
-                ),
+
+              // First check: look for tenant by admin email (any status)
+              const userTenant = await mDb.query.tenants.findFirst({
+                where: eq(tenantsTable.admin_email, data.user.email!),
               });
 
-              if (pendingTenant) {
-                console.log(`[Auth] User ${data.user.id} has pending_setup tenant: ${pendingTenant.slug} — redirecting to /setup`);
-                return {
-                  success: true,
-                  profile: null as any,
-                  user: {
-                    id: data.user.id,
-                    email: data.user.email
-                  },
-                  redirectTo: '/setup',
-                  tenantSlug: pendingTenant.slug,
+              if (userTenant) {
+                // If already provisioned (trial/active), fetch profile from tenant schema
+                if (userTenant.status !== 'pending_setup') {
+                  try {
+                    const { centralDb: cDb } = await import('@/lib/db');
+                    const { sql: sqlTag } = await import('drizzle-orm');
+                    const schemaName = userTenant.tenant_schema;
+                    const profileRows = await cDb.execute(sqlTag`
+                      SELECT p.*, row_to_json(d.*) as designation
+                      FROM ${sqlTag.raw(schemaName)}.profiles p
+                      LEFT JOIN ${sqlTag.raw(schemaName)}.designations d ON d.id = p.designation_id
+                      WHERE p.id = ${data.user.id} LIMIT 1;
+                    `);
+                    if (profileRows[0]) {
+                      const bgProfile = profileRows[0] as any;
+                      if (typeof bgProfile.designation === 'string') {
+                        try { bgProfile.designation = JSON.parse(bgProfile.designation); } catch {}
+                      }
+                      console.log(`[Auth] Profile found in already-provisioned tenant: ${userTenant.slug}`);
+                      profileData = bgProfile;
+                      (data as any).discoveredTenantSlug = userTenant.slug;
+                    }
+                  } catch (fetchErr) {
+                    console.error('[Auth] Error fetching profile from provisioned tenant:', fetchErr);
+                  }
+                }
+
+                // If still pending_setup, wait briefly for background provisioning to finish
+                if (!profileData && userTenant.status === 'pending_setup') {
+                  console.log(`[Auth] Tenant ${userTenant.slug} is pending_setup — waiting for background provisioning...`);
+                  for (let attempt = 0; attempt < 3; attempt++) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    const refreshed = await mDb.query.tenants.findFirst({
+                      where: eq(tenantsTable.id, userTenant.id),
+                    });
+                    if (refreshed && refreshed.status !== 'pending_setup') {
+                      // Provisioning completed! Fetch admin profile
+                      try {
+                        const { centralDb: cDb } = await import('@/lib/db');
+                        const { sql: sqlTag } = await import('drizzle-orm');
+                        const schemaName = refreshed.tenant_schema;
+                        const profileRows = await cDb.execute(sqlTag`
+                          SELECT p.*, row_to_json(d.*) as designation
+                          FROM ${sqlTag.raw(schemaName)}.profiles p
+                          LEFT JOIN ${sqlTag.raw(schemaName)}.designations d ON d.id = p.designation_id
+                          WHERE p.id = ${data.user.id} LIMIT 1;
+                        `);
+                        if (profileRows[0]) {
+                          const bgProfile = profileRows[0] as any;
+                          if (typeof bgProfile.designation === 'string') {
+                            try { bgProfile.designation = JSON.parse(bgProfile.designation); } catch {}
+                          }
+                          console.log(`[Auth] Background provisioning completed for ${userTenant.slug}. Profile found after ${attempt + 1}s wait.`);
+                          profileData = bgProfile;
+                          (data as any).discoveredTenantSlug = userTenant.slug;
+                        }
+                      } catch (fetchErr) {
+                        console.error('[Auth] Error fetching profile after background provisioning:', fetchErr);
+                      }
+                      break;
+                    }
+                  }
+                }
+
+                // If STILL no profile after polling, fall back to /setup
+                if (!profileData) {
+                  console.log(`[Auth] User ${data.user.id} has pending_setup tenant: ${userTenant.slug} — falling back to /setup`);
+                  return {
+                    success: true,
+                    profile: null as any,
+                    user: {
+                      id: data.user.id,
+                      email: data.user.email
+                    },
+                    redirectTo: '/setup',
+                    tenantSlug: userTenant.slug,
+                  }
                 }
               }
             } catch (lookupErr) {
               console.error('[Auth] Error checking pending_setup tenant:', lookupErr);
             }
 
-            return {
-              success: true,
-              profile: null as any,
-              user: {
-                id: data.user.id,
-                email: data.user.email
-              },
-              warning: 'Profile not found. Please contact administrator.'
+            // Only return 'not found' if profileData wasn't discovered during polling above
+            if (!profileData) {
+              return {
+                success: true,
+                profile: null as any,
+                user: {
+                  id: data.user.id,
+                  email: data.user.email
+                },
+                warning: 'Profile not found. Please contact administrator.'
+              }
             }
           }
         }
@@ -618,6 +668,48 @@ export const authRouter = router({
 
         console.log(`[Signup] Tenant ${safeSlug} registered (pending_setup). Auth user: ${adminUserId}`);
 
+        // Fire background provisioning (non-blocking, fire-and-forget)
+        // This runs the full schema+table+profile setup while the user reads the success screen.
+        // If it fails, the /setup page fallback still works.
+        (async () => {
+          try {
+            const { provisionTenant } = await import('@/lib/tenant/provisioning');
+            await provisionTenant(
+              safeSlug,
+              input.companyName,
+              input.adminEmail,
+              14,
+              adminUserId,
+              {
+                firstName: input.firstName,
+                lastName: input.lastName,
+                phone: input.phone,
+                country: input.country,
+                industry: input.industry,
+                teamSize: input.teamSize,
+              },
+              undefined,
+              true, // skipRegistration — tenant record already created above
+            );
+
+            // Update tenant status: pending_setup → trial
+            await masterDb.update(tenants)
+              .set({ status: 'trial', updated_at: new Date() })
+              .where(eq(tenants.id, newTenant.id));
+
+            // Clear resolver cache so login picks up the new status
+            try {
+              const { clearResolverCache } = await import('@/lib/tenant/resolver');
+              clearResolverCache();
+            } catch {}
+
+            console.log(`[BG-Provision] ✅ Workspace ${safeSlug} auto-provisioned successfully`);
+          } catch (bgErr) {
+            console.error(`[BG-Provision] ❌ Background provisioning failed for ${safeSlug}:`, bgErr);
+            // Status stays pending_setup — user will see /setup fallback on login
+          }
+        })();
+
         return {
           success: true,
           tenantId: newTenant.id,
@@ -636,6 +728,25 @@ export const authRouter = router({
           message: error.message || 'Failed to register workspace',
         });
       }
+    }),
+
+  // Get tenant info for the /setup page heading
+  getSetupInfo: authenticatedProcedure
+    .query(async ({ ctx }) => {
+      const { masterDb } = await import('@/lib/db/master-connection');
+      const { tenants } = await import('@/lib/db/master-schema');
+
+      const tenant = await masterDb.query.tenants.findFirst({
+        where: eq(tenants.admin_email, ctx.user.email),
+      });
+
+      return {
+        companyName: tenant?.company_name || 'Your Workspace',
+        adminEmail: ctx.user.email || '',
+        adminName: ctx.user.user_metadata?.full_name || '',
+        slug: tenant?.slug || '',
+        status: tenant?.status || 'unknown',
+      };
     }),
 
   // Provision workspace schema on first login (called from /setup page)
@@ -682,6 +793,13 @@ export const authRouter = router({
         
         const safeSlug = tenant.slug;
 
+        // Extract firstName/lastName from Supabase user metadata (stored during signup)
+        const userMeta = ctx.user.user_metadata || {};
+        const fullName = userMeta.full_name || '';
+        const nameParts = fullName.split(' ');
+        const firstName = nameParts[0] || '';
+        const lastName = nameParts.slice(1).join(' ') || '';
+
         // Provision schema and tables (skipRegistration=true since tenant record already exists)
         await provisionTenant(
           safeSlug,
@@ -689,7 +807,7 @@ export const authRouter = router({
           tenant.admin_email!,
           tenant.trial_duration_days || 14,
           ctx.user.id,
-          {}, // additionalData already in user_metadata
+          { firstName, lastName },
           undefined, // onProgress
           true, // skipRegistration — tenant record already created during signup
         );

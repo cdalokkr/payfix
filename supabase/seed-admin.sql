@@ -58,7 +58,7 @@ VALUES (
     'srpadmin@saaskit.in',
     'srp admin',
     '/avatars/default-male.png',
-    'admin',
+    'super_admin',
     NOW(),
     NOW(),
     'srp',

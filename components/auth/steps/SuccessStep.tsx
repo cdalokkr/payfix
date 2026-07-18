@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ShieldCheck, ArrowRight } from "lucide-react";
-import { motion } from "framer-motion";
+import { ShieldCheck, ArrowRight, Loader2, CheckCircle2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/auth/ui/button";
 
 const CONFETTI_COLORS = [
@@ -55,9 +55,17 @@ function ConfettiPiece({
 
 export default function SuccessStep({ slug }: { slug?: string }) {
   const [showConfetti, setShowConfetti] = useState(false);
+  const [workspaceReady, setWorkspaceReady] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setShowConfetti(true), 200);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Workspace preparation indicator — transitions to "ready" after ~3 seconds
+  // (background provisioning takes ~2s, this gives a comfortable margin)
+  useEffect(() => {
+    const t = setTimeout(() => setWorkspaceReady(true), 3000);
     return () => clearTimeout(t);
   }, []);
 
@@ -125,13 +133,51 @@ export default function SuccessStep({ slug }: { slug?: string }) {
         your workforce.
       </motion.p>
 
+      {/* Workspace preparation status */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.5, duration: 0.4 }}
+        className="mt-5 flex items-center justify-center gap-2"
+      >
+        <AnimatePresence mode="wait">
+          {workspaceReady ? (
+            <motion.div
+              key="ready"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20"
+            >
+              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+              <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                Workspace ready
+              </span>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="preparing"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100/80 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/40"
+            >
+              <Loader2 className="h-3.5 w-3.5 text-brand-primary animate-spin" />
+              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                Preparing workspace...
+              </span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.45, duration: 0.4 }}
-        className="mt-8"
+        className="mt-6"
       >
-        <Link href={slug ? `/login?tenant=${slug}` : "/login"}>
+        <Link href="/login">
           <Button type="button" className="group">
             <span className="flex items-center justify-center gap-2">
               Go to Sign In

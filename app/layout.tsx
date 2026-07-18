@@ -73,6 +73,7 @@ export const metadata: Metadata = {
   },
 }
 
+import { ToastProvider } from "@/components/auth/ui/Toast"
 import { headers } from 'next/headers'
 
 export default async function RootLayout({
@@ -129,7 +130,9 @@ export default async function RootLayout({
           disableTransitionOnChange
         >
           <TRPCProvider>
-            {children}
+            <ToastProvider>
+              {children}
+            </ToastProvider>
             <SonnerToaster richColors position="top-center" />
             <WebVitalsReporter debug={process.env.NODE_ENV === 'development'} />
             <PWARegister />

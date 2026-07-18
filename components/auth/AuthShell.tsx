@@ -7,7 +7,7 @@ import Logo from "@/components/brand/Logo";
 import ThemeToggle from "@/components/auth/ui/ThemeToggle";
 import MobileMenuDrawer from "./MobileMenuDrawer";
 import BrandPanel from "@/components/brand/BrandPanel";
-import { ToastProvider } from "@/components/auth/ui/Toast";
+
 
 export default function AuthShell({
   variant = "login",
@@ -100,7 +100,7 @@ export default function AuthShell({
           {/* Form container — starts after theme toggle, scrollable */}
           <div className="flex flex-1 items-start lg:items-center justify-center overflow-y-auto no-scrollbar px-4 py-4 sm:px-6 lg:px-6 lg:py-4">
             <div className="flex w-full justify-center">
-              <ToastProvider>{children}</ToastProvider>
+              {children}
             </div>
           </div>
         </div>

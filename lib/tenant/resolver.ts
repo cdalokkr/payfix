@@ -38,18 +38,20 @@ export interface TenantMetadata {
 const resolverCache = new Map<string, { data: TenantMetadata | null; expires: number }>();
 const CACHE_TTL = 3 * 60 * 1000; // 3 minutes cache expiration
 
-export async function resolveTenant(hostname: string): Promise<TenantMetadata | null> {
-    const cached = resolverCache.get(hostname);
-    if (cached && Date.now() < cached.expires) {
-        return cached.data;
+export async function resolveTenant(hostname: string, forceRefresh = false): Promise<TenantMetadata | null> {
+    // Normalize hostname and strip port if present
+    const host = hostname.split(':')[0].toLowerCase().trim();
+
+    if (!forceRefresh) {
+        const cached = resolverCache.get(host);
+        if (cached && Date.now() < cached.expires) {
+            return cached.data;
+        }
     }
 
     const mainDomain = process.env.NEXT_PUBLIC_MAIN_DOMAIN || 'payfix.com';
     let isSubdomain = false;
     let slug = '';
-    
-    // Normalize hostname and strip port if present
-    const host = hostname.split(':')[0].toLowerCase().trim();
 
 
     if (host.endsWith(mainDomain)) {
@@ -150,7 +152,11 @@ export async function resolveTenant(hostname: string): Promise<TenantMetadata | 
  * Clears resolver cache entries for a deleted tenant.
  * Called by deprovisionTenant() during tenant deletion.
  */
-export function clearResolverCache(slug: string): void {
+export function clearResolverCache(slug?: string): void {
+    if (!slug) {
+        resolverCache.clear();
+        return;
+    }
     for (const [key] of resolverCache.entries()) {
         if (key === slug || key.includes(slug)) {
             resolverCache.delete(key);

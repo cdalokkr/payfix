@@ -98,34 +98,34 @@ function ToastCard({ message, onClose }: { message: ToastMessage; onClose: () =>
     >
       <div className="flex gap-3">
         {icons[type]}
-        <div className="flex-1 space-y-1">
-          <p className="text-[13px] font-semibold text-slate-900 dark:text-slate-100 leading-tight">
+        <div className="flex-1">
+          <h4 className="text-sm font-semibold text-slate-900 dark:text-white leading-tight">
             {title}
-          </p>
+          </h4>
           {description && (
-            <p className="text-[12px] text-slate-500 dark:text-slate-400 leading-normal">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-normal">
               {description}
             </p>
           )}
         </div>
         <button
           onClick={onClose}
-          className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors p-0.5 rounded-md self-start cursor-pointer"
+          className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors self-start"
         >
-          <X size={14} />
+          <X size={16} />
         </button>
       </div>
 
-      {/* Progress Bar */}
-      <div className="absolute bottom-0 left-0 h-[3px] bg-slate-100 dark:bg-slate-800 w-full">
-        <div
+      {/* Progress bar indicator */}
+      <div className="absolute bottom-0 left-0 w-full h-[3px] bg-slate-100 dark:bg-slate-800">
+        <motion.div
           className={cn(
-            "h-full transition-all duration-75",
+            "h-full rounded-r-full",
             type === "success" && "bg-emerald-500",
             type === "warning" && "bg-amber-500",
             type === "error" && "bg-red-500"
           )}
-          style={{ width: `${progress}%`, transitionTimingFunction: "linear" }}
+          style={{ width: `${progress}%` }}
         />
       </div>
     </motion.div>

@@ -325,36 +325,19 @@ async function preloadProfile(profileId: string): Promise<Profile | null> {
       if (!result) {
         try {
           const { sql: sqlTag } = await import('drizzle-orm')
-          const activeTenants = await centralDb.execute(sqlTag`
-            SELECT tenant_schema FROM public.tenants 
-            WHERE tenant_schema IS NOT NULL AND status IN ('active', 'trial');
+          const scanResult = await centralDb.execute(sqlTag`
+            SELECT public.find_profile_across_schemas(${profileId}::uuid) as profile;
           `)
 
-          for (const tRow of activeTenants) {
-            const schemaName = tRow.tenant_schema as string
-
-            try {
-              const scanResult = await centralDb.execute(sqlTag`
-                SELECT p.*, row_to_json(d.*) as designation
-                FROM ${sqlTag.raw(schemaName)}.profiles p
-                LEFT JOIN ${sqlTag.raw(schemaName)}.designations d ON d.id = p.designation_id
-                WHERE p.id = ${profileId}
-                LIMIT 1;
-              `)
-
-              if (scanResult[0]) {
-                const fbProfile = scanResult[0] as any
-                if (typeof fbProfile.designation === 'string') {
-                  try { fbProfile.designation = JSON.parse(fbProfile.designation); } catch {}
-                }
-                result = fbProfile
-                if (process.env.NODE_ENV === 'development') {
-                  console.log(`[AUTH-PERF] Profile found via Universal Schema Scan in: ${schemaName}`)
-                }
-                break
-              }
-            } catch (tErr) {
-              // Ignore individual schema query errors
+          const profileJson = scanResult[0]?.profile;
+          if (profileJson) {
+            const fbProfile = profileJson as any
+            if (typeof fbProfile.designation === 'string') {
+              try { fbProfile.designation = JSON.parse(fbProfile.designation); } catch {}
+            }
+            result = fbProfile
+            if (process.env.NODE_ENV === 'development') {
+              console.log(`[AUTH-PERF] Profile found via Universal Schema Scan in: ${fbProfile.tenant_schema}`)
             }
           }
         } catch (scanErr) {
@@ -434,17 +417,20 @@ export async function createOptimizedContext(req?: Request) {
     let headerUserId: string | null = null
     let headerUserEmail: string | null = null
     let headerUserProfileStr: string | null = null
+    let headerUserMetadataStr: string | null = null
 
     if (req) {
       headerUserId = req.headers.get('x-user-id')
       headerUserEmail = req.headers.get('x-user-email')
       headerUserProfileStr = req.headers.get('x-user-profile')
+      headerUserMetadataStr = req.headers.get('x-user-metadata')
     } else {
       try {
         const headerStore = await headers()
         headerUserId = headerStore.get('x-user-id')
         headerUserEmail = headerStore.get('x-user-email')
         headerUserProfileStr = headerStore.get('x-user-profile')
+        headerUserMetadataStr = headerStore.get('x-user-metadata')
       } catch (err) {
         // cookies/headers functions throw in static build or context where headers are unavailable
       }
@@ -453,7 +439,12 @@ export async function createOptimizedContext(req?: Request) {
     if (headerUserId) {
       try {
         const profile = headerUserProfileStr ? JSON.parse(headerUserProfileStr) as Profile : null
-        const user = { id: headerUserId, email: headerUserEmail || '' } as User
+        const userMetadata = headerUserMetadataStr ? JSON.parse(headerUserMetadataStr) : {}
+        const user = { 
+          id: headerUserId, 
+          email: headerUserEmail || '', 
+          user_metadata: userMetadata 
+        } as User
         
         const finalMetrics = endAuthTiming(metrics, {
           userFound: true,

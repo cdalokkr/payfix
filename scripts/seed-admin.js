@@ -44,7 +44,7 @@ const masterAdmin = {
     email: 'srpadmin@saaskit.in',
     full_name: 'srp admin',
     avatar_url: '/avatars/default-male.png',
-    role: 'admin',
+    role: 'super_admin',
     first_name: 'srp',
     last_name: 'admin',
     mobile_no: '8707064200',
@@ -151,7 +151,7 @@ async function createAuthUser() {
         email_confirm: true,
         user_metadata: {
             full_name: masterAdmin.full_name,
-            role: 'admin'
+            role: 'super_admin'
         }
     })
 

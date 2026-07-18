@@ -1,3 +1,4 @@
+import '../scripts/env-config';
 import { centralDb } from '../lib/db';
 import { sql } from 'drizzle-orm';
 

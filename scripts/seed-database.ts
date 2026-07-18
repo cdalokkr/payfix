@@ -295,7 +295,7 @@ async function createAdminProfile(userId: string): Promise<boolean> {
         email: ADMIN_CONFIG.email,
         full_name: `${ADMIN_CONFIG.firstName} ${ADMIN_CONFIG.lastName}`,
         avatar_url: '/avatars/default-male.png',
-        role: 'admin',
+        role: 'super_admin',
         designation_id: 'd1234567-89ab-cdef-0123-456789abcdef',
         first_name: ADMIN_CONFIG.firstName,
         middle_name: '',

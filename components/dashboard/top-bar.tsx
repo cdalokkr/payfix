@@ -13,16 +13,25 @@ import { Building2, ShieldAlert } from "lucide-react"
 interface TopBarProps {
   className?: string
   user?: Profile | null
+  tenantBrand?: string | null
+  tenantLicenseExpiresAt?: string | null
 }
 
-function TopBarComponent({ className, user }: TopBarProps) {
+function TopBarComponent({ 
+  className, 
+  user,
+  tenantBrand,
+  tenantLicenseExpiresAt: propLicenseExpiresAt
+}: TopBarProps) {
   const isSuperAdmin = user?.role === 'super_admin';
 
+  const hasPropData = !!tenantBrand;
   const { data: tenantInfo } = trpc.profile.getTenantInfo.useQuery(undefined, {
-    enabled: !!user && !isSuperAdmin,
+    enabled: !!user && !isSuperAdmin && !hasPropData,
   });
 
-  const licenseExpiresAt = tenantInfo?.licenseExpiresAt;
+  const finalBrandName = tenantBrand || tenantInfo?.brandName;
+  const licenseExpiresAt = propLicenseExpiresAt || tenantInfo?.licenseExpiresAt;
 
   const getLicenseBadge = () => {
     if (!licenseExpiresAt || !user || user.role !== "admin") return null;
@@ -77,13 +86,13 @@ function TopBarComponent({ className, user }: TopBarProps) {
               </span>
             </div>
           </>
-        ) : tenantInfo?.brandName ? (
+        ) : finalBrandName ? (
           <>
             <div className="h-6 w-px bg-border/40 hidden sm:block" />
             <div className="hidden sm:flex items-center gap-2">
               <Building2 className="h-4 w-4 text-muted-foreground/70 shrink-0" />
               <span className="text-sm font-semibold text-foreground/90 truncate max-w-[200px]">
-                {tenantInfo.brandName}
+                {finalBrandName}
               </span>
             </div>
           </>

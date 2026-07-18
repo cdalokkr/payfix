@@ -173,6 +173,7 @@ export async function proxy(request: NextRequest) {
         });
         return response;
     }
+
     
     // Redirect if tenant not found but trying to access subdomains
     const mainDomain = process.env.NEXT_PUBLIC_MAIN_DOMAIN || 'payfix.com';
@@ -278,6 +279,7 @@ export async function proxy(request: NextRequest) {
     requestHeaders.delete('x-user-id')
     requestHeaders.delete('x-user-email')
     requestHeaders.delete('x-user-profile')
+    requestHeaders.delete('x-user-metadata')
 
     // Strip incoming client-side tenant headers to prevent header injection
     requestHeaders.delete('x-tenant-id')
@@ -369,6 +371,34 @@ export async function proxy(request: NextRequest) {
     // Optimized resolution with memory caching to bypass slow Supabase network calls
     const cookieHash = getProxyCookieHash(request)
 
+    // After workspace provisioning, /admin?setup_done=1 signals the proxy to:
+    // 1. Invalidate the stale session cache (which still has role: undefined)
+    // 2. Force-refresh tenant from DB (which now has status: trial)
+    // 3. Redirect to clean /admin URL
+    const setupDone = request.nextUrl.searchParams.get('setup_done');
+    if (setupDone === '1' && cookieHash) {
+        console.log(`[PROXY-SETUP] Post-provisioning redirect detected — clearing stale caches`);
+        proxySessionCache.delete(cookieHash);
+        // Force re-resolve tenant from DB (bypass any stale cache)
+        if (tenant) {
+            const freshTenant = await resolveTenant(tenant.slug, true);
+            if (freshTenant) {
+                tenant = freshTenant;
+            }
+        }
+        const cleanUrl = new URL(request.url);
+        cleanUrl.searchParams.delete('setup_done');
+        return NextResponse.redirect(cleanUrl);
+    }
+
+    // Get cached session before invalidation so the current request can still use it for fast-path
+    let cached = cookieHash ? proxySessionCache.get(cookieHash) : null
+
+    if (cached && Date.now() > cached.expiresAt) {
+        proxySessionCache.delete(cookieHash)
+        cached = null
+    }
+
     // Invalidate proxy session cache immediately if this is a logout request
     if (cookieHash && pathname.includes('auth.logout')) {
         proxySessionCache.delete(cookieHash)
@@ -386,17 +416,16 @@ export async function proxy(request: NextRequest) {
         }
     }
 
-    let cached = cookieHash ? proxySessionCache.get(cookieHash) : null
-
-    if (cached && Date.now() > cached.expiresAt) {
-        proxySessionCache.delete(cookieHash)
-        cached = null
-    }
-
     let user: any = null
     let profile: any = null
 
-    if (cached) {
+    // Optimization: Skip auth resolution for unauthenticated requests or public auth POST endpoints
+    const isLoginOrSignupPost = (pathname.includes('auth.login') || pathname.includes('auth.registerTenant')) && request.method === 'POST';
+
+    if (!cookieHash || isLoginOrSignupPost) {
+        user = null
+        profile = null
+    } else if (cached) {
         user = cached.user
         profile = cached.profile
         if (process.env.NODE_ENV === 'development') {
@@ -517,6 +546,9 @@ export async function proxy(request: NextRequest) {
     if (user) {
         requestHeaders.set('x-user-id', user.id)
         requestHeaders.set('x-user-email', user.email || '')
+        if (user.user_metadata) {
+            requestHeaders.set('x-user-metadata', JSON.stringify(user.user_metadata))
+        }
         if (profile) {
             requestHeaders.set('x-user-profile', JSON.stringify(profile))
         }
@@ -672,6 +704,9 @@ export async function proxy(request: NextRequest) {
         // /setup route is special — allowed for authenticated users with pending_setup tenant, even without a profile
         if (isSetupRoute) {
             if (tenant && tenant.status === 'pending_setup') {
+                if (profile?.role === 'super_admin') {
+                    return redirectWithCookies('/superadmin')
+                }
                 // User is on /setup with a pending_setup tenant — allow access
                 return addSecurityHeaders(response, request)
             } else {
@@ -681,8 +716,8 @@ export async function proxy(request: NextRequest) {
             }
         }
 
-        // For dashboard routes: if tenant is pending_setup, redirect to /setup
-        if (tenant && tenant.status === 'pending_setup' && !isSetupRoute) {
+        // For dashboard routes: if tenant is pending_setup, redirect to /setup (unless user is super_admin)
+        if (tenant && tenant.status === 'pending_setup' && !isSetupRoute && profile?.role !== 'super_admin') {
             console.log(`[PROXY-AUTH] Tenant ${tenant.slug} is pending_setup — redirecting to /setup`)
             return redirectWithCookies('/setup')
         }

@@ -57,6 +57,8 @@ function DashboardSkeleton() {
 
 interface DashboardLayoutProps {
   children?: ReactNode
+  tenantBrand?: string | null
+  tenantLicenseExpiresAt?: string | null
 }
 
 function DashboardContent({
@@ -109,7 +111,11 @@ function getInitialProfile(): Profile | null {
   }
 }
 
-export function DashboardLayout({ children }: DashboardLayoutProps) {
+export function DashboardLayout({ 
+  children,
+  tenantBrand,
+  tenantLicenseExpiresAt
+}: DashboardLayoutProps) {
   const pathname = usePathname()
   const [storedProfile, setStoredProfile] = useState<Profile | null>(null)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
@@ -191,7 +197,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           user={null}
         />
         <SidebarInset className="flex flex-col min-h-screen">
-          <TopBar user={null} />
+          <TopBar 
+            user={null} 
+            tenantBrand={tenantBrand} 
+            tenantLicenseExpiresAt={tenantLicenseExpiresAt} 
+          />
           <div className="flex-1 w-full pt-6 pb-4 px-4">
             <div className="min-h-full p-4 md:p-6 lg:p-8 space-y-6 scroll-smooth-touch mobile-optimized">
               <div className="bg-background/50 backdrop-blur-sm rounded-lg border border-border/20 shadow-sm p-6 md:p-8">
@@ -222,7 +232,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           className={cn(currentRole === 'employee' && "hidden lg:flex")}
         />
         <SidebarInset className="flex flex-col h-screen overflow-hidden">
-          <TopBar user={currentUser} />
+          <TopBar 
+            user={currentUser} 
+            tenantBrand={tenantBrand} 
+            tenantLicenseExpiresAt={tenantLicenseExpiresAt} 
+          />
           <div className="flex-1 overflow-y-auto pt-6 pb-20 lg:pb-4 scroll-smooth">
             <div
               key={pathname}

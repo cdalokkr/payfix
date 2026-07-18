@@ -14,6 +14,8 @@ interface AdminLayoutProps {
   children: React.ReactNode
 }
 
+import { headers } from 'next/headers'
+
 export default async function AdminLayout({ children }: AdminLayoutProps) {
   // Prefetch critical data for the dashboard to eliminate initial loading skeletons
   const dehydratedState = await getCachedDehydratedState(async (client, queryClient) => {
@@ -23,10 +25,17 @@ export default async function AdminLayout({ children }: AdminLayoutProps) {
     });
   });
 
+  const headerStore = await headers();
+  const tenantBrand = headerStore.get('x-tenant-brand');
+  const tenantLicenseExpiresAt = headerStore.get('x-tenant-license-expires-at');
+
   return (
     <ErrorBoundary>
       <HydrationBoundary state={dehydratedState}>
-        <DashboardLayout>
+        <DashboardLayout 
+          tenantBrand={tenantBrand} 
+          tenantLicenseExpiresAt={tenantLicenseExpiresAt}
+        >
           {children}
         </DashboardLayout>
       </HydrationBoundary>

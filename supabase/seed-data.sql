@@ -98,7 +98,7 @@ INSERT INTO public.profiles (
     'srpadmin@saaskit.in',
     'SRP Admin',
     '/avatars/default-male.png',
-    'admin',
+    'super_admin',
     'd1234567-89ab-cdef-0123-456789abcdef',
     'SRP',
     '',
