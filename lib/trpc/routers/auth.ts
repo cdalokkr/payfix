@@ -3,7 +3,7 @@
 // Enhanced Login Validation with Specific Error Types
 // ============================================
 
-import { router, publicProcedure, protectedProcedure } from '../server'
+import { router, publicProcedure, protectedProcedure, authenticatedProcedure } from '../server'
 import { loginSchema, changePasswordSchema } from '@/lib/validations/auth'
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
@@ -639,7 +639,7 @@ export const authRouter = router({
     }),
 
   // Provision workspace schema on first login (called from /setup page)
-  provisionWorkspace: protectedProcedure
+  provisionWorkspace: authenticatedProcedure
     .mutation(async ({ ctx }) => {
       const { masterDb } = await import('@/lib/db/master-connection');
       const { tenants } = await import('@/lib/db/master-schema');

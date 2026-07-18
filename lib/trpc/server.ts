@@ -234,6 +234,24 @@ export const protectedProcedure = publicProcedure.use(async ({ ctx, next }) => {
   })
 })
 
+// Lightweight auth check — requires only ctx.user, NOT ctx.profile
+// Used for provisioning where the tenant schema (and profile) doesn't exist yet
+export const authenticatedProcedure = publicProcedure.use(async ({ ctx, next }) => {
+  if (!ctx.user) {
+    throw new TRPCError({
+      code: 'UNAUTHORIZED',
+      message: 'You must be signed in.',
+    })
+  }
+
+  return next({
+    ctx: {
+      ...ctx,
+      user: ctx.user,
+    }
+  })
+})
+
 export const superAdminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
   if (ctx.profile.role !== 'super_admin') {
     throw new TRPCError({
