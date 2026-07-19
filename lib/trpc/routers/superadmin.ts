@@ -24,6 +24,8 @@ export const superadminRouter = router({
 
           let employeeCount = 0;
           let moderatorCount = 0;
+          let adminName = "Platform Admin";
+          let adminPhone = "N/A";
 
           if (tenant.tenant_schema) {
             try {
@@ -42,6 +44,18 @@ export const superadminRouter = router({
                 WHERE role = 'moderator';
               `);
               moderatorCount = (modRes[0]?.count as number) || 0;
+
+              // Fetch admin details
+              const adminRes = await centralDb.execute(sql`
+                SELECT full_name, mobile_no 
+                FROM ${sql.raw(tenant.tenant_schema)}.profiles 
+                WHERE role = 'admin' 
+                LIMIT 1;
+              `);
+              if (adminRes[0]) {
+                adminName = (adminRes[0].full_name as string) || tenant.company_name + " Admin";
+                adminPhone = (adminRes[0].mobile_no as string) || "N/A";
+              }
             } catch (schemaErr) {
               // Table or schema does not exist yet (e.g. not provisioned)
               employeeCount = -1;
@@ -78,7 +92,9 @@ export const superadminRouter = router({
               secondaryColor: branding.secondary_color
             } : null,
             employeeCount,
-            moderatorCount
+            moderatorCount,
+            adminName,
+            adminPhone
           };
         })
       );

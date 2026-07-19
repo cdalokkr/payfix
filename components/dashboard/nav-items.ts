@@ -449,11 +449,25 @@ export const superAdminNavItems: NavGroup[] = [
     icon: "ShieldUser",
     items: [
       {
-        title: "Control Plane",
+        title: "Dashboard",
         href: "/superadmin",
-        icon: "ShieldUser",
+        icon: "LayoutDashboard",
         moduleId: "superadmin",
-        description: "Manage workspaces and plans"
+        description: "Overview of platform metrics"
+      },
+      {
+        title: "Tenants",
+        href: "/superadmin/tenants",
+        icon: "Building2",
+        moduleId: "superadmin",
+        description: "Manage workspaces"
+      },
+      {
+        title: "Plans",
+        href: "/superadmin/plans",
+        icon: "CreditCard",
+        moduleId: "superadmin",
+        description: "Manage subscription plans"
       }
     ]
   }

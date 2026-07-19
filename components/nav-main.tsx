@@ -78,7 +78,7 @@ const NavItemComponent = React.memo(({ item, pathname }: { item: NavItem; pathna
     // Often Dashboards are /admin. If I go to /admin/users, /admin matches start.
     // User wants: Dashboard active ONLY when on dashboard.
 
-    const isDashboard = item.moduleId === 'dashboard';
+    const isDashboard = item.moduleId === 'dashboard' || ['/superadmin', '/admin', '/moderator', '/employee'].includes(item.href);
     const isActive = isDashboard
         ? pathname === item.href
         : pathname.startsWith(item.href);
