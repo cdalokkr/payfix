@@ -307,10 +307,10 @@ async function preloadProfile(profileId: string): Promise<Profile | null> {
 
       let result = null
 
-      if (centralResult && centralResult.role === 'super_admin') {
+      if (centralResult) {
         result = centralResult
         if (process.env.NODE_ENV === 'development') {
-          console.log(`[AUTH-PERF] Resolved super_admin via centralDb: ${profileId}`)
+          console.log(`[AUTH-PERF] Resolved profile via centralDb: ${profileId} (role: ${centralResult.role})`)
         }
       } else {
         // Query mapped tenant DB
@@ -318,7 +318,7 @@ async function preloadProfile(profileId: string): Promise<Profile | null> {
           where: eq(profiles.id, profileId),
           with: { designation: true }
         })
-        result = tenantResult || centralResult
+        result = tenantResult
       }
 
       // Universal schema scan fallback if profile still not found
@@ -553,9 +553,6 @@ export async function createOptimizedContext(req?: Request) {
     const hasBearerToken = authHeader ? authHeader.startsWith('Bearer ') : false
     const t2 = performance.now();
 
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[AUTH-PERF] createContext setup: cookies: ${(t1 - t0).toFixed(2)}ms, hash/headers: ${(t2 - t1).toFixed(2)}ms. Total: ${(t2 - t0).toFixed(2)}ms`)
-    }
 
     // 1b. BEARER TOKEN FAST PATH (Mobile Native Apps)
     if (hasBearerToken) {

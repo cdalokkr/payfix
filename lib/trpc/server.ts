@@ -54,13 +54,6 @@ export const createContext = async (opts?: { req: Request }) => {
       }
     }
 
-    console.log('[TRPC-CONTEXT] Header extraction:', {
-        tenantId,
-        tenantSlug,
-        tenantSchema,
-        tenantBrand,
-        hasOptsReq: !!opts?.req
-    });
 
     // Record timing for performance monitoring
     const duration = performance.now() - startTime
@@ -172,11 +165,7 @@ const t = initTRPC.context<Context>().create({
 // Middleware to run tRPC procedures inside the resolved tenant context
 const tenantContextMiddleware = t.middleware(async ({ ctx, next }) => {
   if (ctx.tenant) {
-    console.log('[TENANT-MW] Running with tenant context:', ctx.tenant.slug, ctx.tenant.tenantSchema);
     return tenantStorage.run(ctx.tenant, () => {
-      // Verify context is actually active inside run()
-      const verify = tenantStorage.getStore();
-      console.log('[TENANT-MW] Inside run() - context active:', !!verify, verify?.tenantSchema);
       return next();
     });
   }

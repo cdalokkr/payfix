@@ -4,7 +4,7 @@
 // ============================================
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
-import { resolveTenant } from '@/lib/tenant/resolver'
+import { resolveTenant, type TenantMetadata } from '@/lib/tenant/resolver'
 
 // ============================================
 // Request Validation
@@ -116,8 +116,6 @@ export async function proxy(request: NextRequest) {
     const url = request.nextUrl.clone()
 
     // 1. Resolve Tenant from Hostname or Fallbacks (Query Param / Cookie) for testing environments
-    let tenant = await resolveTenant(hostname);
-    let resolvedViaFallback = false;
     const queryTenant = request.nextUrl.searchParams.get('tenant');
     const cookieTenant = request.cookies.get('tenant_fallback')?.value;
 
@@ -130,32 +128,26 @@ export async function proxy(request: NextRequest) {
         return response;
     }
 
-    if (!tenant) {
-        const fallbackSlug = queryTenant || cookieTenant;
-        if (fallbackSlug) {
-            tenant = await resolveTenant(fallbackSlug);
-            if (tenant) {
-                resolvedViaFallback = true;
+    let tenant: TenantMetadata | null = null;
+    let resolvedViaFallback = false;
+
+    // OPTIMIZATION: Check tenant_fallback cookie FIRST before hostname resolution.
+    // This avoids resolving "primary" just to immediately override it.
+    // The cookie is set when a user's profile is discovered in their actual tenant.
+    const preferredSlug = queryTenant || cookieTenant;
+    if (preferredSlug && preferredSlug !== 'primary') {
+        tenant = await resolveTenant(preferredSlug);
+        if (tenant) {
+            resolvedViaFallback = true;
+            if (process.env.NODE_ENV === 'development') {
+                console.log(`[PROXY-TENANT] Resolved tenant via preferred fallback (${queryTenant ? 'query param' : 'cookie'}): ${preferredSlug} → ${tenant.tenant_schema}`);
             }
         }
     }
 
-    // Override primary catch-all with tenant_fallback cookie OR query parameter.
-    // When accessing via localhost or *.vercel.app, the hostname resolves to 'primary' (the
-    // platform tenant). But if a user previously logged in and their profile was discovered
-    // in a different tenant schema, a tenant_fallback cookie was set. We must respect it
-    // so admins/moderators/employees access their own business workspace, not primary.
-    // Also handle ?tenant=xxx query param for signup redirect flows.
-    const overrideSlug = queryTenant || cookieTenant;
-    if (tenant && tenant.slug === 'primary' && overrideSlug && overrideSlug !== 'primary') {
-        const overrideTenant = await resolveTenant(overrideSlug);
-        if (overrideTenant) {
-            tenant = overrideTenant;
-            resolvedViaFallback = true;
-            if (process.env.NODE_ENV === 'development') {
-                console.log(`[PROXY-TENANT] Overriding primary catch-all with ${queryTenant ? 'query param' : 'cookie'}: ${overrideSlug} → ${overrideTenant.tenant_schema}`);
-            }
-        }
+    // Only resolve from hostname if no preferred fallback slug was resolved
+    if (!tenant) {
+        tenant = await resolveTenant(hostname);
     }
 
     // Redirect to clean URL if tenant was passed via query parameter to prevent URL cluttering

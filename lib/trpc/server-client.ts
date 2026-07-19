@@ -18,11 +18,5 @@ export const getServerClient = cache(async () => {
     // tenantStorage is active during procedure execution.
     // The tRPC middleware SHOULD handle this, but as a safety net
     // we also pre-seed tenantStorage here for direct calls.
-    if (context.tenant) {
-        console.log('[SERVER-CLIENT] Tenant context available:', context.tenant.slug, context.tenant.tenantSchema);
-    } else {
-        console.warn('[SERVER-CLIENT] No tenant context — DB queries will use centralDb (public schema)');
-    }
-
     return caller;
 });
