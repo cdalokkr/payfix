@@ -418,11 +418,12 @@ export const authRouter = router({
               (async () => {
                 try {
                   const { getTenantDb } = await import('@/lib/db/tenant-connection');
+                  const { masterDb: mDb } = await import('@/lib/db/master-connection');
                   const { tenants: tenantsTable } = await import('@/lib/db/master-schema');
                   
                   // Lookup database URL and ID to construct correct connection
-                  const tenantRecord = await loginCentralDb.query.tenants.findFirst({
-                    where: (t, { eq }) => eq(t.slug, userTenantSlug)
+                  const tenantRecord = await mDb.query.tenants.findFirst({
+                    where: eq(tenantsTable.slug, userTenantSlug)
                   });
 
                   if (tenantRecord) {
@@ -863,17 +864,44 @@ export const authRouter = router({
     try {
       // Log the logout activity & sign out from Supabase concurrently
       const activityPromise = ctx.user
-        ? ctx.db.insert(activities).values({
-            user_id: ctx.profile?.id || ctx.user.id,
-            activity_type: 'logout',
-            module: 'auth',
-            description: formatActivityDescription({
-              action: 'logout',
-              actorRole: ctx.profile?.role || 'employee',
-              actorEmail: ctx.user.email || '',
-              module: 'auth'
-            }),
-          })
+        ? (async () => {
+            try {
+              const { sql: sqlTag } = await import('drizzle-orm');
+              const { centralDb } = await import('@/lib/db');
+              const userRole = ctx.profile?.role || 'employee';
+
+              // If super_admin, log in public schema.
+              // Otherwise, scan and find the correct tenant schema to avoid FK violations.
+              let activitySchema = 'public';
+              if (userRole !== 'super_admin') {
+                try {
+                  const scanResult = await centralDb.execute(sqlTag`
+                    SELECT public.find_profile_across_schemas(${ctx.profile?.id || ctx.user.id}::uuid) as profile;
+                  `);
+                  const profileJson = scanResult[0]?.profile as any;
+                  if (profileJson && profileJson.tenant_schema) {
+                    activitySchema = profileJson.tenant_schema;
+                  }
+                } catch (scanErr) {
+                  console.error('[AUTH-LOGOUT] Failed to scan schema for logout activity:', scanErr);
+                }
+              }
+
+              const description = formatActivityDescription({
+                action: 'logout',
+                actorRole: userRole,
+                actorEmail: ctx.user.email || '',
+                module: 'auth'
+              });
+
+              await centralDb.execute(sqlTag`
+                INSERT INTO ${sqlTag.raw(activitySchema)}.activities (user_id, activity_type, module, description)
+                VALUES (${ctx.profile?.id || ctx.user.id}, 'logout', 'auth', ${description});
+              `);
+            } catch (err) {
+              console.error('[AUTH-LOGOUT] Background activity logging failed:', err);
+            }
+          })()
         : Promise.resolve();
 
       const [signOutResult] = await Promise.all([
