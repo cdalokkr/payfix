@@ -122,11 +122,11 @@ export default async function RootLayout({
           }}
         />
       </head>
-      <body className={`${inter.variable} ${outfit.variable} font-sans antialiased`} style={{ backgroundColor: '#fafafa' }} suppressHydrationWarning={true}>
+      <body className={`${inter.variable} ${outfit.variable} font-sans antialiased`} suppressHydrationWarning={true}>
         <ThemeProvider
           attribute="class"
           defaultTheme="light"
-          forcedTheme="light"
+          enableSystem
           disableTransitionOnChange
         >
           <TRPCProvider>

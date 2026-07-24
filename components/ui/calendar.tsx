@@ -203,7 +203,7 @@ function CalendarDayButton({
       className={cn(
         buttonVariants({ variant: "ghost" }),
         "flex items-center justify-center leading-none transition-colors duration-150 cursor-pointer disabled:opacity-50 select-none outline-none",
-        "data-[selected-single=true]:bg-indigo-600 data-[selected-single=true]:text-white data-[range-middle=true]:bg-accent data-[range-middle=true]:text-accent-foreground data-[range-start=true]:bg-indigo-600 data-[range-start=true]:text-white data-[range-end=true]:bg-indigo-600 data-[range-end=true]:text-white data-[today=true]:bg-slate-100 data-[today=true]:text-slate-900 group-data-[focused=true]/day:border-ring group-data-[focused=true]/day:ring-ring/50 group-data-[focused=true]/day:ring-[3px]",
+        "data-[selected-single=true]:bg-indigo-600 data-[selected-single=true]:text-white data-[range-middle=true]:bg-accent data-[range-middle=true]:text-accent-foreground data-[range-start=true]:bg-indigo-600 data-[range-start=true]:text-white data-[range-end=true]:bg-indigo-600 data-[range-end=true]:text-white data-[today=true]:bg-slate-100 dark:data-[today=true]:bg-slate-800 data-[today=true]:text-slate-900 dark:data-[today=true]:text-slate-100 group-data-[focused=true]/day:border-ring group-data-[focused=true]/day:ring-ring/50 group-data-[focused=true]/day:ring-[3px]",
         defaultClassNames.day,
         className,
         "!p-0 !h-[24px] !w-[24px] !aspect-square !text-[12px] !font-normal rounded-[6px] mx-auto"

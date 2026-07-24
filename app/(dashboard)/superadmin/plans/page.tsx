@@ -99,7 +99,7 @@ export default function PlansPage() {
   };
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 space-y-6 text-foreground font-sans">
+    <div className="p-4 md:p-6 lg:p-8 space-y-6 text-foreground font-sans bg-[#F8FAFC] dark:bg-[#0B131A] min-h-screen transition-colors duration-200">
       {/* Top Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-6 pb-6 border-b border-border/50">
         <div className="flex items-center gap-3">
@@ -107,10 +107,10 @@ export default function PlansPage() {
             <Shield className="h-8 w-8 text-primary" />
           </div>
           <div>
-            <h1 className="text-3xl font-extrabold tracking-tight">
+            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
               Subscription Plans Control
             </h1>
-            <p className="text-muted-foreground text-sm">
+            <p className="text-muted-foreground dark:text-slate-400 text-sm">
               Configure SaaS subscription levels, resource limits, and monthly price tiers.
             </p>
           </div>
@@ -127,9 +127,9 @@ export default function PlansPage() {
           loading={loadingTenants}
           iconBgColor="bg-blue-500/20"
           iconColor="text-blue-700 dark:text-blue-400"
-          borderColor="border-x-gray-200/80 border-b-gray-200/80 dark:border-x-zinc-800 dark:border-b-zinc-800"
+          borderColor="border-x-gray-200/80 border-b-gray-200/80 dark:border-x-slate-800 dark:border-b-slate-800"
           gradientColor="from-blue-500/10 to-blue-500/5"
-          cardBgColor="bg-[#FFFFFF] dark:bg-zinc-900"
+          cardBgColor="bg-[#FFFFFF] dark:bg-[#121B22]"
           topBorderColor="border-t-blue-700 dark:border-t-blue-500"
           hoverBorderColor="hover:border-t-blue-700 hover:border-x-blue-500/30 hover:border-b-blue-500/30 dark:hover:border-t-blue-500 dark:hover:border-x-blue-500/40 dark:hover:border-b-blue-500/40"
           hoverShadowColor="hover:shadow-[0_8px_30px_rgba(29,78,216,0.12)] dark:hover:shadow-[0_8px_30px_rgba(59,130,246,0.2)]"
@@ -144,9 +144,9 @@ export default function PlansPage() {
           loading={loadingTenants}
           iconBgColor="bg-emerald-500/20"
           iconColor="text-emerald-700 dark:text-emerald-400"
-          borderColor="border-x-gray-200/80 border-b-gray-200/80 dark:border-x-zinc-800 dark:border-b-zinc-800"
+          borderColor="border-x-gray-200/80 border-b-gray-200/80 dark:border-x-slate-800 dark:border-b-slate-800"
           gradientColor="from-emerald-500/10 to-emerald-500/5"
-          cardBgColor="bg-[#FFFFFF] dark:bg-zinc-900"
+          cardBgColor="bg-[#FFFFFF] dark:bg-[#121B22]"
           topBorderColor="border-t-emerald-700 dark:border-t-emerald-500"
           hoverBorderColor="hover:border-t-emerald-700 hover:border-x-emerald-500/30 hover:border-b-emerald-500/30 dark:hover:border-t-emerald-500 dark:hover:border-x-emerald-500/40 dark:hover:border-b-emerald-500/40"
           hoverShadowColor="hover:shadow-[0_8px_30px_rgba(4,120,87,0.12)] dark:hover:shadow-[0_8px_30px_rgba(16,185,129,0.2)]"
@@ -161,9 +161,9 @@ export default function PlansPage() {
           loading={loadingTenants}
           iconBgColor="bg-rose-500/20"
           iconColor="text-rose-700 dark:text-rose-400"
-          borderColor="border-x-gray-200/80 border-b-gray-200/80 dark:border-x-zinc-800 dark:border-b-zinc-800"
+          borderColor="border-x-gray-200/80 border-b-gray-200/80 dark:border-x-slate-800 dark:border-b-slate-800"
           gradientColor="from-rose-500/10 to-rose-500/5"
-          cardBgColor="bg-[#FFFFFF] dark:bg-zinc-900"
+          cardBgColor="bg-[#FFFFFF] dark:bg-[#121B22]"
           topBorderColor="border-t-rose-700 dark:border-t-rose-500"
           hoverBorderColor="hover:border-t-rose-700 hover:border-x-rose-500/30 hover:border-b-rose-500/30 dark:hover:border-t-rose-500 dark:hover:border-x-rose-500/40 dark:hover:border-b-rose-500/40"
           hoverShadowColor="hover:shadow-[0_8px_30px_rgba(225,29,72,0.12)] dark:hover:shadow-[0_8px_30px_rgba(248,113,113,0.2)]"
@@ -178,9 +178,9 @@ export default function PlansPage() {
           loading={loadingPlans}
           iconBgColor="bg-amber-500/20"
           iconColor="text-amber-700 dark:text-amber-400"
-          borderColor="border-x-gray-200/80 border-b-gray-200/80 dark:border-x-zinc-800 dark:border-b-zinc-800"
+          borderColor="border-x-gray-200/80 border-b-gray-200/80 dark:border-x-slate-800 dark:border-b-slate-800"
           gradientColor="from-amber-500/10 to-amber-500/5"
-          cardBgColor="bg-[#FFFFFF] dark:bg-zinc-900"
+          cardBgColor="bg-[#FFFFFF] dark:bg-[#121B22]"
           topBorderColor="border-t-amber-700 dark:border-t-amber-500"
           hoverBorderColor="hover:border-t-amber-700 hover:border-x-amber-500/30 hover:border-b-amber-500/30 dark:hover:border-t-amber-500 dark:hover:border-x-amber-500/40 dark:hover:border-b-amber-500/40"
           hoverShadowColor="hover:shadow-[0_8px_30px_rgba(217,119,6,0.12)] dark:hover:shadow-[0_8px_30px_rgba(245,158,11,0.2)]"
@@ -191,11 +191,11 @@ export default function PlansPage() {
 
       {/* Plans Action Bar & Table */}
       <div className="space-y-6">
-        <div className="flex justify-between items-center bg-card/45 p-4 border border-border/60 rounded-2xl backdrop-blur-xl">
-          <span className="text-sm text-muted-foreground">Manage platform product tiers dynamically.</span>
+        <div className="flex justify-between items-center bg-white dark:bg-[#121B22] p-4 border border-slate-200/90 dark:border-slate-800/80 rounded-2xl shadow-xs">
+          <span className="text-sm text-slate-500 dark:text-slate-400 font-medium">Manage platform product tiers dynamically.</span>
           <button
             onClick={handleOpenCreatePlan}
-            className="flex items-center gap-2 h-[38px] px-5 btn-primary font-bold rounded-[10px] text-sm transition-all shadow-md cursor-pointer"
+            className="flex items-center gap-2 h-[38px] px-5 btn-save-superadmin font-bold rounded-[12px] text-sm cursor-pointer"
           >
             <Plus className="h-4 w-4" />
             Create Plan
@@ -247,16 +247,16 @@ export default function PlansPage() {
 
       {/* Create/Edit Plan Dialog / Modal */}
       {isPlanModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-gray-200 rounded-[20px] p-6 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200 text-left">
-            <div className="flex justify-between items-center pb-4 border-b border-gray-100 mb-5">
-              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-indigo-600 stroke-[1.8]" />
+        <div className="fixed inset-0 bg-slate-900/50 dark:bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#121B22] border border-gray-200 dark:border-slate-800 rounded-[20px] p-6 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200 text-left">
+            <div className="flex justify-between items-center pb-4 border-b border-gray-100 dark:border-slate-800 mb-5">
+              <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <CreditCard className="h-5 w-5 text-indigo-600 dark:text-indigo-400 stroke-[1.8]" />
                 {editingPlan ? "Edit Plan Details" : "Create Subscription Plan"}
               </h2>
               <button 
                 onClick={() => setIsPlanModalOpen(false)} 
-                className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -264,80 +264,80 @@ export default function PlansPage() {
 
             <form onSubmit={handleSavePlan} className="space-y-4">
               <div className="flex flex-col gap-1">
-                <label className="text-[13px] font-medium text-slate-600">Plan Display Name</label>
+                <label className="text-[13px] font-medium text-slate-600 dark:text-slate-400">Plan Display Name</label>
                 <input
                   type="text"
                   placeholder="e.g. Silver Plan"
                   value={planForm.displayName}
                   onChange={(e) => setPlanForm({ ...planForm, displayName: e.target.value })}
-                  className="w-full h-[38px] bg-white border border-gray-200/90 rounded-[12px] px-3 text-xs text-slate-900 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 shadow-xs"
+                  className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-gray-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 shadow-xs"
                   required
                 />
               </div>
 
               {!editingPlan && (
                 <div className="flex flex-col gap-1">
-                  <label className="text-[13px] font-medium text-slate-600">Plan Key Name (Immutable)</label>
+                  <label className="text-[13px] font-medium text-slate-600 dark:text-slate-400">Plan Key Name (Immutable)</label>
                   <input
                     type="text"
                     placeholder="e.g. silver"
                     value={planForm.name}
                     onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })}
-                    className="w-full h-[38px] bg-white border border-gray-200/90 rounded-[12px] px-3 text-xs text-slate-900 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 font-mono shadow-xs"
+                    className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-gray-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 font-mono shadow-xs"
                     required
                   />
                 </div>
               )}
 
               <div className="flex flex-col gap-1">
-                <label className="text-[13px] font-medium text-slate-600">Monthly Price (USD)</label>
+                <label className="text-[13px] font-medium text-slate-600 dark:text-slate-400">Monthly Price (USD)</label>
                 <input
                   type="text"
                   placeholder="29.99"
                   value={planForm.priceMonthly}
                   onChange={(e) => setPlanForm({ ...planForm, priceMonthly: e.target.value })}
-                  className="w-full h-[38px] bg-white border border-gray-200/90 rounded-[12px] px-3 text-xs text-slate-900 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 shadow-xs"
+                  className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-gray-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 shadow-xs"
                   required
                 />
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-[13px] font-medium text-slate-600">Max Allowed Employees</label>
+                <label className="text-[13px] font-medium text-slate-600 dark:text-slate-400">Max Allowed Employees</label>
                 <input
                   type="number"
                   placeholder="15"
                   value={planForm.maxEmployees}
                   onChange={(e) => setPlanForm({ ...planForm, maxEmployees: parseInt(e.target.value) || 0 })}
-                  className="w-full h-[38px] bg-white border border-gray-200/90 rounded-[12px] px-3 text-xs text-slate-900 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 shadow-xs"
+                  className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-gray-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 shadow-xs"
                   required
                 />
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-[13px] font-medium text-slate-600">Max Allowed Moderators</label>
+                <label className="text-[13px] font-medium text-slate-600 dark:text-slate-400">Max Allowed Moderators</label>
                 <input
                   type="number"
                   placeholder="2"
                   value={planForm.maxModerators}
                   onChange={(e) => setPlanForm({ ...planForm, maxModerators: parseInt(e.target.value) || 0 })}
-                  className="w-full h-[38px] bg-white border border-gray-200/90 rounded-[12px] px-3 text-xs text-slate-900 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 shadow-xs"
+                  className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-gray-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 shadow-xs"
                   required
                 />
               </div>
 
               {/* Submit Buttons */}
-              <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 mt-5">
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-slate-800 mt-5">
                 <button
                   type="button"
                   onClick={() => setIsPlanModalOpen(false)}
-                  className="h-[38px] px-4 rounded-[10px] border border-slate-200/80 bg-white/70 backdrop-blur-md text-slate-700 hover:bg-slate-50 shadow-xs font-medium text-xs transition-all cursor-pointer"
+                  className="h-[38px] px-4 rounded-[12px] border border-slate-200/80 dark:border-slate-700 bg-white/70 dark:bg-slate-800/70 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 font-medium text-xs transition-all cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={createPlanMutation.isPending || updatePlanLimitsMutation.isPending}
-                  className="h-[38px] px-5 btn-primary font-semibold text-xs text-white rounded-[10px] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 shadow-sm"
+                  className="h-[38px] px-5 btn-save-superadmin font-semibold text-xs rounded-[12px] flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {(createPlanMutation.isPending || updatePlanLimitsMutation.isPending) && (
                     <Loader2 className="h-4 w-4 animate-spin" />

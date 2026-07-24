@@ -493,7 +493,7 @@ export default function TenantsPage() {
 
           {/* 2. Select Tenant Dropdown (Takes more width space) */}
           <div className="flex-1 flex flex-col gap-1 text-left min-w-[200px]">
-            <label className="text-xs font-semibold text-slate-700">Select Tenant</label>
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Select Tenant</label>
             <Combobox
               options={[
                 ...filteredTenants.map((t: any) => ({
@@ -515,7 +515,7 @@ export default function TenantsPage() {
 
           {/* 3. Status Filter (Reduced Width) */}
           <div className="w-full sm:w-[150px] flex flex-col gap-1 text-left shrink-0">
-            <label className="text-xs font-semibold text-slate-700">Status</label>
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Status</label>
             <Combobox
               options={[
                 { value: "all", label: "All Status", icon: <Activity className="w-3.5 h-3.5 text-slate-400" /> },
@@ -532,7 +532,7 @@ export default function TenantsPage() {
 
           {/* 4. Plan Filter (Reduced Width) */}
           <div className="w-full sm:w-[150px] flex flex-col gap-1 text-left shrink-0">
-            <label className="text-xs font-semibold text-slate-700">Plan</label>
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Plan</label>
             <Combobox
               options={[
                 { value: "all", label: "All Plans" },
@@ -549,14 +549,14 @@ export default function TenantsPage() {
       </div>
 
       {loadingTenants ? (
-        <div className="flex items-center justify-center p-12 bg-white rounded-[16px] border border-slate-200 shadow-xs min-h-[300px]">
-          <Loader2 className="h-8 w-8 text-[#635BFF] animate-spin" />
+        <div className="flex items-center justify-center p-12 bg-white dark:bg-[#121B22] rounded-[16px] border border-slate-200 dark:border-slate-800 shadow-xs min-h-[300px]">
+          <Loader2 className="h-8 w-8 text-[#635BFF] dark:text-[#0BDBB9] animate-spin" />
         </div>
       ) : !selectedTenant ? (
-        <div className="border border-dashed border-slate-200 rounded-[16px] p-12 bg-white flex flex-col items-center justify-center text-center shadow-xs min-h-[320px]">
-          <Building2 className="h-12 w-12 text-[#635BFF] mb-3 stroke-[1.5]" />
-          <h3 className="text-base font-bold text-slate-900 mb-1">No Workspace Selected</h3>
-          <p className="text-slate-500 text-xs max-w-sm">
+        <div className="border border-dashed border-slate-200 dark:border-slate-800 rounded-[16px] p-12 bg-white dark:bg-[#121B22] flex flex-col items-center justify-center text-center shadow-xs min-h-[320px]">
+          <Building2 className="h-12 w-12 text-[#635BFF] dark:text-[#0BDBB9] mb-3 stroke-[1.5]" />
+          <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 mb-1">No Workspace Selected</h3>
+          <p className="text-slate-500 dark:text-slate-400 text-xs max-w-sm">
             Select a tenant workspace from the directory controls above to view admin info, subscription details, invoices, and audit logs.
           </p>
         </div>
@@ -690,48 +690,48 @@ export default function TenantsPage() {
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <UserCheck className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                        <span className="text-xs text-slate-500 whitespace-nowrap">Contact Name</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Contact Name</span>
                       </div>
-                      <span className="text-xs font-semibold text-slate-800 truncate text-right">
+                      <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate text-right">
                         {selectedTenant.adminName || "—"}
                       </span>
                     </div>
 
-                    <div className="h-px bg-slate-100" />
+                    <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
                     {/* Email */}
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <Mail className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                        <span className="text-xs text-slate-500 whitespace-nowrap">Email</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Email</span>
                       </div>
-                      <span className="text-xs font-semibold text-slate-800 truncate text-right">
+                      <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate text-right">
                         {selectedTenant.adminEmail}
                       </span>
                     </div>
 
-                    <div className="h-px bg-slate-100" />
+                    <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
                     {/* Phone */}
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <Phone className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                        <span className="text-xs text-slate-500 whitespace-nowrap">Phone</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Phone</span>
                       </div>
-                      <span className="text-xs font-semibold text-slate-800 text-right">
+                      <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 text-right">
                         {selectedTenant.adminPhone || "—"}
                       </span>
                     </div>
 
-                    <div className="h-px bg-slate-100" />
+                    <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
                     {/* Registration Date */}
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <Clock className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                        <span className="text-xs text-slate-500 whitespace-nowrap">Registered</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Registered</span>
                       </div>
-                      <span className="text-xs font-semibold text-slate-800 text-right">
+                      <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 text-right">
                         {formattedCreated}
                       </span>
                     </div>
@@ -741,7 +741,7 @@ export default function TenantsPage() {
                   <div className="space-y-2.5">
                     {/* Contact Name */}
                     <div className="flex flex-col gap-1 text-left">
-                      <label className="text-xs font-semibold text-slate-600 flex items-center gap-1">
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1">
                         <UserCheck className="w-3.5 h-3.5 text-[#635BFF]" /> Contact Name
                       </label>
                       <input
@@ -753,7 +753,7 @@ export default function TenantsPage() {
                         }}
                         placeholder="Enter contact name..."
                         className={cn(
-                          "w-full h-[38px] px-3 bg-white border border-slate-200 rounded-[12px] text-xs font-medium text-slate-900 outline-none transition-all focus:ring-[3px] focus:ring-indigo-500/10 focus:border-[#635BFF]",
+                          "w-full h-[38px] px-3 bg-white dark:bg-[#0B131A] border border-slate-200 dark:border-slate-700 rounded-[12px] text-xs font-medium text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition-all focus:ring-[3px] focus:ring-indigo-500/10 focus:border-[#635BFF]",
                           adminErrors.adminName && "border-rose-400 focus:border-rose-500 focus:ring-rose-500/10"
                         )}
                       />
@@ -766,7 +766,7 @@ export default function TenantsPage() {
 
                     {/* Email */}
                     <div className="flex flex-col gap-1 text-left">
-                      <label className="text-xs font-semibold text-slate-600 flex items-center gap-1">
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1">
                         <Mail className="w-3.5 h-3.5 text-[#635BFF]" /> Email Address
                       </label>
                       <input
@@ -778,7 +778,7 @@ export default function TenantsPage() {
                         }}
                         placeholder="Enter admin email..."
                         className={cn(
-                          "w-full h-[38px] px-3 bg-white border border-slate-200 rounded-[12px] text-xs font-medium text-slate-900 outline-none transition-all focus:ring-[3px] focus:ring-indigo-500/10 focus:border-[#635BFF]",
+                          "w-full h-[38px] px-3 bg-white dark:bg-[#0B131A] border border-slate-200 dark:border-slate-700 rounded-[12px] text-xs font-medium text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition-all focus:ring-[3px] focus:ring-indigo-500/10 focus:border-[#635BFF]",
                           adminErrors.adminEmail && "border-rose-400 focus:border-rose-500 focus:ring-rose-500/10"
                         )}
                       />
@@ -791,7 +791,7 @@ export default function TenantsPage() {
 
                     {/* Phone */}
                     <div className="flex flex-col gap-1 text-left">
-                      <label className="text-xs font-semibold text-slate-600 flex items-center gap-1">
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1">
                         <Phone className="w-3.5 h-3.5 text-[#635BFF]" /> Phone Number
                       </label>
                       <input
@@ -803,7 +803,7 @@ export default function TenantsPage() {
                         }}
                         placeholder="Enter phone number..."
                         className={cn(
-                          "w-full h-[38px] px-3 bg-white border border-slate-200 rounded-[12px] text-xs font-medium text-slate-900 outline-none transition-all focus:ring-[3px] focus:ring-indigo-500/10 focus:border-[#635BFF]",
+                          "w-full h-[38px] px-3 bg-white dark:bg-[#0B131A] border border-slate-200 dark:border-slate-700 rounded-[12px] text-xs font-medium text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition-all focus:ring-[3px] focus:ring-indigo-500/10 focus:border-[#635BFF]",
                           adminErrors.adminPhone && "border-rose-400 focus:border-rose-500 focus:ring-rose-500/10"
                         )}
                       />
@@ -818,7 +818,7 @@ export default function TenantsPage() {
               </div>
 
               {/* Bottom Action Area */}
-              <div className="pt-3 border-t border-slate-100 mt-3">
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 mt-3">
                 {!isAdminEditing ? (
                   <button
                     type="button"
@@ -839,7 +839,7 @@ export default function TenantsPage() {
                         setAdminPhoneInput(selectedTenant.adminPhone || "");
                         setAdminErrors({});
                       }}
-                      className="h-[38px] flex-1 px-3 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/80 font-semibold text-sm rounded-[12px] flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                      className="h-[38px] flex-1 px-3 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 border border-rose-200/80 dark:border-rose-900/60 font-semibold text-sm rounded-[12px] flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                     >
                       Cancel
                     </button>
@@ -857,12 +857,12 @@ export default function TenantsPage() {
             </div>
 
             {/* Card 2: Subscription Details */}
-            <div className="bg-white border border-slate-200/80 rounded-xl p-4 text-left flex flex-col justify-between">
+            <div className="bg-white dark:bg-[#0B131A]/60 border border-slate-200/80 dark:border-slate-800/80 rounded-xl p-4 text-left flex flex-col justify-between">
               <div>
                 {/* Card Header */}
                 <div className="flex items-center gap-2 mb-3">
                   <CreditCard className="w-5 h-5 text-[#635BFF]" />
-                  <span className="text-sm font-medium text-slate-900">Subscription Details</span>
+                  <span className="text-sm font-medium text-slate-900 dark:text-slate-100">Subscription Details</span>
                 </div>
 
                 {/* Rows / Fields */}
@@ -873,44 +873,44 @@ export default function TenantsPage() {
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <Gift className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                        <span className="text-xs text-slate-500 whitespace-nowrap">Current Plan</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Current Plan</span>
                       </div>
-                      <span className="text-xs font-semibold text-slate-800 text-right">
+                      <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 text-right">
                         {selectedTenant.plan?.displayName || "Free Plan"}
                       </span>
                     </div>
 
-                    <div className="h-px bg-slate-100" />
+                    <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
                     {/* Billing Cycle */}
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <Calendar className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                        <span className="text-xs text-slate-500 whitespace-nowrap">Billing Cycle</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Billing Cycle</span>
                       </div>
-                      <span className="text-xs font-semibold text-slate-800 text-right">Monthly</span>
+                      <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 text-right">Monthly</span>
                     </div>
 
-                    <div className="h-px bg-slate-100" />
+                    <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
                     {/* Amount */}
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <DollarSign className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                        <span className="text-xs text-slate-500 whitespace-nowrap">Amount</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Amount</span>
                       </div>
-                      <span className="text-xs font-semibold text-slate-800 text-right">₹0 / month</span>
+                      <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 text-right">₹0 / month</span>
                     </div>
 
-                    <div className="h-px bg-slate-100" />
+                    <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
                     {/* Expiry Date */}
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <Clock className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                        <span className="text-xs text-slate-500 whitespace-nowrap">Expiry Date</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Expiry Date</span>
                       </div>
-                      <span className="text-xs font-semibold text-slate-800 text-right">
+                      <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 text-right">
                         {formattedExpiry}
                       </span>
                     </div>
@@ -920,13 +920,13 @@ export default function TenantsPage() {
                   <div className="space-y-2.5">
                     {/* Current Plan */}
                     <div className="flex flex-col gap-1 text-left">
-                      <label className="text-xs font-semibold text-slate-600 flex items-center gap-1">
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1">
                         <Gift className="w-3.5 h-3.5 text-[#635BFF]" /> Select Plan
                       </label>
                       <select
                         value={selectedPlanId}
                         onChange={(e) => setSelectedPlanId(e.target.value)}
-                        className="w-full h-[38px] px-3 bg-white border border-slate-200 rounded-[12px] text-xs font-medium text-slate-900 outline-none transition-all focus:ring-[3px] focus:ring-indigo-500/10 focus:border-[#635BFF]"
+                        className="w-full h-[38px] px-3 bg-white dark:bg-[#0B131A] border border-slate-200 dark:border-slate-700 rounded-[12px] text-xs font-medium text-slate-900 dark:text-slate-100 outline-none transition-all focus:ring-[3px] focus:ring-indigo-500/10 focus:border-[#635BFF]"
                       >
                         <option value="">Free Plan ($0.00)</option>
                         {paidPlansList.map((p: any) => (
@@ -937,7 +937,7 @@ export default function TenantsPage() {
 
                     {/* Expiry Date */}
                     <div className="flex flex-col gap-1 text-left">
-                      <label className="text-xs font-semibold text-slate-600 flex items-center gap-1">
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1">
                         <Clock className="w-3.5 h-3.5 text-[#635BFF]" /> License Expiry Date
                       </label>
                       <div className="w-full">
@@ -949,7 +949,7 @@ export default function TenantsPage() {
               </div>
 
               {/* Bottom Action Area */}
-              <div className="pt-3 border-t border-slate-100 mt-3">
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 mt-3">
                 {!isSubEditing ? (
                   <button
                     type="button"
@@ -964,7 +964,7 @@ export default function TenantsPage() {
                     <button
                       type="button"
                       onClick={() => setIsSubEditing(false)}
-                      className="h-[38px] flex-1 px-3 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/80 font-semibold text-sm rounded-[12px] flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                      className="h-[38px] flex-1 px-3 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 border border-rose-200/80 dark:border-rose-900/60 font-semibold text-sm rounded-[12px] flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                     >
                       Cancel
                     </button>
@@ -982,12 +982,12 @@ export default function TenantsPage() {
             </div>
 
             {/* Card 3: Card Security */}
-            <div className="bg-white border border-slate-200/80 rounded-xl p-4 text-left flex flex-col justify-between">
+            <div className="bg-white dark:bg-[#0B131A]/60 border border-slate-200/80 dark:border-slate-800/80 rounded-xl p-4 text-left flex flex-col justify-between">
               <div>
                 {/* Card Header */}
                 <div className="flex items-center gap-2 mb-3">
                   <Key className="w-5 h-5 text-[#635BFF]" />
-                  <span className="text-sm font-medium text-slate-900">Card Security</span>
+                  <span className="text-sm font-medium text-slate-900 dark:text-slate-100">Card Security</span>
                 </div>
 
                 {/* Rows / Fields */}
@@ -998,31 +998,31 @@ export default function TenantsPage() {
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <Lock className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                        <span className="text-xs text-slate-500 whitespace-nowrap">New Password</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">New Password</span>
                       </div>
-                      <span className="text-xs font-mono text-slate-400 text-right">••••••••</span>
+                      <span className="text-xs font-mono text-slate-400 dark:text-slate-500 text-right">••••••••</span>
                     </div>
 
-                    <div className="h-px bg-slate-100" />
+                    <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
                     {/* Confirm Password */}
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <ShieldCheck className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                        <span className="text-xs text-slate-500 whitespace-nowrap">Confirm Password</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Confirm Password</span>
                       </div>
-                      <span className="text-xs font-mono text-slate-400 text-right">••••••••</span>
+                      <span className="text-xs font-mono text-slate-400 dark:text-slate-500 text-right">••••••••</span>
                     </div>
 
-                    <div className="h-px bg-slate-100" />
+                    <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
                     {/* Encryption Status */}
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                        <span className="text-xs text-slate-500 whitespace-nowrap">Encryption</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Encryption</span>
                       </div>
-                      <span className="text-xs font-semibold text-emerald-600 text-right">Active (AES-256)</span>
+                      <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 text-right">Active (AES-256)</span>
                     </div>
                   </div>
                 ) : (
@@ -1030,7 +1030,7 @@ export default function TenantsPage() {
                   <div className="space-y-2.5">
                     {/* New Password */}
                     <div className="flex flex-col gap-1 text-left">
-                      <label className="text-xs font-semibold text-slate-600 flex items-center gap-1">
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1">
                         <Lock className="w-3.5 h-3.5 text-[#635BFF]" /> New Password
                       </label>
                       <input
@@ -1042,7 +1042,7 @@ export default function TenantsPage() {
                         }}
                         placeholder="Enter new password..."
                         className={cn(
-                          "w-full h-[38px] px-3 bg-white border border-slate-200 rounded-[12px] text-xs font-medium text-slate-900 outline-none transition-all focus:ring-[3px] focus:ring-indigo-500/10 focus:border-[#635BFF]",
+                          "w-full h-[38px] px-3 bg-white dark:bg-[#0B131A] border border-slate-200 dark:border-slate-700 rounded-[12px] text-xs font-medium text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition-all focus:ring-[3px] focus:ring-indigo-500/10 focus:border-[#635BFF]",
                           securityErrors.newPassword && "border-rose-400 focus:border-rose-500 focus:ring-rose-500/10"
                         )}
                       />
@@ -1055,7 +1055,7 @@ export default function TenantsPage() {
 
                     {/* Confirm Password */}
                     <div className="flex flex-col gap-1 text-left">
-                      <label className="text-xs font-semibold text-slate-600 flex items-center gap-1">
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1">
                         <ShieldCheck className="w-3.5 h-3.5 text-[#635BFF]" /> Confirm Password
                       </label>
                       <input
@@ -1067,7 +1067,7 @@ export default function TenantsPage() {
                         }}
                         placeholder="Confirm new password..."
                         className={cn(
-                          "w-full h-[38px] px-3 bg-white border border-slate-200 rounded-[12px] text-xs font-medium text-slate-900 outline-none transition-all focus:ring-[3px] focus:ring-indigo-500/10 focus:border-[#635BFF]",
+                          "w-full h-[38px] px-3 bg-white dark:bg-[#0B131A] border border-slate-200 dark:border-slate-700 rounded-[12px] text-xs font-medium text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition-all focus:ring-[3px] focus:ring-indigo-500/10 focus:border-[#635BFF]",
                           securityErrors.confirmPassword && "border-rose-400 focus:border-rose-500 focus:ring-rose-500/10"
                         )}
                       />
@@ -1082,7 +1082,7 @@ export default function TenantsPage() {
               </div>
 
               {/* Bottom Action Area */}
-              <div className="pt-3 border-t border-slate-100 mt-3">
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 mt-3">
                 {!isSecurityEditing ? (
                   <button
                     type="button"
@@ -1102,7 +1102,7 @@ export default function TenantsPage() {
                         setConfirmSecPassword("");
                         setSecurityErrors({});
                       }}
-                      className="h-[38px] flex-1 px-3 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/80 font-semibold text-sm rounded-[12px] flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                      className="h-[38px] flex-1 px-3 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 border border-rose-200/80 dark:border-rose-900/60 font-semibold text-sm rounded-[12px] flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                     >
                       Cancel
                     </button>
@@ -1121,16 +1121,16 @@ export default function TenantsPage() {
           </div>
 
           {/* DEDICATED INNER CARD: Wrapping Tabs and their details inside a card */}
-          <div className="bg-white border border-slate-200/90 rounded-[14px] p-4 shadow-2xs space-y-4 text-left">
+          <div className="bg-white dark:bg-[#0B131A]/60 border border-slate-200/90 dark:border-slate-800/80 rounded-[14px] p-4 shadow-2xs space-y-4 text-left">
             {/* Tabs Header with Underline for Active Tab */}
-            <div className="flex border-b border-slate-100 overflow-x-auto no-scrollbar -mx-2 px-2">
+            <div className="flex border-b border-slate-100 dark:border-slate-800 overflow-x-auto no-scrollbar -mx-2 px-2">
               <button
                 type="button"
                 onClick={() => setActiveTab("payments")}
                 className={`px-4 py-2.5 text-xs sm:text-sm flex items-center whitespace-nowrap -mb-[2px] transition-all cursor-pointer ${
                   activeTab === "payments"
-                    ? "font-extrabold text-[#635BFF] border-b-2 border-[#635BFF]"
-                    : "font-semibold text-slate-400 hover:text-slate-600"
+                    ? "font-extrabold text-[#635BFF] dark:text-[#0BDBB9] border-b-2 border-[#635BFF] dark:border-[#0BDBB9]"
+                    : "font-semibold text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
                 }`}
               >
                 <CreditCard className="w-4 h-4 mr-2 stroke-[1.8]" />
@@ -1141,8 +1141,8 @@ export default function TenantsPage() {
                 onClick={() => setActiveTab("logs")}
                 className={`px-4 py-2.5 text-xs sm:text-sm flex items-center whitespace-nowrap -mb-[2px] transition-all cursor-pointer ${
                   activeTab === "logs"
-                    ? "font-extrabold text-[#635BFF] border-b-2 border-[#635BFF]"
-                    : "font-semibold text-slate-400 hover:text-slate-600"
+                    ? "font-extrabold text-[#635BFF] dark:text-[#0BDBB9] border-b-2 border-[#635BFF] dark:border-[#0BDBB9]"
+                    : "font-semibold text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
                 }`}
               >
                 <Clock className="w-4 h-4 mr-2 stroke-[1.8]" />
@@ -1153,10 +1153,10 @@ export default function TenantsPage() {
             {/* Tab 1: Invoice & Payments Details */}
             {activeTab === "payments" && (
               <div className="space-y-3 animate-in fade-in duration-200 text-left">
-                <div className="overflow-x-auto border border-slate-100 rounded-xl bg-white shadow-2xs">
+                <div className="overflow-x-auto border border-slate-100 dark:border-slate-800 rounded-xl bg-white dark:bg-[#121B22] shadow-2xs">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
-                      <tr className="border-b border-slate-150 text-slate-500 font-semibold bg-slate-50/70">
+                      <tr className="border-b border-slate-200/80 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-semibold bg-slate-50/70 dark:bg-slate-800/40">
                         <th className="py-2.5 px-3">Invoice #</th>
                         <th className="py-2.5 px-3">Invoice Date</th>
                         <th className="py-2.5 px-3">Amount</th>
@@ -1164,14 +1164,14 @@ export default function TenantsPage() {
                         <th className="py-2.5 px-3 text-right">Action</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
                       {getInvoicesList(selectedTenant).map((inv) => (
-                        <tr key={inv.id} className="hover:bg-slate-50/60 transition-colors">
-                          <td className="py-2.5 px-3 font-semibold text-slate-900">{inv.id}</td>
-                          <td className="py-2.5 px-3 text-slate-500 whitespace-nowrap">{inv.date}</td>
-                          <td className="py-2.5 px-3 font-bold text-slate-900">{inv.amount}</td>
+                        <tr key={inv.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/50 transition-colors">
+                          <td className="py-2.5 px-3 font-semibold text-slate-900 dark:text-slate-100">{inv.id}</td>
+                          <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400 whitespace-nowrap">{inv.date}</td>
+                          <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-slate-100">{inv.amount}</td>
                           <td className="py-2.5 px-3">
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100/80 text-emerald-700 border border-emerald-200/60">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100/80 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60">
                               {inv.status}
                             </span>
                           </td>
@@ -1179,7 +1179,7 @@ export default function TenantsPage() {
                             <button
                               type="button"
                               onClick={() => setSelectedInvoice(inv)}
-                              className="px-2.5 py-1 text-[11px] font-semibold border border-slate-200 rounded-lg text-slate-600 hover:text-[#635BFF] hover:border-indigo-300 hover:bg-indigo-50/40 inline-flex items-center gap-1 transition-all cursor-pointer"
+                              className="px-2.5 py-1 text-[11px] font-semibold border border-slate-200 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-300 hover:text-[#635BFF] dark:hover:text-[#0BDBB9] hover:border-indigo-300 dark:hover:border-[#0BDBB9]/40 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/40 inline-flex items-center gap-1 transition-all cursor-pointer"
                             >
                               <Eye className="w-3 h-3 stroke-[1.8]" />
                               View Invoice
@@ -1196,14 +1196,14 @@ export default function TenantsPage() {
             {/* Tab 2: Connecting Node Audit Logs */}
             {activeTab === "logs" && (
               <div className="space-y-4 animate-in fade-in duration-200 text-left">
-                <div className="relative border-l-2 border-indigo-150 ml-4 pl-6 space-y-5 py-2">
+                <div className="relative border-l-2 border-indigo-150 dark:border-indigo-900/60 ml-4 pl-6 space-y-5 py-2">
                   {getAuditLogsList(selectedTenant).map((log, idx) => {
                     const IconComp = log.icon;
                     return (
                       <div key={idx} className="relative">
                         {/* Connecting Node Dot */}
-                        <span className="absolute -left-[31px] top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#635BFF] text-white ring-4 ring-white shadow-xs">
-                          <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                        <span className="absolute -left-[31px] top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#635BFF] dark:bg-[#0BDBB9] text-white dark:text-[#0A1118] ring-4 ring-white dark:ring-[#121B22] shadow-xs">
+                          <span className="h-1.5 w-1.5 rounded-full bg-white dark:bg-[#0A1118]" />
                         </span>
                         <div className="space-y-0.5">
                           <div className="flex items-center justify-between gap-4">
@@ -1211,12 +1211,12 @@ export default function TenantsPage() {
                               <div className={`w-5 h-5 rounded-full ${log.bg} flex items-center justify-center shrink-0`}>
                                 <IconComp className="w-3 h-3 stroke-[2]" />
                               </div>
-                              <h4 className="text-xs font-bold text-slate-900">{log.activity}</h4>
+                              <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">{log.activity}</h4>
                             </div>
-                            <span className="text-[10.5px] text-slate-400 font-semibold whitespace-nowrap">{log.dateTime}</span>
+                            <span className="text-[10.5px] text-slate-400 dark:text-slate-500 font-semibold whitespace-nowrap">{log.dateTime}</span>
                           </div>
-                          <p className="text-[11px] text-slate-500 font-medium pl-7">
-                            Performed by <span className="font-semibold text-slate-700">{log.performedBy}</span> • IP <span className="font-mono text-[10.5px]">{log.ip}</span>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium pl-7">
+                            Performed by <span className="font-semibold text-slate-700 dark:text-slate-200">{log.performedBy}</span> • IP <span className="font-mono text-[10.5px] dark:text-slate-300">{log.ip}</span>
                           </p>
                         </div>
                       </div>
@@ -1231,17 +1231,17 @@ export default function TenantsPage() {
 
       {/* + Add Tenant Modal Dialog */}
       {isAddTenantModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150 text-left space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="fixed inset-0 bg-slate-900/50 dark:bg-black/70 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-[#121B22] border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150 text-left space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <div className="flex items-center space-x-2">
                 <Building2 className="w-5 h-5 text-[#635BFF] stroke-[1.8]" />
-                <h3 className="text-lg font-bold text-slate-900">Add New Tenant Workspace</h3>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Add New Tenant Workspace</h3>
               </div>
               <button
                 type="button"
                 onClick={() => setIsAddTenantModalOpen(false)}
-                className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+                className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4 stroke-[2]" />
               </button>
@@ -1250,7 +1250,7 @@ export default function TenantsPage() {
             <form onSubmit={handleAddTenantSubmit} className="space-y-4">
               <div className="space-y-3">
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold text-slate-700">Company Name *</label>
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Company Name *</label>
                   <input
                     type="text"
                     required
@@ -1260,40 +1260,40 @@ export default function TenantsPage() {
                       setNewCompanyName(e.target.value);
                       if (!newSlug) setNewSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''));
                     }}
-                    className="w-full h-[38px] bg-white border border-slate-200/90 rounded-[12px] px-3 text-xs text-slate-900 outline-none focus:ring-[3px] focus:ring-[#635BFF]/10 focus:border-[#635BFF] transition-all shadow-2xs"
+                    className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-slate-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-[#635BFF]/10 focus:border-[#635BFF] transition-all shadow-2xs"
                   />
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold text-slate-700">Workspace Slug *</label>
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Workspace Slug *</label>
                   <input
                     type="text"
                     required
                     placeholder="e.g. acmecorp"
                     value={newSlug}
                     onChange={(e) => setNewSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''))}
-                    className="w-full h-[38px] bg-white border border-slate-200/90 rounded-[12px] px-3 text-xs text-slate-900 outline-none focus:ring-[3px] focus:ring-[#635BFF]/10 focus:border-[#635BFF] transition-all shadow-2xs font-mono"
+                    className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-slate-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-[#635BFF]/10 focus:border-[#635BFF] transition-all shadow-2xs font-mono"
                   />
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold text-slate-700">Admin Email Address *</label>
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Admin Email Address *</label>
                   <input
                     type="email"
                     required
                     placeholder="admin@acmecorp.com"
                     value={newAdminEmail}
                     onChange={(e) => setNewAdminEmail(e.target.value)}
-                    className="w-full h-[38px] bg-white border border-slate-200/90 rounded-[12px] px-3 text-xs text-slate-900 outline-none focus:ring-[3px] focus:ring-[#635BFF]/10 focus:border-[#635BFF] transition-all shadow-2xs"
+                    className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-slate-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-[#635BFF]/10 focus:border-[#635BFF] transition-all shadow-2xs"
                   />
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
+              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setIsAddTenantModalOpen(false)}
-                  className="h-9 px-4 border border-slate-200 hover:bg-slate-50 text-slate-600 font-semibold rounded-xl text-xs transition-all cursor-pointer"
+                  className="h-9 px-4 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold rounded-xl text-xs transition-all cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -1309,19 +1309,19 @@ export default function TenantsPage() {
         </div>
       )}
 
-      {/* Edit Subscription & Limits Modal (Preserving DatePicker component untouched!) */}
+      {/* Edit Subscription & Limits Modal */}
       {isEditModalOpen && selectedTenant && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white border border-slate-200 rounded-3xl max-w-lg w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150 text-left space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="fixed inset-0 bg-slate-900/50 dark:bg-black/70 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-[#121B22] border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150 text-left space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <div className="flex items-center space-x-2">
                 <Edit2 className="w-5 h-5 text-[#635BFF] stroke-[1.8]" />
-                <h3 className="text-lg font-bold text-slate-900">Edit Subscription & Overrides</h3>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Edit Subscription & Overrides</h3>
               </div>
               <button
                 type="button"
                 onClick={() => setIsEditModalOpen(false)}
-                className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+                className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4 stroke-[2]" />
               </button>
@@ -1331,7 +1331,7 @@ export default function TenantsPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Assigned Plan */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-700">Assigned Subscription Plan</label>
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Assigned Subscription Plan</label>
                   <Combobox
                     options={[
                       { value: "", label: "Free Plan ($0.00/mo)" },
@@ -1344,9 +1344,9 @@ export default function TenantsPage() {
                   />
                 </div>
 
-                {/* License Expiration (Preserving DatePicker component untouched!) */}
+                {/* License Expiration */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-700">License Expiration Date</label>
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">License Expiration Date</label>
                   <DatePicker
                     date={expiryDate}
                     setDate={setExpiryDate}
@@ -1356,34 +1356,34 @@ export default function TenantsPage() {
 
                 {/* Max Employees Override */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-700">Custom Max Employees</label>
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Custom Max Employees</label>
                   <input
                     type="number"
                     placeholder="Use plan default"
                     value={empOverride}
                     onChange={(e) => setEmpOverride(e.target.value)}
-                    className="w-full h-[38px] bg-white border border-slate-200/90 rounded-[12px] px-3 text-xs text-slate-900 outline-none focus:ring-[3px] focus:ring-[#635BFF]/10 focus:border-[#635BFF] transition-all shadow-2xs"
+                    className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-slate-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-[#635BFF]/10 focus:border-[#635BFF] transition-all shadow-2xs"
                   />
                 </div>
 
                 {/* Max Moderators Override */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-700">Custom Max Moderators</label>
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Custom Max Moderators</label>
                   <input
                     type="number"
                     placeholder="Use plan default"
                     value={modOverride}
                     onChange={(e) => setModOverride(e.target.value)}
-                    className="w-full h-[38px] bg-white border border-slate-200/90 rounded-[12px] px-3 text-xs text-slate-900 outline-none focus:ring-[3px] focus:ring-[#635BFF]/10 focus:border-[#635BFF] transition-all shadow-2xs"
+                    className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-slate-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-[#635BFF]/10 focus:border-[#635BFF] transition-all shadow-2xs"
                   />
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
+              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setIsEditModalOpen(false)}
-                  className="h-9 px-4 border border-slate-200 hover:bg-slate-50 text-slate-600 font-semibold rounded-xl text-xs transition-all cursor-pointer"
+                  className="h-9 px-4 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold rounded-xl text-xs transition-all cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -1403,42 +1403,42 @@ export default function TenantsPage() {
 
       {/* Invoice Viewer Modal */}
       {selectedInvoice && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150 text-left space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="fixed inset-0 bg-slate-900/50 dark:bg-black/70 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-[#121B22] border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150 text-left space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <div className="flex items-center space-x-2">
                 <CreditCard className="w-5 h-5 text-[#635BFF] stroke-[1.8]" />
-                <h3 className="text-base font-bold text-slate-900">Invoice {selectedInvoice.id}</h3>
+                <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Invoice {selectedInvoice.id}</h3>
               </div>
               <button
                 type="button"
                 onClick={() => setSelectedInvoice(null)}
-                className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+                className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4 stroke-[2]" />
               </button>
             </div>
 
-            <div className="space-y-3 text-xs text-slate-600 bg-slate-50/60 p-4 rounded-xl border border-slate-100">
+            <div className="space-y-3 text-xs text-slate-600 dark:text-slate-300 bg-slate-50/60 dark:bg-[#0B131A]/60 p-4 rounded-xl border border-slate-100 dark:border-slate-800">
               <div className="flex justify-between">
-                <span className="font-semibold text-slate-500">Invoice Number:</span>
+                <span className="font-semibold text-slate-500 dark:text-slate-400">Invoice Number:</span>
                 <span className="font-mono font-bold text-[#635BFF]">{selectedInvoice.id}</span>
               </div>
               <div className="flex justify-between">
-                <span className="font-semibold text-slate-500">Billing Date:</span>
-                <span className="font-bold text-slate-800">{selectedInvoice.date}</span>
+                <span className="font-semibold text-slate-500 dark:text-slate-400">Billing Date:</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200">{selectedInvoice.date}</span>
               </div>
               <div className="flex justify-between">
-                <span className="font-semibold text-slate-500">Subscription Tier:</span>
-                <span className="font-bold text-slate-800">{selectedTenant?.plan?.displayName || "Free Plan"}</span>
+                <span className="font-semibold text-slate-500 dark:text-slate-400">Subscription Tier:</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200">{selectedTenant?.plan?.displayName || "Free Plan"}</span>
               </div>
               <div className="flex justify-between">
-                <span className="font-semibold text-slate-500">Total Amount Paid:</span>
-                <span className="font-bold text-emerald-600 text-sm">{selectedInvoice.amount}</span>
+                <span className="font-semibold text-slate-500 dark:text-slate-400">Total Amount Paid:</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">{selectedInvoice.amount}</span>
               </div>
               <div className="flex justify-between">
-                <span className="font-semibold text-slate-500">Payment Status:</span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                <span className="font-semibold text-slate-500 dark:text-slate-400">Payment Status:</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60">
                   {selectedInvoice.status}
                 </span>
               </div>
@@ -1448,7 +1448,7 @@ export default function TenantsPage() {
               <button
                 type="button"
                 onClick={() => setSelectedInvoice(null)}
-                className="h-9 px-4 bg-[#635BFF] hover:bg-[#534ae4] text-white font-semibold rounded-xl text-xs transition-all cursor-pointer shadow-xs"
+                className="h-9 px-4 btn-save-superadmin font-semibold rounded-xl text-xs transition-all cursor-pointer"
               >
                 Close Receipt
               </button>
@@ -1459,35 +1459,35 @@ export default function TenantsPage() {
 
       {/* Delete Tenant Confirmation Dialog */}
       {deletingTenant && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white border border-slate-200 rounded-[20px] max-w-md w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150 text-left">
+        <div className="fixed inset-0 bg-slate-900/50 dark:bg-black/70 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-[#121B22] border border-slate-200 dark:border-slate-800 rounded-[20px] max-w-md w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150 text-left">
             <div className="flex items-center gap-3 mb-4">
-              <div className="p-2.5 rounded-full bg-red-50 text-red-500">
+              <div className="p-2.5 rounded-full bg-red-50 dark:bg-red-950/40 text-red-500 dark:text-red-400">
                 <Trash2 className="h-5 w-5 stroke-[1.8]" />
               </div>
-              <h3 className="text-[18px] font-bold text-slate-900">Delete Tenant Permanently</h3>
+              <h3 className="text-[18px] font-bold text-slate-900 dark:text-slate-100">Delete Tenant Permanently</h3>
             </div>
 
             <div className="space-y-3 mb-6">
-              <p className="text-sm text-slate-500">
-                This will permanently delete <strong className="text-slate-900">{deletingTenant.companyName}</strong> and cannot be undone.
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                This will permanently delete <strong className="text-slate-900 dark:text-slate-100">{deletingTenant.companyName}</strong> and cannot be undone.
               </p>
-              <div className="bg-red-50/50 border border-red-100 rounded-xl p-4 text-[12px] text-red-700 space-y-1.5">
-                <p>• Drop database schema <code className="bg-red-100/50 px-1.5 py-0.5 rounded font-bold">{deletingTenant.tenantSchema}</code> and all business tables</p>
+              <div className="bg-red-50/50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/50 rounded-xl p-4 text-[12px] text-red-700 dark:text-red-400 space-y-1.5">
+                <p>• Drop database schema <code className="bg-red-100/50 dark:bg-red-900/50 px-1.5 py-0.5 rounded font-bold">{deletingTenant.tenantSchema}</code> and all business tables</p>
                 <p>• Delete all auth user accounts belonging to this tenant</p>
                 <p>• Remove branding, trial tracking, and tenant record</p>
                 <p>• Clear all cached connections and resolver entries</p>
               </div>
               <div className="pt-2">
-                <label className="text-xs font-semibold text-slate-500 block mb-1.5">
-                  Type <code className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-900 font-bold">{deletingTenant.slug}</code> to confirm:
+                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 block mb-1.5">
+                  Type <code className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-900 dark:text-slate-100 font-bold">{deletingTenant.slug}</code> to confirm:
                 </label>
                 <input
                   type="text"
                   value={deleteConfirmSlug}
                   onChange={(e) => setDeleteConfirmSlug(e.target.value)}
                   placeholder={deletingTenant.slug}
-                  className="w-full h-11 bg-white border border-slate-200 rounded-xl px-3 text-sm text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-red-500 focus:outline-none"
+                  className="w-full h-11 bg-white dark:bg-[#0B131A] border border-slate-200 dark:border-slate-700 rounded-xl px-3 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-red-500 focus:border-red-500 focus:outline-none"
                   autoFocus
                 />
               </div>
@@ -1496,7 +1496,7 @@ export default function TenantsPage() {
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => { setDeletingTenant(null); setDeleteConfirmSlug(""); }}
-                className="h-9 px-4 border border-slate-200 hover:bg-slate-50 text-slate-500 font-semibold rounded-lg text-sm transition-all cursor-pointer"
+                className="h-9 px-4 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 font-semibold rounded-lg text-sm transition-all cursor-pointer"
                 disabled={deleteTenantMutation.isPending}
               >
                 Cancel
@@ -1507,7 +1507,7 @@ export default function TenantsPage() {
                   confirmSlug: deleteConfirmSlug,
                 })}
                 disabled={deleteConfirmSlug !== deletingTenant.slug || deleteTenantMutation.isPending}
-                className="h-9 px-4 bg-red-600 hover:bg-red-700 disabled:bg-red-300 disabled:cursor-not-allowed text-white font-semibold rounded-lg text-sm transition-all flex items-center gap-2 cursor-pointer"
+                className="h-9 px-4 bg-red-600 hover:bg-red-700 disabled:bg-red-300 dark:disabled:bg-red-900/50 disabled:cursor-not-allowed text-white font-semibold rounded-lg text-sm transition-all flex items-center gap-2 cursor-pointer"
               >
                 {deleteTenantMutation.isPending && (
                   <Loader2 className="h-4 w-4 animate-spin" />

@@ -171,14 +171,14 @@ export function LogoutModal({ isOpen, onOpenChange }: LogoutModalProps) {
   return (
     <Dialog open={isOpen} onOpenChange={() => { }}>
       <DialogContent className="sm:max-w-md p-0 overflow-hidden border-none bg-transparent shadow-none" showCloseButton={false}>
-        <div className="bg-white/90 backdrop-blur-2xl border border-white/20 rounded-[2.5rem] p-8 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.1)] relative overflow-hidden">
+        <div className="bg-white/95 dark:bg-[#121B22]/95 backdrop-blur-2xl border border-slate-200/80 dark:border-slate-800/80 rounded-[2.5rem] p-8 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] relative overflow-hidden">
           {/* Background decoration */}
-          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-100/30 blur-3xl rounded-full -mr-16 -mt-16" />
-          <div className="absolute bottom-0 left-0 w-32 h-32 bg-indigo-100/30 blur-3xl rounded-full -ml-16 -mb-16" />
+          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-100/30 dark:bg-blue-900/20 blur-3xl rounded-full -mr-16 -mt-16" />
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-indigo-100/30 dark:bg-indigo-900/20 blur-3xl rounded-full -ml-16 -mb-16" />
 
           <DialogHeader className="mb-2">
-            <DialogTitle className="text-2xl font-bold text-gray-900 text-center tracking-tight">Safe Sign Out</DialogTitle>
-            <DialogDescription className="text-center text-gray-500 text-sm mt-1">
+            <DialogTitle className="text-2xl font-bold text-gray-900 dark:text-slate-100 text-center tracking-tight">Safe Sign Out</DialogTitle>
+            <DialogDescription className="text-center text-gray-500 dark:text-slate-400 text-sm mt-1">
               Securing your session data
             </DialogDescription>
           </DialogHeader>
@@ -210,11 +210,11 @@ export function LogoutModal({ isOpen, onOpenChange }: LogoutModalProps) {
                       }
                     }}
                   >
-                    <CheckCircle className="h-12 w-12 text-green-500" aria-hidden="true" />
+                    <CheckCircle className="h-12 w-12 text-green-500 dark:text-emerald-400" aria-hidden="true" />
                   </motion.div>
                   <div className="flex flex-col gap-1">
                     <motion.p
-                      className="text-lg font-medium text-green-600"
+                      className="text-lg font-medium text-green-600 dark:text-emerald-400"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: [0, 1, 1, 0.7, 1] }}
                       transition={{
@@ -229,7 +229,7 @@ export function LogoutModal({ isOpen, onOpenChange }: LogoutModalProps) {
                       Securely Signed Out!
                     </motion.p>
                     <motion.p
-                      className="text-gray-500 text-sm font-medium"
+                      className="text-gray-500 dark:text-slate-400 text-sm font-medium"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       transition={{ delay: 0.3 }}
@@ -238,7 +238,7 @@ export function LogoutModal({ isOpen, onOpenChange }: LogoutModalProps) {
                     </motion.p>
                     {logoutError && (
                       <motion.p
-                        className="text-xs text-amber-600 mt-2"
+                        className="text-xs text-amber-600 dark:text-amber-400 mt-2"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: 0.4 }}
@@ -258,7 +258,7 @@ export function LogoutModal({ isOpen, onOpenChange }: LogoutModalProps) {
                   className="flex flex-col items-center gap-6 w-full"
                 >
                   <div className="relative">
-                    <Loader2 className="h-10 w-10 animate-spin text-primary" aria-hidden="true" />
+                    <Loader2 className="h-10 w-10 animate-spin text-primary dark:text-[#0BDBB9]" aria-hidden="true" />
                   </div>
 
                   <div className="w-full space-y-4">
@@ -280,7 +280,7 @@ export function LogoutModal({ isOpen, onOpenChange }: LogoutModalProps) {
                       </motion.div>
                     </AnimatePresence>
 
-                    <Progress value={progress} className="h-1.5 w-full bg-gray-100" indicatorClassName="bg-gradient-to-r from-blue-600 to-indigo-600" />
+                    <Progress value={progress} className="h-1.5 w-full bg-gray-100 dark:bg-slate-800" indicatorClassName="bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-[#0BDBB9] dark:to-[#00F5D4]" />
                   </div>
                 </motion.div>
               )}
