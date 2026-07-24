@@ -648,7 +648,13 @@ export const authRouter = router({
       try {
         // 3. Register tenant in control plane with status 'pending_setup' (NO schema provisioning)
         const { masterDb } = await import('@/lib/db/master-connection');
-        const { tenants, tenantBranding } = await import('@/lib/db/master-schema');
+        const { tenants, tenantBranding, tenantPlans } = await import('@/lib/db/master-schema');
+        const { eq } = await import('drizzle-orm');
+
+        // Fetch default 'free' plan from database
+        const freePlan = await masterDb.query.tenantPlans.findFirst({
+          where: eq(tenantPlans.name, 'free')
+        });
 
         const safeSlug = input.slug.toLowerCase().trim().replace(/[^a-z0-9-]/g, '');
         const schemaName = `tenant_${safeSlug.replace(/-/g, '_')}`;
@@ -661,6 +667,7 @@ export const authRouter = router({
           company_name: input.companyName,
           tenant_schema: schemaName,
           status: 'pending_setup',
+          plan_id: freePlan?.id || null,
           trial_start: trialStart,
           trial_end: trialEnd,
           trial_duration_days: 14,

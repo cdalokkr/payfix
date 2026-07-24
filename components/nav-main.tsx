@@ -108,9 +108,10 @@ const NavItemComponent = React.memo(({ item, pathname }: { item: NavItem; pathna
                             tooltip={item.title}
                             isActive={isActive}
                             className={cn(
-                                "relative flex items-center gap-3 pl-[14px] pr-3 py-2 rounded-xl transition-all duration-150 ease-in-out",
-                                "hover:bg-sidebar-accent/50",
-                                isActive && "text-primary font-semibold"
+                                "relative flex items-center gap-3 pl-[14px] pr-3 py-2 rounded-lg transition-all duration-150 ease-in-out",
+                                isActive
+                        ? "bg-[#E0E1FF] text-[#111827] font-bold"
+                        : "text-[#6B7280] hover:bg-[#EEEEFF] hover:text-[#4F46E5]"
                             )}
 
 
@@ -118,10 +119,9 @@ const NavItemComponent = React.memo(({ item, pathname }: { item: NavItem; pathna
                         >
                             <div className="relative flex items-center justify-center">
                                 {Icon && <Icon className={cn(
-                                    "h-5 w-5 transition-transform duration-300 group-hover/collapsible:scale-110 group-hover/collapsible:text-primary",
-                                    isActive ? "text-primary" : "text-sidebar-foreground/70"
+                                    "h-5 w-5 transition-transform duration-200",
+                                    isActive ? "text-[#4F46E5]" : "text-[#9CA3AF] group-hover/menu-btn:text-[#4F46E5]"
                                 )} />}
-
                             </div>
                             <span className="flex-1 truncate group-data-[collapsible=icon]:hidden">{item.title}</span>
                             <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-300 group-data-[state=open]/collapsible:rotate-90 text-sidebar-foreground/40 group-data-[collapsible=icon]:hidden" />
@@ -129,11 +129,11 @@ const NavItemComponent = React.memo(({ item, pathname }: { item: NavItem; pathna
 
                             {isActive && (
                                 <motion.div
-                                    layoutId="active-indicator"
-                                    className="absolute inset-0 bg-primary/10 rounded-xl -z-10"
+                                    layoutId="active-pill-collapsible"
+                                    className="absolute inset-0 bg-[#E0E1FF] rounded-lg -z-10"
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
-                                    transition={{ duration: 0.3 }}
+                                    transition={{ duration: 0.15 }}
                                 />
                             )}
                         </SidebarMenuButton>
@@ -149,8 +149,10 @@ const NavItemComponent = React.memo(({ item, pathname }: { item: NavItem; pathna
                                             asChild
                                             isActive={childIsActive}
                                             className={cn(
-                                                "px-3 py-1.5 rounded-lg transition-all duration-200",
-                                                childIsActive ? "text-primary font-medium bg-primary/5" : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/30"
+                                                "px-3 py-1.5 rounded-lg transition-all duration-150",
+                                                childIsActive
+                                                    ? "text-[#111827] font-bold bg-[#E0E1FF]"
+                                                    : "text-[#9CA3AF] hover:text-[#4F46E5] hover:bg-[#EEEEFF]"
                                             )}
                                         >
                                             <Link href={child.href} className="flex items-center gap-3 w-full">
@@ -175,21 +177,18 @@ const NavItemComponent = React.memo(({ item, pathname }: { item: NavItem; pathna
                 tooltip={item.title}
                 isActive={isActive}
                 className={cn(
-                    "relative flex items-center gap-3 pl-[14px] pr-3 py-2 rounded-xl transition-all duration-150 ease-in-out",
-                    "hover:bg-sidebar-accent/50",
-                    isActive && "text-primary font-semibold"
+                    "relative flex items-center gap-3 pl-[14px] pr-3 py-2 rounded-lg transition-all duration-150 ease-in-out",
+                    isActive
+                        ? "bg-[#E0E1FF] text-[#111827] font-bold"
+                        : "text-[#6B7280] hover:bg-[#EEEEFF] hover:text-[#4F46E5]"
                 )}
-
-
-
             >
                 <Link href={item.href} className="flex items-center gap-3 w-full">
                     <div className="relative flex items-center justify-center">
                         {Icon && <Icon className={cn(
-                            "h-5 w-5 transition-all duration-300 group-hover/nav-item:scale-110 group-hover/nav-item:text-primary",
-                            isActive ? "text-primary" : "text-sidebar-foreground/70"
+                            "h-5 w-5 transition-transform duration-200",
+                            isActive ? "text-[#4F46E5]" : "text-[#9CA3AF] group-hover/nav-item:text-[#4F46E5]"
                         )} />}
-
                     </div>
                     <span className="flex-1 truncate group-data-[collapsible=icon]:hidden">{item.title}</span>
                     {item.badge && (
@@ -200,11 +199,11 @@ const NavItemComponent = React.memo(({ item, pathname }: { item: NavItem; pathna
 
                     {isActive && (
                         <motion.div
-                            layoutId="active-indicator"
-                            className="absolute inset-0 bg-primary/10 rounded-xl -z-10"
+                            layoutId="active-pill-leaf"
+                            className="absolute inset-0 bg-[#E0E1FF] rounded-lg -z-10"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
-                            transition={{ duration: 0.3 }}
+                            transition={{ duration: 0.15 }}
                         />
                     )}
                 </Link>

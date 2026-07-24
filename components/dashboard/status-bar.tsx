@@ -100,28 +100,47 @@ export function StatusBar({ className }: { className?: string }) {
     markDashboardLoaded()
   }, [markDashboardLoaded])
 
+  const getStatusText = () => {
+    switch (cacheStatus.status) {
+      case 'excellent': return 'Excellent';
+      case 'good': return 'Good';
+      case 'fair': return 'Fair';
+      default: return 'Poor';
+    }
+  }
+
+  const getStatusColor = () => {
+    switch (cacheStatus.status) {
+      case 'excellent': return 'text-emerald-500 dark:text-emerald-400';
+      case 'good': return 'text-blue-500 dark:text-blue-400';
+      case 'fair': return 'text-amber-500 dark:text-amber-400';
+      default: return 'text-rose-500 dark:text-rose-400';
+    }
+  }
+
   return (
-    <div className={cn("flex items-center justify-center gap-4 px-4 py-2 bg-muted/50 border-t", className)}>
-      <div className="flex items-center gap-2">
-        <div className="flex items-center gap-1">
-          <span className="text-xs font-medium">Status:</span>
-          <CompactIndependentStatus
-            status={cacheStatus.status}
-            detail={cacheStatus.statusDetail}
-          />
-        </div>
+    <div className={cn("w-full flex items-center justify-between px-6 py-2.5 bg-white dark:bg-zinc-950 border-t border-border/80 text-xs font-sans", className)}>
+      {/* Left - Status indicator */}
+      <div className="flex items-center gap-1.5">
+        <CheckCircle className="h-4 w-4 text-emerald-500" />
+        <span className="text-[#6B7280] font-medium">Status:</span>
+        <span className={cn("font-semibold", getStatusColor())}>{getStatusText()}</span>
+      </div>
 
-        {/* Connection status */}
-        <div className="flex items-center gap-1">
-          {cacheStatus.isConnected ? (
-            <Wifi className="h-3 w-3 text-green-500" />
-          ) : (
-            <WifiOff className="h-3 w-3 text-red-500" />
-          )}
-        </div>
-
-        {/* Last updated */}
+      {/* Center - Connection status and last updated */}
+      <div className="flex items-center gap-1.5">
+        {cacheStatus.isConnected ? (
+          <Wifi className="h-4 w-4 text-emerald-500" />
+        ) : (
+          <WifiOff className="h-4 w-4 text-rose-500 animate-pulse" />
+        )}
         <SimpleLastUpdated timestamp={cacheStatus.lastUpdated} />
+      </div>
+
+      {/* Right - All systems operational */}
+      <div className="flex items-center gap-1.5 text-emerald-500 dark:text-emerald-400 font-semibold">
+        <span className="h-2 w-2 rounded-full bg-emerald-500" />
+        <span>All systems operational</span>
       </div>
     </div>
   )

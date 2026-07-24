@@ -1,6 +1,6 @@
 import { sql, eq } from 'drizzle-orm';
 import { masterDb } from '@/lib/db/master-connection';
-import { tenants, tenantBranding } from '@/lib/db/master-schema';
+import { tenants, tenantBranding, tenantPlans } from '@/lib/db/master-schema';
 import { centralDb } from '@/lib/db';
 
 /**
@@ -160,12 +160,18 @@ export async function provisionTenant(
             const trialEnd = new Date();
             trialEnd.setDate(trialStart.getDate() + trialDurationDays);
 
+            // Fetch default 'free' plan from database
+            const freePlan = await masterDb.query.tenantPlans.findFirst({
+              where: eq(tenantPlans.name, 'free')
+            });
+
             // We run these inserts on the masterDb (which maps to public central schema)
             const [newTenant] = await masterDb.insert(tenants).values({
                 slug: safeSlug,
                 company_name: companyName,
                 tenant_schema: schemaName,
                 status: 'trial',
+                plan_id: freePlan?.id || null,
                 trial_start: trialStart,
                 trial_end: trialEnd,
                 trial_duration_days: trialDurationDays,

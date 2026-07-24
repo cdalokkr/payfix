@@ -192,7 +192,7 @@ const nextConfig: NextConfig = {
       'date-fns',
     ],
     // Enable CSS optimization for smaller bundles
-    optimizeCss: true,
+    optimizeCss: false,
     // Optimize React server components rendering
     optimizeServerReact: true,
     // Cache configuration for client-side router cache

@@ -1,5 +1,6 @@
 body {
-  @apply overscroll-none bg-transparent;
+  @apply overscroll-none;
+  background-color: #fafafa !important;
 }
 
 :root {
@@ -29,12 +30,12 @@ body {
 
 .theme-default,
 .theme-default-scaled {
-  --primary: oklch(0.48 0.23 282);
-  --primary-foreground: oklch(0.985 0.005 285);
+  --primary: #5B5CEB;
+  --primary-foreground: #FFFFFF;
 
   @variant dark {
-    --primary: oklch(0.58 0.22 282);
-    --primary-foreground: oklch(0.985 0.005 285);
+    --primary: #7375EF;
+    --primary-foreground: #FFFFFF;
   }
 }
 

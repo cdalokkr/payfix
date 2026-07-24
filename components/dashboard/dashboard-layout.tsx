@@ -231,13 +231,13 @@ export function DashboardLayout({
           user={currentUser}
           className={cn(currentRole === 'employee' && "hidden lg:flex")}
         />
-        <SidebarInset className="flex flex-col h-screen overflow-hidden">
+        <SidebarInset className="flex flex-col h-screen overflow-hidden bg-background">
           <TopBar 
             user={currentUser} 
             tenantBrand={tenantBrand} 
             tenantLicenseExpiresAt={tenantLicenseExpiresAt} 
           />
-          <div className="flex-1 overflow-y-auto pt-6 pb-20 lg:pb-4 scroll-smooth">
+          <div className="flex-1 overflow-y-auto pt-6 pb-20 lg:pb-4 scroll-smooth bg-background">
             <div
               key={pathname}
               className="w-full animate-fade-in"

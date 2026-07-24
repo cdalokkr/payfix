@@ -67,7 +67,7 @@ function TopBarComponent({
   return (
     <header
       className={cn(
-        "sticky top-0 flex h-16 shrink-0 items-center justify-between gap-2 border-b transition-all duration-300 ease-in-out bg-background/60 backdrop-blur-xl z-30 px-6",
+        "sticky top-0 flex h-16 shrink-0 items-center justify-between gap-2 border-b border-slate-200/80 transition-all duration-300 ease-in-out bg-background z-30 px-6",
         className
       )}
     >

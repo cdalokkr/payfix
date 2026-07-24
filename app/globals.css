@@ -7,50 +7,51 @@
 @import './theme.css';
 
 :root {
+  --font-inter: 'Inter Variable', 'Geist', system-ui, sans-serif;
+  --font-sans: 'Inter Variable', 'Geist', system-ui, sans-serif;
   --radius: 0.625rem;
-  --background: oklch(0.99 0.005 285);
-  --foreground: oklch(0.15 0.02 285);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.15 0.02 285);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.15 0.02 285);
-  --primary: oklch(0.48 0.23 282);
-  /* Premium Deep Indigo */
-  --primary-foreground: oklch(0.985 0.005 285);
-  --secondary: oklch(0.95 0.015 285);
-  --secondary-foreground: oklch(0.25 0.08 285);
-  --muted: oklch(0.95 0.01 285);
-  --muted-foreground: oklch(0.45 0.05 285);
-  --accent: oklch(0.92 0.03 282);
-  --accent-foreground: oklch(0.22 0.1 282);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.91 0.015 285);
-  --input: oklch(0.91 0.015 285);
-  --ring: oklch(0.48 0.23 282 / 0.5);
-  --chart-1: oklch(0.48 0.23 282);
-  --chart-2: oklch(0.55 0.24 295);
-  --chart-3: oklch(0.42 0.18 260);
-  --chart-4: oklch(0.72 0.18 310);
-  --chart-5: oklch(0.65 0.2 330);
-  --sidebar: oklch(0.985 0.005 285);
-  --sidebar-foreground: oklch(0.15 0.02 285);
-  --sidebar-primary: oklch(0.48 0.23 282);
-  --sidebar-primary-foreground: oklch(0.985 0.005 285);
-  --sidebar-accent: oklch(0.93 0.015 285);
-  --sidebar-accent-foreground: oklch(0.2 0.08 285);
-  --sidebar-border: oklch(0.91 0.015 285);
-  --sidebar-ring: oklch(0.48 0.23 282 / 0.5);
+  --background: #fafafa;
+  --foreground: #111827;
+  --card: #FFFFFF;
+  --card-foreground: #111827;
+  --popover: #FFFFFF;
+  --popover-foreground: #111827;
+  --primary: #5B5CEB;
+  --primary-foreground: #FFFFFF;
+  --secondary: #EEF2FF;
+  --secondary-foreground: #3730A3;
+  --muted: #F3F4F6;
+  --muted-foreground: #6B7280;
+  --accent: #EEF2FF;
+  --accent-foreground: #3730A3;
+  --destructive: #EF4444;
+  --border: #E5E7EB;
+  --input: #E5E7EB;
+  --ring: rgba(91, 92, 235, 0.5);
+  --chart-1: #5B5CEB;
+  --chart-2: #3B82F6;
+  --chart-3: #22C55E;
+  --chart-4: #F59E0B;
+  --chart-5: #EF4444;
+  --sidebar: #fafafa;
+  --sidebar-foreground: #111827;
+  --sidebar-primary: #5B5CEB;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #EEEEFF;
+  --sidebar-accent-foreground: #5B5CEB;
+  --sidebar-border: #E5E7EB;
+  --sidebar-ring: rgba(91, 92, 235, 0.5);
   /* Semantic colors */
-  --success: oklch(0.548 0.17 142.5);
-  --success-foreground: oklch(0.985 0 0);
-  --warning: oklch(0.768 0.165 74.1);
-  --warning-foreground: oklch(0.205 0 0);
-  --info: oklch(0.55 0.24 295); /* Deep Violet for Info */
-  --info-foreground: oklch(0.985 0 0);
+  --success: #22C55E;
+  --success-foreground: #FFFFFF;
+  --warning: #F59E0B;
+  --warning-foreground: #FFFFFF;
+  --info: #3B82F6;
+  --info-foreground: #FFFFFF;
 
-  --brand-primary: #2563EB;
-  --brand-hover: #1D4ED8;
-  --brand-light: #DBEAFE;
+  --brand-primary: #5B5CEB;
+  --brand-hover: #4F46E5;
+  --brand-light: #EEF2FF;
   --glass-bg: rgba(255, 255, 255, 0.72);
   --glass-border: rgba(255, 255, 255, 0.6);
   --glass-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.6) inset,
@@ -249,6 +250,10 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+  }
+
+  html {
+    background-color: #fafafa;
   }
 
   body {
@@ -900,3 +905,43 @@
   transform-origin: left;
   transition: transform 500ms var(--ease-premium);
 }
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   SUPERADMIN TENANTS SAVE BUTTON CONCEPT
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.btn-save-superadmin {
+  background-color: #02A88E !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 4px 14px rgba(2, 168, 142, 0.20) !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.btn-save-superadmin:hover:not(:disabled) {
+  background-color: #02907A !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 6px 18px rgba(2, 168, 142, 0.30) !important;
+  transform: translateY(-1px);
+}
+
+.btn-save-superadmin:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-save-superadmin:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dark .btn-save-superadmin {
+  background-color: #0BDBB9 !important;
+  color: #0A1118 !important;
+  box-shadow: 0 4px 20px rgba(11, 219, 185, 0.25) !important;
+}
+
+.dark .btn-save-superadmin:hover:not(:disabled) {
+  background-color: #00F5D4 !important;
+  color: #0A1118 !important;
+  box-shadow: 0 6px 24px rgba(11, 219, 185, 0.40) !important;
+  transform: translateY(-1px);
+}

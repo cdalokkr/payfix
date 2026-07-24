@@ -195,7 +195,7 @@ export default function PlansPage() {
           <span className="text-sm text-muted-foreground">Manage platform product tiers dynamically.</span>
           <button
             onClick={handleOpenCreatePlan}
-            className="flex items-center gap-2 py-2.5 px-4 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl text-sm transition-all shadow-lg hover:shadow-primary/20"
+            className="flex items-center gap-2 h-[38px] px-5 btn-primary font-bold rounded-[10px] text-sm transition-all shadow-md cursor-pointer"
           >
             <Plus className="h-4 w-4" />
             Create Plan
@@ -227,11 +227,11 @@ export default function PlansPage() {
                     <td className="py-4 px-6 font-mono text-xs text-primary">{plan.name}</td>
                     <td className="py-4 px-6 font-semibold text-card-foreground">${plan.priceMonthly}</td>
                     <td className="py-4 px-6 font-mono font-semibold text-muted-foreground">{plan.maxEmployees}</td>
-                    <td className="py-4 px-6 font-mono font-semibold text-muted-foreground">{plan.maxModifiers}</td>
+                    <td className="py-4 px-6 font-mono font-semibold text-muted-foreground">{plan.maxModerators}</td>
                     <td className="py-4 px-6 text-right">
                       <button
                         onClick={() => handleOpenEditPlan(plan)}
-                        className="p-2 bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-lg transition-colors"
+                        className="p-2 bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-lg transition-colors cursor-pointer"
                         title="Edit Plan Configuration"
                       >
                         <Edit2 className="h-4 w-4" />
@@ -248,96 +248,96 @@ export default function PlansPage() {
       {/* Create/Edit Plan Dialog / Modal */}
       {isPlanModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-3xl p-6 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center pb-4 border-b border-border mb-6">
-              <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-primary" />
+          <div className="bg-white border border-gray-200 rounded-[20px] p-6 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200 text-left">
+            <div className="flex justify-between items-center pb-4 border-b border-gray-100 mb-5">
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <CreditCard className="h-5 w-5 text-indigo-600 stroke-[1.8]" />
                 {editingPlan ? "Edit Plan Details" : "Create Subscription Plan"}
               </h2>
               <button 
                 onClick={() => setIsPlanModalOpen(false)} 
-                className="p-1 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground transition-colors"
+                className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             <form onSubmit={handleSavePlan} className="space-y-4">
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-semibold text-muted-foreground">Plan Display Name</label>
+              <div className="flex flex-col gap-1">
+                <label className="text-[13px] font-medium text-slate-600">Plan Display Name</label>
                 <input
                   type="text"
                   placeholder="e.g. Silver Plan"
                   value={planForm.displayName}
                   onChange={(e) => setPlanForm({ ...planForm, displayName: e.target.value })}
-                  className="w-full bg-background border border-border focus:border-primary rounded-xl p-3 text-sm text-foreground outline-none transition-colors"
+                  className="w-full h-[38px] bg-white border border-gray-200/90 rounded-[12px] px-3 text-xs text-slate-900 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 shadow-xs"
                   required
                 />
               </div>
 
               {!editingPlan && (
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-semibold text-muted-foreground">Plan Key Name (Immutable)</label>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[13px] font-medium text-slate-600">Plan Key Name (Immutable)</label>
                   <input
                     type="text"
                     placeholder="e.g. silver"
                     value={planForm.name}
                     onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })}
-                    className="w-full bg-background border border-border focus:border-primary rounded-xl p-3 text-sm text-foreground outline-none transition-colors font-mono"
+                    className="w-full h-[38px] bg-white border border-gray-200/90 rounded-[12px] px-3 text-xs text-slate-900 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 font-mono shadow-xs"
                     required
                   />
                 </div>
               )}
 
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-semibold text-muted-foreground">Monthly Price (USD)</label>
+              <div className="flex flex-col gap-1">
+                <label className="text-[13px] font-medium text-slate-600">Monthly Price (USD)</label>
                 <input
                   type="text"
                   placeholder="29.99"
                   value={planForm.priceMonthly}
                   onChange={(e) => setPlanForm({ ...planForm, priceMonthly: e.target.value })}
-                  className="w-full bg-background border border-border focus:border-primary rounded-xl p-3 text-sm text-foreground outline-none transition-colors"
+                  className="w-full h-[38px] bg-white border border-gray-200/90 rounded-[12px] px-3 text-xs text-slate-900 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 shadow-xs"
                   required
                 />
               </div>
 
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-semibold text-muted-foreground">Max Allowed Employees</label>
+              <div className="flex flex-col gap-1">
+                <label className="text-[13px] font-medium text-slate-600">Max Allowed Employees</label>
                 <input
                   type="number"
                   placeholder="15"
                   value={planForm.maxEmployees}
                   onChange={(e) => setPlanForm({ ...planForm, maxEmployees: parseInt(e.target.value) || 0 })}
-                  className="w-full bg-background border border-border focus:border-primary rounded-xl p-3 text-sm text-foreground outline-none transition-colors"
+                  className="w-full h-[38px] bg-white border border-gray-200/90 rounded-[12px] px-3 text-xs text-slate-900 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 shadow-xs"
                   required
                 />
               </div>
 
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-semibold text-muted-foreground">Max Allowed Moderators</label>
+              <div className="flex flex-col gap-1">
+                <label className="text-[13px] font-medium text-slate-600">Max Allowed Moderators</label>
                 <input
                   type="number"
                   placeholder="2"
                   value={planForm.maxModerators}
                   onChange={(e) => setPlanForm({ ...planForm, maxModerators: parseInt(e.target.value) || 0 })}
-                  className="w-full bg-background border border-border focus:border-primary rounded-xl p-3 text-sm text-foreground outline-none transition-colors"
+                  className="w-full h-[38px] bg-white border border-gray-200/90 rounded-[12px] px-3 text-xs text-slate-900 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 shadow-xs"
                   required
                 />
               </div>
 
               {/* Submit Buttons */}
-              <div className="flex justify-end gap-3 pt-4 border-t border-border mt-6">
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 mt-5">
                 <button
                   type="button"
                   onClick={() => setIsPlanModalOpen(false)}
-                  className="py-2.5 px-4 bg-secondary hover:bg-secondary/80 text-secondary-foreground font-semibold rounded-xl text-sm transition-colors"
+                  className="h-[38px] px-4 rounded-[10px] border border-slate-200/80 bg-white/70 backdrop-blur-md text-slate-700 hover:bg-slate-50 shadow-xs font-medium text-xs transition-all cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={createPlanMutation.isPending || updatePlanLimitsMutation.isPending}
-                  className="py-2.5 px-5 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl text-sm transition-colors flex items-center gap-2"
+                  className="h-[38px] px-5 btn-primary font-semibold text-xs text-white rounded-[10px] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 shadow-sm"
                 >
                   {(createPlanMutation.isPending || updatePlanLimitsMutation.isPending) && (
                     <Loader2 className="h-4 w-4 animate-spin" />

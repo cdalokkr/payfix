@@ -50,7 +50,7 @@ export function AppSidebar({ role, tenants, defaultTenant, onTenantSwitch, user,
   return (
     <Sidebar
       collapsible="icon"
-      className="border-r border-sidebar-border bg-sidebar/70 backdrop-blur-2xl supports-backdrop-filter:bg-sidebar/50"
+      className="border-r border-sidebar-border bg-sidebar"
       {...props}
     >
       <SidebarHeader className="h-16 border-b border-sidebar-border/50 bg-transparent justify-center p-0">
