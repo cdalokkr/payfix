@@ -242,7 +242,7 @@ export function DashboardLayout({
               key={pathname}
               className="w-full animate-fade-in"
             >
-              {children || <DashboardContent profile={profile} isLoading={profileLoading} onLoadingChange={handleLoadingChange} />}
+              {children || <DashboardContent profile={profile} isLoading={profileLoading} onLoadingChange={() => {}} />}
             </div>
           </div>
           <BottomNav />

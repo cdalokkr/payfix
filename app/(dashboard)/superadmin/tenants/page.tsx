@@ -14,6 +14,10 @@ import { cn } from "@/lib/utils";
 import { Combobox } from "@/components/ui/combobox";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { AppButton } from "@/components/ui/button-system";
+import { FormInput } from "@/components/ui/form-input";
+import CreateUserButton from "@/components/ui/create-user-button";
+import { CancelButton } from "@/components/ui/action-button";
 
 // Zod schemas for card validations
 const adminInfoSchema = z.object({
@@ -464,14 +468,14 @@ export default function TenantsPage() {
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium">Quickly find and manage any tenant workspace</p>
           </div>
 
-          <button
-            type="button"
+          <AppButton
+            variant="primary"
+            leftIcon={<Plus className="w-4 h-4 stroke-[2.5]" />}
             onClick={() => setIsAddTenantModalOpen(true)}
-            className="h-[38px] px-4 bg-[#635BFF] hover:bg-[#5249ea] text-white font-semibold text-sm rounded-[12px] flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs hover:shadow-md shrink-0 self-start sm:self-center"
+            className="shrink-0 self-start sm:self-center"
           >
-            <Plus className="w-4 h-4 stroke-[2.5]" />
-            <span>Add Tenant</span>
-          </button>
+            Add Tenant
+          </AppButton>
         </div>
 
         {/* Horizontal Toolbar (Search -> Select Tenant -> Status Filter -> Plan Filter) */}
@@ -737,82 +741,44 @@ export default function TenantsPage() {
                     </div>
                   </div>
                 ) : (
-                  /* Edit Mode: Label above + full width input control */
+                  /* Edit Mode: FormInput components */
                   <div className="space-y-2.5">
-                    {/* Contact Name */}
-                    <div className="flex flex-col gap-1 text-left">
-                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1">
-                        <UserCheck className="w-3.5 h-3.5 text-[#635BFF]" /> Contact Name
-                      </label>
-                      <input
-                        type="text"
-                        value={adminNameInput}
-                        onChange={(e) => {
-                          setAdminNameInput(e.target.value);
-                          if (adminErrors.adminName) setAdminErrors((prev) => ({ ...prev, adminName: undefined }));
-                        }}
-                        placeholder="Enter contact name..."
-                        className={cn(
-                          "w-full h-[38px] px-3 bg-white dark:bg-[#0B131A] border border-slate-200 dark:border-slate-700 rounded-[12px] text-xs font-medium text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition-all focus:ring-[3px] focus:ring-indigo-500/10 focus:border-[#635BFF]",
-                          adminErrors.adminName && "border-rose-400 focus:border-rose-500 focus:ring-rose-500/10"
-                        )}
-                      />
-                      {adminErrors.adminName && (
-                        <span className="text-[11px] font-semibold text-rose-500 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3 text-rose-500" /> {adminErrors.adminName}
-                        </span>
-                      )}
-                    </div>
+                    <FormInput
+                      label="Contact Name"
+                      icon={<UserCheck className="w-3.5 h-3.5 text-[#635BFF]" />}
+                      value={adminNameInput}
+                      onChange={(e) => {
+                        setAdminNameInput(e.target.value);
+                        if (adminErrors.adminName) setAdminErrors((prev) => ({ ...prev, adminName: undefined }));
+                      }}
+                      placeholder="Enter contact name..."
+                      error={adminErrors.adminName}
+                    />
 
-                    {/* Email */}
-                    <div className="flex flex-col gap-1 text-left">
-                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1">
-                        <Mail className="w-3.5 h-3.5 text-[#635BFF]" /> Email Address
-                      </label>
-                      <input
-                        type="email"
-                        value={adminEmailInput}
-                        onChange={(e) => {
-                          setAdminEmailInput(e.target.value);
-                          if (adminErrors.adminEmail) setAdminErrors((prev) => ({ ...prev, adminEmail: undefined }));
-                        }}
-                        placeholder="Enter admin email..."
-                        className={cn(
-                          "w-full h-[38px] px-3 bg-white dark:bg-[#0B131A] border border-slate-200 dark:border-slate-700 rounded-[12px] text-xs font-medium text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition-all focus:ring-[3px] focus:ring-indigo-500/10 focus:border-[#635BFF]",
-                          adminErrors.adminEmail && "border-rose-400 focus:border-rose-500 focus:ring-rose-500/10"
-                        )}
-                      />
-                      {adminErrors.adminEmail && (
-                        <span className="text-[11px] font-semibold text-rose-500 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3 text-rose-500" /> {adminErrors.adminEmail}
-                        </span>
-                      )}
-                    </div>
+                    <FormInput
+                      label="Email Address"
+                      icon={<Mail className="w-3.5 h-3.5 text-[#635BFF]" />}
+                      type="email"
+                      value={adminEmailInput}
+                      onChange={(e) => {
+                        setAdminEmailInput(e.target.value);
+                        if (adminErrors.adminEmail) setAdminErrors((prev) => ({ ...prev, adminEmail: undefined }));
+                      }}
+                      placeholder="Enter admin email..."
+                      error={adminErrors.adminEmail}
+                    />
 
-                    {/* Phone */}
-                    <div className="flex flex-col gap-1 text-left">
-                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1">
-                        <Phone className="w-3.5 h-3.5 text-[#635BFF]" /> Phone Number
-                      </label>
-                      <input
-                        type="text"
-                        value={adminPhoneInput}
-                        onChange={(e) => {
-                          setAdminPhoneInput(e.target.value);
-                          if (adminErrors.adminPhone) setAdminErrors((prev) => ({ ...prev, adminPhone: undefined }));
-                        }}
-                        placeholder="Enter phone number..."
-                        className={cn(
-                          "w-full h-[38px] px-3 bg-white dark:bg-[#0B131A] border border-slate-200 dark:border-slate-700 rounded-[12px] text-xs font-medium text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition-all focus:ring-[3px] focus:ring-indigo-500/10 focus:border-[#635BFF]",
-                          adminErrors.adminPhone && "border-rose-400 focus:border-rose-500 focus:ring-rose-500/10"
-                        )}
-                      />
-                      {adminErrors.adminPhone && (
-                        <span className="text-[11px] font-semibold text-rose-500 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3 text-rose-500" /> {adminErrors.adminPhone}
-                        </span>
-                      )}
-                    </div>
+                    <FormInput
+                      label="Phone Number"
+                      icon={<Phone className="w-3.5 h-3.5 text-[#635BFF]" />}
+                      value={adminPhoneInput}
+                      onChange={(e) => {
+                        setAdminPhoneInput(e.target.value);
+                        if (adminErrors.adminPhone) setAdminErrors((prev) => ({ ...prev, adminPhone: undefined }));
+                      }}
+                      placeholder="Enter phone number..."
+                      error={adminErrors.adminPhone}
+                    />
                   </div>
                 )}
               </div>
@@ -820,18 +786,19 @@ export default function TenantsPage() {
               {/* Bottom Action Area */}
               <div className="pt-3 border-t border-slate-100 dark:border-slate-800 mt-3">
                 {!isAdminEditing ? (
-                  <button
-                    type="button"
+                  <AppButton
+                    variant="primary"
+                    fullWidth
+                    leftIcon={<Edit2 className="w-4 h-4 text-white" />}
                     onClick={() => setIsAdminEditing(true)}
-                    className="h-[38px] w-full px-4 bg-[#635BFF] hover:bg-[#5249ea] text-white font-semibold text-sm rounded-[12px] flex items-center justify-center gap-1.5 shadow-xs hover:shadow-md transition-all cursor-pointer"
                   >
-                    <Edit2 className="w-4 h-4 text-white" />
                     Edit Admin Info
-                  </button>
+                  </AppButton>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <button
-                      type="button"
+                    <CancelButton
+                      size="md"
+                      className="flex-1"
                       onClick={() => {
                         setIsAdminEditing(false);
                         setAdminNameInput(selectedTenant.adminName || "");
@@ -839,18 +806,18 @@ export default function TenantsPage() {
                         setAdminPhoneInput(selectedTenant.adminPhone || "");
                         setAdminErrors({});
                       }}
-                      className="h-[38px] flex-1 px-3 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 border border-rose-200/80 dark:border-rose-900/60 font-semibold text-sm rounded-[12px] flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                     >
                       Cancel
-                    </button>
-                    <button
-                      type="button"
+                    </CancelButton>
+                    <CreateUserButton
+                      mode="edit"
+                      size="md"
+                      className="flex-1"
+                      asyncState={isAdminSaving ? 'loading' : 'idle'}
                       onClick={handleSaveAdminInfo}
-                      disabled={isAdminSaving}
-                      className="btn-save-superadmin h-[38px] flex-1 px-3 font-semibold text-sm rounded-[12px] flex items-center justify-center gap-1.5 cursor-pointer"
                     >
-                      {isAdminSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
-                    </button>
+                      Save
+                    </CreateUserButton>
                   </div>
                 )}
               </div>
@@ -951,31 +918,32 @@ export default function TenantsPage() {
               {/* Bottom Action Area */}
               <div className="pt-3 border-t border-slate-100 dark:border-slate-800 mt-3">
                 {!isSubEditing ? (
-                  <button
-                    type="button"
+                  <AppButton
+                    variant="primary"
+                    fullWidth
+                    leftIcon={<Edit2 className="w-4 h-4 text-white" />}
                     onClick={() => setIsSubEditing(true)}
-                    className="h-[38px] w-full px-4 bg-[#635BFF] hover:bg-[#5249ea] text-white font-semibold text-sm rounded-[12px] flex items-center justify-center gap-1.5 shadow-xs hover:shadow-md transition-all cursor-pointer"
                   >
-                    <Edit2 className="w-4 h-4 text-white" />
                     Edit Subscription
-                  </button>
+                  </AppButton>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <button
-                      type="button"
+                    <CancelButton
+                      size="md"
+                      className="flex-1"
                       onClick={() => setIsSubEditing(false)}
-                      className="h-[38px] flex-1 px-3 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 border border-rose-200/80 dark:border-rose-900/60 font-semibold text-sm rounded-[12px] flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                     >
                       Cancel
-                    </button>
-                    <button
-                      type="button"
+                    </CancelButton>
+                    <CreateUserButton
+                      mode="edit"
+                      size="md"
+                      className="flex-1"
+                      asyncState={isSubSaving ? 'loading' : 'idle'}
                       onClick={handleSaveSubDetails}
-                      disabled={isSubSaving}
-                      className="btn-save-superadmin h-[38px] flex-1 px-3 font-semibold text-sm rounded-[12px] flex items-center justify-center gap-1.5 cursor-pointer"
                     >
-                      {isSubSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
-                    </button>
+                      Save
+                    </CreateUserButton>
                   </div>
                 )}
               </div>
@@ -1026,57 +994,33 @@ export default function TenantsPage() {
                     </div>
                   </div>
                 ) : (
-                  /* Edit Mode: Label above + full width input control */
+                  /* Edit Mode: FormInput components */
                   <div className="space-y-2.5">
-                    {/* New Password */}
-                    <div className="flex flex-col gap-1 text-left">
-                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1">
-                        <Lock className="w-3.5 h-3.5 text-[#635BFF]" /> New Password
-                      </label>
-                      <input
-                        type="password"
-                        value={newSecPassword}
-                        onChange={(e) => {
-                          setNewSecPassword(e.target.value);
-                          if (securityErrors.newPassword) setSecurityErrors((prev) => ({ ...prev, newPassword: undefined }));
-                        }}
-                        placeholder="Enter new password..."
-                        className={cn(
-                          "w-full h-[38px] px-3 bg-white dark:bg-[#0B131A] border border-slate-200 dark:border-slate-700 rounded-[12px] text-xs font-medium text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition-all focus:ring-[3px] focus:ring-indigo-500/10 focus:border-[#635BFF]",
-                          securityErrors.newPassword && "border-rose-400 focus:border-rose-500 focus:ring-rose-500/10"
-                        )}
-                      />
-                      {securityErrors.newPassword && (
-                        <span className="text-[11px] font-semibold text-rose-500 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3 text-rose-500" /> {securityErrors.newPassword}
-                        </span>
-                      )}
-                    </div>
+                    <FormInput
+                      label="New Password"
+                      icon={<Lock className="w-3.5 h-3.5 text-[#635BFF]" />}
+                      type="password"
+                      value={newSecPassword}
+                      onChange={(e) => {
+                        setNewSecPassword(e.target.value);
+                        if (securityErrors.newPassword) setSecurityErrors((prev) => ({ ...prev, newPassword: undefined }));
+                      }}
+                      placeholder="Enter new password..."
+                      error={securityErrors.newPassword}
+                    />
 
-                    {/* Confirm Password */}
-                    <div className="flex flex-col gap-1 text-left">
-                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1">
-                        <ShieldCheck className="w-3.5 h-3.5 text-[#635BFF]" /> Confirm Password
-                      </label>
-                      <input
-                        type="password"
-                        value={confirmSecPassword}
-                        onChange={(e) => {
-                          setConfirmSecPassword(e.target.value);
-                          if (securityErrors.confirmPassword) setSecurityErrors((prev) => ({ ...prev, confirmPassword: undefined }));
-                        }}
-                        placeholder="Confirm new password..."
-                        className={cn(
-                          "w-full h-[38px] px-3 bg-white dark:bg-[#0B131A] border border-slate-200 dark:border-slate-700 rounded-[12px] text-xs font-medium text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition-all focus:ring-[3px] focus:ring-indigo-500/10 focus:border-[#635BFF]",
-                          securityErrors.confirmPassword && "border-rose-400 focus:border-rose-500 focus:ring-rose-500/10"
-                        )}
-                      />
-                      {securityErrors.confirmPassword && (
-                        <span className="text-[11px] font-semibold text-rose-500 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3 text-rose-500" /> {securityErrors.confirmPassword}
-                        </span>
-                      )}
-                    </div>
+                    <FormInput
+                      label="Confirm Password"
+                      icon={<ShieldCheck className="w-3.5 h-3.5 text-[#635BFF]" />}
+                      type="password"
+                      value={confirmSecPassword}
+                      onChange={(e) => {
+                        setConfirmSecPassword(e.target.value);
+                        if (securityErrors.confirmPassword) setSecurityErrors((prev) => ({ ...prev, confirmPassword: undefined }));
+                      }}
+                      placeholder="Confirm new password..."
+                      error={securityErrors.confirmPassword}
+                    />
                   </div>
                 )}
               </div>
@@ -1084,36 +1028,37 @@ export default function TenantsPage() {
               {/* Bottom Action Area */}
               <div className="pt-3 border-t border-slate-100 dark:border-slate-800 mt-3">
                 {!isSecurityEditing ? (
-                  <button
-                    type="button"
+                  <AppButton
+                    variant="primary"
+                    fullWidth
+                    leftIcon={<Edit2 className="w-4 h-4 text-white" />}
                     onClick={() => setIsSecurityEditing(true)}
-                    className="h-[38px] w-full px-4 bg-[#635BFF] hover:bg-[#5249ea] text-white font-semibold text-sm rounded-[12px] flex items-center justify-center gap-1.5 shadow-xs hover:shadow-md transition-all cursor-pointer"
                   >
-                    <Edit2 className="w-4 h-4 text-white" />
                     Reset Password
-                  </button>
+                  </AppButton>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <button
-                      type="button"
+                    <CancelButton
+                      size="md"
+                      className="flex-1"
                       onClick={() => {
                         setIsSecurityEditing(false);
                         setNewSecPassword("");
                         setConfirmSecPassword("");
                         setSecurityErrors({});
                       }}
-                      className="h-[38px] flex-1 px-3 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 border border-rose-200/80 dark:border-rose-900/60 font-semibold text-sm rounded-[12px] flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                     >
                       Cancel
-                    </button>
-                    <button
-                      type="button"
+                    </CancelButton>
+                    <CreateUserButton
+                      mode="edit"
+                      size="md"
+                      className="flex-1"
+                      asyncState={isSecuritySaving ? 'loading' : 'idle'}
                       onClick={handleSaveSecurity}
-                      disabled={isSecuritySaving}
-                      className="btn-save-superadmin h-[38px] flex-1 px-3 font-semibold text-sm rounded-[12px] flex items-center justify-center gap-1.5 cursor-pointer"
                     >
-                      {isSecuritySaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
-                    </button>
+                      Save
+                    </CreateUserButton>
                   </div>
                 )}
               </div>
@@ -1290,19 +1235,19 @@ export default function TenantsPage() {
               </div>
 
               <div className="flex justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  type="button"
+                <CancelButton
+                  size="md"
                   onClick={() => setIsAddTenantModalOpen(false)}
-                  className="h-9 px-4 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold rounded-xl text-xs transition-all cursor-pointer"
                 >
                   Cancel
-                </button>
-                <button
+                </CancelButton>
+                <CreateUserButton
                   type="submit"
-                  className="btn-save-superadmin h-9 px-5 font-semibold rounded-xl text-xs cursor-pointer"
+                  mode="edit"
+                  size="md"
                 >
                   Provision Tenant
-                </button>
+                </CreateUserButton>
               </div>
             </form>
           </div>
@@ -1380,21 +1325,20 @@ export default function TenantsPage() {
               </div>
 
               <div className="flex justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  type="button"
+                <CancelButton
+                  size="md"
                   onClick={() => setIsEditModalOpen(false)}
-                  className="h-9 px-4 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold rounded-xl text-xs transition-all cursor-pointer"
                 >
                   Cancel
-                </button>
-                <button
+                </CancelButton>
+                <CreateUserButton
                   type="submit"
-                  disabled={updatePlanMutation.isPending}
-                  className="btn-save-superadmin h-9 px-5 font-semibold rounded-xl text-xs flex items-center gap-2 cursor-pointer"
+                  mode="edit"
+                  size="md"
+                  asyncState={updatePlanMutation.isPending ? 'loading' : 'idle'}
                 >
-                  {updatePlanMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   Save Subscription
-                </button>
+                </CreateUserButton>
               </div>
             </form>
           </div>

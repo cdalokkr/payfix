@@ -154,7 +154,7 @@ export function useRealTimeMonitoring(config: Partial<MonitoringConfig> = {}) {
             updateHealthStatus(healthStatus)
 
             // Run performance analysis if enabled
-            let performanceReport = null
+            let performanceReport: any = null
             if (finalConfig.enablePerformanceAnalysis) {
                 performanceReport = await runPerformanceAnalysis()
             }

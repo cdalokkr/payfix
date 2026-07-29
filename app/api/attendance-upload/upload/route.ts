@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
         .from(profiles)
         .where(eq(profiles.status, 'active'))
         
-        const emailToProfile = new Map(allProfiles.map(p => [p.email.toLowerCase(), p]))
+        const emailToProfile = new Map<string, any>(allProfiles.map(p => [p.email.toLowerCase(), p]))
 
         if (type === 'daily') {
             const result = await processDailyUpload(dataRows, emailToProfile, profile.id, profile.full_name || 'Admin', preview)

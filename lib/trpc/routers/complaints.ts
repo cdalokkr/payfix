@@ -42,7 +42,7 @@ export const complaintsRouter = router({
       offset: z.number().min(0).default(0),
     }).optional())
     .query(async ({ ctx, input }) => {
-      const conditions = []
+      const conditions: any[] = []
 
       if (input?.status) conditions.push(eq(complaints.status, input.status))
       if (input?.priority) conditions.push(eq(complaints.priority, input.priority))

@@ -6,56 +6,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { resolveTenant, type TenantMetadata } from '@/lib/tenant/resolver'
 
-// ============================================
-// Request Validation
-// ============================================
-function validateRequest(request: NextRequest): { valid: boolean; reason?: string } {
-    const url = request.nextUrl.pathname + request.nextUrl.search
-
-    // Check for null byte injection
-    if (url.includes('%00')) {
-        return { valid: false, reason: 'Null byte injection detected' }
-    }
-
-    // Block common attack patterns
-    const suspiciousPatterns = [
-        /\.\.\//,                    // Path traversal
-        /<script/i,                  // XSS attempt in URL
-        /javascript:/i,              // JavaScript protocol
-        /vbscript:/i,                // VBScript protocol
-        /\bon\w+\s*=/i,              // Event handlers (word-boundary to avoid false positives like "month=")
-        /union\s+select/i,           // SQL injection
-        /;\s*drop\s+/i,              // SQL injection
-        /;\s*delete\s+/i,            // SQL injection
-    ]
-
-    for (const pattern of suspiciousPatterns) {
-        if (pattern.test(url)) {
-            return { valid: false, reason: 'Suspicious request pattern detected' }
-        }
-    }
-
-    return { valid: true }
-}
-
-// ============================================
-// Security Headers
-// ============================================
-function addSecurityHeaders(response: NextResponse, request: NextRequest): NextResponse {
-    // Add request ID for tracing
-    const requestId = crypto.randomUUID()
-    response.headers.set('X-Request-ID', requestId)
-
-    // Prevent caching of authenticated pages
-    const pathname = request.nextUrl.pathname
-    if (pathname.startsWith('/admin') || pathname.startsWith('/moderator') || pathname.startsWith('/employee') || pathname.startsWith('/mobile') || pathname.startsWith('/dashboard') || pathname.startsWith('/superadmin')) {
-        response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
-        response.headers.set('Pragma', 'no-cache')
-        response.headers.set('Expires', '0')
-    }
-
-    return response
-}
+import { validateRequest, addSecurityHeaders } from '@/lib/proxy/security'
 
 // ============================================
 // Proxy Session Cache for Performance Optimization

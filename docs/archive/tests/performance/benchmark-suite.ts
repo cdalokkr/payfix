@@ -408,7 +408,7 @@ export class PerformanceBenchmarkSuite {
     }
 
     private generateLatencyRecommendations(p95Latency: number, outlierCount: number): string[] {
-        const recommendations = []
+        const recommendations: any[] = []
 
         if (p95Latency > 500) {
             recommendations.push('Consider optimizing API response times or implementing more aggressive caching')
@@ -524,7 +524,7 @@ export class PerformanceBenchmarkSuite {
     }
 
     private generateOverallRecommendations(benchmarks: any): string[] {
-        const recommendations = []
+        const recommendations: any[] = []
 
         if (benchmarks.latency?.p95 > 500) {
             recommendations.push('Performance optimization needed - latency targets not met')

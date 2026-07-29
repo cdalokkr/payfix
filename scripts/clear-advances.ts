@@ -45,7 +45,7 @@ async function main() {
     }
 
     // 2. Identify advances matching the delete criteria
-    const deleteConditions = [];
+    const deleteConditions: any[] = [];
     deleteConditions.push(lt(employeeAdvances.date, '2026-05-01'));
     if (asifProfile) {
         deleteConditions.push(eq(employeeAdvances.profile_id, asifProfile.id));
@@ -71,7 +71,7 @@ async function main() {
 
     // 4. Fetch all monthly summaries for these profiles
     const summaries = await db.select().from(monthlyAttendanceSummary).where(
-        inArray(monthlyAttendanceSummary.profile_id, affectedProfileIds)
+        inArray(monthlyAttendanceSummary.profile_id as any, affectedProfileIds as any)
     );
 
     // Sort summaries chronologically: first by year, then by month

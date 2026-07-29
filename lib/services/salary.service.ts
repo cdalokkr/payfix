@@ -719,7 +719,7 @@ export class SalaryService {
             }
         }
 
-        const results = []
+        const results: any[] = []
 
         for (const employee of employees) {
             // Check if summary already exists for this month in memory
@@ -968,12 +968,12 @@ export class SalaryService {
             orderBy: [desc(employeeSalarySetup.effective_from_year), desc(employeeSalarySetup.effective_from_month)],
         })
 
-        const results = []
+        const results: any[] = []
 
         for (const summary of summaries) {
             // Find applicable salary setup in-memory
             const employeeSetups = allSalarySetups.filter(s => s.profile_id === summary.profile_id)
-            let salarySetup = null
+            let salarySetup: typeof allSalarySetups[number] | null = null
             for (const setup of employeeSetups) {
                 const fromVal = setup.effective_from_year * 100 + setup.effective_from_month
                 const targetVal = summary.year * 100 + summary.month

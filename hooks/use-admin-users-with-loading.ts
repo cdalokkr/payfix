@@ -23,7 +23,7 @@ export function useAdminUsersWithLoading(
     page: 1,
     limit: 50,
     ...initialConfig
-  })
+  } as any)
 
   // Simple mutations
   const createUserMutation = trpc.admin.users.createUser.useMutation({

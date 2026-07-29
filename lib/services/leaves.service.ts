@@ -16,7 +16,7 @@ export class LeavesService {
         role: string
         status?: 'pending' | 'approved' | 'rejected' | 'all'
     }) {
-        let whereClause = []
+        let whereClause: any[] = []
 
         if (role === 'employee') {
             if (!profileId) throwAppError('UNAUTHORIZED', 'Profile ID is required for employee role')

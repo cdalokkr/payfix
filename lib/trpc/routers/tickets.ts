@@ -48,10 +48,10 @@ export const ticketsRouter = router({
           .from(ticketAssignments)
           .where(eq(ticketAssignments.assigned_to, input.assigned_to))
         ticketIds = assignments.map(a => a.ticket_id)
-        if (ticketIds.length === 0) return { data: [], total: 0 }
+        if (ticketIds && ticketIds.length === 0) return { data: [], total: 0 }
       }
 
-      const conditions = []
+      const conditions: any[] = []
       if (input?.status) conditions.push(eq(tickets.status, input.status))
       if (input?.priority) conditions.push(eq(tickets.priority, input.priority))
       if (input?.complaint_id) conditions.push(eq(tickets.complaint_id, input.complaint_id))

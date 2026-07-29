@@ -305,7 +305,7 @@ async function preloadProfile(profileId: string): Promise<Profile | null> {
         with: { designation: true }
       })
 
-      let result = null
+      let result: any = null
 
       if (centralResult) {
         result = centralResult

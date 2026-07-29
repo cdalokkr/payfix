@@ -114,7 +114,7 @@ export class AttendanceService {
         ])
 
         // Build a profile lookup map from targetProfiles to stitch profiles in memory (avoiding redundant DB joins)
-        const profilesMap = new Map(targetProfiles.map(p => [p.id, p]))
+        const profilesMap = new Map<string, any>(targetProfiles.map((p: any) => [p.id, p]))
 
         const actualMap = new Map<string, any>()
         for (const r of actualRecords) {

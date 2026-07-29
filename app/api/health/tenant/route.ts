@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
         const asyncContext = tenantStorage.getStore();
 
         // 4. Try resolving tenant from cookie fallback
-        let resolvedTenant = null;
+        let resolvedTenant: any = null;
         if (tenantFallbackCookie) {
             try {
                 const { resolveTenant } = await import('@/lib/tenant/resolver');

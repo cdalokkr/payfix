@@ -306,7 +306,7 @@ export const moderatorReportsRouter = router({
             })
         )
         .query(async ({ ctx, input }) => {
-            let filters = []
+            let filters: any[] = []
             if (input.startDate) filters.push(gte(activities.created_at, new Date(input.startDate)))
             if (input.endDate) filters.push(lte(activities.created_at, new Date(input.endDate)))
 

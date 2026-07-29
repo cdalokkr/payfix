@@ -404,7 +404,7 @@ export const adminReportsRouter = router({
         })
       }
 
-      const activityChartData = []
+      const activityChartData: any[] = []
       for (let i = 6; i >= 0; i--) {
         const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000)
         const dayKey = date.toISOString().split('T')[0]
@@ -428,7 +428,7 @@ export const adminReportsRouter = router({
         })
       }
 
-      const usageChartData = []
+      const usageChartData: any[] = []
       for (let i = 6; i >= 0; i--) {
         const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
         const monthKey = `${monthNames[date.getMonth()]} ${date.getFullYear()}`
@@ -609,7 +609,7 @@ export const adminReportsRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const searchQuery = input.query.trim()
-      let filters = []
+      let filters: any[] = []
 
       if (searchQuery.length > 0) {
         filters.push(
@@ -761,7 +761,7 @@ export const adminReportsRouter = router({
       endDate: z.string().optional(),
     }))
     .query(async ({ ctx, input }) => {
-      let filters = []
+      let filters: any[] = []
       if (input.startDate) filters.push(gte(activities.created_at, new Date(input.startDate)))
       if (input.endDate) filters.push(lte(activities.created_at, new Date(input.endDate)))
 

@@ -18,7 +18,7 @@ export const clientsRouter = router({
       offset: z.number().min(0).default(0),
     }).optional())
     .query(async ({ ctx, input }) => {
-      const conditions = []
+      const conditions: any[] = []
 
       if (input?.status) {
         conditions.push(eq(clients.status, input.status))

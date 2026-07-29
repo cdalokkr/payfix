@@ -499,7 +499,7 @@ export class OptimizedQueryManager {
       }
 
       // Build where clause
-      let whereClause = []
+      let whereClause: any[] = []
       if (role) whereClause.push(eq(profiles.role, role as any))
       if (search) {
         whereClause.push(
@@ -576,7 +576,7 @@ export class OptimizedQueryManager {
         if (cached) return cached
       }
 
-      let whereClause = []
+      let whereClause: any[] = []
       if (userId) whereClause.push(eq(activities.user_id, userId))
       if (activityType) whereClause.push(eq(activities.activity_type, activityType as any))
       if (dateFrom) whereClause.push(gte(activities.created_at, new Date(dateFrom)))

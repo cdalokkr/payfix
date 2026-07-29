@@ -162,7 +162,7 @@ class Phase3Validator {
   private async validateAccessibility(): Promise<any> {
     console.log('  • Running accessibility validation...');
     
-    const results = [];
+    const results: any[] = [];
     
     for (const url of this.config.urls) {
       console.log(`  • Validating ${url}...`);

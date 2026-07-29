@@ -138,7 +138,7 @@ class CachePerformanceValidator {
       const hasEntryLimits = cacheContent.includes('maxEntries')
       const hasLRU = cacheContent.includes('LRU')
 
-      const optimizations = []
+      const optimizations: any[] = []
       if (hasCompression) optimizations.push('Data compression')
       if (hasSizeLimits) optimizations.push('Size limits')
       if (hasEntryLimits) optimizations.push('Entry limits')

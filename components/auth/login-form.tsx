@@ -178,7 +178,7 @@ export function LoginForm() {
         success: data?.success,
         hasProfile: !!data?.profile,
         profileRole: data?.profile?.role,
-        warning: data?.warning
+        warning: (data as any)?.warning
       })
 
       // Ensure background geolocation is pre-warmed if not already done

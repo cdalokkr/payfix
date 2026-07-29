@@ -114,7 +114,7 @@ export default function CreateUserButton({
     idleText: children || "Update User",
     idleIcon: Save,
     idleBgClass: "bg-purple-600 hover:bg-purple-700 shadow-lg hover:shadow-purple-500/30 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]",
-    successBgClass: "bg-green-600 cursor-not-allowed opacity-90 animate-pulse",
+    successBgClass: "bg-[#02A88E] dark:bg-[#0BDBB9] text-black dark:text-[#0A1118] cursor-not-allowed opacity-90 animate-pulse shadow-md",
     errorBgClass: "bg-red-600 hover:bg-red-700",
     loadingBgClass: "bg-gray-600 cursor-wait"
   };
