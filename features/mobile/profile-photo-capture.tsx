@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import { trpc } from "@/lib/trpc/client"
+import { FaceApiBrowserService } from "@/lib/services/faceapi-browser.service"
 import {
     Camera as IconCamera,
     Loader2 as IconLoader2,
@@ -43,6 +44,7 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
     const supabase = createClient()
     const updateProfilePicture = trpc.profile.updateProfilePicture.useMutation()
     const createPhotoRequest = trpc.profile.createPhotoUpdateRequest.useMutation()
+    const saveFaceEmbedding = trpc.profile.saveFaceEmbedding.useMutation()
 
     // Check if there's a pending photo request
     const { data: pendingRequest, isLoading: pendingLoading } = trpc.profile.getMyPendingPhotoRequest.useQuery()
@@ -292,6 +294,24 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                 // First-time: Direct update (current behavior)
                 setStatus('success')
                 toast.success('Profile photo updated successfully!')
+
+                // Background: Extract and save face embedding for kiosk & PWA verification
+                if (capturedImage) {
+                    try {
+                        addLog('Extracting face vector for attendance verification...')
+                        await FaceApiBrowserService.loadModels()
+                        const descriptor = await FaceApiBrowserService.extractDescriptorFromDataUrl(capturedImage)
+                        if (descriptor && descriptor.length === 128) {
+                            const embedding = FaceApiBrowserService.descriptorToArray(descriptor)
+                            await saveFaceEmbedding.mutateAsync({ embedding })
+                            addLog('✅ Face vector saved for attendance matching.')
+                        } else {
+                            addLog('⚠️ No face detected in photo — enrollment skipped.')
+                        }
+                    } catch (faceErr) {
+                        addLog('⚠️ Face enrollment failed (non-critical): ' + String(faceErr))
+                    }
+                }
 
                 setTimeout(() => {
                     onSuccess?.()

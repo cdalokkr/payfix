@@ -241,4 +241,28 @@ export const profileRouter = router({
         })
       }
     }),
+
+  /**
+   * Save a browser-extracted 128-d face descriptor (from face-api.js) to the
+   * profiles.face_embedding column. Tenant-isolated via the db proxy.
+   */
+  saveFaceEmbedding: protectedProcedure
+    .input(z.object({
+      embedding: z.array(z.number()).length(128, 'Face embedding must be exactly 128 dimensions'),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await ctx.db
+          .update(profiles)
+          .set({ face_embedding: input.embedding })
+          .where(eq(profiles.id, ctx.profile.id))
+
+        return { success: true, message: 'Face embedding saved successfully.' }
+      } catch (err: any) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: err.message || 'Failed to save face embedding'
+        })
+      }
+    }),
 })

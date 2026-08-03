@@ -1,11 +1,13 @@
 /**
- * Face Verification Service — Server-Side Python Vector Face Matching
+ * Face Verification Service — Browser-side face-api.js
  *
- * Replaces the client-side heavy face-api.js execution with a Next.js/tRPC
- * server-side vector extraction and database match.
- *
- * Keeps method signatures identical to avoid compilation issues in dependent code.
+ * Uses FaceApiBrowserService (singleton) to compare selfie against profile photo.
+ * Completely replaces the Python microservice dependency.
+ * Method signatures preserved for backward compatibility with selfie-capture.tsx
+ * and face-verification.tsx — no changes needed in those files.
  */
+
+import { FaceApiBrowserService } from './faceapi-browser.service'
 
 export interface FaceVerificationResult {
     matched: boolean
@@ -15,42 +17,40 @@ export interface FaceVerificationResult {
     error?: string
 }
 
-// State
-let modelsLoaded = true // Instantly loaded because we don't download files client-side
+// Threshold: distance < 0.6 = same person (face-api.js standard)
+const THRESHOLD = 0.6
 
 export const FaceVerificationService = {
     /**
-     * Initializes the service. With server-side matching, this is an instant operation.
+     * Initialize and load face-api.js models (call once on app start or before first scan).
      */
-    async initialize(): Promise<boolean> {
-        modelsLoaded = true
-        return true
+    async initialize(onProgress?: (pct: number, msg: string) => void): Promise<boolean> {
+        return FaceApiBrowserService.loadModels(onProgress)
     },
 
     isReady(): boolean {
-        return modelsLoaded
+        return FaceApiBrowserService.isReady()
     },
 
     clearCache(): void {
-        // Caching is handled on the server (in DB / profiles table)
+        // No-op: face-api.js models stay in memory per session (browser cache handles persistence)
     },
 
     /**
-     * Dummy profile descriptor preloader.
-     * Profile preloading is now handled dynamically on the server-side during verifyFace.
+     * Preload profile descriptor in the background.
+     * With browser-side face-api.js, this is handled lazily inside compareFaces().
      */
     async preloadProfileDescriptor(
         profileImageUrl: string,
         log?: (msg: string) => void
     ): Promise<boolean> {
-        const logFn = log || (() => {})
-        logFn('📋 Profile descriptor preloading handled dynamically by server')
+        log?.('Profile descriptor will be extracted on first comparison.')
         return true
     },
 
     /**
-     * Compare a selfie against a profile photo using server-side Python face recognition.
-     * Calls the Next.js API endpoint /api/trpc/attendance.verifyFace.
+     * Compare a selfie (base64 data URL) against a profile photo (remote URL).
+     * Uses face-api.js running entirely in the browser — no network call to Python.
      */
     async compareFaces(
         selfieDataUrl: string,
@@ -64,64 +64,41 @@ export const FaceVerificationService = {
             onDebugLog?.(entry)
         }
 
-        const t0 = performance.now()
-        const ms = () => `${(performance.now() - t0).toFixed(0)}ms`
-
         try {
-            log('🚀 Starting server-side face verification...')
-            log('📦 Packaging compressed selfie and requesting verification...')
+            log('🚀 Starting browser-side face-api.js verification...')
 
-            // Call the tRPC verifyFace mutation via Next.js API
-            const response = await fetch('/api/trpc/attendance.verifyFace?batch=1', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-trpc-source': 'client',
-                },
-                body: JSON.stringify({
-                    "0": {
-                        selfieBase64: selfieDataUrl,
+            // Ensure models are loaded
+            if (!FaceApiBrowserService.isReady()) {
+                log('⏳ Loading face-api.js models...')
+                const loaded = await FaceApiBrowserService.loadModels((pct, msg) => log(`📦 ${pct}% — ${msg}`))
+                if (!loaded) {
+                    return {
+                        matched: false,
+                        similarity: 0,
+                        method: 'face-api',
+                        debugLog,
+                        error: 'Failed to load face recognition models. Please refresh and try again.'
                     }
-                }),
-            })
-
-            if (!response.ok) {
-                throw new Error(`Server returned HTTP status ${response.status}`)
+                }
             }
 
-            const json = await response.json()
-            const batchResult = Array.isArray(json) ? json[0] : json
-
-            if (batchResult.error) {
-                const errMsg = batchResult.error.message || batchResult.error.json?.message || 'Verification failed'
-                throw new Error(errMsg)
-            }
-
-            const resultData = batchResult.result?.data?.json || batchResult.result?.data
-
-            if (!resultData) {
-                throw new Error('Malformed response from server')
-            }
-
-            const matched = !!resultData.matched
-            const similarity = typeof resultData.similarity === 'number' ? resultData.similarity : 0
-            const distance = typeof resultData.distance === 'number' ? resultData.distance : 0.5
-            const error = resultData.error || (matched ? undefined : 'Face does not match profile photo.')
-
-            log(`📊 Distance: ${distance.toFixed(3)} | Similarity: ${(similarity * 100).toFixed(1)}% (threshold: <0.500)`)
-            log(`⏱️ Total round-trip time: ${ms()}`)
-            log(matched ? '✅ MATCH — Same person verified!' : `❌ NO MATCH — ${error}`)
+            const result = await FaceApiBrowserService.compareImages(
+                selfieDataUrl,
+                profileImageUrl,
+                THRESHOLD,
+                log
+            )
 
             return {
-                matched,
-                similarity,
+                matched: result.matched,
+                similarity: result.similarity,
                 method: 'face-api',
                 debugLog,
-                error: matched ? undefined : error,
+                error: result.error,
             }
         } catch (error) {
             const msg = error instanceof Error ? error.message : 'Unknown error'
-            log(`❌ Error: ${msg} (${ms()})`)
+            log(`❌ Error: ${msg}`)
             return {
                 matched: false,
                 similarity: 0,
@@ -133,7 +110,7 @@ export const FaceVerificationService = {
     },
 
     getThreshold(): number {
-        return 0.5 // Matching the server's threshold of 0.5 (1 - distance threshold)
+        return 1 - THRESHOLD // Returns as similarity (0.4 = 40% similarity minimum)
     },
 
     formatSimilarity(similarity: number): string {
