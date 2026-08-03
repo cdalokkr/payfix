@@ -63,6 +63,10 @@ export const attendance = pgTable('attendance', {
     date: date('date').notNull().defaultNow(),
     check_in: timestamp('check_in', { withTimezone: true }),
     check_out: timestamp('check_out', { withTimezone: true }),
+    first_check_in: timestamp('first_check_in', { withTimezone: true }),
+    last_check_out: timestamp('last_check_out', { withTimezone: true }),
+    total_sessions: integer('total_sessions').default(0),
+    current_session_status: text('current_session_status').default('checked_out'), // 'checked_in' | 'checked_out'
     working_hours: numeric('working_hours'),
     status: text('status').notNull().default('pending'),
     remarks: text('remarks'),
@@ -71,6 +75,7 @@ export const attendance = pgTable('attendance', {
     is_half_day: boolean('is_half_day').default(false),
     source: attendanceSourceEnum('source').default('mobile'),
     device_id: text('device_id'),
+    location_id: uuid('location_id').references(() => officeLocations.id, { onDelete: 'set null' }),
     // Mobile attendance fields
     selfie_url: text('selfie_url'),
     checkin_latitude: numeric('checkin_latitude', { precision: 10, scale: 7 }),
@@ -80,6 +85,45 @@ export const attendance = pgTable('attendance', {
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
+
+// Attendance Sessions (Multiple Check-In & Check-Out sessions per day)
+export const attendanceSessions = pgTable('attendance_sessions', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    attendance_id: uuid('attendance_id').references(() => attendance.id, { onDelete: 'cascade' }),
+    profile_id: uuid('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+    date: date('date').notNull(),
+    session_number: integer('session_number').notNull().default(1),
+    check_in: timestamp('check_in', { withTimezone: true }).notNull(),
+    check_out: timestamp('check_out', { withTimezone: true }),
+    working_hours: numeric('working_hours'),
+    source: text('source').default('mobile'), // 'mobile', 'biometric', 'kiosk', 'manual', 'bulk'
+    device_id: text('device_id'),
+    location_id: uuid('location_id').references(() => officeLocations.id, { onDelete: 'set null' }),
+    selfie_url: text('selfie_url'),
+    checkin_latitude: numeric('checkin_latitude', { precision: 10, scale: 7 }),
+    checkin_longitude: numeric('checkin_longitude', { precision: 10, scale: 7 }),
+    checkin_location_name: text('checkin_location_name'),
+    checkout_latitude: numeric('checkout_latitude', { precision: 10, scale: 7 }),
+    checkout_longitude: numeric('checkout_longitude', { precision: 10, scale: 7 }),
+    checkout_location_name: text('checkout_location_name'),
+    status: text('status').notNull().default('active'), // 'active' | 'completed'
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+// Biometric Raw Logs (Auditing secondary punches)
+export const biometricRawLogs = pgTable('biometric_raw_logs', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    profile_id: uuid('profile_id').references(() => profiles.id, { onDelete: 'set null' }),
+    biometric_user_id: text('biometric_user_id').notNull(),
+    device_id: text('device_id'),
+    location_id: uuid('location_id').references(() => officeLocations.id, { onDelete: 'set null' }),
+    punch_time: timestamp('punch_time', { withTimezone: true }).notNull(),
+    punch_type: integer('punch_type'), // 0: In, 1: Out, 2: Break In, 3: Break Out
+    raw_payload: jsonb('raw_payload'),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
 
 // Leaves
 export const leaves = pgTable('leaves', {
@@ -157,6 +201,7 @@ export const employeeSettings = pgTable('employee_settings', {
     custom_check_in: text('custom_check_in'),
     custom_check_out: text('custom_check_out'),
     biometric_device_user_id: text('biometric_device_user_id'),
+    face_vector: jsonb('face_vector'),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 
@@ -166,7 +211,10 @@ export const biometricDevices = pgTable('biometric_devices', {
     name: text('name').notNull(),
     serial_number: varchar('serial_number', { length: 100 }).unique(),
     location: text('location'),
+    location_id: uuid('location_id').references(() => officeLocations.id, { onDelete: 'set null' }),
     ip_address: varchar('ip_address', { length: 45 }),
+    device_type: text('device_type').default('adms'), // 'adms', 'socket', 'desktop_bridge', 'usb'
+    api_key: text('api_key'),
     status: text('status').default('active'),
     last_sync_time: timestamp('last_sync_time', { withTimezone: true }),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
@@ -633,5 +681,31 @@ export const salaryPaymentsRelations = relations(salaryPayments, ({ one }) => ({
     paidByProfile: one(profiles, {
         fields: [salaryPayments.paid_by],
         references: [profiles.id],
+    }),
+}));
+
+export const attendanceSessionsRelations = relations(attendanceSessions, ({ one }) => ({
+    attendance: one(attendance, {
+        fields: [attendanceSessions.attendance_id],
+        references: [attendance.id],
+    }),
+    profile: one(profiles, {
+        fields: [attendanceSessions.profile_id],
+        references: [profiles.id],
+    }),
+    location: one(officeLocations, {
+        fields: [attendanceSessions.location_id],
+        references: [officeLocations.id],
+    }),
+}));
+
+export const biometricRawLogsRelations = relations(biometricRawLogs, ({ one }) => ({
+    profile: one(profiles, {
+        fields: [biometricRawLogs.profile_id],
+        references: [profiles.id],
+    }),
+    location: one(officeLocations, {
+        fields: [biometricRawLogs.location_id],
+        references: [officeLocations.id],
     }),
 }));

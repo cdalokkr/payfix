@@ -1,9 +1,10 @@
 import { db } from '@/lib/db'
-import { attendance, activities, officeSettings, officeClosures, officeLocations, notifications, leaves, profiles } from '@/lib/db/schema'
+import { attendance, attendanceSessions, biometricRawLogs, activities, officeSettings, officeClosures, officeLocations, notifications, leaves, profiles } from '@/lib/db/schema'
 import { eq, and, gte, lte, desc, sql, inArray } from 'drizzle-orm'
 import { throwAppError } from '@/lib/errors/app-errors'
 import { SmartCache } from '@/lib/cache/smart-cache'
 import { getLocalDateIST, getLocalTimeIST12Hour } from '@/lib/utils/date-utils'
+import { differenceInMinutes } from 'date-fns'
 
 export class AttendanceService {
     /**
@@ -218,6 +219,66 @@ export class AttendanceService {
         )
     }
 
+    static async ensureAttendanceSchema() {
+        try {
+            await db.execute(sql`
+                DO $$ 
+                BEGIN 
+                    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'attendance_source') THEN
+                        CREATE TYPE "attendance_source" AS ENUM ('mobile', 'biometric', 'manual', 'bulk', 'kiosk');
+                    ELSE
+                        ALTER TYPE "attendance_source" ADD VALUE IF NOT EXISTS 'kiosk';
+                    END IF;
+                END $$;
+
+                ALTER TABLE IF EXISTS "attendance" 
+                ADD COLUMN IF NOT EXISTS "first_check_in" timestamp with time zone,
+                ADD COLUMN IF NOT EXISTS "last_check_out" timestamp with time zone,
+                ADD COLUMN IF NOT EXISTS "total_sessions" integer DEFAULT 0,
+                ADD COLUMN IF NOT EXISTS "current_session_status" text DEFAULT 'checked_out',
+                ADD COLUMN IF NOT EXISTS "location_id" uuid;
+
+                CREATE TABLE IF NOT EXISTS "attendance_sessions" (
+                    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                    "attendance_id" uuid REFERENCES "attendance"("id") ON DELETE CASCADE,
+                    "profile_id" uuid NOT NULL REFERENCES "profiles"("id") ON DELETE CASCADE,
+                    "date" date NOT NULL,
+                    "session_number" integer NOT NULL DEFAULT 1,
+                    "check_in" timestamp with time zone NOT NULL,
+                    "check_out" timestamp with time zone,
+                    "working_hours" numeric,
+                    "source" text DEFAULT 'mobile',
+                    "device_id" text,
+                    "location_id" uuid,
+                    "selfie_url" text,
+                    "checkin_latitude" numeric(10, 7),
+                    "checkin_longitude" numeric(10, 7),
+                    "checkin_location_name" text,
+                    "checkout_latitude" numeric(10, 7),
+                    "checkout_longitude" numeric(10, 7),
+                    "checkout_location_name" text,
+                    "status" text NOT NULL DEFAULT 'active',
+                    "created_at" timestamp with time zone DEFAULT now(),
+                    "updated_at" timestamp with time zone DEFAULT now()
+                );
+
+                CREATE TABLE IF NOT EXISTS "biometric_raw_logs" (
+                    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                    "profile_id" uuid REFERENCES "profiles"("id") ON DELETE SET NULL,
+                    "biometric_user_id" text NOT NULL,
+                    "device_id" text,
+                    "location_id" uuid,
+                    "punch_time" timestamp with time zone NOT NULL,
+                    "punch_type" integer,
+                    "raw_payload" jsonb,
+                    "created_at" timestamp with time zone DEFAULT now()
+                );
+            `);
+        } catch (e) {
+            // Ignore schema check error if already up to date
+        }
+    }
+
     /**
      * Clock in a user
      */
@@ -228,7 +289,11 @@ export class AttendanceService {
         localDate,
         isExtraDay,
         latitude,
-        longitude
+        longitude,
+        source = 'mobile',
+        deviceId,
+        locationId,
+        selfieUrl
     }: {
         profileId: string
         fullName?: string
@@ -237,7 +302,12 @@ export class AttendanceService {
         isExtraDay?: boolean
         latitude?: number
         longitude?: number
+        source?: string
+        deviceId?: string
+        locationId?: string
+        selfieUrl?: string
     }) {
+        await AttendanceService.ensureAttendanceSchema()
         const today = localDate || getLocalDateIST()
         const dayOfWeek = new Date(today).getDay()
 
@@ -250,16 +320,17 @@ export class AttendanceService {
         // For off days and holidays, they are automatically clocked in as pending extra days
         const autoExtraDay = isOffDay || isHoliday
 
-        const existing = await db.query.attendance.findFirst({
+        // Check if an active session exists for this user today
+        const activeSession = await db.query.attendanceSessions.findFirst({
             where: and(
-                eq(attendance.profile_id, profileId),
-                eq(attendance.date, today)
-            ),
-            columns: { id: true }
+                eq(attendanceSessions.profile_id, profileId),
+                eq(attendanceSessions.date, today),
+                eq(attendanceSessions.status, 'active')
+            )
         })
 
-        if (existing) {
-            throwAppError('ALREADY_CLOCKED_IN', 'Already clocked in for today.')
+        if (activeSession) {
+            throwAppError('ALREADY_CLOCKED_IN', 'An active attendance session is currently in progress. Please clock out first.')
         }
 
         // Resolve location name & Validate Geofence
@@ -300,34 +371,81 @@ export class AttendanceService {
                 console.error('Error resolving location:', err)
                 locationName = 'Unknown'
             }
-        } else {
-            // Strict Geofencing: If office locations exist, location is MANDATORY
+        } else if (source === 'mobile') {
+            // Strict Geofencing: If office locations exist, location is MANDATORY for mobile punches
             if (activeLocations.length > 0) {
                 throwAppError('FORBIDDEN', 'Location access is required to clock in at an office location.')
             }
         }
 
-        const [data] = await db.insert(attendance).values({
+        const now = new Date()
+
+        // Fetch parent attendance record
+        let parentRecord = await db.query.attendance.findFirst({
+            where: and(
+                eq(attendance.profile_id, profileId),
+                eq(attendance.date, today)
+            )
+        })
+
+        const currentTotalSessions = (parentRecord?.total_sessions || 0) + 1
+
+        const validSource = (source === 'kiosk' ? 'biometric' : (source || 'mobile')) as any
+
+        if (!parentRecord) {
+            const [newParent] = await db.insert(attendance).values({
+                profile_id: profileId,
+                date: today,
+                check_in: now,
+                first_check_in: now,
+                total_sessions: 1,
+                current_session_status: 'checked_in',
+                status: 'pending',
+                source: validSource,
+                device_id: deviceId || null,
+                location_id: locationId || null,
+                selfie_url: selfieUrl || null,
+                is_extra_day: isExtraDay || autoExtraDay,
+                checkin_latitude: latitude ? String(latitude) : null,
+                checkin_longitude: longitude ? String(longitude) : null,
+                checkin_location_name: locationName
+            }).returning()
+            parentRecord = newParent
+        } else {
+            const [updatedParent] = await db.update(attendance).set({
+                total_sessions: currentTotalSessions,
+                current_session_status: 'checked_in',
+                check_out: null, // Reset check_out for new active session
+                updated_at: now
+            }).where(eq(attendance.id, parentRecord.id)).returning()
+            parentRecord = updatedParent
+        }
+
+        // Insert new session row into attendanceSessions
+        await db.insert(attendanceSessions).values({
+            attendance_id: parentRecord.id,
             profile_id: profileId,
             date: today,
-            check_in: new Date(),
-            status: 'pending',
-            is_extra_day: isExtraDay || autoExtraDay,
+            session_number: currentTotalSessions,
+            check_in: now,
+            status: 'active',
+            source: source || 'mobile',
+            device_id: deviceId || null,
+            location_id: locationId || null,
+            selfie_url: selfieUrl || null,
             checkin_latitude: latitude ? String(latitude) : null,
             checkin_longitude: longitude ? String(longitude) : null,
             checkin_location_name: locationName
-        }).returning()
-
-        if (!data) throwAppError('DATABASE_ERROR', 'Failed to create clock-in record')
+        })
 
         await db.insert(activities).values({
             user_id: profileId,
             activity_type: 'data_create',
             module: 'attendance',
-            description: `Clocked in at ${getLocalTimeIST12Hour()}${isExtraDay ? ' (Extra Work)' : ''}${locationName ? ` from ${locationName}` : ''}`,
+            description: `Clocked in (Session #${currentTotalSessions}) at ${getLocalTimeIST12Hour()}${isExtraDay ? ' (Extra Work)' : ''}${locationName ? ` from ${locationName}` : ''}`,
         })
 
-        return data
+        return parentRecord
     }
 
     /**
@@ -344,38 +462,68 @@ export class AttendanceService {
         email: string
         localDate?: string
     }) {
+        await AttendanceService.ensureAttendanceSchema()
         const today = localDate || getLocalDateIST()
+        const now = new Date()
 
-        let record = await db.query.attendance.findFirst({
+        // Find active session
+        const activeSession = await db.query.attendanceSessions.findFirst({
+            where: and(
+                eq(attendanceSessions.profile_id, profileId),
+                eq(attendanceSessions.status, 'active')
+            ),
+            orderBy: [desc(attendanceSessions.created_at)]
+        })
+
+        const record = await db.query.attendance.findFirst({
             where: and(
                 eq(attendance.profile_id, profileId),
                 eq(attendance.date, today)
-            ),
-            columns: { id: true, check_in: true, check_out: true, date: true }
+            )
         })
 
-        if (!record) {
-            record = await db.query.attendance.findFirst({
-                where: and(
-                    eq(attendance.profile_id, profileId),
-                    sql`${attendance.check_out} IS NULL`
-                ),
-                orderBy: [desc(attendance.date)]
-            })
-        }
-
-        if (!record) {
+        if (!record && !activeSession) {
             throwAppError('NO_CLOCK_IN_FOUND', 'No clock-in record found to clock out.')
         }
 
-        if (record!.check_out) {
-            throwAppError('ALREADY_CLOCKED_OUT', 'Already clocked out for this session.')
+        const attendanceId = activeSession?.attendance_id || record?.id
+
+        if (activeSession) {
+            const diffMins = differenceInMinutes(now, new Date(activeSession.check_in))
+            const sessionHours = (diffMins / 60).toFixed(2)
+
+            await db.update(attendanceSessions).set({
+                check_out: now,
+                working_hours: sessionHours,
+                status: 'completed',
+                updated_at: now
+            }).where(eq(attendanceSessions.id, activeSession.id))
+        }
+
+        // Calculate cumulative working hours across all completed sessions for this parent record
+        let totalHoursStr = record?.working_hours || '0'
+        if (attendanceId) {
+            const completedSessions = await db.query.attendanceSessions.findMany({
+                where: and(
+                    eq(attendanceSessions.attendance_id, attendanceId),
+                    eq(attendanceSessions.status, 'completed')
+                )
+            })
+
+            const totalMins = completedSessions.reduce((acc, s) => {
+                return acc + (s.working_hours ? Math.round(Number(s.working_hours) * 60) : 0)
+            }, 0)
+
+            totalHoursStr = (totalMins / 60).toFixed(2)
         }
 
         const [data] = await db.update(attendance).set({
-            check_out: new Date(),
-            updated_at: new Date()
-        }).where(eq(attendance.id, record!.id)).returning()
+            check_out: now,
+            last_check_out: now,
+            working_hours: totalHoursStr,
+            current_session_status: 'checked_out',
+            updated_at: now
+        }).where(eq(attendance.id, attendanceId!)).returning()
 
         if (!data) throwAppError('DATABASE_ERROR', 'Failed to update clock-out record')
 

@@ -73,6 +73,8 @@ export const metadata: Metadata = {
   },
 }
 
+import Script from 'next/script'
+
 import { ToastProvider } from "@/components/auth/ui/Toast"
 import { headers } from 'next/headers'
 
@@ -94,7 +96,9 @@ export default async function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <script
+        <Script
+          id="pwa-standalone-check"
+          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `
               (function() {

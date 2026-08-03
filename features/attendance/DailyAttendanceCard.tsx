@@ -1,7 +1,7 @@
 "use client"
 
 import { MetricCard } from "@/components/dashboard/metric-card"
-import { Calendar, LogIn, LogOut, UserCheck, Loader2, Plus } from "lucide-react"
+import { Calendar, LogIn, LogOut, UserCheck, Loader2, Plus, Clock } from "lucide-react"
 import { trpc } from "@/lib/trpc/client"
 import { format } from "date-fns"
 import { Badge } from "@/components/ui/badge"
@@ -68,12 +68,10 @@ export function DailyAttendanceCard({ className }: { className?: string }) {
         return () => clearInterval(timer)
     }, [])
 
-    // Reset optimistic state on component mount (fresh page load)
     useEffect(() => {
         setOptimisticState('idle')
     }, [])
 
-    // Reset optimistic state when attendance data updates, unless a mutation is in progress
     useEffect(() => {
         if (attendance) {
             if (!clockInMutation.isPending && !clockOutMutation.isPending) {
@@ -82,25 +80,23 @@ export function DailyAttendanceCard({ className }: { className?: string }) {
         }
     }, [attendance, clockInMutation.isPending, clockOutMutation.isPending])
 
-    // Helper to normalize date to YYYY-MM-DD string format
     const normalizeDate = (d: unknown): string => {
         if (!d) return ''
         if (d instanceof Date) {
             return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
         }
-        // If it's already a string, ensure it's in YYYY-MM-DD format (handle potential ISO strings)
         const str = String(d)
-        return str.split('T')[0] // Handle ISO format like "2026-01-07T00:00:00.000Z"
+        return str.split('T')[0]
     }
 
-    // Find today's record using normalized date comparison
     const todayRecord = attendance?.find(r => normalizeDate(r.date) === todayStr)
-    // Find the most recent pending record (could be today or yesterday)
-    const pendingRecord = attendance?.filter(r => !r.check_out).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
+    const pendingRecord = attendance?.find(r => !r.check_out && normalizeDate(r.date) === todayStr)
 
-    // Determine button state with optimistic updates taking priority
+    // Multi-session state determination
     const isClockedIn = optimisticState === 'clocked-in' || (optimisticState === 'idle' && !!pendingRecord)
-    const isMarked = optimisticState === 'marked' || (optimisticState === 'idle' && !!todayRecord?.check_in && !!todayRecord?.check_out)
+    const totalSessionsToday = todayRecord?.total_sessions || 0
+    const workingHoursToday = todayRecord?.working_hours ? Number(todayRecord.working_hours).toFixed(1) : '0.0'
+
     const isTodayOffDay = settings?.off_days?.includes(new Date().getDay())
     const todayClosure = closures?.find(c => c.date === todayStr)
     const isTodayHoliday = !!todayClosure
@@ -109,7 +105,7 @@ export function DailyAttendanceCard({ className }: { className?: string }) {
         try {
             await clockInMutation.mutateAsync({ localDate: todayStr, isExtraDay: isExtra })
         } catch (error: any) {
-            // Already handled in onError
+            // Error handled in onError
         }
     }
 
@@ -117,12 +113,11 @@ export function DailyAttendanceCard({ className }: { className?: string }) {
         try {
             await clockOutMutation.mutateAsync({ localDate: todayStr })
         } catch (error: any) {
-            // Already handled in onError
+            // Error handled in onError
         }
     }
 
     return (
-
         <MetricCard
             className={cn("shadow-xl", className)}
             gradientColor="from-green-500/10 to-transparent"
@@ -148,23 +143,14 @@ export function DailyAttendanceCard({ className }: { className?: string }) {
                     </div>
                 </div>
 
-                <div className="flex items-center justify-center p-8 bg-background/30 rounded-2xl border border-green-500/5 min-h-[140px]">
+                <div className="flex flex-col items-center justify-center p-6 bg-background/30 rounded-2xl border border-green-500/5 min-h-[140px] space-y-4">
                     {isLoading ? (
                         <div className="flex items-center gap-2 text-muted-foreground">
                             <Loader2 className="h-5 w-5 animate-spin" />
                             <span className="text-sm font-medium">Loading status...</span>
                         </div>
-                    ) : isMarked ? (
-                        <div className="flex flex-col items-center gap-2 animate-in fade-in zoom-in duration-500">
-                            <Badge variant="secondary" className="px-8 py-3 text-xl font-black bg-green-500/10 text-green-700 border-green-500/20 shadow-sm">
-                                <UserCheck className="mr-3 h-6 w-6" /> Marked
-                            </Badge>
-                            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-green-600/60 mt-2">
-                                {todayRecord?.is_extra_day ? "Extra Work Day Complete" : "Attendance Complete"}
-                            </p>
-                        </div>
                     ) : isClockedIn ? (
-                        <div className="flex flex-col items-center gap-4">
+                        <div className="flex flex-col items-center gap-3">
                             <button
                                 onClick={handleClockOut}
                                 disabled={clockOutMutation.isPending}
@@ -174,39 +160,60 @@ export function DailyAttendanceCard({ className }: { className?: string }) {
                                 <span className="text-2xl font-extrabold uppercase tracking-tight">Office - Out</span>
                                 {clockOutMutation.isPending && <Loader2 className="h-5 w-5 animate-spin ml-2" />}
                             </button>
-                            {pendingRecord?.is_extra_day && (
-                                <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-widest text-orange-600 border-orange-200 bg-orange-50/50">Extra Work Session</Badge>
-                            )}
+                            <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="border-orange-300 text-orange-700 font-semibold text-xs">
+                                    Active Session #{totalSessionsToday || 1}
+                                </Badge>
+                                <Badge variant="outline" className="border-slate-300 text-slate-600 text-xs">
+                                    Total Today: {workingHoursToday} hrs
+                                </Badge>
+                            </div>
                         </div>
                     ) : isTodayHoliday ? (
-                        <div className="flex flex-col items-center gap-2 animate-in fade-in slide-in-from-bottom-4 duration-700 text-center">
+                        <div className="flex flex-col items-center gap-2 text-center">
                             <div className="px-10 py-4 rounded-2xl bg-amber-500/10 border-2 border-dashed border-amber-500/30 text-amber-600 text-3xl font-black uppercase tracking-widest">
                                 Holiday
                             </div>
                             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-600/60 mt-2">
-                                Office is closed for {todayClosure.reason}
+                                Office is closed for {todayClosure?.reason}
                             </p>
                         </div>
                     ) : isTodayOffDay ? (
-                        <div className="flex flex-col items-center gap-2 animate-in fade-in slide-in-from-bottom-4 duration-700 text-center">
+                        <div className="flex flex-col items-center gap-2 text-center">
                             <div className="px-10 py-4 rounded-2xl bg-muted/50 border-2 border-dashed border-muted-foreground/20 text-muted-foreground/60 text-3xl font-black uppercase tracking-widest">
                                 Week off Day
                             </div>
                             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/40 mt-1">Weekly scheduled off day</p>
                         </div>
                     ) : (
-                        <button
-                            onClick={() => handleClockIn(false)}
-                            disabled={clockInMutation.isPending}
-                            className="group relative flex items-center gap-4 px-10 py-5 rounded-2xl border border-green-200 bg-green-50 text-green-700 hover:bg-green-100 hover:border-green-300 transition-all duration-300 shadow-xl shadow-green-500/10 active:scale-95 disabled:opacity-50"
-                        >
-                            <LogIn className="h-7 w-7 group-hover:-rotate-12 transition-transform" />
-                            <span className="text-2xl font-extrabold uppercase tracking-tight">Office - In</span>
-                            {clockInMutation.isPending && <Loader2 className="h-5 w-5 animate-spin ml-2" />}
-                        </button>
+                        <div className="flex flex-col items-center gap-3">
+                            <button
+                                onClick={() => handleClockIn(false)}
+                                disabled={clockInMutation.isPending}
+                                className="group relative flex items-center gap-4 px-10 py-5 rounded-2xl border border-green-200 bg-green-50 text-green-700 hover:bg-green-100 hover:border-green-300 transition-all duration-300 shadow-xl shadow-green-500/10 active:scale-95 disabled:opacity-50"
+                            >
+                                <LogIn className="h-7 w-7 group-hover:-rotate-12 transition-transform" />
+                                <span className="text-2xl font-extrabold uppercase tracking-tight">
+                                    {totalSessionsToday > 0 ? `Session #${totalSessionsToday + 1} - In` : 'Office - In'}
+                                </span>
+                                {clockInMutation.isPending && <Loader2 className="h-5 w-5 animate-spin ml-2" />}
+                            </button>
+
+                            {totalSessionsToday > 0 && (
+                                <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className="border-emerald-300 text-emerald-700 font-semibold text-xs">
+                                        {totalSessionsToday} Sessions Completed
+                                    </Badge>
+                                    <Badge variant="outline" className="border-slate-300 text-slate-600 text-xs">
+                                        Total Hours: {workingHoursToday} hrs
+                                    </Badge>
+                                </div>
+                            )}
+                        </div>
                     )}
                 </div>
             </div>
         </MetricCard>
     )
 }
+

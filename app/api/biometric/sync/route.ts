@@ -3,14 +3,14 @@ import { db } from '@/lib/db';
 import { masterDb } from '@/lib/db/master-connection';
 import { tenants } from '@/lib/db/master-schema';
 import { tenantStorage } from '@/lib/tenant/store';
-import { attendance, employeeSettings } from '@/lib/db/schema';
-import { eq, and, desc, sql } from 'drizzle-orm';
-import { differenceInMinutes } from 'date-fns';
+import { employeeSettings, biometricDevices, biometricRawLogs, attendanceSessions } from '@/lib/db/schema';
+import { AttendanceService } from '@/lib/services/attendance.service';
+import { eq, and } from 'drizzle-orm';
 
 interface PunchLog {
     userId: string;
     timestamp: string; // ISO string
-    punchType?: number; // Optional: 0 for Check-in, 1 for Check-out
+    punchType?: number; // 0: Check-In, 1: Check-Out, 2: Break In, 3: Break Out
 }
 
 interface SyncPayload {
@@ -31,10 +31,10 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Empty token payload.' }, { status: 401 });
         }
 
-        // Query the Central control plane to match this token to a tenant
+        // Query Central master database to match token to a tenant
         const tenant = await masterDb.query.tenants.findFirst({
             where: eq(tenants.biometric_api_key, token),
-            with: { plan: true } // verify status if necessary
+            with: { plan: true }
         });
 
         if (!tenant || tenant.status === 'suspended' || tenant.status === 'cancelled') {
@@ -55,64 +55,81 @@ export async function POST(req: NextRequest) {
             brandName: tenant.company_name
         };
 
-        // 3. Process logs inside the resolved tenant storage context
+        // 3. Process logs inside the resolved tenant context
         return await tenantStorage.run(tenantContext, async () => {
             let processedCount = 0;
             let errorCount = 0;
 
+            // Fetch device record if registered to update health status & get location_id
+            const device = await db.query.biometricDevices.findFirst({
+                where: eq(biometricDevices.serial_number, body.deviceId)
+            });
+
+            if (device) {
+                await db.update(biometricDevices)
+                    .set({ last_sync_time: new Date(), status: 'active', updated_at: new Date() })
+                    .where(eq(biometricDevices.id, device.id));
+            }
+
+            const locationId = device?.location_id || null;
+
             for (const log of body.logs) {
                 try {
-                    // Find corresponding profile_id for this biometric userId (queried on tenant's DB)
+                    // Find profile_id for this biometric userId
                     const settings = await db.query.employeeSettings.findFirst({
                         where: eq(employeeSettings.biometric_device_user_id, log.userId),
                     });
 
-                    if (!settings) {
-                        console.warn(`[Biometric Sync] No profile mapped for biometric user ID: ${log.userId} in tenant ${tenant.slug}`);
+                    const profileId = settings?.profile_id || null;
+                    const punchTime = new Date(log.timestamp);
+                    const localDate = punchTime.toISOString().split('T')[0];
+
+                    // 1. Record raw audit log
+                    await db.insert(biometricRawLogs).values({
+                        profile_id: profileId,
+                        biometric_user_id: log.userId,
+                        device_id: body.deviceId,
+                        location_id: locationId,
+                        punch_time: punchTime,
+                        punch_type: log.punchType ?? 0,
+                        raw_payload: log as any
+                    });
+
+                    if (!profileId) {
+                        console.warn(`[Biometric Sync] Unmapped biometric user ID: ${log.userId} in tenant ${tenant.slug}`);
                         errorCount++;
                         continue;
                     }
 
-                    const profileId = settings.profile_id;
-                    const punchTime = new Date(log.timestamp);
-                    const dateStr = punchTime.toISOString().split('T')[0];
-
-                    // Check if an attendance record already exists for this date and user
-                    const existingAttendance = await db.query.attendance.findFirst({
+                    // 2. Handle session clock-in / clock-out logic
+                    const activeSession = await db.query.attendanceSessions.findFirst({
                         where: and(
-                            eq(attendance.profile_id, profileId),
-                            sql`DATE(${attendance.date}) = ${dateStr}`
-                        ),
-                        orderBy: [desc(attendance.created_at)]
+                            eq(attendanceSessions.profile_id, profileId),
+                            eq(attendanceSessions.date, localDate),
+                            eq(attendanceSessions.status, 'active')
+                        )
                     });
 
-                    if (!existingAttendance) {
-                        // First punch of the day -> Check-In
-                        await db.insert(attendance).values({
-                            profile_id: profileId,
-                            date: dateStr,
-                            check_in: punchTime,
-                            source: 'biometric',
-                            device_id: body.deviceId,
-                            status: 'pending',
+                    if (log.punchType === 1 && activeSession) {
+                        // Explicit Punch Out -> Clock out active session
+                        await AttendanceService.clockOut({
+                            profileId,
+                            email: 'biometric@device.local',
+                            localDate
                         });
-                    } else {
-                        // Subsequent punch -> Check-Out
-                        const checkInTime = existingAttendance.check_in ? new Date(existingAttendance.check_in) : null;
-                        
-                        if (checkInTime && punchTime > checkInTime) {
-                            const diffMins = differenceInMinutes(punchTime, checkInTime);
-                            const workingHours = (diffMins / 60).toFixed(2);
-
-                            await db.update(attendance)
-                                .set({
-                                    check_out: punchTime,
-                                    working_hours: workingHours,
-                                    source: 'biometric',
-                                    device_id: body.deviceId,
-                                })
-                                .where(eq(attendance.id, existingAttendance.id));
-                        }
+                    } else if (!activeSession && (log.punchType === undefined || log.punchType === 0)) {
+                        // Start new attendance session
+                        await AttendanceService.clockIn({
+                            profileId,
+                            email: 'biometric@device.local',
+                            localDate,
+                            source: 'biometric',
+                            deviceId: body.deviceId,
+                            locationId: locationId || undefined
+                        });
+                    } else if (activeSession && (log.punchType === 0 || log.punchType === undefined)) {
+                        // Secondary in-between punch without explicit out:
+                        // Logged into biometric_raw_logs above, do NOT force clock-out automatically.
                     }
 
                     processedCount++;
@@ -133,3 +150,4 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }
+
