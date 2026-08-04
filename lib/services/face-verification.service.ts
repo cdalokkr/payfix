@@ -17,8 +17,10 @@ export interface FaceVerificationResult {
     error?: string
 }
 
-// Threshold: distance < 0.6 = same person (face-api.js standard)
 const THRESHOLD = 0.6
+
+// In-memory cache for profile descriptors (URL -> Float32Array)
+const descriptorCache = new Map<string, Float32Array>()
 
 export const FaceVerificationService = {
     /**
@@ -33,24 +35,40 @@ export const FaceVerificationService = {
     },
 
     clearCache(): void {
-        // No-op: face-api.js models stay in memory per session (browser cache handles persistence)
+        descriptorCache.clear()
     },
 
     /**
-     * Preload profile descriptor in the background.
-     * With browser-side face-api.js, this is handled lazily inside compareFaces().
+     * Preload profile descriptor in the background while camera is opening.
      */
     async preloadProfileDescriptor(
         profileImageUrl: string,
         log?: (msg: string) => void
     ): Promise<boolean> {
-        log?.('Profile descriptor will be extracted on first comparison.')
-        return true
+        if (!profileImageUrl) return false
+        if (descriptorCache.has(profileImageUrl)) return true
+
+        try {
+            log?.('Preloading profile face descriptor in background...')
+            if (!FaceApiBrowserService.isReady()) {
+                await FaceApiBrowserService.loadModels()
+            }
+            const descriptor = await FaceApiBrowserService.extractDescriptorFromUrl(profileImageUrl, log)
+            if (descriptor) {
+                descriptorCache.set(profileImageUrl, descriptor)
+                log?.('✅ Profile face descriptor cached in memory')
+                return true
+            }
+        } catch (err) {
+            console.warn('[FaceVerification] Preload failed:', err)
+        }
+        return false
     },
 
     /**
      * Compare a selfie (base64 data URL) against a profile photo (remote URL).
-     * Uses face-api.js running entirely in the browser — no network call to Python.
+     * Uses face-api.js running entirely in the browser.
+     * Uses cached profile descriptor if available for instant matching (<150ms).
      */
     async compareFaces(
         selfieDataUrl: string,
@@ -65,7 +83,7 @@ export const FaceVerificationService = {
         }
 
         try {
-            log('🚀 Starting browser-side face-api.js verification...')
+            log('🚀 Starting fast browser-side face-api.js verification...')
 
             // Ensure models are loaded
             if (!FaceApiBrowserService.isReady()) {
@@ -82,19 +100,56 @@ export const FaceVerificationService = {
                 }
             }
 
-            const result = await FaceApiBrowserService.compareImages(
-                selfieDataUrl,
-                profileImageUrl,
-                THRESHOLD,
-                log
-            )
+            // Check if profile descriptor is cached in memory
+            let profileDescriptor = descriptorCache.get(profileImageUrl) || null
+
+            // Extract selfie descriptor
+            log('⚡ Extracting selfie face descriptor...')
+            const selfieDescriptor = await FaceApiBrowserService.extractDescriptorFromDataUrl(selfieDataUrl, log)
+            if (!selfieDescriptor) {
+                return {
+                    matched: false,
+                    similarity: 0,
+                    method: 'face-api',
+                    debugLog,
+                    error: 'No face detected in selfie. Please align your face inside the guide oval and retake.'
+                }
+            }
+
+            // Extract profile descriptor if not cached
+            if (!profileDescriptor) {
+                log('📷 Extracting profile photo face descriptor...')
+                profileDescriptor = await FaceApiBrowserService.extractDescriptorFromUrl(profileImageUrl, log)
+                if (profileDescriptor) {
+                    descriptorCache.set(profileImageUrl, profileDescriptor)
+                }
+            } else {
+                log('⚡ Using cached profile face descriptor (Instant Matching)')
+            }
+
+            if (!profileDescriptor) {
+                return {
+                    matched: false,
+                    similarity: 0,
+                    method: 'face-api',
+                    debugLog,
+                    error: 'No face detected in profile photo. Please update your profile picture.'
+                }
+            }
+
+            // Instant Euclidean vector comparison
+            const distance = FaceApiBrowserService.euclideanDistance(selfieDescriptor, profileDescriptor)
+            const similarity = Math.max(0, 1 - distance)
+            const matched = distance < THRESHOLD
+
+            log(`🎯 Distance: ${distance.toFixed(3)} | Similarity: ${(similarity * 100).toFixed(1)}% | ${matched ? '✅ MATCH' : '❌ NO MATCH'}`)
 
             return {
-                matched: result.matched,
-                similarity: result.similarity,
+                matched,
+                similarity,
                 method: 'face-api',
                 debugLog,
-                error: result.error,
+                error: matched ? undefined : `Face does not match profile photo (${(similarity * 100).toFixed(0)}% similarity, need >${((1 - THRESHOLD) * 100).toFixed(0)}%).`,
             }
         } catch (error) {
             const msg = error instanceof Error ? error.message : 'Unknown error'
@@ -108,6 +163,7 @@ export const FaceVerificationService = {
             }
         }
     },
+
 
     getThreshold(): number {
         return 1 - THRESHOLD // Returns as similarity (0.4 = 40% similarity minimum)
