@@ -215,7 +215,9 @@ export function MobileAttendanceWizard({
             toast.success('Server connection lost. Saved offline successfully!')
         }
 
-        // Invalidate cache for real-time update
+        // Invalidate BOTH queries for real-time UI update
+        // getTodayStatus drives the clock-in/clock-out button state — must be fresh
+        await utils.attendance.getTodayStatus.invalidate()
         utils.attendance.getMobileAttendance.invalidate()
     }, [action, clockIn, clockOut, utils])
 

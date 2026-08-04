@@ -23,6 +23,7 @@ interface AttendanceGateProps {
 export function AttendanceGate({ profileImageUrl, hasProfileImage }: AttendanceGateProps) {
     const [showWizard, setShowWizard] = useState(false)
     const [wizardAction, setWizardAction] = useState<'clock_in' | 'clock_out'>('clock_in')
+    const utils = trpc.useUtils()
 
     // Get today's attendance status using IST date
     const { data: todayStatus, isLoading: statusLoading } = trpc.attendance.getTodayStatus.useQuery({
@@ -74,6 +75,9 @@ export function AttendanceGate({ profileImageUrl, hasProfileImage }: AttendanceG
 
     const handleWizardComplete = () => {
         setShowWizard(false)
+        // Force-refresh today's status so button states (clock-in/clock-out) are immediately correct
+        utils.attendance.getTodayStatus.invalidate()
+        utils.attendance.getMobileAttendance.invalidate()
     }
 
     const handleWizardCancel = () => {

@@ -20,15 +20,26 @@ export const attendanceRouter = router({
     getTodayStatus: protectedProcedure
         .input(z.object({ localDate: z.string() }))
         .query(async ({ ctx, input }) => {
+            await AttendanceService.ensureAttendanceSchema()
             const record = await ctx.db.query.attendance.findFirst({
                 where: and(
                     eq(attendance.profile_id, ctx.profile.id),
                     eq(attendance.date, input.localDate)
                 ),
-                columns: { check_in: true, check_out: true }
+                columns: { check_in: true, check_out: true, current_session_status: true }
             });
 
             if (!record) return { status: 'not_clocked_in' as const };
+
+            // Use current_session_status for accurate multi-session state
+            // 'checked_in' = active session in progress → can clock out
+            // 'checked_out' with check_out set = fully done → marked
+            // Fallback to check_out null check for older records without session_status
+            const sessionStatus = record.current_session_status
+            if (sessionStatus === 'checked_in') return { status: 'clocked_in' as const };
+            if (sessionStatus === 'checked_out' && record.check_out) return { status: 'marked' as const };
+
+            // Legacy fallback
             if (record.check_in && !record.check_out) return { status: 'clocked_in' as const };
             return { status: 'marked' as const };
         }),
