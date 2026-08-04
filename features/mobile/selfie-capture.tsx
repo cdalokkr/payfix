@@ -355,16 +355,37 @@ export function SelfieCapture({
             try {
                 await onSubmitAttendance(capturedImage)
                 setApiStatus('success')
-            } catch (error) {
+            } catch (error: any) {
                 setApiStatus('error')
-                setApiError(error instanceof Error ? error.message : 'Failed to record attendance')
+                const errMsg = error?.message || 'Failed to record attendance'
+                setApiError(errMsg)
+                // Re-throw so the wizard's onError / error card shows the real message
+                throw error
             }
-        } catch (error) {
+        } catch (error: any) {
             setStatus('verify_failed')
-            const msg = error instanceof Error && error.message === 'TIMEOUT'
-                ? 'Verification timed out. Please try again.'
-                : 'Verification failed. Please try again.'
-            setErrorMessage(msg)
+            const errMsg: string = error?.message || ''
+
+            // Attendance submission server errors — show actual message, not generic "Verification failed"
+            const isAttendanceError = (
+                errMsg.includes('ALREADY_CLOCKED_IN') ||
+                errMsg.includes('NO_CLOCK_IN_FOUND') ||
+                errMsg.includes('FORBIDDEN') ||
+                errMsg.includes('NOT_FOUND') ||
+                errMsg.includes('ALREADY_EXISTS') ||
+                errMsg.includes('session is currently in progress') ||
+                errMsg.includes('clock out first') ||
+                errMsg.includes('clock-in') ||
+                errMsg.includes('clock in')
+            )
+
+            if (isAttendanceError) {
+                setErrorMessage(errMsg)
+            } else if (errMsg === 'TIMEOUT') {
+                setErrorMessage('Verification timed out. Please try again.')
+            } else {
+                setErrorMessage('Face verification failed. Please retake your selfie.')
+            }
         }
     }, [capturedImage, capturedAt, profileImageUrl, onSubmitAttendance, onVerified])
 

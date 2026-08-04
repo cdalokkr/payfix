@@ -179,8 +179,32 @@ export function MobileAttendanceWizard({
                     localDate,
                 })
             }
-        } catch (err) {
-            console.warn('[WIZARD] Server post failed, falling back to IndexedDB local queue:', err)
+        } catch (err: any) {
+            // Only fall back to offline queue for genuine NETWORK errors.
+            // Real server errors (ALREADY_CLOCKED_IN, FORBIDDEN, NO_CLOCK_IN_FOUND etc.)
+            // must be re-thrown so the user sees the correct error message.
+            const errMsg: string = err?.message || ''
+            const isServerError = (
+                errMsg.includes('ALREADY_CLOCKED_IN') ||
+                errMsg.includes('NO_CLOCK_IN_FOUND') ||
+                errMsg.includes('FORBIDDEN') ||
+                errMsg.includes('NOT_FOUND') ||
+                errMsg.includes('ALREADY_EXISTS') ||
+                errMsg.includes('UNAUTHORIZED') ||
+                // tRPC BAD_REQUEST responses are real server errors
+                err?.data?.code === 'BAD_REQUEST' ||
+                err?.data?.code === 'FORBIDDEN' ||
+                err?.data?.code === 'NOT_FOUND' ||
+                err?.data?.code === 'UNAUTHORIZED'
+            )
+
+            if (isServerError) {
+                // Re-throw so selfie-capture shows the real error to the user
+                throw err
+            }
+
+            // Only genuine offline / network failures reach here
+            console.warn('[WIZARD] Network error — falling back to IndexedDB local queue:', err)
             await OfflineSyncService.queuePunch({
                 action,
                 localDate,
@@ -188,7 +212,7 @@ export function MobileAttendanceWizard({
                 longitude: coords.longitude,
                 selfie: selfie || null
             })
-            toast.success("Server connection lost. Saved offline successfully!")
+            toast.success('Server connection lost. Saved offline successfully!')
         }
 
         // Invalidate cache for real-time update
