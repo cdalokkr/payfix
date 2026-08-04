@@ -2,6 +2,10 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { MobileAttendanceClient } from './mobile-attendance-client'
 import { redirect } from 'next/navigation'
 import { isDefaultAvatar } from '@/lib/utils/avatar-helper'
+import { runWithRequestHeaders } from '@/lib/tenant/with-context'
+import { db } from '@/lib/db'
+import { attendance } from '@/lib/db/schema'
+import { eq, and } from 'drizzle-orm'
 
 export const metadata = {
     title: 'Mark Attendance',
@@ -16,9 +20,16 @@ function getLocalDateIST(): string {
     return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Kolkata' })
 }
 
-export default async function MobileAttendancePage() {
+interface PageProps {
+    searchParams?: Promise<{ action?: string }> | { action?: string }
+}
+
+export default async function MobileAttendancePage({ searchParams }: PageProps) {
+    const resolvedSearchParams = searchParams ? await searchParams : {}
+    const requestedAction = resolvedSearchParams?.action === 'clock_out' ? 'clock_out' : resolvedSearchParams?.action === 'clock_in' ? 'clock_in' : null
+
     const supabase = await createServerSupabaseClient()
-    const { data, error } = await supabase.auth.getUser()
+    const { data } = await supabase.auth.getUser()
     const user = data?.user || null
 
     if (!user) {
@@ -28,23 +39,26 @@ export default async function MobileAttendancePage() {
     // Get today's date in IST
     const today = getLocalDateIST()
 
-    // Parallelize Supabase fetches to speed up server response time
-    const [profileRes, attendanceRes] = await Promise.all([
-        supabase
-            .from('profiles')
-            .select('id, full_name, avatar_url, avatar_status')
-            .eq('id', user.id)
-            .single(),
-        supabase
-            .from('attendance')
-            .select('id, check_in, check_out')
-            .eq('profile_id', user.id)
-            .eq('date', today)
-            .maybeSingle()
-    ])
-
-    const profile = profileRes.data
-    const todayAttendance = attendanceRes.data
+    // Fetch profile and tenant attendance record in proper tenant context
+    const { profile, todayAttendance } = await runWithRequestHeaders(async () => {
+        const [profileRes, attRecord] = await Promise.all([
+            supabase
+                .from('profiles')
+                .select('id, full_name, avatar_url, avatar_status')
+                .eq('id', user.id)
+                .single(),
+            db.query.attendance.findFirst({
+                where: and(
+                    eq(attendance.profile_id, user.id),
+                    eq(attendance.date, today)
+                )
+            })
+        ])
+        return {
+            profile: profileRes.data,
+            todayAttendance: attRecord || null
+        }
+    })
 
     const hasNoPhoto = profile?.avatar_status !== 'custom' && (!profile?.avatar_url || isDefaultAvatar(profile.avatar_url))
 
@@ -52,9 +66,17 @@ export default async function MobileAttendancePage() {
         redirect('/mobile')
     }
 
-    const action = todayAttendance?.check_in && !todayAttendance?.check_out
-        ? 'clock_out'
-        : 'clock_in'
+    // Determine action:
+    // 1. If explicit query parameter was provided (e.g. ?action=clock_out), prioritize it
+    // 2. Otherwise determine dynamically from tenant DB attendance record
+    let action: 'clock_in' | 'clock_out' = 'clock_in'
+
+    if (requestedAction) {
+        action = requestedAction
+    } else if (todayAttendance) {
+        const isClockedIn = todayAttendance.current_session_status === 'checked_in' || (todayAttendance.check_in && !todayAttendance.check_out)
+        action = isClockedIn ? 'clock_out' : 'clock_in'
+    }
 
     return (
         <MobileAttendanceClient

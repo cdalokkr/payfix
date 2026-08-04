@@ -84,6 +84,16 @@ export function MobileAttendanceWizard({
     }, [])
 
     const utils = trpc.useUtils()
+    const localDate = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Kolkata' })
+
+    // Client-side status check — double-safety net to guarantee action matches real DB state
+    const { data: serverTodayStatus } = trpc.attendance.getTodayStatus.useQuery({ localDate })
+
+    const effectiveAction: 'clock_in' | 'clock_out' = serverTodayStatus?.status === 'clocked_in'
+        ? 'clock_out'
+        : serverTodayStatus?.status === 'not_clocked_in'
+            ? 'clock_in'
+            : action
 
     // Clock in mutation
     const clockIn = trpc.attendance.clockIn.useMutation({
@@ -107,10 +117,8 @@ export function MobileAttendanceWizard({
 
     // This is called by SelfieCapture to submit attendance in parallel with verification
     const handleSubmitAttendance = useCallback(async (selfie?: string) => {
-        const localDate = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Kolkata' })
-
         let coords: { latitude: number | null; longitude: number | null } = { latitude: null, longitude: null }
-        if (action === 'clock_in') {
+        if (effectiveAction === 'clock_in') {
             try {
                 // Try to reuse fresh cached coordinates from sessionStorage (less than 1 minute old)
                 let cachedCoords: { lat: number; lng: number } | null = null
@@ -156,7 +164,7 @@ export function MobileAttendanceWizard({
         if (isOffline) {
             console.log('[WIZARD] Client is offline, queuing punch directly in IndexedDB')
             await OfflineSyncService.queuePunch({
-                action,
+                action: effectiveAction,
                 localDate,
                 latitude: coords.latitude,
                 longitude: coords.longitude,
@@ -167,7 +175,7 @@ export function MobileAttendanceWizard({
         }
 
         try {
-            if (action === 'clock_in') {
+            if (effectiveAction === 'clock_in') {
                 await clockIn.mutateAsync({
                     localDate,
                     isExtraDay: false,
@@ -206,7 +214,7 @@ export function MobileAttendanceWizard({
             // Only genuine offline / network failures reach here
             console.warn('[WIZARD] Network error — falling back to IndexedDB local queue:', err)
             await OfflineSyncService.queuePunch({
-                action,
+                action: effectiveAction,
                 localDate,
                 latitude: coords.latitude,
                 longitude: coords.longitude,
@@ -219,13 +227,13 @@ export function MobileAttendanceWizard({
         // getTodayStatus drives the clock-in/clock-out button state — must be fresh
         await utils.attendance.getTodayStatus.invalidate()
         utils.attendance.getMobileAttendance.invalidate()
-    }, [action, clockIn, clockOut, utils])
+    }, [action, effectiveAction, localDate, clockIn, clockOut, utils])
 
     // Called when verification AND API both succeed
     const handleVerified = useCallback((result: { matched: boolean; similarity: number }) => {
-        toast.success(action === 'clock_in' ? 'Successfully clocked in!' : 'Successfully clocked out!')
+        toast.success(effectiveAction === 'clock_in' ? 'Successfully clocked in!' : 'Successfully clocked out!')
         onComplete()
-    }, [action, onComplete])
+    }, [effectiveAction, onComplete])
 
     const handleBack = useCallback(() => {
         onCancel()

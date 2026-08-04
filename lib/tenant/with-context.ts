@@ -39,17 +39,38 @@ export function runWithTenant<T>(context: TenantContext, callback: () => T): T {
 }
 
 /**
- * Resolves the tenant context from the Next.js request headers asynchronously
+ * Resolves the tenant context from the Next.js request headers or tenant_fallback cookie
  * and runs a callback within that storage context.
  */
 export async function runWithRequestHeaders<T>(callback: () => Promise<T>): Promise<T> {
     try {
         const headersList = await headers();
-        const tenantId = headersList.get('x-tenant-id');
-        const slug = headersList.get('x-tenant-slug');
-        const databaseUrl = headersList.get('x-tenant-db-url');
-        const tenantSchema = headersList.get('x-tenant-schema');
-        const brandName = headersList.get('x-tenant-brand') || 'PayFix';
+        let tenantId = headersList.get('x-tenant-id');
+        let slug = headersList.get('x-tenant-slug');
+        let databaseUrl = headersList.get('x-tenant-db-url');
+        let tenantSchema = headersList.get('x-tenant-schema');
+        let brandName = headersList.get('x-tenant-brand') || 'PayFix';
+
+        if (!tenantId || !slug) {
+            try {
+                const { cookies } = await import('next/headers');
+                const cookieStore = await cookies();
+                const fallbackSlug = cookieStore.get('tenant_fallback')?.value;
+                if (fallbackSlug) {
+                    const { resolveTenant } = await import('@/lib/tenant/resolver');
+                    const tenant = await resolveTenant(fallbackSlug);
+                    if (tenant) {
+                        tenantId = tenant.id;
+                        slug = tenant.slug;
+                        databaseUrl = tenant.database_url || null;
+                        tenantSchema = tenant.tenant_schema || null;
+                        brandName = tenant.branding?.app_name || tenant.company_name;
+                    }
+                }
+            } catch {
+                // Ignore cookie error outside request context
+            }
+        }
 
         if (tenantId && slug) {
             const context: TenantContext = {
