@@ -1,10 +1,37 @@
 import { db } from '@/lib/db'
 import { profiles, activities, profilePhotoRequests } from '@/lib/db/schema'
-import { eq, and, desc, count } from 'drizzle-orm'
+import { eq, and, desc, count, sql } from 'drizzle-orm'
 import { throwAppError } from '@/lib/errors/app-errors'
 import { invalidateUserSession } from '@/lib/auth/optimized-context'
 
 export class ProfileService {
+    /**
+     * Ensure profile_photo_requests table exists in the current tenant schema.
+     * Safe to call multiple times — uses IF NOT EXISTS.
+     * Mirrors the ensureAttendanceSchema() pattern from AttendanceService.
+     */
+    static async ensurePhotoRequestsSchema() {
+        try {
+            await db.execute(sql`
+                CREATE TABLE IF NOT EXISTS "profile_photo_requests" (
+                    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                    "profile_id" uuid NOT NULL REFERENCES "profiles"("id") ON DELETE CASCADE,
+                    "pending_photo_url" text NOT NULL,
+                    "status" text NOT NULL DEFAULT 'pending',
+                    "reviewed_by" uuid REFERENCES "profiles"("id") ON DELETE SET NULL,
+                    "reviewed_at" timestamp with time zone,
+                    "rejection_reason" text,
+                    "created_at" timestamp with time zone DEFAULT now()
+                );
+
+                ALTER TABLE IF EXISTS "profiles"
+                    ADD COLUMN IF NOT EXISTS "face_embedding" real[];
+            `)
+        } catch (e) {
+            // Ignore — table already exists or concurrent creation
+        }
+    }
+
     /**
      * Get user profile by ID with designation relation
      */
@@ -138,6 +165,7 @@ export class ProfileService {
      * Get pending photo request
      */
     static async getPendingPhotoRequest(profileId: string) {
+        await ProfileService.ensurePhotoRequestsSchema()
         return await db.query.profilePhotoRequests.findFirst({
             where: and(
                 eq(profilePhotoRequests.profile_id, profileId),
@@ -151,6 +179,7 @@ export class ProfileService {
      * Get last rejected photo request
      */
     static async getLastRejectedRequest(profileId: string) {
+        await ProfileService.ensurePhotoRequestsSchema()
         return await db.query.profilePhotoRequests.findFirst({
             where: and(
                 eq(profilePhotoRequests.profile_id, profileId),
@@ -170,6 +199,7 @@ export class ProfileService {
         profileId: string
         pendingPhotoUrl: string
     }) {
+        await ProfileService.ensurePhotoRequestsSchema()
         const existingPending = await db.query.profilePhotoRequests.findFirst({
             where: and(
                 eq(profilePhotoRequests.profile_id, profileId),
@@ -201,6 +231,7 @@ export class ProfileService {
      * Get all pending photo requests
      */
     static async getPendingPhotoRequests() {
+        await ProfileService.ensurePhotoRequestsSchema()
         return await db.query.profilePhotoRequests.findMany({
             where: eq(profilePhotoRequests.status, 'pending'),
             with: {
@@ -221,6 +252,7 @@ export class ProfileService {
      * Get photo request statistics
      */
     static async getPhotoRequestStats() {
+        await ProfileService.ensurePhotoRequestsSchema()
         const [pending, approved, rejected] = await Promise.all([
             db.select({ count: count() }).from(profilePhotoRequests).where(eq(profilePhotoRequests.status, 'pending')),
             db.select({ count: count() }).from(profilePhotoRequests).where(eq(profilePhotoRequests.status, 'approved')),
@@ -239,6 +271,7 @@ export class ProfileService {
      * Get all photo requests with history
      */
     static async getAllPhotoRequests() {
+        await ProfileService.ensurePhotoRequestsSchema()
         return await db.query.profilePhotoRequests.findMany({
             with: {
                 profile: {
@@ -276,6 +309,7 @@ export class ProfileService {
         rejectionReason?: string
         reviewerId: string
     }) {
+        await ProfileService.ensurePhotoRequestsSchema()
         const request = await db.query.profilePhotoRequests.findFirst({
             where: eq(profilePhotoRequests.id, requestId),
             with: { profile: true }
