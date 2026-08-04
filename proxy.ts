@@ -389,38 +389,24 @@ export async function proxy(request: NextRequest) {
             // Fetch full profile (including designation) dynamically from tenant schema or public fallback
             let dbProfile: any = null;
 
-            // Check public.profiles first to see if this is a platform-wide super_admin
-            const { data: publicProfile } = await supabase
-                .from('profiles')
-                .select('*, designation:designations(*)')
-                .eq('id', user.id)
-                .maybeSingle();
-
-            if (publicProfile && publicProfile.role === 'super_admin') {
-                dbProfile = publicProfile;
-                if (process.env.NODE_ENV === 'development') {
-                    console.log(`[PROXY-AUTH] Super Admin resolved via public.profiles for user: ${user.id}`);
-                }
-            }
-
-            // If not a super_admin, look up in tenant-specific schema if tenant context exists
-            if (!dbProfile && tenant && tenant.tenant_schema) {
+            // 1. Check tenant-specific schema FIRST if tenant context exists
+            if (tenant && tenant.tenant_schema) {
                 const { data: rpcData, error: rpcError } = await supabase.rpc('get_profile_from_schema', {
                     schema_name: tenant.tenant_schema,
                     user_id: user.id
                 });
                 if (!rpcError && rpcData) {
                     dbProfile = rpcData;
+                    if (process.env.NODE_ENV === 'development') {
+                        console.log(`[PROXY-AUTH] Profile resolved via tenant schema (${tenant.tenant_schema}) for user: ${user.id}`);
+                    }
                 } else if (rpcError) {
                     console.error('[PROXY-RPC] Error calling get_profile_from_schema:', rpcError);
                 }
             }
 
-            // Cross-schema scan fallback: If profile not found in current tenant schema,
+            // 2. Cross-schema scan fallback: If profile not found in current tenant schema,
             // scan ALL active tenant schemas in a single DB round-trip via RPC.
-            // This handles new signups where the user registered on a different tenant
-            // but is logging in from localhost/Vercel (which resolves to primary).
-            // Uses SECURITY DEFINER function to bypass RLS and avoid PostgREST restrictions.
             if (!dbProfile) {
                 const { data: scanResult, error: scanError } = await supabase.rpc('find_profile_across_schemas', {
                     target_user_id: user.id
@@ -433,8 +419,6 @@ export async function proxy(request: NextRequest) {
                     }
 
                     // CRITICAL: Override tenant context to the user's actual workspace.
-                    // Without this, all tRPC/API calls would route to tenant_primary,
-                    // showing wrong data or empty dashboards.
                     if (scanResult.tenant_slug && scanResult.tenant_slug !== tenant?.slug) {
                         const discoveredTenant = await resolveTenant(scanResult.tenant_slug);
                         if (discoveredTenant) {
@@ -461,9 +445,20 @@ export async function proxy(request: NextRequest) {
                 }
             }
 
-            // Fallback to public schema profile if not found in any tenant schema
-            if (!dbProfile && publicProfile) {
-                dbProfile = publicProfile;
+            // 3. Check public.profiles LAST (for platform-wide super_admin who has no tenant profile)
+            if (!dbProfile) {
+                const { data: publicProfile } = await supabase
+                    .from('profiles')
+                    .select('*, designation:designations(*)')
+                    .eq('id', user.id)
+                    .maybeSingle();
+
+                if (publicProfile) {
+                    dbProfile = publicProfile;
+                    if (process.env.NODE_ENV === 'development') {
+                        console.log(`[PROXY-AUTH] Super Admin resolved via public.profiles for user: ${user.id}`);
+                    }
+                }
             }
 
             profile = dbProfile ? {
