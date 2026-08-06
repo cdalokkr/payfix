@@ -119,6 +119,8 @@ export class KioskDeviceService {
         if (!pairingCode) return null
 
         try {
+            const cleanCode = pairingCode.trim().toUpperCase()
+
             // Search all active tenant schemas for this pairing code
             const schemasRes = await centralDb.execute(sql`
                 SELECT schema_name FROM information_schema.schemata WHERE schema_name LIKE 'tenant_%';
@@ -127,18 +129,41 @@ export class KioskDeviceService {
             for (const row of schemasRes) {
                 const schemaName = (row as any).schema_name
                 try {
-                    const result = await centralDb.execute(sql`
-                        SELECT k.id, k.name, k.pairing_code, k.location_id, k.is_active,
-                               l.name as location_name, l.latitude, l.longitude, l.radius_meters
-                        FROM ${sql.raw(schemaName)}.kiosk_devices k
-                        LEFT JOIN ${sql.raw(schemaName)}.office_locations l ON l.id = k.location_id
-                        WHERE k.pairing_code = ${pairingCode} AND k.is_active = true
+                    const devices = await centralDb.execute(sql`
+                        SELECT id, name, pairing_code, location_id, is_active
+                        FROM ${sql.raw(schemaName)}.kiosk_devices
+                        WHERE pairing_code = ${cleanCode} AND is_active = true
                         LIMIT 1;
                     `)
 
-                    if (result[0]) {
-                        const device = result[0] as any
+                    if (devices[0]) {
+                        const device = devices[0] as any
                         const slug = schemaName.replace(/^tenant_/, '')
+
+                        let locationName: string | null = null
+                        let latitude: number | null = null
+                        let longitude: number | null = null
+                        let radiusMeters = 200
+
+                        if (device.location_id) {
+                            try {
+                                const locs = await centralDb.execute(sql`
+                                    SELECT name, latitude, longitude, radius_meters
+                                    FROM public.office_locations
+                                    WHERE id = ${device.location_id}
+                                    LIMIT 1;
+                                `)
+                                if (locs[0]) {
+                                    const loc = locs[0] as any
+                                    locationName = loc.name
+                                    latitude = loc.latitude ? Number(loc.latitude) : null
+                                    longitude = loc.longitude ? Number(loc.longitude) : null
+                                    radiusMeters = loc.radius_meters ? Number(loc.radius_meters) : 200
+                                }
+                            } catch {
+                                // Ignore location lookup error if table does not exist
+                            }
+                        }
 
                         // Update last_seen_at timestamp
                         await centralDb.execute(sql`
@@ -153,10 +178,10 @@ export class KioskDeviceService {
                                 name: device.name,
                                 pairingCode: device.pairing_code,
                                 locationId: device.location_id,
-                                locationName: device.location_name,
-                                latitude: device.latitude ? Number(device.latitude) : null,
-                                longitude: device.longitude ? Number(device.longitude) : null,
-                                radiusMeters: device.radius_meters ? Number(device.radius_meters) : 200,
+                                locationName,
+                                latitude,
+                                longitude,
+                                radiusMeters,
                             },
                             tenantSchema: schemaName,
                             tenantSlug: slug
@@ -172,4 +197,5 @@ export class KioskDeviceService {
 
         return null
     }
+
 }
