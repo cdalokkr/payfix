@@ -4,10 +4,14 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { AlertCircle, Camera, CheckCircle2, RefreshCw, Wifi, WifiOff, Zap, ScanFace, UserX, Key, MapPin, Tablet, ShieldCheck, LogOut } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import {
+    AlertCircle, Camera, CheckCircle2, CheckCheck, XCircle, RefreshCw, Wifi, WifiOff,
+    Zap, ScanFace, UserX, Key, MapPin, Tablet, ShieldCheck, LogOut, Sparkles, Clock, X,
+    Maximize2, User
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { FaceApiBrowserService } from '@/lib/services/faceapi-browser.service';
 import { trpc } from '@/lib/trpc/client';
@@ -17,7 +21,7 @@ interface CachedEmployee {
     name: string;
     avatarUrl?: string | null;
     biometricUserId?: string | null;
-    faceEmbedding: number[] | null; // 128-d face-api.js vector from profiles.face_embedding
+    faceEmbedding: number[] | null; // 128-d face-api.js vector
 }
 
 interface QueuedPunch {
@@ -42,15 +46,35 @@ interface PairedDeviceInfo {
     radiusMeters?: number;
 }
 
+interface VerificationOverlayState {
+    status: 'idle' | 'scanning' | 'verified' | 'rejected';
+    matched?: boolean;
+    employeeName?: string;
+    avatarUrl?: string | null;
+    time?: string;
+    similarity?: string;
+    error?: string;
+    snapshotUrl?: string | null;
+}
+
 export function ExpressKioskApp() {
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const mediaStreamRef = useRef<MediaStream | null>(null);
 
     // Kiosk Terminal Pairing State
     const [pairingCode, setPairingCode] = useState<string | null>(null);
     const [pairedDevice, setPairedDevice] = useState<PairedDeviceInfo | null>(null);
     const [inputKey, setInputKey] = useState('');
     const [isPairing, setIsPairing] = useState(false);
+
+    // Verification Modal & Camera State
+    const [isVerificationModalOpen, setIsVerificationModalOpen] = useState<boolean>(false);
+    const [verificationResult, setVerificationResult] = useState<VerificationOverlayState | null>(null);
+
+    // Live Clock State
+    const [currentTime, setCurrentTime] = useState<string>('');
+    const [currentDate, setCurrentDate] = useState<string>('');
 
     // Terminal Location GPS State
     const [terminalGps, setTerminalGps] = useState<{ latitude: number | null; longitude: number | null }>({
@@ -68,10 +92,21 @@ export function ExpressKioskApp() {
     const [modelsLoading, setModelsLoading] = useState<boolean>(false);
     const [modelsReady, setModelsReady] = useState<boolean>(false);
     const [modelProgress, setModelProgress] = useState<number>(0);
-    const [modelMsg, setModelMsg] = useState<string>('');
     const [stats, setStats] = useState({ totalEmployees: 0, enrolledEmployees: 0, queuedOffline: 0 });
 
     const verifyPairingMutation = trpc.kioskDevices.verifyPairingCode.useMutation();
+
+    // Live clock update
+    useEffect(() => {
+        const updateClock = () => {
+            const now = new Date();
+            setCurrentTime(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+            setCurrentDate(now.toLocaleDateString([], { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }));
+        };
+        updateClock();
+        const timer = setInterval(updateClock, 1000);
+        return () => clearInterval(timer);
+    }, []);
 
     // Check stored pairing key on mount
     useEffect(() => {
@@ -84,14 +119,12 @@ export function ExpressKioskApp() {
                 if (savedDeviceInfo) {
                     try { setPairedDevice(JSON.parse(savedDeviceInfo)); } catch {}
                 }
-                // Verify pairing key with server
                 verifyPairingMutation.mutate({ pairingCode: savedKey }, {
                     onSuccess: (res) => {
                         if (res.success && 'device' in res && res.device) {
                             setPairedDevice(res.device);
                             localStorage.setItem('payfix_kiosk_device_info', JSON.stringify(res.device));
                         } else {
-                            // Key revoked or invalid
                             toast.error('Kiosk Pairing Key is no longer active. Please pair again.');
                             handleUnpair();
                         }
@@ -154,6 +187,26 @@ export function ExpressKioskApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pairingCode]);
 
+    // Bind camera stream whenever cameraActive or videoRef updates inside Modal
+    useEffect(() => {
+        if (cameraActive && videoRef.current && mediaStreamRef.current) {
+            const video = videoRef.current;
+            video.srcObject = mediaStreamRef.current;
+            video.muted = true;
+            video.play().catch(err => console.warn('[Kiosk Video] Play error:', err));
+        }
+    }, [cameraActive, isVerificationModalOpen]);
+
+    // Cleanup camera stream on unmount
+    useEffect(() => {
+        return () => {
+            if (mediaStreamRef.current) {
+                mediaStreamRef.current.getTracks().forEach(track => track.stop());
+                mediaStreamRef.current = null;
+            }
+        };
+    }, []);
+
     const handlePairDevice = (e: React.FormEvent) => {
         e.preventDefault();
         const code = inputKey.trim().toUpperCase();
@@ -184,7 +237,6 @@ export function ExpressKioskApp() {
         });
     };
 
-
     const handleUnpair = () => {
         localStorage.removeItem('payfix_kiosk_pairing_code');
         localStorage.removeItem('payfix_kiosk_device_info');
@@ -192,7 +244,7 @@ export function ExpressKioskApp() {
         setPairedDevice(null);
         setInputKey('');
         setEmployees([]);
-        stopCamera();
+        closeVerificationModal();
     };
 
     const loadFaceModels = async () => {
@@ -203,11 +255,9 @@ export function ExpressKioskApp() {
         }
         setModelsLoading(true);
         setModelProgress(0);
-        setModelMsg('Loading AI models...');
 
-        const ok = await FaceApiBrowserService.loadModels((pct, msg) => {
+        const ok = await FaceApiBrowserService.loadModels((pct) => {
             setModelProgress(pct);
-            setModelMsg(msg);
         });
 
         setModelsLoading(false);
@@ -242,12 +292,10 @@ export function ExpressKioskApp() {
                             : null,
                     }));
                     setEmployees(mapped);
-                    // Cache in LocalStorage for offline fallback
                     try { localStorage.setItem('payfix_kiosk_cached_employees', JSON.stringify(mapped)); } catch {}
 
                     const enrolledCount = mapped.filter(e => e.faceEmbedding !== null).length;
                     setStats(prev => ({ ...prev, totalEmployees: data.total, enrolledEmployees: enrolledCount }));
-                    toast.info(`${data.total} employees loaded for this tenant workspace. ${enrolledCount} have face enrolled.`);
                 }
             } else if (res.status === 401) {
                 toast.error('Unauthorized Kiosk device. Pairing Key rejected.');
@@ -255,7 +303,6 @@ export function ExpressKioskApp() {
             }
         } catch (err) {
             console.warn('[Kiosk] Failed to fetch face vectors from cloud. Checking offline cache...');
-            // Offline fallback
             const cached = localStorage.getItem('payfix_kiosk_cached_employees');
             if (cached) {
                 try {
@@ -263,35 +310,12 @@ export function ExpressKioskApp() {
                     setEmployees(mapped);
                     const enrolledCount = mapped.filter(e => e.faceEmbedding !== null).length;
                     setStats(prev => ({ ...prev, totalEmployees: mapped.length, enrolledEmployees: enrolledCount }));
-                    toast.warning(`Offline Mode: Loaded ${mapped.length} employees from local tablet cache.`);
                 } catch {}
             }
         }
     };
 
-    const mediaStreamRef = useRef<MediaStream | null>(null);
-
-    // Bind camera stream to video element whenever cameraActive or videoRef updates
-    useEffect(() => {
-        if (cameraActive && videoRef.current && mediaStreamRef.current) {
-            const video = videoRef.current;
-            video.srcObject = mediaStreamRef.current;
-            video.muted = true;
-            video.play().catch(err => console.warn('[Kiosk Video] Play error:', err));
-        }
-    }, [cameraActive]);
-
-    // Cleanup camera stream on unmount
-    useEffect(() => {
-        return () => {
-            if (mediaStreamRef.current) {
-                mediaStreamRef.current.getTracks().forEach(track => track.stop());
-                mediaStreamRef.current = null;
-            }
-        };
-    }, []);
-
-    // Start Camera Stream
+    // Start Camera Stream inside Modal
     const startCamera = async () => {
         try {
             if (mediaStreamRef.current) {
@@ -300,13 +324,12 @@ export function ExpressKioskApp() {
             }
 
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }
+                video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 1280 } } // Vertical Portrait preferred
             });
 
             mediaStreamRef.current = stream;
             setCameraActive(true);
             setScanError(null);
-            setLastScanResult(null);
 
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
@@ -315,7 +338,7 @@ export function ExpressKioskApp() {
             }
         } catch (err) {
             console.error('Camera access error:', err);
-            toast.error('Unable to access front camera.');
+            toast.error('Unable to access camera.');
         }
     };
 
@@ -331,37 +354,52 @@ export function ExpressKioskApp() {
         setCameraActive(false);
     };
 
-
-    // Capture frame from video into canvas and return as ImageData element
-    const captureFrame = (): HTMLCanvasElement | null => {
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        if (!video || !canvas || !cameraActive) return null;
-
-        canvas.width = video.videoWidth || 640;
-        canvas.height = video.videoHeight || 480;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return null;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        return canvas;
+    // Open Verification Modal Flow
+    const openVerificationModal = () => {
+        setIsVerificationModalOpen(true);
+        setVerificationResult(null);
+        setScanError(null);
+        startCamera();
     };
 
-    // Real Face Scan using face-api.js
+    // Close Verification Modal Flow
+    const closeVerificationModal = () => {
+        setIsVerificationModalOpen(false);
+        setVerificationResult(null);
+        setScanError(null);
+        stopCamera();
+    };
+
+    // Capture frame from video into canvas and return as Data URL
+    const captureFrame = (): { canvas: HTMLCanvasElement | null; dataUrl: string | null } => {
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        if (!video || !canvas || !cameraActive) return { canvas: null, dataUrl: null };
+
+        canvas.width = video.videoWidth || 720;
+        canvas.height = video.videoHeight || 1280;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return { canvas: null, dataUrl: null };
+
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        return { canvas, dataUrl };
+    };
+
+    // Instant Face Verification Scan & Overlay Flow
     const handleFaceScan = useCallback(async () => {
         if (isScanning || !modelsReady || !pairingCode) return;
 
         if (employees.length === 0) {
-            toast.error('No employee profiles cached. Please check server connection.');
+            toast.error('No employee profiles cached. Please check connection.');
             return;
         }
 
-        // Only match against employees who have enrolled face vectors
         const enrolledEmployees = employees.filter(e => e.faceEmbedding !== null && e.faceEmbedding.length === 128);
 
         if (enrolledEmployees.length === 0) {
             playErrorChimeSound();
-            setScanError('No enrolled face vectors found! Employees must upload a profile photo first to enroll their face.');
-            toast.error('No face enrollments found. Ask employees to upload their profile photo.');
+            setScanError('No enrolled face vectors found! Employees must upload a profile photo first.');
             return;
         }
 
@@ -369,24 +407,30 @@ export function ExpressKioskApp() {
         setScanError(null);
 
         try {
-            // 1. Capture live frame from webcam
-            const frameCanvas = captureFrame();
-            if (!frameCanvas) {
+            // 1. Capture live frame snapshot
+            const { canvas, dataUrl: snapshotUrl } = captureFrame();
+            if (!canvas) {
                 setScanError('Camera frame capture failed. Please try again.');
+                setIsScanning(false);
                 return;
             }
 
-            // 2. Extract live face descriptor from webcam frame
-            const liveDescriptor = await FaceApiBrowserService.extractDescriptor(frameCanvas);
+            // 2. Extract live face descriptor
+            const liveDescriptor = await FaceApiBrowserService.extractDescriptor(canvas);
 
             if (!liveDescriptor) {
                 playErrorChimeSound();
-                setScanError('No face detected in camera frame. Please align your face in the circle and try again.');
-                toast.warning('No face detected in frame.');
+                setVerificationResult({
+                    status: 'rejected',
+                    matched: false,
+                    error: 'No face detected in camera frame. Please align face inside the guide oval.',
+                    snapshotUrl,
+                });
+                setIsScanning(false);
                 return;
             }
 
-            // 3. Find closest matching employee using Euclidean distance
+            // 3. Vector comparison against enrolled employee vectors
             let matchedEmployee: CachedEmployee | null = null;
             let bestDistance = Infinity;
 
@@ -399,23 +443,49 @@ export function ExpressKioskApp() {
                 }
             }
 
-            // 4. Threshold check — distance < 0.6 = same person
+            // Threshold: < 0.6 = same person
             if (bestDistance >= 0.6) {
                 matchedEmployee = null;
             }
 
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
             if (!matchedEmployee) {
                 playErrorChimeSound();
-                setScanError(`Face Not Recognized! (Best match distance: ${bestDistance.toFixed(3)} — threshold: 0.6). Attendance NOT marked.`);
-                toast.error('Face not recognized. Attendance NOT marked.');
+                setVerificationResult({
+                    status: 'rejected',
+                    matched: false,
+                    error: `Face Not Recognized in employee database. (Match score: ${(Math.max(0, 1 - bestDistance) * 100).toFixed(0)}%)`,
+                    snapshotUrl,
+                });
+                setIsScanning(false);
                 return;
             }
 
-            // 5. Face matched — mark attendance!
-            const now = new Date();
-            const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            const similarity = Math.max(0, (1 - bestDistance) * 100).toFixed(1);
+            // 4. Face MATCHED!
+            const similarity = `${Math.max(0, (1 - bestDistance) * 100).toFixed(1)}%`;
 
+            // Instant UI Notification & Overlay (<100ms)
+            setVerificationResult({
+                status: 'verified',
+                matched: true,
+                employeeName: matchedEmployee.name,
+                avatarUrl: matchedEmployee.avatarUrl,
+                time: timeStr,
+                similarity,
+                snapshotUrl,
+            });
+
+            setLastScanResult({
+                name: matchedEmployee.name,
+                time: timeStr,
+                type: `Verified (${similarity} Match)`,
+            });
+
+            playChimeSound();
+
+            // 5. ASYNC BACKGROUND PUNCH (Non-blocking DB sync)
             const punchLog: QueuedPunch = {
                 id: `punch_${Date.now()}`,
                 profileId: matchedEmployee.id,
@@ -427,44 +497,37 @@ export function ExpressKioskApp() {
                 longitude: terminalGps.longitude,
             };
 
-            setLastScanResult({
-                name: matchedEmployee.name,
-                time: timeStr,
-                type: `Verified ${similarity}% Match`,
-            });
-
-            playChimeSound();
-
-            if (navigator.onLine) {
-                const res = await fetch('/api/kiosk/sync', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-kiosk-secret': pairingCode
-                    },
-                    body: JSON.stringify(punchLog),
-                });
-
-                if (res.ok) {
-                    const resData = await res.json();
-                    if (resData.success) {
-                        toast.success(`✅ Welcome ${matchedEmployee.name}! Attendance marked at ${timeStr} (${similarity}% match)`);
-                    } else if (resData.errorDetails?.[0]) {
-                        toast.error(`⚠️ ${resData.errorDetails[0]}`);
-                    } else {
-                        toast.success(`✅ Welcome ${matchedEmployee.name}! Attendance recorded.`);
+            (async () => {
+                if (navigator.onLine) {
+                    try {
+                        const res = await fetch('/api/kiosk/sync', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-kiosk-secret': pairingCode
+                            },
+                            body: JSON.stringify(punchLog),
+                        });
+                        if (!res.ok) queueOfflinePunch(punchLog);
+                    } catch {
+                        queueOfflinePunch(punchLog);
                     }
                 } else {
                     queueOfflinePunch(punchLog);
                 }
-            } else {
-                queueOfflinePunch(punchLog);
-            }
+            })();
+
+            // Auto-close modal after 2.5 seconds for next employee
+            setTimeout(() => {
+                closeVerificationModal();
+                setIsScanning(false);
+            }, 2500);
+
         } catch (err) {
             console.error('[Kiosk] Scan error:', err);
-            toast.error('Face verification failed. Please try again.');
-        } finally {
-            setTimeout(() => setIsScanning(false), 2000);
+            playErrorChimeSound();
+            setScanError('Verification processing failed. Please try again.');
+            setIsScanning(false);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isScanning, modelsReady, employees, cameraActive, pairingCode, terminalGps]);
@@ -507,7 +570,6 @@ export function ExpressKioskApp() {
             setStats(s => ({ ...s, queuedOffline: updated.length }));
             return updated;
         });
-        toast.info(`Offline Mode: Saved punch locally for ${punch.employeeName}. Will auto-sync when online.`);
     };
 
     const flushOfflineQueue = async () => {
@@ -523,23 +585,21 @@ export function ExpressKioskApp() {
                 body: JSON.stringify({ punches: prev }),
             }).then(res => {
                 if (res.ok) {
-                    toast.success(`Successfully synced ${prev.length} offline punches!`);
+                    toast.success(`Synced ${prev.length} offline punches!`);
                     setStats(s => ({ ...s, queuedOffline: 0 }));
                 }
-            }).catch(e => {
-                console.warn('[Kiosk] Offline sync retry failed:', e);
-            });
+            }).catch(() => {});
             return [];
         });
     };
 
     // =========================================================================
-    // UNPAIRED STATE — Show Pairing Key Input Screen
+    // UNPAIRED STATE — Pairing Key Screen
     // =========================================================================
     if (!pairingCode) {
         return (
-            <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
-                <Card className="w-full max-w-md bg-slate-900/90 border-slate-800 shadow-2xl text-slate-100">
+            <div className="h-screen w-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4 overflow-hidden select-none">
+                <Card className="w-full max-w-md bg-slate-900/90 border-slate-800 shadow-2xl text-slate-100 backdrop-blur-xl">
                     <CardHeader className="text-center space-y-2">
                         <div className="mx-auto w-16 h-16 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-sky-400 flex items-center justify-center shadow-inner">
                             <Key className="h-8 w-8" />
@@ -547,8 +607,8 @@ export function ExpressKioskApp() {
                         <CardTitle className="text-2xl font-bold tracking-tight text-white">
                             Pair Kiosk Terminal
                         </CardTitle>
-                        <CardDescription className="text-slate-400 text-sm">
-                            Enter the Kiosk Pairing Key generated in your Admin Settings panel to authorize this entrance device.
+                        <CardDescription className="text-slate-400 text-xs">
+                            Enter Kiosk Pairing Key generated in Admin Settings panel.
                         </CardDescription>
                     </CardHeader>
 
@@ -558,28 +618,26 @@ export function ExpressKioskApp() {
                                 <Label htmlFor="pairing-key" className="text-xs font-bold uppercase tracking-wider text-slate-300">
                                     Kiosk Pairing Key
                                 </Label>
-                                <div className="relative">
-                                    <Input
-                                        id="pairing-key"
-                                        type="text"
-                                        placeholder="e.g. KSK-PAYFIX-9A82B"
-                                        value={inputKey}
-                                        onChange={(e) => setInputKey(e.target.value.toUpperCase())}
-                                        className="bg-slate-950/80 border-slate-700 text-white placeholder:text-slate-600 font-mono tracking-wider font-bold text-center h-12 text-base focus-visible:ring-sky-500"
-                                        required
-                                        autoFocus
-                                    />
-                                </div>
+                                <Input
+                                    id="pairing-key"
+                                    type="text"
+                                    placeholder="e.g. KSK-PAYFIX-9A82B"
+                                    value={inputKey}
+                                    onChange={(e) => setInputKey(e.target.value.toUpperCase())}
+                                    className="bg-slate-950/80 border-slate-700 text-white font-mono tracking-wider font-bold text-center h-12 text-base focus-visible:ring-sky-500"
+                                    required
+                                    autoFocus
+                                />
                             </div>
 
                             <Button
                                 type="submit"
                                 disabled={isPairing || !inputKey.trim()}
-                                className="w-full h-12 bg-sky-600 hover:bg-sky-500 text-white font-bold text-base shadow-lg shadow-sky-600/20"
+                                className="w-full h-12 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-bold text-base shadow-lg shadow-sky-600/20"
                             >
                                 {isPairing ? (
                                     <>
-                                        <RefreshCw className="h-5 w-5 mr-2 animate-spin" /> Verifying Terminal Key...
+                                        <RefreshCw className="h-5 w-5 mr-2 animate-spin" /> Verifying Key...
                                     </>
                                 ) : (
                                     <>
@@ -588,11 +646,6 @@ export function ExpressKioskApp() {
                                 )}
                             </Button>
                         </form>
-
-                        <div className="pt-2 text-center text-xs text-slate-500 space-y-1">
-                            <p>Admin Panel Location:</p>
-                            <code className="text-sky-400/90 font-mono">Payroll &gt; Settings &gt; Kiosk Tab</code>
-                        </div>
                     </CardContent>
                 </Card>
             </div>
@@ -600,28 +653,33 @@ export function ExpressKioskApp() {
     }
 
     // =========================================================================
-    // PAIRED STATE — Always-On Kiosk Interface
+    // PAIRED STATE — Zero-Scroll Kiosk Dashboard UI
     // =========================================================================
     return (
-        <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col p-4 md:p-6 space-y-6 select-none">
-            {/* Header Status Bar */}
-            <header className="flex flex-wrap items-center justify-between gap-4 bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-xl backdrop-blur-md">
+        <div className="h-screen w-screen bg-slate-950 text-slate-100 flex flex-col overflow-hidden select-none">
+            {/* Hidden Canvas for Snapshot Capture */}
+            <canvas ref={canvasRef} className="hidden" />
+
+            {/* Compact Header Bar (h-14) */}
+            <header className="h-14 px-4 bg-slate-900/90 border-b border-slate-800/80 flex items-center justify-between shrink-0 shadow-lg backdrop-blur-md">
                 <div className="flex items-center gap-3">
-                    <div className="p-3 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                        <Tablet className="h-6 w-6" />
+                    <div className="p-2 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                        <Tablet className="h-5 w-5" />
                     </div>
                     <div>
                         <div className="flex items-center gap-2">
-                            <h1 className="text-xl font-bold tracking-tight text-white">{pairedDevice?.name || 'Express Kiosk Terminal'}</h1>
-                            <Badge variant="outline" className="border-sky-500/40 text-sky-400 text-xs font-bold">
+                            <h1 className="text-base font-bold tracking-tight text-white leading-none">
+                                {pairedDevice?.name || 'Kiosk Terminal'}
+                            </h1>
+                            <Badge variant="outline" className="border-sky-500/40 text-sky-400 text-[10px] font-bold px-1.5 py-0">
                                 Paired
                             </Badge>
                         </div>
-                        <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
-                            <MapPin className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-                            <span>{pairedDevice?.locationName || 'Geofenced Office Location'}</span>
+                        <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mt-0.5">
+                            <MapPin className="h-3 w-3 text-emerald-400 shrink-0" />
+                            <span className="truncate max-w-[200px] md:max-w-xs">{pairedDevice?.locationName || 'Geofenced Location'}</span>
                             {terminalGps.latitude && (
-                                <span className="text-emerald-400/90 font-mono text-[11px] ml-1">
+                                <span className="text-emerald-400 font-mono text-[10px] hidden md:inline">
                                     (GPS Verified)
                                 </span>
                             )}
@@ -630,14 +688,20 @@ export function ExpressKioskApp() {
                 </div>
 
                 <div className="flex items-center gap-3">
+                    {/* Live Clock & Date */}
+                    <div className="hidden sm:flex flex-col items-end text-right">
+                        <span className="text-sm font-bold font-mono text-white leading-none">{currentTime}</span>
+                        <span className="text-[10px] text-slate-400 mt-0.5">{currentDate}</span>
+                    </div>
+
                     {/* Online / Offline Status Badge */}
                     {isOnline ? (
-                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 px-3 py-1 font-semibold flex items-center gap-1.5">
-                            <Wifi className="h-3.5 w-3.5" /> Online
+                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 px-2.5 py-0.5 font-semibold text-xs flex items-center gap-1">
+                            <Wifi className="h-3 w-3" /> Online
                         </Badge>
                     ) : (
-                        <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 px-3 py-1 font-semibold flex items-center gap-1.5">
-                            <WifiOff className="h-3.5 w-3.5" /> Offline Mode ({stats.queuedOffline} queued)
+                        <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 px-2.5 py-0.5 font-semibold text-xs flex items-center gap-1">
+                            <WifiOff className="h-3 w-3" /> Offline ({stats.queuedOffline})
                         </Badge>
                     )}
 
@@ -645,181 +709,303 @@ export function ExpressKioskApp() {
                         variant="ghost"
                         size="icon"
                         onClick={handleUnpair}
-                        className="text-slate-400 hover:text-red-400 hover:bg-red-500/10 h-9 w-9 rounded-xl"
-                        title="Unpair Kiosk Device"
+                        className="text-slate-400 hover:text-red-400 hover:bg-red-500/10 h-8 w-8 rounded-lg"
+                        title="Unpair Terminal"
                     >
                         <LogOut className="h-4 w-4" />
                     </Button>
                 </div>
             </header>
 
-            {/* Main Content Area */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1">
-                {/* Left Side: Live Webcam View */}
-                <Card className="lg:col-span-8 bg-slate-900/60 border-slate-800 flex flex-col justify-between overflow-hidden shadow-2xl relative">
-                    <CardHeader className="pb-2 border-b border-slate-800/80">
-                        <div className="flex items-center justify-between">
-                            <CardTitle className="text-lg font-bold text-white flex items-center gap-2">
-                                <ScanFace className="h-5 w-5 text-sky-400" /> Live Entrance Scanner
-                            </CardTitle>
+            {/* Central Viewport Area (Zero Scroll Grid) */}
+            <div className="flex-1 p-3 md:p-5 grid grid-cols-1 lg:grid-cols-12 gap-4 overflow-hidden">
+                {/* Left/Main Hero Box: Start Verification CTA */}
+                <Card className="lg:col-span-8 bg-gradient-to-br from-slate-900/90 via-slate-900/60 to-slate-950/90 border-slate-800/80 shadow-2xl flex flex-col justify-between p-6 relative overflow-hidden backdrop-blur-xl">
+                    {/* Background Glowing Ambient Orbs */}
+                    <div className="absolute -top-24 -left-24 w-72 h-72 rounded-full bg-sky-500/10 blur-3xl pointer-events-none" />
+                    <div className="absolute -bottom-24 -right-24 w-72 h-72 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
 
-                            {modelsLoading ? (
-                                <Badge variant="secondary" className="bg-sky-500/10 text-sky-400 animate-pulse border border-sky-500/30">
-                                    Loading AI Models ({modelProgress}%)
-                                </Badge>
-                            ) : modelsReady ? (
-                                <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                                    AI Recognition Ready
-                                </Badge>
-                            ) : null}
+                    {/* Top Status Bar inside Hero Card */}
+                    <div className="flex items-center justify-between relative z-10">
+                        <div className="flex items-center gap-2">
+                            <Sparkles className="h-5 w-5 text-sky-400" />
+                            <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                                Touchless Face Attendance Terminal
+                            </span>
                         </div>
-                    </CardHeader>
 
-                    <CardContent className="flex-1 flex flex-col items-center justify-center p-4 relative min-h-[400px]">
-                        {/* Hidden Canvas for Frame Capture */}
-                        <canvas ref={canvasRef} className="hidden" />
+                        {modelsLoading ? (
+                            <Badge variant="secondary" className="bg-sky-500/10 text-sky-400 animate-pulse border border-sky-500/30 text-xs">
+                                Loading AI ({modelProgress}%)
+                            </Badge>
+                        ) : modelsReady ? (
+                            <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs">
+                                AI Ready
+                            </Badge>
+                        ) : null}
+                    </div>
 
-                        {cameraActive ? (
-                            <div className="relative w-full max-w-xl aspect-video rounded-2xl overflow-hidden border-2 border-sky-500/30 shadow-2xl bg-black">
-                                <video
-                                    ref={videoRef}
-                                    className="w-full h-full object-cover transform -scale-x-100"
-                                    playsInline
-                                    muted
-                                />
-
-                                {/* Face Guide Oval Overlay */}
-                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                    <div className="w-56 h-72 rounded-[50%] border-4 border-dashed border-sky-400/60 animate-pulse shadow-[0_0_50px_rgba(56,189,248,0.2)]" />
-                                </div>
-
-                                {isScanning && (
-                                    <div className="absolute inset-0 bg-sky-950/40 backdrop-blur-xs flex items-center justify-center">
-                                        <div className="bg-slate-900/90 border border-sky-500/40 p-4 rounded-2xl shadow-2xl text-center space-y-2">
-                                            <RefreshCw className="h-8 w-8 text-sky-400 animate-spin mx-auto" />
-                                            <p className="font-bold text-sm text-sky-300">Comparing Face Vector...</p>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        ) : (
-                            <div className="text-center space-y-4 my-auto p-8">
-                                <div className="mx-auto w-20 h-20 rounded-full bg-slate-800 flex items-center justify-center text-slate-500">
-                                    <Camera className="h-10 w-10" />
-                                </div>
-                                <div>
-                                    <h3 className="text-lg font-bold text-white">Camera Standby</h3>
-                                    <p className="text-sm text-slate-400 max-w-sm mx-auto mt-1">
-                                        Click start camera to begin live face recognition attendance.
-                                    </p>
-                                </div>
-                                <Button
-                                    onClick={startCamera}
-                                    disabled={!modelsReady}
-                                    size="lg"
-                                    className="bg-sky-600 hover:bg-sky-500 font-bold px-8"
-                                >
-                                    <Camera className="h-5 w-5 mr-2" /> Start Entrance Camera
-                                </Button>
-                            </div>
-                        )}
-
-                        {/* Scanner Error Notice */}
-                        {scanError && (
-                            <div className="mt-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-semibold flex items-center gap-2 max-w-xl w-full">
-                                <AlertCircle className="h-4 w-4 shrink-0" />
-                                <span>{scanError}</span>
-                            </div>
-                        )}
-                    </CardContent>
-
-                    {/* Scan Action Controls */}
-                    <div className="p-4 border-t border-slate-800/80 bg-slate-950/40 flex items-center justify-between">
-                        <Button
-                            onClick={cameraActive ? stopCamera : startCamera}
-                            variant={cameraActive ? "destructive" : "default"}
-                            className="font-bold"
-                        >
-                            {cameraActive ? 'Pause Camera' : 'Start Camera'}
-                        </Button>
+                    {/* Central Action CTA */}
+                    <div className="my-auto text-center space-y-6 relative z-10 max-w-md mx-auto py-4">
+                        <div className="space-y-2">
+                            <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
+                                Entrance Attendance Scanner
+                            </h2>
+                            <p className="text-xs md:text-sm text-slate-400 max-w-sm mx-auto">
+                                Click below to open camera verification modal and mark instant touchless attendance.
+                            </p>
+                        </div>
 
                         <Button
-                            onClick={handleFaceScan}
-                            disabled={!cameraActive || isScanning || !modelsReady}
-                            size="lg"
-                            className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-8 shadow-lg shadow-emerald-600/20"
+                            onClick={openVerificationModal}
+                            disabled={!modelsReady}
+                            className="w-full max-w-xs h-20 rounded-2xl bg-gradient-to-r from-sky-500 via-indigo-500 to-emerald-500 hover:from-sky-400 hover:to-emerald-400 shadow-[0_0_50px_rgba(56,189,248,0.35)] hover:shadow-[0_0_60px_rgba(56,189,248,0.5)] text-white font-extrabold text-xl tracking-wide transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 border border-white/20"
                         >
-                            <ScanFace className="h-5 w-5 mr-2" /> Scan &amp; Punch Attendance
+                            <ScanFace className="h-9 w-9 animate-pulse shrink-0" />
+                            <span>Start Verification</span>
                         </Button>
+                    </div>
+
+                    {/* Bottom Status Info */}
+                    <div className="flex items-center justify-between text-xs text-slate-400 border-t border-slate-800/80 pt-3 relative z-10">
+                        <div className="flex items-center gap-2">
+                            <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                            <span>Geofenced &amp; Encrypted</span>
+                        </div>
+                        <div className="flex items-center gap-2 font-mono">
+                            <span>{stats.enrolledEmployees} Employees Enrolled</span>
+                        </div>
                     </div>
                 </Card>
 
-                {/* Right Side: Scan Results & Stats Panel */}
-                <div className="lg:col-span-4 flex flex-col space-y-6">
-                    {/* Last Scan Result Card */}
-                    <Card className="bg-slate-900/60 border-slate-800 shadow-xl overflow-hidden">
-                        <CardHeader className="pb-3 border-b border-slate-800/80">
-                            <CardTitle className="text-base font-bold text-white flex items-center gap-2">
-                                <CheckCircle2 className="h-5 w-5 text-emerald-400" /> Recent Verification
+                {/* Right Panel: Recent Scan Feed & Stats */}
+                <div className="lg:col-span-4 flex flex-col space-y-4 overflow-hidden">
+                    {/* Recent Verification Card */}
+                    <Card className="bg-slate-900/70 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
+                        <CardHeader className="py-3 px-4 border-b border-slate-800">
+                            <CardTitle className="text-sm font-bold text-white flex items-center gap-2">
+                                <CheckCircle2 className="h-4 w-4 text-emerald-400" /> Recent Verification
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="p-4">
                             {lastScanResult ? (
-                                <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-center space-y-2">
-                                    <div className="w-14 h-14 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center font-bold text-xl">
+                                <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-center space-y-1.5">
+                                    <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center font-bold text-lg">
                                         {lastScanResult.name.charAt(0)}
                                     </div>
-                                    <h4 className="text-lg font-bold text-white">{lastScanResult.name}</h4>
-                                    <Badge variant="outline" className="border-emerald-500/50 text-emerald-400 font-bold">
+                                    <h4 className="text-base font-bold text-white">{lastScanResult.name}</h4>
+                                    <Badge variant="outline" className="border-emerald-500/50 text-emerald-400 font-bold text-xs">
                                         {lastScanResult.type}
                                     </Badge>
-                                    <div className="text-xs text-slate-400 pt-1">
-                                        Punch Time: {lastScanResult.time}
+                                    <div className="text-[11px] text-slate-400 pt-0.5">
+                                        Time: {lastScanResult.time}
                                     </div>
                                 </div>
                             ) : (
-                                <div className="py-8 text-center text-slate-500 text-xs">
-                                    No scan recorded yet. Ready for incoming employees.
+                                <div className="py-6 text-center text-slate-500 text-xs">
+                                    No scan recorded yet. Ready for incoming staff.
                                 </div>
                             )}
                         </CardContent>
                     </Card>
 
-                    {/* Terminal Cache Stats Card */}
-                    <Card className="bg-slate-900/60 border-slate-800 shadow-xl flex-1">
-                        <CardHeader className="pb-3 border-b border-slate-800/80">
-                            <CardTitle className="text-base font-bold text-white flex items-center gap-2">
-                                <ShieldCheck className="h-5 w-5 text-sky-400" /> Tenant Cache Status
+                    {/* Cache Stats Card */}
+                    <Card className="bg-slate-900/70 border-slate-800 shadow-xl flex-1 flex flex-col justify-between backdrop-blur-md">
+                        <CardHeader className="py-3 px-4 border-b border-slate-800">
+                            <CardTitle className="text-sm font-bold text-white flex items-center gap-2">
+                                <Zap className="h-4 w-4 text-sky-400" /> Terminal Local Cache
                             </CardTitle>
                         </CardHeader>
-                        <CardContent className="p-4 space-y-4 text-sm">
-                            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                                <span className="text-slate-400">Total Active Employees</span>
+                        <CardContent className="p-4 space-y-3 text-xs flex-1 flex flex-col justify-center">
+                            <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                                <span className="text-slate-400">Total Workspace Employees</span>
                                 <span className="font-bold text-white font-mono">{stats.totalEmployees}</span>
                             </div>
-
-                            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                            <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
                                 <span className="text-slate-400">Face Vector Enrolled</span>
                                 <span className="font-bold text-emerald-400 font-mono">{stats.enrolledEmployees}</span>
                             </div>
-
-                            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                            <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
                                 <span className="text-slate-400">Queued Offline Punches</span>
                                 <span className="font-bold text-amber-400 font-mono">{stats.queuedOffline}</span>
                             </div>
-
                             <Button
                                 onClick={fetchEmployeeFaceVectors}
                                 variant="outline"
                                 size="sm"
-                                className="w-full border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 text-xs font-semibold"
+                                className="w-full border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 text-xs font-semibold mt-2"
                             >
-                                <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Reload Tenant Vectors
+                                <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Reload Employee Vectors
                             </Button>
                         </CardContent>
                     </Card>
                 </div>
             </div>
+
+            {/* =========================================================================
+                VERIFICATION CAMERA MODAL DIALOG
+               ========================================================================= */}
+            <Dialog open={isVerificationModalOpen} onOpenChange={(open) => !open && closeVerificationModal()}>
+                <DialogContent className="max-w-md w-[95vw] bg-slate-950/95 border-slate-800 text-slate-100 p-0 overflow-hidden shadow-2xl rounded-3xl backdrop-blur-2xl">
+                    <DialogHeader className="p-4 bg-slate-900/80 border-b border-slate-800 flex items-center justify-between flex-row space-y-0">
+                        <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
+                            <ScanFace className="h-5 w-5 text-sky-400" /> Face Verification Scanner
+                        </DialogTitle>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={closeVerificationModal}
+                            className="text-slate-400 hover:text-white hover:bg-slate-800 h-8 w-8 rounded-full"
+                        >
+                            <X className="h-4 w-4" />
+                        </Button>
+                    </DialogHeader>
+
+                    {/* Camera Display Box (Vertical Portrait Orientation) */}
+                    <div className="p-4 flex flex-col items-center justify-center relative bg-black min-h-[440px]">
+                        <div className="relative w-full max-w-xs aspect-[3/4] rounded-2xl overflow-hidden border-2 border-sky-500/40 shadow-2xl bg-black">
+                            <video
+                                ref={videoRef}
+                                className="w-full h-full object-cover transform -scale-x-100"
+                                playsInline
+                                muted
+                            />
+
+                            {/* Outer Frosted Glass Mask & Oval Guide */}
+                            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                                {/* SVG Mask for cut-out oval */}
+                                <svg className="w-full h-full absolute inset-0" preserveAspectRatio="none">
+                                    <defs>
+                                        <mask id="face-oval-mask">
+                                            <rect width="100%" height="100%" fill="white" />
+                                            <ellipse cx="50%" cy="45%" rx="36%" ry="33%" fill="black" />
+                                        </mask>
+                                    </defs>
+                                    <rect
+                                        width="100%"
+                                        height="100%"
+                                        fill="rgba(2, 6, 23, 0.75)"
+                                        mask="url(#face-oval-mask)"
+                                        className="backdrop-blur-xs"
+                                    />
+                                </svg>
+
+                                {/* Glowing Oval Border */}
+                                <div className="w-[72%] aspect-[3/4] rounded-[50%] border-2 border-dashed border-sky-400 shadow-[0_0_30px_rgba(56,189,248,0.4)] absolute top-[12%] pointer-events-none flex items-center justify-center overflow-hidden">
+                                    {isScanning && (
+                                        <div className="w-full h-1 bg-gradient-to-r from-transparent via-sky-400 to-transparent shadow-[0_0_15px_#38bdf8] animate-pulse" />
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Scanning Progress Spinner Overlay */}
+                            {isScanning && !verificationResult && (
+                                <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center z-20">
+                                    <div className="bg-slate-900/90 border border-sky-500/50 p-4 rounded-2xl shadow-2xl text-center space-y-2">
+                                        <RefreshCw className="h-8 w-8 text-sky-400 animate-spin mx-auto" />
+                                        <p className="font-bold text-xs text-sky-300">Extracting Face Vector...</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* =========================================================
+                                INSTANT VERIFICATION RESULT OVERLAY (Glossy Blur Card)
+                               ========================================================= */}
+                            {verificationResult && (
+                                <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-xl flex flex-col items-center justify-center p-5 space-y-3 z-30 text-center animate-in fade-in zoom-in-95 duration-200">
+                                    {verificationResult.matched ? (
+                                        <>
+                                            {/* VERIFIED SUCCESS CARD */}
+                                            <div className="w-16 h-16 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 p-0.5 shadow-[0_0_40px_rgba(16,185,129,0.6)] flex items-center justify-center animate-bounce-short">
+                                                <div className="w-full h-full bg-slate-950 rounded-full flex items-center justify-center">
+                                                    <CheckCheck className="h-8 w-8 text-emerald-400" />
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <div className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-400">
+                                                    VERIFICATION SUCCESSFUL
+                                                </div>
+                                                <h3 className="text-xl font-bold text-white">
+                                                    {verificationResult.employeeName}
+                                                </h3>
+                                                <Badge variant="outline" className="border-emerald-500/40 text-emerald-400 font-bold text-xs">
+                                                    Verified {verificationResult.similarity} Match
+                                                </Badge>
+                                            </div>
+
+                                            <div className="text-xs text-slate-400 pt-1 space-y-0.5">
+                                                <div>Time: <span className="font-mono text-white font-bold">{verificationResult.time}</span></div>
+                                                <div className="text-[11px] text-emerald-400/90 font-semibold">📍 Geofence Verified</div>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            {/* REJECTED / NOT VERIFIED CARD */}
+                                            <div className="w-16 h-16 rounded-full bg-gradient-to-r from-rose-600 to-red-600 p-0.5 shadow-[0_0_40px_rgba(244,63,94,0.6)] flex items-center justify-center">
+                                                <div className="w-full h-full bg-slate-950 rounded-full flex items-center justify-center">
+                                                    <XCircle className="h-8 w-8 text-rose-400" />
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <div className="text-[10px] font-extrabold uppercase tracking-widest text-rose-400">
+                                                    NOT VERIFIED
+                                                </div>
+                                                <p className="text-xs text-slate-300 max-w-xs">
+                                                    {verificationResult.error || 'Face not recognized in employee records.'}
+                                                </p>
+                                            </div>
+
+                                            <Button
+                                                onClick={() => setVerificationResult(null)}
+                                                size="sm"
+                                                className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs mt-2"
+                                            >
+                                                Try Again
+                                            </Button>
+                                        </>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        {scanError && !verificationResult && (
+                            <div className="mt-3 p-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-semibold flex items-center gap-2 max-w-xs w-full">
+                                <AlertCircle className="h-4 w-4 shrink-0" />
+                                <span>{scanError}</span>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Modal Control Footer */}
+                    <div className="p-4 bg-slate-900/80 border-t border-slate-800 flex items-center justify-between gap-3">
+                        <Button
+                            onClick={closeVerificationModal}
+                            variant="outline"
+                            className="border-slate-700 text-slate-300 hover:bg-slate-800 font-bold text-xs"
+                        >
+                            Pause / Cancel
+                        </Button>
+
+                        <Button
+                            onClick={handleFaceScan}
+                            disabled={isScanning || !cameraActive || !modelsReady}
+                            className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-sm px-6 shadow-lg shadow-emerald-600/20"
+                        >
+                            {isScanning ? (
+                                <>
+                                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Verifying...
+                                </>
+                            ) : (
+                                <>
+                                    <ScanFace className="h-4 w-4 mr-2" /> Mark Attendance
+                                </>
+                            )}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
