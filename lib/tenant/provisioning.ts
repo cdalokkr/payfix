@@ -59,6 +59,9 @@ export async function provisionTenant(
         'user_mpin',
         'push_subscriptions',
         'profile_photo_requests',
+        'attendance_sessions',
+        'biometric_raw_logs',
+        'kiosk_devices',
         'employee_salary_setup',
         'employee_advances',
         'monthly_attendance_summary',
@@ -103,7 +106,66 @@ export async function provisionTenant(
             END $$;
         `);
 
+        // 3b. Ensure multi-tenant specialized tables exist regardless of public schema state
+        await centralDb.execute(sql`
+            CREATE TABLE IF NOT EXISTS ${sql.raw(schemaName)}.profile_photo_requests (
+                "id"                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                "profile_id"        uuid NOT NULL,
+                "photo_url"         text NOT NULL,
+                "status"            text NOT NULL DEFAULT 'pending',
+                "reviewed_by"       uuid,
+                "reviewed_at"       timestamp with time zone,
+                "rejection_reason" text,
+                "created_at"        timestamp with time zone DEFAULT now(),
+                "updated_at"        timestamp with time zone DEFAULT now()
+            );
+
+            CREATE TABLE IF NOT EXISTS ${sql.raw(schemaName)}.attendance_sessions (
+                "id"                        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                "attendance_id"             uuid NOT NULL,
+                "profile_id"                uuid NOT NULL,
+                "date"                      text NOT NULL,
+                "session_number"            integer NOT NULL DEFAULT 1,
+                "check_in"                  timestamp with time zone NOT NULL,
+                "check_out"                 timestamp with time zone,
+                "working_hours"             numeric(5, 2),
+                "source"                    text DEFAULT 'mobile',
+                "device_id"                 text,
+                "location_id"               uuid,
+                "selfie_url"                text,
+                "checkin_latitude"         numeric(10, 7),
+                "checkin_longitude"        numeric(10, 7),
+                "checkin_location_name"    text,
+                "checkout_latitude"        numeric(10, 7),
+
+                "checkout_longitude"        numeric(10, 7),
+                "checkout_location_name"    text,
+                "status"                    text NOT NULL DEFAULT 'active',
+                "created_at"                timestamp with time zone DEFAULT now(),
+                "updated_at"                timestamp with time zone DEFAULT now()
+            );
+
+            CREATE TABLE IF NOT EXISTS ${sql.raw(schemaName)}.kiosk_devices (
+                "id"            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                "name"          text NOT NULL,
+                "pairing_code"  text NOT NULL UNIQUE,
+                "location_id"   uuid REFERENCES ${sql.raw(schemaName)}.office_locations("id") ON DELETE SET NULL,
+                "is_active"     boolean DEFAULT true,
+                "last_seen_at"  timestamp with time zone,
+                "created_by"    uuid REFERENCES ${sql.raw(schemaName)}.profiles("id") ON DELETE SET NULL,
+                "created_at"    timestamp with time zone DEFAULT now(),
+                "updated_at"    timestamp with time zone DEFAULT now()
+            );
+
+            ALTER TABLE IF EXISTS ${sql.raw(schemaName)}.profiles
+                ADD COLUMN IF NOT EXISTS "face_embedding" real[];
+
+            ALTER TABLE IF EXISTS ${sql.raw(schemaName)}.employee_settings
+                ADD COLUMN IF NOT EXISTS "face_vector" jsonb;
+        `);
+
         // 4. Seed initial designations & office settings using explicit schema-qualified names
+
         onProgress?.('seeding_defaults', 'Configuring default settings...');
         console.log(`[Provisioning] Seeding default data into ${schemaName}...`);
         await centralDb.execute(sql`
