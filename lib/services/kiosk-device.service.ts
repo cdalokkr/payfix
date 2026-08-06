@@ -149,7 +149,7 @@ export class KioskDeviceService {
                             try {
                                 const locs = await centralDb.execute(sql`
                                     SELECT name, latitude, longitude, radius_meters
-                                    FROM public.office_locations
+                                    FROM ${sql.raw(schemaName)}.office_locations
                                     WHERE id = ${device.location_id}
                                     LIMIT 1;
                                 `)
@@ -164,6 +164,7 @@ export class KioskDeviceService {
                                 // Ignore location lookup error if table does not exist
                             }
                         }
+
 
                         // Update last_seen_at timestamp
                         await centralDb.execute(sql`
