@@ -315,7 +315,7 @@ export function ExpressKioskApp() {
         }
     };
 
-    // Start Camera Stream inside Modal
+    // Start Camera Stream inside Modal (Full HD Native Resolution)
     const startCamera = async () => {
         try {
             if (mediaStreamRef.current) {
@@ -324,7 +324,12 @@ export function ExpressKioskApp() {
             }
 
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 1280 } } // Vertical Portrait preferred
+                video: {
+                    facingMode: 'user',
+                    width: { ideal: 1920, min: 1280 },
+                    height: { ideal: 1080, min: 720 },
+                    frameRate: { ideal: 60, min: 30 }
+                }
             });
 
             mediaStreamRef.current = stream;
@@ -338,9 +343,10 @@ export function ExpressKioskApp() {
             }
         } catch (err) {
             console.error('Camera access error:', err);
-            toast.error('Unable to access camera.');
+            toast.error('Unable to access camera in HD quality.');
         }
     };
+
 
     // Stop Camera Stream
     const stopCamera = () => {
@@ -861,9 +867,9 @@ export function ExpressKioskApp() {
                         </Button>
                     </DialogHeader>
 
-                    {/* Camera Display Box (Vertical Portrait Orientation) */}
+                    {/* Camera Display Box (Full Native HD View) */}
                     <div className="p-4 flex flex-col items-center justify-center relative bg-black min-h-[440px]">
-                        <div className="relative w-full max-w-xs aspect-[3/4] rounded-2xl overflow-hidden border-2 border-sky-500/40 shadow-2xl bg-black">
+                        <div className="relative w-full max-w-sm aspect-[3/4] rounded-2xl overflow-hidden border border-slate-800 shadow-2xl bg-black">
                             <video
                                 ref={videoRef}
                                 className="w-full h-full object-cover transform -scale-x-100"
@@ -871,37 +877,15 @@ export function ExpressKioskApp() {
                                 muted
                             />
 
-                            {/* Outer Frosted Glass Mask & Oval Guide */}
-                            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                                {/* SVG Mask for cut-out oval */}
-                                <svg className="w-full h-full absolute inset-0" preserveAspectRatio="none">
-                                    <defs>
-                                        <mask id="face-oval-mask">
-                                            <rect width="100%" height="100%" fill="white" />
-                                            <ellipse cx="50%" cy="45%" rx="36%" ry="33%" fill="black" />
-                                        </mask>
-                                    </defs>
-                                    <rect
-                                        width="100%"
-                                        height="100%"
-                                        fill="rgba(2, 6, 23, 0.75)"
-                                        mask="url(#face-oval-mask)"
-                                        className="backdrop-blur-xs"
-                                    />
-                                </svg>
-
-                                {/* Glowing Oval Border */}
-                                <div className="w-[72%] aspect-[3/4] rounded-[50%] border-2 border-dashed border-sky-400 shadow-[0_0_30px_rgba(56,189,248,0.4)] absolute top-[12%] pointer-events-none flex items-center justify-center overflow-hidden">
-                                    {isScanning && (
-                                        <div className="w-full h-1 bg-gradient-to-r from-transparent via-sky-400 to-transparent shadow-[0_0_15px_#38bdf8] animate-pulse" />
-                                    )}
-                                </div>
-                            </div>
+                            {/* Scanning Progress Beam */}
+                            {isScanning && !verificationResult && (
+                                <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-sky-500 via-emerald-400 to-sky-500 shadow-[0_0_15px_#38bdf8] animate-pulse z-20" />
+                            )}
 
                             {/* Scanning Progress Spinner Overlay */}
                             {isScanning && !verificationResult && (
-                                <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center z-20">
-                                    <div className="bg-slate-900/90 border border-sky-500/50 p-4 rounded-2xl shadow-2xl text-center space-y-2">
+                                <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-xs flex items-center justify-center z-20">
+                                    <div className="bg-slate-900/90 border border-sky-500/40 p-4 rounded-2xl shadow-2xl text-center space-y-2">
                                         <RefreshCw className="h-8 w-8 text-sky-400 animate-spin mx-auto" />
                                         <p className="font-bold text-xs text-sky-300">Extracting Face Vector...</p>
                                     </div>
@@ -971,8 +955,8 @@ export function ExpressKioskApp() {
                         </div>
 
                         {scanError && !verificationResult && (
-                            <div className="mt-3 p-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-semibold flex items-center gap-2 max-w-xs w-full">
-                                <AlertCircle className="h-4 w-4 shrink-0" />
+                            <div className="mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-medium flex items-center gap-2.5 max-w-sm w-full shadow-sm">
+                                <AlertCircle className="h-4 w-4 text-amber-400 shrink-0" />
                                 <span>{scanError}</span>
                             </div>
                         )}
@@ -985,7 +969,7 @@ export function ExpressKioskApp() {
                             variant="outline"
                             className="border-slate-700 text-slate-300 hover:bg-slate-800 font-bold text-xs"
                         >
-                            Pause / Cancel
+                            Cancel
                         </Button>
 
                         <Button
@@ -1009,3 +993,4 @@ export function ExpressKioskApp() {
         </div>
     );
 }
+
