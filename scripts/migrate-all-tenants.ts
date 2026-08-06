@@ -168,6 +168,22 @@ async function migrateAllTenants() {
             `)
             console.log('  ✅ employee_settings.face_vector column — OK')
 
+            // ── 8. kiosk_devices table ──────────────────────────────────────────────
+            await centralDb.execute(sql`
+                CREATE TABLE IF NOT EXISTS ${sql.raw(schema)}.kiosk_devices (
+                    "id"            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                    "name"          text NOT NULL,
+                    "pairing_code"  text NOT NULL UNIQUE,
+                    "location_id"   uuid REFERENCES ${sql.raw(schema)}.office_locations("id") ON DELETE SET NULL,
+                    "is_active"     boolean DEFAULT true,
+                    "last_seen_at"  timestamp with time zone,
+                    "created_by"    uuid REFERENCES ${sql.raw(schema)}.profiles("id") ON DELETE SET NULL,
+                    "created_at"    timestamp with time zone DEFAULT now(),
+                    "updated_at"    timestamp with time zone DEFAULT now()
+                );
+            `)
+            console.log('  ✅ kiosk_devices table — OK')
+
             console.log(`  ✓  ${tenant.company_name} — Migration Complete!`)
             successCount++
 

@@ -13,6 +13,8 @@ import Link from 'next/link';
 import { AdminOfficeSettings } from "@/features/attendance/AdminOfficeSettings";
 import { AdminOfficeLocations } from "@/features/settings/AdminOfficeLocations";
 import { BiometricDevicesManager } from "@/features/settings/BiometricDevicesManager";
+import { AdminKioskDevices } from "@/features/settings/AdminKioskDevices";
+
 
 export default function AdminSettingsPage() {
     const kioskUrl = typeof window !== 'undefined' ? `${window.location.origin}/kiosk` : '/kiosk';
@@ -67,74 +69,12 @@ export default function AdminSettingsPage() {
 
                     {/* Tab 4: Express Selfie Kiosk Terminal Setup */}
                     <TabsContent value="kiosk" className="space-y-6 focus-visible:outline-none">
-                        <Card className="border-border bg-card shadow-sm">
-                            <CardHeader>
-                                <div className="flex items-start justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-2.5 rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400">
-                                            <Monitor className="h-5 w-5" />
-                                        </div>
-                                        <div>
-                                            <CardTitle className="text-xl font-bold text-foreground">
-                                                Express Selfie Kiosk Setup
-                                            </CardTitle>
-                                            <CardDescription className="text-muted-foreground mt-0.5">
-                                                Mount any Tablet, iPad, or Smartphone at your office entrance for Always-On face recognition attendance.
-                                            </CardDescription>
-                                        </div>
-                                    </div>
-                                    <Badge variant="outline" className="border-sky-500/40 text-sky-600 dark:text-sky-400 font-semibold px-3 py-1">
-                                        Offline First (&lt;300ms)
-                                    </Badge>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="space-y-6">
-                                <div className="p-4 rounded-xl bg-card border border-border space-y-3">
-                                    <h4 className="font-bold text-sm text-foreground">Kiosk Terminal URL</h4>
-                                    <div className="flex items-center gap-3">
-                                        <code className="flex-1 p-3 rounded-lg bg-muted text-sky-700 dark:text-sky-400 font-mono text-sm border border-border font-bold">
-                                            {kioskUrl}
-                                        </code>
-                                        <Button asChild size="lg" className="bg-sky-600 hover:bg-sky-700 text-white font-bold">
-                                            <Link href="/kiosk" target="_blank">
-                                                Launch Kiosk Terminal <ExternalLink className="h-4 w-4 ml-2" />
-                                            </Link>
-                                        </Button>
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                                    <div className="p-4 rounded-xl bg-card border border-border space-y-1">
-                                        <div className="flex items-center gap-2 font-bold text-foreground">
-                                            <ShieldCheck className="h-4 w-4 text-emerald-500" /> Local Vector Cache
-                                        </div>
-                                        <p className="text-xs text-muted-foreground">
-                                            Automatically downloads face vectors for ALL active employees into local IndexedDB.
-                                        </p>
-                                    </div>
-
-                                    <div className="p-4 rounded-xl bg-card border border-border space-y-1">
-                                        <div className="flex items-center gap-2 font-bold text-foreground">
-                                            <Zap className="h-4 w-4 text-amber-500" /> Offline Resiliency
-                                        </div>
-                                        <p className="text-xs text-muted-foreground">
-                                            Works 100% offline during network outages; stores punches in local queue and auto-syncs when online.
-                                        </p>
-                                    </div>
-
-                                    <div className="p-4 rounded-xl bg-card border border-border space-y-1">
-                                        <div className="flex items-center gap-2 font-bold text-foreground">
-                                            <Clock className="h-4 w-4 text-sky-500" /> Multi-Session Integration
-                                        </div>
-                                        <p className="text-xs text-muted-foreground">
-                                            Smartly toggles Check-In and Check-Out sessions for employees throughout the day.
-                                        </p>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
+                        <ErrorBoundary fallback={<div className="p-4 text-sm text-red-500">Error loading kiosk terminal settings</div>}>
+                            <AdminKioskDevices />
+                        </ErrorBoundary>
                     </TabsContent>
                 </Tabs>
+
             </DashboardPageLayout>
         </div>
     );

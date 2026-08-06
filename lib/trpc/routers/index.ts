@@ -14,6 +14,7 @@ import { designationRouter } from './designation'
 import { attendanceRouter } from './attendance'
 import { mpinRouter } from './mpin'
 import { officeLocationsRouter } from './office-locations'
+import { kioskDevicesRouter } from './kiosk-devices'
 import { pushRouter } from './push'
 import { salaryRouter } from './salary'
 import { clientsRouter } from './clients'
@@ -32,6 +33,7 @@ export const appRouter = router({
     reports: adminReportsRouter,
     designation: designationRouter,
     officeLocations: officeLocationsRouter,
+    kioskDevices: kioskDevicesRouter,
     salary: salaryRouter,
   }),
   moderator: router({
@@ -44,12 +46,14 @@ export const appRouter = router({
   salary: salaryRouter,
   mpin: mpinRouter,
   officeLocations: officeLocationsRouter,
+  kioskDevices: kioskDevicesRouter,
   push: pushRouter,
   // Complaint & Ticket Management
   clients: clientsRouter,
   complaints: complaintsRouter,
   tickets: ticketsRouter,
 })
+
 
 export type AppRouter = typeof appRouter
 

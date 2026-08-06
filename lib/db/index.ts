@@ -63,3 +63,20 @@ export const db = new Proxy({} as any, {
         return Reflect.get(getCentralDb(), prop, receiver);
     }
 });
+
+/**
+ * Run a database callback explicitly inside a specified tenant schema.
+ */
+export async function runWithTenantSchema<T>(tenantSchema: string, fn: () => Promise<T>): Promise<T> {
+    const slug = tenantSchema.replace(/^tenant_/, '');
+    return tenantStorage.run({
+        tenantId: `tenant_${slug}`,
+        slug,
+        tenantSchema,
+        databaseUrl: process.env.DATABASE_URL || null,
+        brandName: slug
+    }, fn);
+}
+
+
+

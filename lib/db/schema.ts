@@ -235,6 +235,20 @@ export const officeLocations = pgTable('office_locations', {
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 
+// Kiosk Devices (for terminal pairing & geofencing authorization)
+export const kioskDevices = pgTable('kiosk_devices', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    pairing_code: text('pairing_code').notNull().unique(),
+    location_id: uuid('location_id').references(() => officeLocations.id, { onDelete: 'set null' }),
+    is_active: boolean('is_active').default(true),
+    last_seen_at: timestamp('last_seen_at', { withTimezone: true }),
+    created_by: uuid('created_by').references(() => profiles.id, { onDelete: 'set null' }),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+
 // User MPIN (6-digit mobile PIN)
 export const userMpin = pgTable('user_mpin', {
     profile_id: uuid('profile_id').primaryKey().references(() => profiles.id, { onDelete: 'cascade' }),
@@ -517,6 +531,18 @@ export const officeLocationsRelations = relations(officeLocations, ({ one }) => 
         references: [profiles.id],
     }),
 }));
+
+export const kioskDevicesRelations = relations(kioskDevices, ({ one }) => ({
+    location: one(officeLocations, {
+        fields: [kioskDevices.location_id],
+        references: [officeLocations.id],
+    }),
+    creator: one(profiles, {
+        fields: [kioskDevices.created_by],
+        references: [profiles.id],
+    }),
+}));
+
 
 export const userMpinRelations = relations(userMpin, ({ one }) => ({
     profile: one(profiles, {
