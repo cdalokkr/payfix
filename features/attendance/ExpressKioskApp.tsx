@@ -261,15 +261,20 @@ export function ExpressKioskApp() {
             setModelProgress(pct);
         });
 
-        setModelsLoading(false);
         if (ok) {
-            setModelsReady(true);
-            toast.success('Face recognition models loaded!');
-            fetchEmployeeFaceVectors();
+            setModelProgress(100);
+            // 2-second delay after 100% load before revealing Start Verification button
+            setTimeout(() => {
+                setModelsReady(true);
+                setModelsLoading(false);
+                fetchEmployeeFaceVectors();
+            }, 2000);
         } else {
+            setModelsLoading(false);
             toast.error('Failed to load face recognition models. Please refresh.');
         }
     };
+
 
     // Fetch and cache employee face vectors locally using Kiosk Pairing Key
     const fetchEmployeeFaceVectors = async () => {
@@ -731,7 +736,6 @@ export function ExpressKioskApp() {
                     {/* Background Glowing Ambient Orbs */}
                     <div className="absolute -top-24 -left-24 w-72 h-72 rounded-full bg-sky-500/10 blur-3xl pointer-events-none" />
                     <div className="absolute -bottom-24 -right-24 w-72 h-72 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
-
                     {/* Top Header inside Hero Card */}
                     <div className="flex items-center justify-between relative z-10">
                         <div className="flex items-center gap-2">
@@ -740,16 +744,6 @@ export function ExpressKioskApp() {
                                 Touchless Face Attendance Terminal
                             </span>
                         </div>
-
-                        {modelsReady ? (
-                            <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-semibold">
-                                AI Ready
-                            </Badge>
-                        ) : (
-                            <Badge variant="secondary" className="bg-sky-500/10 text-sky-400 animate-pulse border border-sky-500/30 text-xs font-semibold">
-                                Loading AI ({modelProgress}%)
-                            </Badge>
-                        )}
                     </div>
 
                     {/* Central Area: Initial AI Loading State OR Start Verification Primary Button */}
@@ -759,21 +753,38 @@ export function ExpressKioskApp() {
                         </h2>
 
                         {!modelsReady ? (
-                            /* 1. INITIAL LOADING AI STATE (Before 100%) */
+                            /* 1. INITIAL LOADING AI STATE (Before 100% & 2s Preparation) */
                             <div className="w-full max-w-sm mx-auto p-5 rounded-2xl bg-slate-950/80 border border-slate-800 shadow-xl space-y-3 text-center backdrop-blur-md animate-in fade-in duration-300">
-                                <div className="flex items-center justify-center gap-3">
-                                    <RefreshCw className="h-5 w-5 text-sky-400 animate-spin" />
-                                    <span className="text-sm font-bold text-white tracking-wide">
-                                        Loading AI Models ({modelProgress}%)
-                                    </span>
-                                </div>
-                                <Progress value={modelProgress} className="h-2 bg-slate-800" />
-                                <p className="text-[11px] text-slate-400">
-                                    Initializing local face recognition neural networks...
-                                </p>
+                                {modelProgress < 100 ? (
+                                    <>
+                                        <div className="flex items-center justify-center gap-3">
+                                            <RefreshCw className="h-5 w-5 text-sky-400 animate-spin" />
+                                            <span className="text-sm font-bold text-white tracking-wide">
+                                                Loading AI Models ({modelProgress}%)
+                                            </span>
+                                        </div>
+                                        <Progress value={modelProgress} className="h-2 bg-slate-800" />
+                                        <p className="text-[11px] text-slate-400">
+                                            Initializing local face recognition neural networks...
+                                        </p>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="flex items-center justify-center gap-3">
+                                            <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                                            <span className="text-sm font-bold text-emerald-400 tracking-wide">
+                                                AI Models Loaded (100%)
+                                            </span>
+                                        </div>
+                                        <Progress value={100} className="h-2 bg-slate-800" />
+                                        <p className="text-[11px] text-emerald-400/90 font-medium">
+                                            Preparing entrance camera scanner...
+                                        </p>
+                                    </>
+                                )}
                             </div>
                         ) : (
-                            /* 2. REVEALED PRIMARY "START VERIFICATION" BUTTON (After 100%) */
+                            /* 2. REVEALED PRIMARY "START VERIFICATION" BUTTON (After 100% + 2s Delay) */
                             <div className="space-y-4 animate-in zoom-in-95 duration-300">
                                 <Button
                                     onClick={openVerificationModal}
@@ -893,6 +904,19 @@ export function ExpressKioskApp() {
                                 muted
                             />
 
+                            {/* Camera Initializing Loading Spinner Overlay */}
+                            {!cameraActive && (
+                                <div className="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center space-y-3 z-10">
+                                    <div className="w-14 h-14 rounded-2xl bg-sky-500/10 border border-sky-500/30 text-sky-400 flex items-center justify-center shadow-lg">
+                                        <Camera className="h-7 w-7 animate-pulse" />
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
+                                        <RefreshCw className="h-4 w-4 text-sky-400 animate-spin" />
+                                        <span>Initializing Camera Stream...</span>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Scanning Progress Beam */}
                             {isScanning && !verificationResult && (
                                 <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-sky-500 via-emerald-400 to-sky-500 shadow-[0_0_15px_#38bdf8] animate-pulse z-20" />
@@ -982,8 +1006,7 @@ export function ExpressKioskApp() {
                     <div className="p-4 bg-slate-900/80 border-t border-slate-800 flex items-center justify-between gap-3">
                         <Button
                             onClick={closeVerificationModal}
-                            variant="outline"
-                            className="border-slate-700 text-slate-300 hover:bg-slate-800 font-bold text-xs"
+                            className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold text-xs shadow-sm hover:text-white"
                         >
                             Cancel
                         </Button>
