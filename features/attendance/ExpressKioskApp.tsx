@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import {
     AlertCircle, Camera, CheckCircle2, CheckCheck, XCircle, RefreshCw, Wifi, WifiOff,
@@ -725,13 +726,13 @@ export function ExpressKioskApp() {
 
             {/* Central Viewport Area (Zero Scroll Grid) */}
             <div className="flex-1 p-3 md:p-5 grid grid-cols-1 lg:grid-cols-12 gap-4 overflow-hidden">
-                {/* Left/Main Hero Box: Start Verification CTA */}
-                <Card className="lg:col-span-8 bg-gradient-to-br from-slate-900/90 via-slate-900/60 to-slate-950/90 border-slate-800/80 shadow-2xl flex flex-col justify-between p-6 relative overflow-hidden backdrop-blur-xl">
+                {/* Left/Main Hero Card: Start Verification CTA + Embedded Local Cache */}
+                <Card className="lg:col-span-8 bg-gradient-to-br from-slate-900/90 via-slate-900/60 to-slate-950/90 border-slate-800/80 shadow-2xl flex flex-col justify-between p-5 md:p-6 relative overflow-hidden backdrop-blur-xl">
                     {/* Background Glowing Ambient Orbs */}
                     <div className="absolute -top-24 -left-24 w-72 h-72 rounded-full bg-sky-500/10 blur-3xl pointer-events-none" />
                     <div className="absolute -bottom-24 -right-24 w-72 h-72 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
 
-                    {/* Top Status Bar inside Hero Card */}
+                    {/* Top Header inside Hero Card */}
                     <div className="flex items-center justify-between relative z-10">
                         <div className="flex items-center gap-2">
                             <Sparkles className="h-5 w-5 text-sky-400" />
@@ -740,39 +741,83 @@ export function ExpressKioskApp() {
                             </span>
                         </div>
 
-                        {modelsLoading ? (
-                            <Badge variant="secondary" className="bg-sky-500/10 text-sky-400 animate-pulse border border-sky-500/30 text-xs">
-                                Loading AI ({modelProgress}%)
-                            </Badge>
-                        ) : modelsReady ? (
-                            <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs">
+                        {modelsReady ? (
+                            <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-semibold">
                                 AI Ready
                             </Badge>
-                        ) : null}
+                        ) : (
+                            <Badge variant="secondary" className="bg-sky-500/10 text-sky-400 animate-pulse border border-sky-500/30 text-xs font-semibold">
+                                Loading AI ({modelProgress}%)
+                            </Badge>
+                        )}
                     </div>
 
-                    {/* Central Action CTA */}
-                    <div className="my-auto text-center space-y-6 relative z-10 max-w-md mx-auto py-4">
-                        <div className="space-y-2">
-                            <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
-                                Entrance Attendance Scanner
-                            </h2>
-                            <p className="text-xs md:text-sm text-slate-400 max-w-sm mx-auto">
-                                Click below to open camera verification modal and mark instant touchless attendance.
-                            </p>
+                    {/* Central Area: Initial AI Loading State OR Start Verification Primary Button */}
+                    <div className="my-auto text-center space-y-5 relative z-10 max-w-lg mx-auto py-2">
+                        <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
+                            Entrance Attendance Scanner
+                        </h2>
+
+                        {!modelsReady ? (
+                            /* 1. INITIAL LOADING AI STATE (Before 100%) */
+                            <div className="w-full max-w-sm mx-auto p-5 rounded-2xl bg-slate-950/80 border border-slate-800 shadow-xl space-y-3 text-center backdrop-blur-md animate-in fade-in duration-300">
+                                <div className="flex items-center justify-center gap-3">
+                                    <RefreshCw className="h-5 w-5 text-sky-400 animate-spin" />
+                                    <span className="text-sm font-bold text-white tracking-wide">
+                                        Loading AI Models ({modelProgress}%)
+                                    </span>
+                                </div>
+                                <Progress value={modelProgress} className="h-2 bg-slate-800" />
+                                <p className="text-[11px] text-slate-400">
+                                    Initializing local face recognition neural networks...
+                                </p>
+                            </div>
+                        ) : (
+                            /* 2. REVEALED PRIMARY "START VERIFICATION" BUTTON (After 100%) */
+                            <div className="space-y-4 animate-in zoom-in-95 duration-300">
+                                <Button
+                                    onClick={openVerificationModal}
+                                    className="w-full max-w-xs h-14 rounded-xl bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white font-bold text-lg tracking-wide shadow-lg shadow-sky-600/30 transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 border border-sky-400/30"
+                                >
+                                    <ScanFace className="h-6 w-6 shrink-0" />
+                                    <span>Start Verification</span>
+                                </Button>
+                            </div>
+                        )}
+
+                        {/* 3. TERMINAL LOCAL CACHE EMBEDDED INSIDE HERO CARD */}
+                        <div className="w-full max-w-xl mx-auto mt-4 p-3.5 rounded-xl bg-slate-950/70 border border-slate-800/80 backdrop-blur-md space-y-2.5">
+                            <div className="flex items-center justify-between border-b border-slate-800/80 pb-1.5">
+                                <span className="text-xs text-slate-400 flex items-center gap-1.5 font-medium">
+                                    <Zap className="h-3.5 w-3.5 text-sky-400" /> Terminal Local Cache
+                                </span>
+                                <Button
+                                    onClick={fetchEmployeeFaceVectors}
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 px-2 text-[11px] text-slate-400 hover:text-white hover:bg-slate-800/80 font-semibold"
+                                >
+                                    <RefreshCw className="h-3 w-3 mr-1" /> Reload Vectors
+                                </Button>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                                <div className="p-2 rounded-lg bg-slate-900/80 border border-slate-800">
+                                    <div className="text-[10px] text-slate-400">Workspace Staff</div>
+                                    <div className="text-sm font-bold text-white font-mono mt-0.5">{stats.totalEmployees}</div>
+                                </div>
+                                <div className="p-2 rounded-lg bg-slate-900/80 border border-slate-800">
+                                    <div className="text-[10px] text-slate-400">Face Enrolled</div>
+                                    <div className="text-sm font-bold text-emerald-400 font-mono mt-0.5">{stats.enrolledEmployees}</div>
+                                </div>
+                                <div className="p-2 rounded-lg bg-slate-900/80 border border-slate-800">
+                                    <div className="text-[10px] text-slate-400">Queued Offline</div>
+                                    <div className="text-sm font-bold text-amber-400 font-mono mt-0.5">{stats.queuedOffline}</div>
+                                </div>
+                            </div>
                         </div>
-
-                        <Button
-                            onClick={openVerificationModal}
-                            disabled={!modelsReady}
-                            className="w-full max-w-xs h-20 rounded-2xl bg-gradient-to-r from-sky-500 via-indigo-500 to-emerald-500 hover:from-sky-400 hover:to-emerald-400 shadow-[0_0_50px_rgba(56,189,248,0.35)] hover:shadow-[0_0_60px_rgba(56,189,248,0.5)] text-white font-extrabold text-xl tracking-wide transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 border border-white/20"
-                        >
-                            <ScanFace className="h-9 w-9 animate-pulse shrink-0" />
-                            <span>Start Verification</span>
-                        </Button>
                     </div>
 
-                    {/* Bottom Status Info */}
+                    {/* Bottom Status Bar */}
                     <div className="flex items-center justify-between text-xs text-slate-400 border-t border-slate-800/80 pt-3 relative z-10">
                         <div className="flex items-center gap-2">
                             <ShieldCheck className="h-4 w-4 text-emerald-400" />
@@ -784,69 +829,40 @@ export function ExpressKioskApp() {
                     </div>
                 </Card>
 
-                {/* Right Panel: Recent Scan Feed & Stats */}
+                {/* Right Panel: Compact Recent Verification Card (Height 56px) */}
                 <div className="lg:col-span-4 flex flex-col space-y-4 overflow-hidden">
-                    {/* Recent Verification Card */}
-                    <Card className="bg-slate-900/70 border-slate-800 shadow-xl overflow-hidden backdrop-blur-md">
-                        <CardHeader className="py-3 px-4 border-b border-slate-800">
-                            <CardTitle className="text-sm font-bold text-white flex items-center gap-2">
-                                <CheckCircle2 className="h-4 w-4 text-emerald-400" /> Recent Verification
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-4">
-                            {lastScanResult ? (
-                                <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-center space-y-1.5">
-                                    <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center font-bold text-lg">
+                    {/* Compact Recent Verification Card (Height 56px) */}
+                    <Card className="bg-slate-900/80 border-slate-800 shadow-lg min-h-[56px] h-[56px] flex items-center px-4 py-2 backdrop-blur-md overflow-hidden">
+                        {lastScanResult ? (
+                            <div className="w-full flex items-center justify-between text-xs">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-sm shrink-0">
                                         {lastScanResult.name.charAt(0)}
                                     </div>
-                                    <h4 className="text-base font-bold text-white">{lastScanResult.name}</h4>
-                                    <Badge variant="outline" className="border-emerald-500/50 text-emerald-400 font-bold text-xs">
-                                        {lastScanResult.type}
-                                    </Badge>
-                                    <div className="text-[11px] text-slate-400 pt-0.5">
-                                        Time: {lastScanResult.time}
+                                    <div>
+                                        <div className="font-bold text-white text-sm leading-none">{lastScanResult.name}</div>
+                                        <div className="text-[10px] text-emerald-400 mt-0.5 font-medium">{lastScanResult.type}</div>
                                     </div>
                                 </div>
-                            ) : (
-                                <div className="py-6 text-center text-slate-500 text-xs">
-                                    No scan recorded yet. Ready for incoming staff.
+                                <div className="text-[11px] font-mono text-slate-400">
+                                    {lastScanResult.time}
                                 </div>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    {/* Cache Stats Card */}
-                    <Card className="bg-slate-900/70 border-slate-800 shadow-xl flex-1 flex flex-col justify-between backdrop-blur-md">
-                        <CardHeader className="py-3 px-4 border-b border-slate-800">
-                            <CardTitle className="text-sm font-bold text-white flex items-center gap-2">
-                                <Zap className="h-4 w-4 text-sky-400" /> Terminal Local Cache
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-4 space-y-3 text-xs flex-1 flex flex-col justify-center">
-                            <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
-                                <span className="text-slate-400">Total Workspace Employees</span>
-                                <span className="font-bold text-white font-mono">{stats.totalEmployees}</span>
                             </div>
-                            <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
-                                <span className="text-slate-400">Face Vector Enrolled</span>
-                                <span className="font-bold text-emerald-400 font-mono">{stats.enrolledEmployees}</span>
+                        ) : (
+                            <div className="w-full flex items-center justify-between text-xs text-slate-400">
+                                <div className="flex items-center gap-2">
+                                    <CheckCircle2 className="h-4 w-4 text-slate-500 shrink-0" />
+                                    <span className="font-medium text-slate-300">Recent Scan: <span className="text-slate-500 font-normal">None yet</span></span>
+                                </div>
+                                <Badge variant="outline" className="border-slate-800 text-slate-500 text-[10px]">
+                                    Ready
+                                </Badge>
                             </div>
-                            <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
-                                <span className="text-slate-400">Queued Offline Punches</span>
-                                <span className="font-bold text-amber-400 font-mono">{stats.queuedOffline}</span>
-                            </div>
-                            <Button
-                                onClick={fetchEmployeeFaceVectors}
-                                variant="outline"
-                                size="sm"
-                                className="w-full border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 text-xs font-semibold mt-2"
-                            >
-                                <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Reload Employee Vectors
-                            </Button>
-                        </CardContent>
+                        )}
                     </Card>
                 </div>
             </div>
+
 
             {/* =========================================================================
                 VERIFICATION CAMERA MODAL DIALOG
