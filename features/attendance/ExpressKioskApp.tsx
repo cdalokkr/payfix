@@ -269,18 +269,49 @@ export function ExpressKioskApp() {
         }
     };
 
+    const mediaStreamRef = useRef<MediaStream | null>(null);
+
+    // Bind camera stream to video element whenever cameraActive or videoRef updates
+    useEffect(() => {
+        if (cameraActive && videoRef.current && mediaStreamRef.current) {
+            const video = videoRef.current;
+            video.srcObject = mediaStreamRef.current;
+            video.muted = true;
+            video.play().catch(err => console.warn('[Kiosk Video] Play error:', err));
+        }
+    }, [cameraActive]);
+
+    // Cleanup camera stream on unmount
+    useEffect(() => {
+        return () => {
+            if (mediaStreamRef.current) {
+                mediaStreamRef.current.getTracks().forEach(track => track.stop());
+                mediaStreamRef.current = null;
+            }
+        };
+    }, []);
+
     // Start Camera Stream
     const startCamera = async () => {
         try {
+            if (mediaStreamRef.current) {
+                mediaStreamRef.current.getTracks().forEach(track => track.stop());
+                mediaStreamRef.current = null;
+            }
+
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }
             });
+
+            mediaStreamRef.current = stream;
+            setCameraActive(true);
+            setScanError(null);
+            setLastScanResult(null);
+
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
-                videoRef.current.play();
-                setCameraActive(true);
-                setScanError(null);
-                setLastScanResult(null);
+                videoRef.current.muted = true;
+                videoRef.current.play().catch(() => {});
             }
         } catch (err) {
             console.error('Camera access error:', err);
@@ -290,13 +321,16 @@ export function ExpressKioskApp() {
 
     // Stop Camera Stream
     const stopCamera = () => {
-        if (videoRef.current?.srcObject) {
-            const stream = videoRef.current.srcObject as MediaStream;
-            stream.getTracks().forEach(track => track.stop());
-            videoRef.current.srcObject = null;
-            setCameraActive(false);
+        if (mediaStreamRef.current) {
+            mediaStreamRef.current.getTracks().forEach(track => track.stop());
+            mediaStreamRef.current = null;
         }
+        if (videoRef.current) {
+            videoRef.current.srcObject = null;
+        }
+        setCameraActive(false);
     };
+
 
     // Capture frame from video into canvas and return as ImageData element
     const captureFrame = (): HTMLCanvasElement | null => {
