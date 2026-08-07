@@ -177,12 +177,49 @@ export const FaceVerificationService = {
 
 
     getThreshold(): number {
-        return 1 - THRESHOLD // Returns as similarity (0.4 = 40% similarity minimum)
+        return 1 - THRESHOLD // Returns as similarity (0.60 = 60% similarity minimum)
     },
 
     formatSimilarity(similarity: number): string {
         return `${(similarity * 100).toFixed(0)}%`
     },
+
+    /**
+     * Optional Server-Side RPC Matching: Invokes Postgres match_employee_face RPC function when pgvector is active.
+     */
+    async matchEmployeeFaceRPC(
+        supabase: any,
+        liveDescriptor: Float32Array | number[],
+        matchThreshold = 0.60
+    ): Promise<{ matched: boolean; employeeId?: string; fullName?: string; similarity: number; error?: string }> {
+        try {
+            const embeddingArray = Array.from(liveDescriptor)
+            const { data, error } = await supabase.rpc('match_employee_face', {
+                query_embedding: embeddingArray,
+                match_threshold: matchThreshold,
+                match_count: 1
+            })
+
+            if (error) {
+                return { matched: false, similarity: 0, error: error.message }
+            }
+
+            if (data && data.length > 0) {
+                const best = data[0]
+                return {
+                    matched: true,
+                    employeeId: best.employee_id,
+                    fullName: best.full_name,
+                    similarity: best.similarity || 0.60
+                }
+            }
+
+            return { matched: false, similarity: 0, error: 'No matching employee found (Minimum 60% score required).' }
+        } catch (err: any) {
+            return { matched: false, similarity: 0, error: err.message || 'RPC invocation failed' }
+        }
+    },
 }
 
 export default FaceVerificationService
+
