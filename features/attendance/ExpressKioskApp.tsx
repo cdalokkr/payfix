@@ -342,7 +342,7 @@ export function ExpressKioskApp() {
         }
     };
 
-    // Start Camera Stream inside Modal (Optimized Resolution & Zoom for Mobile/Tablet)
+    // Start Camera Stream inside Modal (Clean 1:1 Framing for Max Face Vector Accuracy)
     const startCamera = async () => {
         try {
             if (mediaStreamRef.current) {
@@ -368,25 +368,12 @@ export function ExpressKioskApp() {
                 videoRef.current.muted = true;
                 videoRef.current.play().catch(() => {});
             }
-
-            // Apply hardware track zoom if supported by device camera
-            const videoTrack = stream.getVideoTracks()[0];
-            if (videoTrack && typeof videoTrack.getCapabilities === 'function') {
-                const capabilities = videoTrack.getCapabilities() as any;
-                if (capabilities && capabilities.zoom) {
-                    try {
-                        const targetZoom = Math.min(capabilities.zoom.max || 1.5, 1.25);
-                        await (videoTrack as any).applyConstraints({
-                            advanced: [{ zoom: targetZoom }]
-                        });
-                    } catch {}
-                }
-            }
         } catch (err) {
             console.error('Camera access error:', err);
             toast.error('Unable to access camera.');
         }
     };
+
 
 
 
@@ -964,19 +951,21 @@ export function ExpressKioskApp() {
                         </Button>
                     </DialogHeader>
 
-                    {/* Camera Display Box (Sleek Biometric Face Oval Scanner Viewport) */}
-                    <div className="p-4 flex flex-col items-center justify-center relative bg-slate-950 min-h-[440px]">
-                        {/* Oval Face-Shaped Camera Viewport Frame */}
-                        <div className="relative w-64 sm:w-72 aspect-[3/4] rounded-[50%/40%] overflow-hidden border-2 border-sky-500/50 shadow-[0_0_35px_rgba(56,189,248,0.25)] bg-black transition-all">
+                    {/* Camera Display Box (Native 1:1 View with Biometric Oval Guide Overlay) */}
+                    <div className="p-4 flex flex-col items-center justify-center relative bg-black min-h-[440px]">
+                        <div className="relative w-full max-w-sm aspect-[3/4] rounded-2xl overflow-hidden border border-slate-800 shadow-2xl bg-black">
                             <video
                                 ref={videoRef}
-                                className="w-full h-full object-cover transform -scale-x-100 scale-125 transition-transform duration-300"
+                                className="w-full h-full object-cover transform -scale-x-100"
                                 playsInline
                                 muted
                             />
 
-                            {/* Biometric Face Inner Guide Ring */}
-                            <div className="absolute inset-0 rounded-[50%/40%] border border-sky-400/30 pointer-events-none z-10 shadow-[inset_0_0_20px_rgba(56,189,248,0.15)]" />
+                            {/* Biometric Oval Guide Overlay (Positioning Reticle) */}
+                            <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10">
+                                <div className="w-[78%] h-[82%] rounded-[50%/40%] border-2 border-dashed border-sky-400/50 shadow-[0_0_25px_rgba(56,189,248,0.2)] animate-pulse" />
+                            </div>
+
 
 
                             {/* Camera Initializing Loading Spinner Overlay */}
