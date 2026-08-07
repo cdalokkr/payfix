@@ -118,9 +118,8 @@ export const FaceApiBrowserService = {
 
         try {
             const faceapi = window.faceapi
-            // inputSize: 224 — reliable detection on 640x480 canvas, ~40% faster than 320
-            // (160 was too aggressive — lost facial detail at kiosk distances)
-            const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 })
+            // inputSize: 320 — standard face-api.js input size for accurate detection on live video streams
+            const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.4 })
 
             const detection = await faceapi
                 .detectSingleFace(input, options)
