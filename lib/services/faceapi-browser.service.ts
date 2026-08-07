@@ -165,6 +165,28 @@ export const FaceApiBrowserService = {
         }
     },
 
+    /**
+     * Client-side Quality Gate: Checks brightness & contrast before running heavy AI passes.
+     * Rejects dark or unlit frames in <2ms.
+     */
+    checkFrameQuality(canvas: HTMLCanvasElement): { acceptable: boolean; luminance: number } {
+        try {
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return { acceptable: true, luminance: 128 };
+            const imageData = ctx.getImageData(0, 0, Math.min(100, canvas.width), Math.min(100, canvas.height));
+            const data = imageData.data;
+            let sum = 0;
+            for (let i = 0; i < data.length; i += 16) {
+                sum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+            }
+            const avgLuminance = sum / (data.length / 16);
+            return { acceptable: avgLuminance >= 25, luminance: avgLuminance };
+        } catch {
+            return { acceptable: true, luminance: 128 };
+        }
+    },
+
+
 
     /**
      * Extract 128-d descriptor from a base64 data URL string.

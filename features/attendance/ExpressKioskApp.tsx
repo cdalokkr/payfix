@@ -458,8 +458,27 @@ export function ExpressKioskApp() {
         // 2. Yield control to browser renderer — React repaints spinner overlay BEFORE heavy AI extraction
         setTimeout(async () => {
             try {
+                // Pre-flight lighting check (<2ms) before heavy neural pass
+                if (canvasRef.current && video) {
+                    const tempCanvas = canvasRef.current;
+                    tempCanvas.width = 160;
+                    tempCanvas.height = 120;
+                    const tctx = tempCanvas.getContext('2d');
+                    if (tctx) {
+                        tctx.drawImage(video, 0, 0, 160, 120);
+                        const quality = FaceApiBrowserService.checkFrameQuality(tempCanvas);
+                        if (!quality.acceptable) {
+                            playErrorChimeSound();
+                            setScanError('Lighting too dark! Please ensure face area is well lit.');
+                            setIsScanning(false);
+                            return;
+                        }
+                    }
+                }
+
                 // Extract live face descriptor directly from native HTMLVideoElement (zero image distortion)
                 const liveDescriptor = await FaceApiBrowserService.extractDescriptor(video);
+
 
 
                 if (!liveDescriptor) {
