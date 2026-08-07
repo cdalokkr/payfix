@@ -276,6 +276,8 @@ export function ExpressKioskApp() {
     };
 
 
+    const descriptorMapRef = useRef<Map<string, Float32Array>>(new Map());
+
     // Fetch and cache employee face vectors locally using Kiosk Pairing Key
     const fetchEmployeeFaceVectors = async () => {
         if (!pairingCode) return;
@@ -300,6 +302,15 @@ export function ExpressKioskApp() {
                     setEmployees(mapped);
                     try { localStorage.setItem('payfix_kiosk_cached_employees', JSON.stringify(mapped)); } catch {}
 
+                    // Pre-parse Float32Array descriptors into memory cache for instant matching
+                    const newMap = new Map<string, Float32Array>();
+                    mapped.forEach(e => {
+                        if (e.faceEmbedding && e.faceEmbedding.length === 128) {
+                            newMap.set(e.id, FaceApiBrowserService.arrayToDescriptor(e.faceEmbedding));
+                        }
+                    });
+                    descriptorMapRef.current = newMap;
+
                     const enrolledCount = mapped.filter(e => e.faceEmbedding !== null).length;
                     setStats(prev => ({ ...prev, totalEmployees: data.total, enrolledEmployees: enrolledCount }));
                 }
@@ -314,6 +325,15 @@ export function ExpressKioskApp() {
                 try {
                     const mapped: CachedEmployee[] = JSON.parse(cached);
                     setEmployees(mapped);
+
+                    const newMap = new Map<string, Float32Array>();
+                    mapped.forEach(e => {
+                        if (e.faceEmbedding && e.faceEmbedding.length === 128) {
+                            newMap.set(e.id, FaceApiBrowserService.arrayToDescriptor(e.faceEmbedding));
+                        }
+                    });
+                    descriptorMapRef.current = newMap;
+
                     const enrolledCount = mapped.filter(e => e.faceEmbedding !== null).length;
                     setStats(prev => ({ ...prev, totalEmployees: mapped.length, enrolledEmployees: enrolledCount }));
                 } catch {}
@@ -366,12 +386,22 @@ export function ExpressKioskApp() {
         setCameraActive(false);
     };
 
-    // Open Verification Modal Flow
+    // Open Verification Modal Flow (Pre-warms WebGL AI Engine)
     const openVerificationModal = () => {
         setIsVerificationModalOpen(true);
         setVerificationResult(null);
         setScanError(null);
         startCamera();
+
+        // Background Pre-Warm Neural Engine to eliminate cold-start latency
+        setTimeout(() => {
+            try {
+                const dummyCanvas = document.createElement('canvas');
+                dummyCanvas.width = 64;
+                dummyCanvas.height = 64;
+                FaceApiBrowserService.extractDescriptor(dummyCanvas).catch(() => {});
+            } catch {}
+        }, 100);
     };
 
     // Close Verification Modal Flow
@@ -415,49 +445,52 @@ export function ExpressKioskApp() {
             return;
         }
 
+        // 1. Show UI spinner INSTANTLY (<10ms)
         setIsScanning(true);
         setScanError(null);
 
-        try {
-            // 1. Capture live frame snapshot instantly
-            const { canvas, dataUrl: snapshotUrl } = captureFrame();
-            if (!canvas) {
-                setScanError('Camera frame capture failed. Please try again.');
-                setIsScanning(false);
-                return;
-            }
-
-            // 2. Extract live face descriptor
-            const liveDescriptor = await FaceApiBrowserService.extractDescriptor(canvas);
-
-            if (!liveDescriptor) {
-                playErrorChimeSound();
-                setVerificationResult({
-                    status: 'rejected',
-                    matched: false,
-                    error: 'No face detected in camera frame. Please align face in camera view.',
-                    snapshotUrl,
-                });
-                // Auto-reset rejected overlay after 2 seconds to keep camera ready
-                setTimeout(() => {
-                    setVerificationResult(null);
+        // 2. Yield control to browser renderer so React repaints spinner overlay BEFORE heavy AI extraction runs
+        setTimeout(async () => {
+            try {
+                // Capture live frame snapshot
+                const { canvas, dataUrl: snapshotUrl } = captureFrame();
+                if (!canvas) {
+                    setScanError('Camera frame capture failed. Please try again.');
                     setIsScanning(false);
-                }, 2000);
-                return;
-            }
-
-            // 3. Vector comparison against enrolled employee vectors
-            let matchedEmployee: CachedEmployee | null = null;
-            let bestDistance = Infinity;
-
-            for (const emp of enrolledEmployees) {
-                const storedDescriptor = FaceApiBrowserService.arrayToDescriptor(emp.faceEmbedding!);
-                const dist = FaceApiBrowserService.euclideanDistance(liveDescriptor, storedDescriptor);
-                if (dist < bestDistance) {
-                    bestDistance = dist;
-                    matchedEmployee = emp;
+                    return;
                 }
-            }
+
+                // Extract live face descriptor (Pre-warmed WebGL engine)
+                const liveDescriptor = await FaceApiBrowserService.extractDescriptor(canvas);
+
+                if (!liveDescriptor) {
+                    playErrorChimeSound();
+                    setVerificationResult({
+                        status: 'rejected',
+                        matched: false,
+                        error: 'No face detected in camera frame. Please align face in camera view.',
+                        snapshotUrl,
+                    });
+                    setTimeout(() => {
+                        setVerificationResult(null);
+                        setIsScanning(false);
+                    }, 2000);
+                    return;
+                }
+
+                // Fast vector comparison using pre-parsed Float32Array descriptors (<1ms)
+                let matchedEmployee: CachedEmployee | null = null;
+                let bestDistance = Infinity;
+
+                for (const emp of enrolledEmployees) {
+                    const storedDescriptor = descriptorMapRef.current.get(emp.id) || FaceApiBrowserService.arrayToDescriptor(emp.faceEmbedding!);
+                    const dist = FaceApiBrowserService.euclideanDistance(liveDescriptor, storedDescriptor);
+                    if (dist < bestDistance) {
+                        bestDistance = dist;
+                        matchedEmployee = emp;
+                    }
+                }
+
 
             // Threshold: < 0.6 = same person
             if (bestDistance >= 0.6) {
@@ -549,8 +582,10 @@ export function ExpressKioskApp() {
             setScanError('Verification processing failed. Please try again.');
             setIsScanning(false);
         }
+        }, 10);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isScanning, modelsReady, employees, cameraActive, pairingCode, terminalGps]);
+
 
     const playErrorChimeSound = () => {
         try {
