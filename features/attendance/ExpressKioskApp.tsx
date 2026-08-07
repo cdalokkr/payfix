@@ -60,7 +60,8 @@ interface VerificationOverlayState {
 
 export function ExpressKioskApp() {
     const videoRef = useRef<HTMLVideoElement | null>(null);
-    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);        // Full-res snapshot canvas
+    const detectCanvasRef = useRef<HTMLCanvasElement | null>(null);  // Small detect canvas for face-api
     const mediaStreamRef = useRef<MediaStream | null>(null);
 
     // Kiosk Terminal Pairing State
@@ -412,20 +413,36 @@ export function ExpressKioskApp() {
         stopCamera();
     };
 
-    // Capture frame from video into canvas and return as Data URL
-    const captureFrame = (): { canvas: HTMLCanvasElement | null; dataUrl: string | null } => {
+    // Capture frame — returns a small 640x480 detect canvas (fast for face-api)
+    // Full-res JPEG snapshot is deferred until AFTER face match (avoid blocking encode upfront)
+    const captureFrame = (): { detectCanvas: HTMLCanvasElement | null; captureSnapshot: () => string | null } => {
         const video = videoRef.current;
-        const canvas = canvasRef.current;
-        if (!video || !canvas || !cameraActive) return { canvas: null, dataUrl: null };
+        if (!video || !cameraActive) return { detectCanvas: null, captureSnapshot: () => null };
 
-        canvas.width = video.videoWidth || 720;
-        canvas.height = video.videoHeight || 1280;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return { canvas: null, dataUrl: null };
+        // Use small dedicated detect canvas (640x480) — face-api only needs low-res for detection
+        if (!detectCanvasRef.current) {
+            detectCanvasRef.current = document.createElement('canvas');
+        }
+        const dc = detectCanvasRef.current;
+        dc.width = 640;
+        dc.height = 480;
+        const dctx = dc.getContext('2d');
+        if (!dctx) return { detectCanvas: null, captureSnapshot: () => null };
+        dctx.drawImage(video, 0, 0, 640, 480);
 
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-        return { canvas, dataUrl };
+        // Deferred full-res snapshot — only called AFTER face match confirmed
+        const captureSnapshot = (): string | null => {
+            const snap = canvasRef.current;
+            if (!snap) return null;
+            snap.width = video.videoWidth || 640;
+            snap.height = video.videoHeight || 480;
+            const sctx = snap.getContext('2d');
+            if (!sctx) return null;
+            sctx.drawImage(video, 0, 0, snap.width, snap.height);
+            return snap.toDataURL('image/jpeg', 0.80);
+        };
+
+        return { detectCanvas: dc, captureSnapshot };
     };
 
     // Instant Face Verification Scan & Overlay Flow (Continuous Staff Scanning)
@@ -449,26 +466,27 @@ export function ExpressKioskApp() {
         setIsScanning(true);
         setScanError(null);
 
-        // 2. Yield control to browser renderer so React repaints spinner overlay BEFORE heavy AI extraction runs
+        // 2. Yield control to browser renderer — React repaints spinner overlay BEFORE heavy AI extraction
         setTimeout(async () => {
             try {
-                // Capture live frame snapshot
-                const { canvas, dataUrl: snapshotUrl } = captureFrame();
-                if (!canvas) {
+                // Capture small 640x480 detect canvas (fast) + deferred full-res snapshot
+                const { detectCanvas, captureSnapshot } = captureFrame();
+                if (!detectCanvas) {
                     setScanError('Camera frame capture failed. Please try again.');
                     setIsScanning(false);
                     return;
                 }
 
-                // Extract live face descriptor (Pre-warmed WebGL engine)
-                const liveDescriptor = await FaceApiBrowserService.extractDescriptor(canvas);
+                // Extract live face descriptor using inputSize:160 on 640px canvas (fastest path)
+                const liveDescriptor = await FaceApiBrowserService.extractDescriptor(detectCanvas);
 
                 if (!liveDescriptor) {
                     playErrorChimeSound();
+                    const snapshotUrl = captureSnapshot();
                     setVerificationResult({
                         status: 'rejected',
                         matched: false,
-                        error: 'No face detected in camera frame. Please align face in camera view.',
+                        error: 'No face detected. Please align face in camera view.',
                         snapshotUrl,
                     });
                     setTimeout(() => {
@@ -502,13 +520,13 @@ export function ExpressKioskApp() {
 
             if (!matchedEmployee) {
                 playErrorChimeSound();
+                const snapshotUrl = captureSnapshot();
                 setVerificationResult({
                     status: 'rejected',
                     matched: false,
-                    error: `Face Not Recognized. (Match score: ${(Math.max(0, 1 - bestDistance) * 100).toFixed(0)}%)`,
+                    error: `Face Not Recognized. (Score: ${(Math.max(0, 1 - bestDistance) * 100).toFixed(0)}%)`,
                     snapshotUrl,
                 });
-                // Auto-reset rejected overlay after 2 seconds to keep camera ready
                 setTimeout(() => {
                     setVerificationResult(null);
                     setIsScanning(false);
@@ -516,7 +534,8 @@ export function ExpressKioskApp() {
                 return;
             }
 
-            // 4. Face MATCHED!
+            // 4. Face MATCHED! Capture full-res snapshot NOW (deferred, only on match)
+            const snapshotUrl = captureSnapshot();
             const similarity = `${Math.max(0, (1 - bestDistance) * 100).toFixed(1)}%`;
 
             // Instant UI Notification & Profile Card Overlay (<100ms)

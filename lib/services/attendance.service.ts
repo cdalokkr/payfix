@@ -6,6 +6,9 @@ import { SmartCache } from '@/lib/cache/smart-cache'
 import { getLocalDateIST, getLocalTimeIST12Hour } from '@/lib/utils/date-utils'
 import { differenceInMinutes } from 'date-fns'
 
+// ─ One-time flag per process lifetime — skips repeated CREATE TABLE IF NOT EXISTS round-trips
+let _attendanceSchemaEnsured = false
+
 export class AttendanceService {
     /**
      * Get attendance records with optional filters
@@ -220,6 +223,7 @@ export class AttendanceService {
     }
 
     static async ensureAttendanceSchema() {
+        if (_attendanceSchemaEnsured) return // Skip if already ensured this process lifetime
         try {
             await db.execute(sql`
                 DO $$ 
@@ -274,6 +278,7 @@ export class AttendanceService {
                     "created_at" timestamp with time zone DEFAULT now()
                 );
             `);
+            _attendanceSchemaEnsured = true
         } catch (e) {
             // Ignore schema check error if already up to date
         }
@@ -421,29 +426,30 @@ export class AttendanceService {
             parentRecord = updatedParent
         }
 
-        // Insert new session row into attendanceSessions
-        await db.insert(attendanceSessions).values({
-            attendance_id: parentRecord.id,
-            profile_id: profileId,
-            date: today,
-            session_number: currentTotalSessions,
-            check_in: now,
-            status: 'active',
-            source: source || 'mobile',
-            device_id: deviceId || null,
-            location_id: locationId || null,
-            selfie_url: selfieUrl || null,
-            checkin_latitude: latitude ? String(latitude) : null,
-            checkin_longitude: longitude ? String(longitude) : null,
-            checkin_location_name: locationName
-        })
-
-        await db.insert(activities).values({
-            user_id: profileId,
-            activity_type: 'data_create',
-            module: 'attendance',
-            description: `Clocked in (Session #${currentTotalSessions}) at ${getLocalTimeIST12Hour()}${isExtraDay ? ' (Extra Work)' : ''}${locationName ? ` from ${locationName}` : ''}`,
-        })
+        // Insert session + activity in parallel (independent writes)
+        await Promise.all([
+            db.insert(attendanceSessions).values({
+                attendance_id: parentRecord.id,
+                profile_id: profileId,
+                date: today,
+                session_number: currentTotalSessions,
+                check_in: now,
+                status: 'active',
+                source: source || 'mobile',
+                device_id: deviceId || null,
+                location_id: locationId || null,
+                selfie_url: selfieUrl || null,
+                checkin_latitude: latitude ? String(latitude) : null,
+                checkin_longitude: longitude ? String(longitude) : null,
+                checkin_location_name: locationName
+            }),
+            db.insert(activities).values({
+                user_id: profileId,
+                activity_type: 'data_create',
+                module: 'attendance',
+                description: `Clocked in (Session #${currentTotalSessions}) at ${getLocalTimeIST12Hour()}${isExtraDay ? ' (Extra Work)' : ''}${locationName ? ` from ${locationName}` : ''}`,
+            })
+        ])
 
         return parentRecord
     }
@@ -517,25 +523,27 @@ export class AttendanceService {
             totalHoursStr = (totalMins / 60).toFixed(2)
         }
 
-        const [data] = await db.update(attendance).set({
-            check_out: now,
-            last_check_out: now,
-            working_hours: totalHoursStr,
-            current_session_status: 'checked_out',
-            updated_at: now
-        }).where(eq(attendance.id, attendanceId!)).returning()
+        const [[data]] = await Promise.all([
+            db.update(attendance).set({
+                check_out: now,
+                last_check_out: now,
+                working_hours: totalHoursStr,
+                current_session_status: 'checked_out',
+                updated_at: now
+            }).where(eq(attendance.id, attendanceId!)).returning(),
+            db.insert(activities).values({
+                user_id: profileId,
+                activity_type: 'data_edit',
+                module: 'attendance',
+                description: `Clocked out at ${getLocalTimeIST12Hour()}`,
+            })
+        ])
 
         if (!data) throwAppError('DATABASE_ERROR', 'Failed to update clock-out record')
 
-        await db.insert(activities).values({
-            user_id: profileId,
-            activity_type: 'data_edit',
-            module: 'attendance',
-            description: `Clocked out at ${getLocalTimeIST12Hour()}`,
-        })
-
         return data
     }
+
 
     /**
      * Verify attendance record

@@ -3,11 +3,34 @@ import { kioskDevices, officeLocations } from '@/lib/db/schema'
 import { eq, and, sql } from 'drizzle-orm'
 import { throwAppError } from '@/lib/errors/app-errors'
 
+// ─── In-memory Pairing Code Cache (5-min TTL) — avoids tenant scan loop on every punch ───
+interface PairingInfo {
+    device: {
+        id: string
+        name: string
+        pairingCode: string
+        locationId: string | null
+        locationName: string | null
+        latitude: number | null
+        longitude: number | null
+        radiusMeters: number
+    }
+    tenantSchema: string
+    tenantSlug: string
+}
+const _pairingCache = new Map<string, { data: PairingInfo; expiresAt: number }>()
+const PAIRING_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
+
+// ─── Per-tenant schema init flag — skips repeated CREATE TABLE IF NOT EXISTS round-trips ───
+const _kioskSchemaEnsured = new Set<string>()
+
 export class KioskDeviceService {
     /**
      * Ensure kiosk_devices table exists in the current tenant schema.
      */
     static async ensureSchema() {
+        const schemaKey = 'kiosk_schema'
+        if (_kioskSchemaEnsured.has(schemaKey)) return // Skip if already ensured this process lifetime
         try {
             await db.execute(sql`
                 CREATE TABLE IF NOT EXISTS "kiosk_devices" (
@@ -22,6 +45,7 @@ export class KioskDeviceService {
                     "updated_at"    timestamp with time zone DEFAULT now()
                 );
             `)
+            _kioskSchemaEnsured.add(schemaKey)
         } catch (e) {
             // Table already exists or concurrent creation
         }
@@ -118,9 +142,15 @@ export class KioskDeviceService {
     static async verifyPairingCode(pairingCode: string) {
         if (!pairingCode) return null
 
-        try {
-            const cleanCode = pairingCode.trim().toUpperCase()
+        const cleanCode = pairingCode.trim().toUpperCase()
 
+        // ✅ Cache hit — skip full tenant schema scan loop
+        const cached = _pairingCache.get(cleanCode)
+        if (cached && cached.expiresAt > Date.now()) {
+            return cached.data
+        }
+
+        try {
             // Search all active tenant schemas for this pairing code
             const schemasRes = await centralDb.execute(sql`
                 SELECT schema_name FROM information_schema.schemata WHERE schema_name LIKE 'tenant_%';
@@ -165,15 +195,14 @@ export class KioskDeviceService {
                             }
                         }
 
-
-                        // Update last_seen_at timestamp
-                        await centralDb.execute(sql`
+                        // Update last_seen_at timestamp (fire and forget)
+                        centralDb.execute(sql`
                             UPDATE ${sql.raw(schemaName)}.kiosk_devices
                             SET last_seen_at = NOW()
                             WHERE id = ${device.id};
                         `).catch(() => {})
 
-                        return {
+                        const result: PairingInfo = {
                             device: {
                                 id: device.id,
                                 name: device.name,
@@ -187,6 +216,11 @@ export class KioskDeviceService {
                             tenantSchema: schemaName,
                             tenantSlug: slug
                         }
+
+                        // ✅ Cache result for 5 minutes
+                        _pairingCache.set(cleanCode, { data: result, expiresAt: Date.now() + PAIRING_CACHE_TTL_MS })
+
+                        return result
                     }
                 } catch {
                     // Table might not exist yet in this schema — continue search
