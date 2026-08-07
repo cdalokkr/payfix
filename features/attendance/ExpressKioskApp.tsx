@@ -398,7 +398,7 @@ export function ExpressKioskApp() {
         return { canvas, dataUrl };
     };
 
-    // Instant Face Verification Scan & Overlay Flow
+    // Instant Face Verification Scan & Overlay Flow (Continuous Staff Scanning)
     const handleFaceScan = useCallback(async () => {
         if (isScanning || !modelsReady || !pairingCode) return;
 
@@ -419,7 +419,7 @@ export function ExpressKioskApp() {
         setScanError(null);
 
         try {
-            // 1. Capture live frame snapshot
+            // 1. Capture live frame snapshot instantly
             const { canvas, dataUrl: snapshotUrl } = captureFrame();
             if (!canvas) {
                 setScanError('Camera frame capture failed. Please try again.');
@@ -435,10 +435,14 @@ export function ExpressKioskApp() {
                 setVerificationResult({
                     status: 'rejected',
                     matched: false,
-                    error: 'No face detected in camera frame. Please align face inside the guide oval.',
+                    error: 'No face detected in camera frame. Please align face in camera view.',
                     snapshotUrl,
                 });
-                setIsScanning(false);
+                // Auto-reset rejected overlay after 2 seconds to keep camera ready
+                setTimeout(() => {
+                    setVerificationResult(null);
+                    setIsScanning(false);
+                }, 2000);
                 return;
             }
 
@@ -468,17 +472,21 @@ export function ExpressKioskApp() {
                 setVerificationResult({
                     status: 'rejected',
                     matched: false,
-                    error: `Face Not Recognized in employee database. (Match score: ${(Math.max(0, 1 - bestDistance) * 100).toFixed(0)}%)`,
+                    error: `Face Not Recognized. (Match score: ${(Math.max(0, 1 - bestDistance) * 100).toFixed(0)}%)`,
                     snapshotUrl,
                 });
-                setIsScanning(false);
+                // Auto-reset rejected overlay after 2 seconds to keep camera ready
+                setTimeout(() => {
+                    setVerificationResult(null);
+                    setIsScanning(false);
+                }, 2000);
                 return;
             }
 
             // 4. Face MATCHED!
             const similarity = `${Math.max(0, (1 - bestDistance) * 100).toFixed(1)}%`;
 
-            // Instant UI Notification & Overlay (<100ms)
+            // Instant UI Notification & Profile Card Overlay (<100ms)
             setVerificationResult({
                 status: 'verified',
                 matched: true,
@@ -497,7 +505,7 @@ export function ExpressKioskApp() {
 
             playChimeSound();
 
-            // 5. ASYNC BACKGROUND PUNCH (Non-blocking DB sync)
+            // 5. ASYNC BACKGROUND PUNCH (Non-blocking DB sync while camera stays active for next staff)
             const punchLog: QueuedPunch = {
                 id: `punch_${Date.now()}`,
                 profileId: matchedEmployee.id,
@@ -529,11 +537,11 @@ export function ExpressKioskApp() {
                 }
             })();
 
-            // Auto-close modal after 2.5 seconds for next employee
+            // DO NOT CLOSE MODAL! Auto-reset overlay after 2 seconds & keep camera active for next staff
             setTimeout(() => {
-                closeVerificationModal();
+                setVerificationResult(null);
                 setIsScanning(false);
-            }, 2500);
+            }, 2000);
 
         } catch (err) {
             console.error('[Kiosk] Scan error:', err);
@@ -672,7 +680,7 @@ export function ExpressKioskApp() {
             {/* Hidden Canvas for Snapshot Capture */}
             <canvas ref={canvasRef} className="hidden" />
 
-            {/* Compact Header Bar (h-14) */}
+            {/* Top Header Bar: Tenant Name & Location Address */}
             <header className="h-14 px-4 bg-slate-900/90 border-b border-slate-800/80 flex items-center justify-between shrink-0 shadow-lg backdrop-blur-md">
                 <div className="flex items-center gap-3">
                     <div className="p-2 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20">
@@ -681,15 +689,12 @@ export function ExpressKioskApp() {
                     <div>
                         <div className="flex items-center gap-2">
                             <h1 className="text-base font-bold tracking-tight text-white leading-none">
-                                {pairedDevice?.name || 'Kiosk Terminal'}
+                                {pairedDevice?.locationName || 'PayFix Workspace'}
                             </h1>
-                            <Badge variant="outline" className="border-sky-500/40 text-sky-400 text-[10px] font-bold px-1.5 py-0">
-                                Paired
-                            </Badge>
                         </div>
                         <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mt-0.5">
                             <MapPin className="h-3 w-3 text-emerald-400 shrink-0" />
-                            <span className="truncate max-w-[200px] md:max-w-xs">{pairedDevice?.locationName || 'Geofenced Location'}</span>
+                            <span className="truncate max-w-[220px] md:max-w-xs">{pairedDevice?.locationName || 'Office Entrance Terminal'}</span>
                             {terminalGps.latitude && (
                                 <span className="text-emerald-400 font-mono text-[10px] hidden md:inline">
                                     (GPS Verified)
@@ -736,6 +741,7 @@ export function ExpressKioskApp() {
                     {/* Background Glowing Ambient Orbs */}
                     <div className="absolute -top-24 -left-24 w-72 h-72 rounded-full bg-sky-500/10 blur-3xl pointer-events-none" />
                     <div className="absolute -bottom-24 -right-24 w-72 h-72 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
+
                     {/* Top Header inside Hero Card */}
                     <div className="flex items-center justify-between relative z-10">
                         <div className="flex items-center gap-2">
@@ -746,11 +752,28 @@ export function ExpressKioskApp() {
                         </div>
                     </div>
 
-                    {/* Central Area: Initial AI Loading State OR Start Verification Primary Button */}
+                    {/* Central Area: Paired Device Info + AI Loading OR Start Verification Primary Button */}
                     <div className="my-auto text-center space-y-5 relative z-10 max-w-lg mx-auto py-2">
-                        <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
-                            Entrance Attendance Scanner
-                        </h2>
+
+                        {/* PAIRED DEVICE DETAILS BOX (RIGHT BEFORE START VERIFICATION BUTTON) */}
+                        {pairedDevice && (
+                            <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 backdrop-blur-md flex items-center justify-between text-xs max-w-sm mx-auto shadow-md">
+                                <div className="flex items-center gap-2.5 text-left">
+                                    <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/30 text-sky-400 flex items-center justify-center font-bold">
+                                        <Tablet className="h-4 w-4" />
+                                    </div>
+                                    <div>
+                                        <div className="font-bold text-white text-xs">{pairedDevice.name}</div>
+                                        <div className="text-[10px] text-slate-400 flex items-center gap-1 font-mono">
+                                            <span>Key: {pairedDevice.pairingCode}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <Badge variant="outline" className="border-sky-500/40 text-sky-400 text-[10px] font-bold">
+                                    Paired &amp; Active
+                                </Badge>
+                            </div>
+                        )}
 
                         {!modelsReady ? (
                             /* 1. INITIAL LOADING AI STATE (Before 100% & 2s Preparation) */
@@ -828,17 +851,15 @@ export function ExpressKioskApp() {
                         </div>
                     </div>
 
-                    {/* Bottom Status Bar */}
+                    {/* Bottom Status Bar (Removed Enrolled Count as requested) */}
                     <div className="flex items-center justify-between text-xs text-slate-400 border-t border-slate-800/80 pt-3 relative z-10">
                         <div className="flex items-center gap-2">
                             <ShieldCheck className="h-4 w-4 text-emerald-400" />
                             <span>Geofenced &amp; Encrypted</span>
                         </div>
-                        <div className="flex items-center gap-2 font-mono">
-                            <span>{stats.enrolledEmployees} Employees Enrolled</span>
-                        </div>
                     </div>
                 </Card>
+
 
                 {/* Right Panel: Compact Recent Verification Card (Height 56px) */}
                 <div className="lg:col-span-4 flex flex-col space-y-4 overflow-hidden">
