@@ -66,14 +66,15 @@ export const FaceVerificationService = {
     },
 
     /**
-     * Compare a selfie (base64 data URL) against a profile photo (remote URL).
+     * Compare a selfie (base64 data URL) against a profile photo or pre-saved face embedding.
      * Uses face-api.js running entirely in the browser.
-     * Uses cached profile descriptor if available for instant matching (<150ms).
+     * Uses pre-saved DB embedding or cached profile descriptor for instant matching (<80ms).
      */
     async compareFaces(
         selfieDataUrl: string,
         profileImageUrl: string,
-        onDebugLog?: (log: string) => void
+        onDebugLog?: (log: string) => void,
+        preSavedEmbedding?: number[] | Float32Array | null
     ): Promise<FaceVerificationResult> {
         const debugLog: string[] = []
         const log = (msg: string) => {
@@ -100,8 +101,16 @@ export const FaceVerificationService = {
                 }
             }
 
-            // Check if profile descriptor is cached in memory
-            let profileDescriptor = descriptorCache.get(profileImageUrl) || null
+            // Check if profile descriptor is pre-saved in DB session context or cached in memory
+            let profileDescriptor: Float32Array | null = null;
+            if (preSavedEmbedding && Array.isArray(preSavedEmbedding) && preSavedEmbedding.length === 128) {
+                profileDescriptor = FaceApiBrowserService.arrayToDescriptor(preSavedEmbedding);
+                log('⚡ Using pre-saved face embedding from session DB context (Zero Network Download!)');
+            } else if (preSavedEmbedding instanceof Float32Array) {
+                profileDescriptor = preSavedEmbedding;
+            } else {
+                profileDescriptor = descriptorCache.get(profileImageUrl) || null;
+            }
 
             // Extract selfie descriptor
             log('⚡ Extracting selfie face descriptor...')
@@ -116,7 +125,7 @@ export const FaceVerificationService = {
                 }
             }
 
-            // Extract profile descriptor if not cached
+            // Extract profile descriptor from image URL only if not already available
             if (!profileDescriptor) {
                 log('📷 Extracting profile photo face descriptor...')
                 profileDescriptor = await FaceApiBrowserService.extractDescriptorFromUrl(profileImageUrl, log)
@@ -126,6 +135,7 @@ export const FaceVerificationService = {
             } else {
                 log('⚡ Using cached profile face descriptor (Instant Matching)')
             }
+
 
             if (!profileDescriptor) {
                 return {

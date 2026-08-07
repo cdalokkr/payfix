@@ -19,6 +19,7 @@ import { motion, AnimatePresence } from "framer-motion"
 interface FaceVerificationProps {
     selfieDataUrl: string
     profileImageUrl: string | null
+    faceEmbedding?: number[] | null
     onVerified: (result: FaceVerificationResult) => void
     onRetakeSelfie: () => void
     onBack?: () => void
@@ -32,6 +33,7 @@ export interface FaceVerificationResult {
 export function FaceVerification({
     selfieDataUrl,
     profileImageUrl,
+    faceEmbedding,
     onVerified,
     onRetakeSelfie,
     onBack,
@@ -66,16 +68,16 @@ export function FaceVerification({
             return
         }
 
-        // Check if profile image exists
-        if (!profileImageUrl) {
+        // Check if profile image or embedding exists
+        if (!profileImageUrl && (!faceEmbedding || faceEmbedding.length === 0)) {
             setStatus('error')
             setErrorMessage('No profile picture found. Please upload a profile photo first.')
-            addDebugLog('❌ No profile image URL provided')
+            addDebugLog('❌ No profile image URL or embedding provided')
             return
         }
 
         addDebugLog(`📷 Selfie size: ${(selfieDataUrl.length / 1024).toFixed(1)}KB`)
-        addDebugLog(`📷 Profile URL: ${profileImageUrl.substring(0, 50)}...`)
+        if (profileImageUrl) addDebugLog(`📷 Profile URL: ${profileImageUrl.substring(0, 50)}...`)
 
         setProgress(10)
 
@@ -85,8 +87,9 @@ export function FaceVerification({
 
             const result = await FaceVerificationService.compareFaces(
                 selfieDataUrl,
-                profileImageUrl,
-                addDebugLog
+                profileImageUrl || '',
+                addDebugLog,
+                faceEmbedding || undefined
             )
 
             setProgress(100)

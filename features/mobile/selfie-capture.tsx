@@ -25,6 +25,7 @@ import { OfflineSyncService } from "@/lib/services/offline-sync.service"
 
 interface SelfieCaptureProps {
     profileImageUrl: string | null
+    faceEmbedding?: number[] | null
     onCaptured: (result: SelfieResult) => void
     onVerified: (result: { matched: boolean; similarity: number }) => void
     onSubmitAttendance: (selfie?: string) => Promise<void>
@@ -45,6 +46,7 @@ export interface SelfieResult {
 
 export function SelfieCapture({
     profileImageUrl,
+    faceEmbedding,
     onCaptured,
     onVerified,
     onSubmitAttendance,
@@ -52,6 +54,7 @@ export function SelfieCapture({
     warmedStream,
     clearWarmedStream
 }: SelfieCaptureProps) {
+
     const [status, setStatus] = useState<'idle' | 'streaming' | 'captured' | 'verifying' | 'verified' | 'verify_failed' | 'error'>('idle')
     const [errorMessage, setErrorMessage] = useState<string>('')
     const [capturedImage, setCapturedImage] = useState<string | null>(null)
@@ -334,11 +337,12 @@ export function SelfieCapture({
         try {
             // Hard timeout — 45s allows for model loading + inference on slow mobile devices
             const result = await Promise.race([
-                FaceVerificationService.compareFaces(capturedImage, profileImageUrl),
+                FaceVerificationService.compareFaces(capturedImage, profileImageUrl, undefined, faceEmbedding),
                 new Promise<never>((_, reject) =>
                     setTimeout(() => reject(new Error('TIMEOUT')), 45000)
                 ),
             ])
+
 
             setSimilarity(result.similarity)
 
