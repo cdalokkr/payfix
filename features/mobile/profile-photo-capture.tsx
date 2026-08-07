@@ -405,19 +405,7 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                                     {/* Modern Overlay Gradient */}
                                     <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-slate-950/20 pointer-events-none" />
 
-                                    {/* Scanning Animation */}
-                                    <motion.div
-                                        className="absolute inset-x-0 h-32 bg-gradient-to-b from-primary/0 via-primary/20 to-primary/0 z-10 pointer-events-none"
-                                        animate={{ top: ['0%', '80%', '0%'] }}
-                                        transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
-                                    />
-                                    <motion.div
-                                        className="absolute inset-x-0 h-px bg-primary z-10 shadow-[0_0_15px_rgba(var(--primary),0.5)] pointer-events-none"
-                                        animate={{ top: ['0%', '100%', '0%'] }}
-                                        transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
-                                    />
-
-                                    {/* Circular Guide */}
+                                    {/* Circular Guide Ring */}
                                     <div className="absolute inset-0 flex items-center justify-center">
                                         <div className="w-3/4 aspect-square rounded-full border-2 border-white/20 border-dashed animate-[spin_20s_linear_infinite]" />
                                         <div className="absolute w-3/4 aspect-square rounded-full border border-white/40" />
@@ -493,42 +481,25 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                         </p>
                     </div>
 
-                    {/* Employee Profile Card */}
+                    {/* Employee Profile Card (Shows ONLY Name and Email) */}
                     <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-lg"
                     >
-                        <div className="flex items-start gap-4">
-                            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 border-2 border-primary/30 flex items-center justify-center overflow-hidden shrink-0">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 border-2 border-primary/30 flex items-center justify-center overflow-hidden shrink-0">
                                 {profileData.avatarUrl ? (
                                     <img src={profileData.avatarUrl} alt="Current" className="w-full h-full object-cover" />
                                 ) : (
-                                    <IconUser className="w-7 h-7 text-primary" />
+                                    <IconUser className="w-6 h-6 text-primary" />
                                 )}
                             </div>
-                            <div className="flex-1 min-w-0 space-y-1.5">
+                            <div className="flex-1 min-w-0 space-y-1">
                                 <p className="text-white font-bold text-base truncate">{profileData.fullName}</p>
                                 <div className="flex items-center gap-2">
-                                    <IconMail className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                                    <p className="text-slate-400 text-xs truncate">{profileData.email}</p>
-                                </div>
-                                {profileData.mobileNo && (
-                                    <div className="flex items-center gap-2">
-                                        <IconPhone className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                                        <p className="text-slate-400 text-xs">{profileData.mobileNo}</p>
-                                    </div>
-                                )}
-                                {/* Designation and Role Badges - Separate Rows */}
-                                <div className="flex flex-col gap-1.5 pt-1.5">
-                                    {profileData.designation && (
-                                        <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-slate-700/60 text-slate-200 text-xs font-bold border border-white/10 w-fit shadow-lg backdrop-blur-md">
-                                            {profileData.designation}
-                                        </span>
-                                    )}
-                                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-primary/20 text-primary text-[10px] font-bold uppercase tracking-wider border border-primary/30 w-fit">
-                                        {profileData.role}
-                                    </span>
+                                    <IconMail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                    <p className="text-slate-300 text-xs truncate">{profileData.email}</p>
                                 </div>
                             </div>
                         </div>
