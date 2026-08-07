@@ -264,9 +264,10 @@ export const FaceApiBrowserService = {
     async compareImages(
         selfieDataUrl: string,
         profileImageUrl: string,
-        threshold = 0.6,
+        threshold = 0.40,
         onLog?: (msg: string) => void
     ): Promise<{ matched: boolean; similarity: number; distance: number; error?: string }> {
+
         const t0 = performance.now()
         const elapsed = () => `${(performance.now() - t0).toFixed(0)}ms`
 

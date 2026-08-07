@@ -17,7 +17,8 @@ export interface FaceVerificationResult {
     error?: string
 }
 
-const THRESHOLD = 0.6
+// Minimum similarity score required to pass = 60% (Euclidean distance <= 0.40)
+const THRESHOLD = 0.40
 
 // In-memory cache for profile descriptors (URL -> Float32Array)
 const descriptorCache = new Map<string, Float32Array>()

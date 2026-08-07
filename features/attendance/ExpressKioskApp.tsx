@@ -511,10 +511,11 @@ export function ExpressKioskApp() {
                 }
 
 
-            // Threshold: < 0.6 = same person
-            if (bestDistance >= 0.6) {
+            // Strict Pass Threshold: distance <= 0.40 (requires minimum 60%+ similarity score to pass)
+            if (bestDistance > 0.40) {
                 matchedEmployee = null;
             }
+
 
             const now = new Date();
             const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
