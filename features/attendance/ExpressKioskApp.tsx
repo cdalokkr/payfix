@@ -342,7 +342,7 @@ export function ExpressKioskApp() {
         }
     };
 
-    // Start Camera Stream inside Modal (Full HD Native Resolution)
+    // Start Camera Stream inside Modal (Optimized Resolution & Zoom for Mobile/Tablet)
     const startCamera = async () => {
         try {
             if (mediaStreamRef.current) {
@@ -353,9 +353,9 @@ export function ExpressKioskApp() {
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: {
                     facingMode: 'user',
-                    width: { ideal: 1920, min: 1280 },
-                    height: { ideal: 1080, min: 720 },
-                    frameRate: { ideal: 60, min: 30 }
+                    width: { ideal: 1280, max: 1280 },
+                    height: { ideal: 720, max: 720 },
+                    frameRate: { ideal: 30 }
                 }
             });
 
@@ -368,11 +368,26 @@ export function ExpressKioskApp() {
                 videoRef.current.muted = true;
                 videoRef.current.play().catch(() => {});
             }
+
+            // Apply hardware track zoom if supported by device camera
+            const videoTrack = stream.getVideoTracks()[0];
+            if (videoTrack && typeof videoTrack.getCapabilities === 'function') {
+                const capabilities = videoTrack.getCapabilities() as any;
+                if (capabilities && capabilities.zoom) {
+                    try {
+                        const targetZoom = Math.min(capabilities.zoom.max || 1.5, 1.25);
+                        await (videoTrack as any).applyConstraints({
+                            advanced: [{ zoom: targetZoom }]
+                        });
+                    } catch {}
+                }
+            }
         } catch (err) {
             console.error('Camera access error:', err);
-            toast.error('Unable to access camera in HD quality.');
+            toast.error('Unable to access camera.');
         }
     };
+
 
 
     // Stop Camera Stream
@@ -949,15 +964,20 @@ export function ExpressKioskApp() {
                         </Button>
                     </DialogHeader>
 
-                    {/* Camera Display Box (Full Native HD View) */}
-                    <div className="p-4 flex flex-col items-center justify-center relative bg-black min-h-[440px]">
-                        <div className="relative w-full max-w-sm aspect-[3/4] rounded-2xl overflow-hidden border border-slate-800 shadow-2xl bg-black">
+                    {/* Camera Display Box (Sleek Biometric Face Oval Scanner Viewport) */}
+                    <div className="p-4 flex flex-col items-center justify-center relative bg-slate-950 min-h-[440px]">
+                        {/* Oval Face-Shaped Camera Viewport Frame */}
+                        <div className="relative w-64 sm:w-72 aspect-[3/4] rounded-[50%/40%] overflow-hidden border-2 border-sky-500/50 shadow-[0_0_35px_rgba(56,189,248,0.25)] bg-black transition-all">
                             <video
                                 ref={videoRef}
-                                className="w-full h-full object-cover transform -scale-x-100"
+                                className="w-full h-full object-cover transform -scale-x-100 scale-125 transition-transform duration-300"
                                 playsInline
                                 muted
                             />
+
+                            {/* Biometric Face Inner Guide Ring */}
+                            <div className="absolute inset-0 rounded-[50%/40%] border border-sky-400/30 pointer-events-none z-10 shadow-[inset_0_0_20px_rgba(56,189,248,0.15)]" />
+
 
                             {/* Camera Initializing Loading Spinner Overlay */}
                             {!cameraActive && (
