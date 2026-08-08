@@ -431,6 +431,7 @@ export function ExpressKioskApp() {
     const openVerificationModal = () => {
         setIsVerificationModalOpen(true);
         setVerificationResult(null);
+        setCapturedFreezeUrl(null);
         setScanError(null);
         startCamera();
 
@@ -449,9 +450,11 @@ export function ExpressKioskApp() {
     const closeVerificationModal = () => {
         setIsVerificationModalOpen(false);
         setVerificationResult(null);
+        setCapturedFreezeUrl(null);
         setScanError(null);
         stopCamera();
     };
+
 
     // Capture full-res JPEG snapshot from video stream (deferred until face match confirmed)
     const captureSnapshot = (): string | null => {
@@ -632,11 +635,13 @@ export function ExpressKioskApp() {
                 }
             })();
 
-            // DO NOT CLOSE MODAL! Auto-reset overlay after 2 seconds & keep camera active for next staff
+            // DO NOT CLOSE MODAL! Auto-reset overlay after 2 seconds & unfreeze camera for next staff
             setTimeout(() => {
                 setVerificationResult(null);
+                setCapturedFreezeUrl(null);
                 setIsScanning(false);
-            }, 2000);
+            }, 2200);
+
 
         } catch (err) {
             console.error('[Kiosk] Scan error:', err);
