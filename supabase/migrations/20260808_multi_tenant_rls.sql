@@ -1,6 +1,6 @@
 -- =========================================================================
--- Supabase Migration: Production-Ready Multi-Tenant Row Level Security (RLS)
--- PayFix SaaS Multi-Tenant Architecture (Profiles, Attendance, Kiosks)
+-- Supabase Migration: Resilient Multi-Tenant Row Level Security (RLS)
+-- PayFix SaaS Multi-Tenant Architecture (Safe for Missing / Dynamic Tables)
 -- =========================================================================
 
 -- =========================================================================
@@ -36,122 +36,118 @@ AS $$
 $$;
 
 -- =========================================================================
--- 2. Enable RLS + FORCE RLS on Core Tables
+-- 2. Profiles Table RLS Policies
 -- =========================================================================
+DO $$ 
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'profiles') THEN
+    ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE profiles FORCE ROW LEVEL SECURITY;
 
-ALTER TABLE IF EXISTS profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS profiles FORCE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS "Users can view active profiles" ON profiles;
+    CREATE POLICY "Users can view active profiles" ON profiles FOR SELECT TO authenticated
+    USING (id = auth.uid() OR public.is_admin());
 
-ALTER TABLE IF EXISTS attendance ENABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS attendance FORCE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
+    CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE TO authenticated
+    USING (id = auth.uid() OR public.is_admin())
+    WITH CHECK (id = auth.uid() OR public.is_admin());
 
-ALTER TABLE IF EXISTS attendance_sessions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS attendance_sessions FORCE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS "Admins can insert profiles" ON profiles;
+    CREATE POLICY "Admins can insert profiles" ON profiles FOR INSERT TO authenticated
+    WITH CHECK (public.is_admin());
 
-ALTER TABLE IF EXISTS activities ENABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS activities FORCE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS "Admins can delete profiles" ON profiles;
+    CREATE POLICY "Admins can delete profiles" ON profiles FOR DELETE TO authenticated
+    USING (public.is_admin());
 
-ALTER TABLE IF EXISTS kiosk_devices ENABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS kiosk_devices FORCE ROW LEVEL SECURITY;
-
-ALTER TABLE IF EXISTS office_locations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS office_locations FORCE ROW LEVEL SECURITY;
-
--- =========================================================================
--- 3. RLS Policies: Profiles Table
--- =========================================================================
-
--- Users can view their own profile or Admins can view all profiles in tenant
-CREATE POLICY "Users can view active profiles"
-ON profiles FOR SELECT TO authenticated
-USING (
-  id = auth.uid() OR public.is_admin()
-);
-
--- Users can update their own profile (avatar, details)
-CREATE POLICY "Users can update own profile"
-ON profiles FOR UPDATE TO authenticated
-USING (id = auth.uid() OR public.is_admin())
-WITH CHECK (id = auth.uid() OR public.is_admin());
-
--- Only Admins can insert new profiles
-CREATE POLICY "Admins can insert profiles"
-ON profiles FOR INSERT TO authenticated
-WITH CHECK (public.is_admin());
-
--- Only Admins can delete profiles
-CREATE POLICY "Admins can delete profiles"
-ON profiles FOR DELETE TO authenticated
-USING (public.is_admin());
+    CREATE INDEX IF NOT EXISTS idx_profiles_user_role ON profiles (id, role);
+  END IF;
+END $$;
 
 -- =========================================================================
--- 4. RLS Policies: Attendance & Attendance Sessions Tables
+-- 3. Attendance Table RLS Policies
 -- =========================================================================
+DO $$ 
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'attendance') THEN
+    ALTER TABLE attendance ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE attendance FORCE ROW LEVEL SECURITY;
 
--- Users can view their own attendance or Admins can view all attendance
-CREATE POLICY "Users can view own attendance"
-ON attendance FOR SELECT TO authenticated
-USING (
-  profile_id = auth.uid() OR public.is_admin()
-);
+    DROP POLICY IF EXISTS "Users can view own attendance" ON attendance;
+    CREATE POLICY "Users can view own attendance" ON attendance FOR SELECT TO authenticated
+    USING (profile_id = auth.uid() OR public.is_admin());
 
--- Members can insert attendance (PWA Selfie Check-In & Kiosk)
-CREATE POLICY "Members can insert attendance"
-ON attendance FOR INSERT TO authenticated
-WITH CHECK (
-  profile_id = auth.uid() OR public.is_admin()
-);
+    DROP POLICY IF EXISTS "Members can insert attendance" ON attendance;
+    CREATE POLICY "Members can insert attendance" ON attendance FOR INSERT TO authenticated
+    WITH CHECK (profile_id = auth.uid() OR public.is_admin());
 
--- Admins can update attendance (corrections, verification approval)
-CREATE POLICY "Admins can update attendance"
-ON attendance FOR UPDATE TO authenticated
-USING (public.is_admin())
-WITH CHECK (public.is_admin());
+    DROP POLICY IF EXISTS "Admins can update attendance" ON attendance;
+    CREATE POLICY "Admins can update attendance" ON attendance FOR UPDATE TO authenticated
+    USING (public.is_admin())
+    WITH CHECK (public.is_admin());
 
--- Users can view their own attendance sessions
-CREATE POLICY "Users can view own attendance sessions"
-ON attendance_sessions FOR SELECT TO authenticated
-USING (
-  profile_id = auth.uid() OR public.is_admin()
-);
-
--- Members can insert attendance sessions
-CREATE POLICY "Members can insert attendance sessions"
-ON attendance_sessions FOR INSERT TO authenticated
-WITH CHECK (
-  profile_id = auth.uid() OR public.is_admin()
-);
+    CREATE INDEX IF NOT EXISTS idx_attendance_profile_date ON attendance (profile_id, date DESC);
+  END IF;
+END $$;
 
 -- =========================================================================
--- 5. RLS Policies: Kiosk Devices & Office Locations
+-- 4. Attendance Sessions Table RLS Policies
 -- =========================================================================
+DO $$ 
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'attendance_sessions') THEN
+    ALTER TABLE attendance_sessions ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE attendance_sessions FORCE ROW LEVEL SECURITY;
 
--- Authenticated users & active kiosks can view office locations
-CREATE POLICY "Authenticated users can view office locations"
-ON office_locations FOR SELECT TO authenticated
-USING (true);
+    DROP POLICY IF EXISTS "Users can view own attendance sessions" ON attendance_sessions;
+    CREATE POLICY "Users can view own attendance sessions" ON attendance_sessions FOR SELECT TO authenticated
+    USING (profile_id = auth.uid() OR public.is_admin());
 
--- Admins can manage office locations
-CREATE POLICY "Admins can manage office locations"
-ON office_locations FOR ALL TO authenticated
-USING (public.is_admin())
-WITH CHECK (public.is_admin());
+    DROP POLICY IF EXISTS "Members can insert attendance sessions" ON attendance_sessions;
+    CREATE POLICY "Members can insert attendance sessions" ON attendance_sessions FOR INSERT TO authenticated
+    WITH CHECK (profile_id = auth.uid() OR public.is_admin());
 
--- Authenticated users can view kiosk devices
-CREATE POLICY "Authenticated users can view kiosk devices"
-ON kiosk_devices FOR SELECT TO authenticated
-USING (true);
-
--- Admins can manage kiosk devices
-CREATE POLICY "Admins can manage kiosk devices"
-ON kiosk_devices FOR ALL TO authenticated
-USING (public.is_admin())
-WITH CHECK (public.is_admin());
+    CREATE INDEX IF NOT EXISTS idx_attendance_sessions_profile_date ON attendance_sessions (profile_id, date DESC);
+  END IF;
+END $$;
 
 -- =========================================================================
--- 6. Performance Indexes
+-- 5. Kiosk Devices Table RLS Policies (Safe Block)
 -- =========================================================================
+DO $$ 
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'kiosk_devices') THEN
+    ALTER TABLE kiosk_devices ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE kiosk_devices FORCE ROW LEVEL SECURITY;
 
-CREATE INDEX IF NOT EXISTS idx_profiles_user_role ON profiles (id, role);
-CREATE INDEX IF NOT EXISTS idx_attendance_profile_date ON attendance (profile_id, date DESC);
-CREATE INDEX IF NOT EXISTS idx_attendance_sessions_profile_date ON attendance_sessions (profile_id, date DESC);
+    DROP POLICY IF EXISTS "Authenticated users can view kiosk devices" ON kiosk_devices;
+    CREATE POLICY "Authenticated users can view kiosk devices" ON kiosk_devices FOR SELECT TO authenticated
+    USING (true);
+
+    DROP POLICY IF EXISTS "Admins can manage kiosk devices" ON kiosk_devices;
+    CREATE POLICY "Admins can manage kiosk devices" ON kiosk_devices FOR ALL TO authenticated
+    USING (public.is_admin())
+    WITH CHECK (public.is_admin());
+  END IF;
+END $$;
+
+-- =========================================================================
+-- 6. Office Locations Table RLS Policies (Safe Block)
+-- =========================================================================
+DO $$ 
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'office_locations') THEN
+    ALTER TABLE office_locations ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE office_locations FORCE ROW LEVEL SECURITY;
+
+    DROP POLICY IF EXISTS "Authenticated users can view office locations" ON office_locations;
+    CREATE POLICY "Authenticated users can view office locations" ON office_locations FOR SELECT TO authenticated
+    USING (true);
+
+    DROP POLICY IF EXISTS "Admins can manage office locations" ON office_locations;
+    CREATE POLICY "Admins can manage office locations" ON office_locations FOR ALL TO authenticated
+    USING (public.is_admin())
+    WITH CHECK (public.is_admin());
+  END IF;
+END $$;

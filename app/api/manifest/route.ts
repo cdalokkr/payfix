@@ -2,6 +2,46 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveTenant, type TenantMetadata } from '@/lib/tenant/resolver';
 
 export async function GET(request: NextRequest) {
+    const type = request.nextUrl.searchParams.get('type');
+
+    // Dedicated Manifest for Kiosk Terminal PWA Installation
+    if (type === 'kiosk') {
+        const kioskManifest = {
+            name: 'PayFix Attendance Kiosk Terminal',
+            short_name: 'PayFix Kiosk',
+            description: 'Touchless Entrance Face Verification Attendance Kiosk',
+            start_url: '/kiosk',
+            display: 'standalone',
+            orientation: 'any',
+            background_color: '#020617',
+            theme_color: '#0f172a',
+            icons: [
+                {
+                    src: '/icons/icon-192x192.png',
+                    sizes: '192x192',
+                    type: 'image/png',
+                    purpose: 'any maskable'
+                },
+                {
+                    src: '/icons/icon-512x512.png',
+                    sizes: '512x512',
+                    type: 'image/png',
+                    purpose: 'any maskable'
+                }
+            ],
+            categories: ['business', 'productivity'],
+            prefer_related_applications: false,
+            related_applications: []
+        };
+
+        return NextResponse.json(kioskManifest, {
+            headers: {
+                'Content-Type': 'application/manifest+json',
+                'Cache-Control': 'public, max-age=600, stale-while-revalidate=1200'
+            }
+        });
+    }
+
     const tenantSlug = request.headers.get('x-tenant-slug') 
         || request.nextUrl.searchParams.get('tenant');
         

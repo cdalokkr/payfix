@@ -83,18 +83,31 @@ export const FaceApiBrowserService = {
 
                 const faceapi = window.faceapi
 
-                onProgress?.(20, 'Loading face detector...')
+                onProgress?.(20, 'Fast-loading TinyFaceDetector...')
                 await faceapi.nets.tinyFaceDetector.loadFromUri(MODELS_PATH)
 
-                onProgress?.(50, 'Loading face landmarks...')
-                await faceapi.nets.faceLandmark68Net.loadFromUri(MODELS_PATH)
+                onProgress?.(50, 'Parallel loading Landmarks & Recognition models...')
+                await Promise.all([
+                    faceapi.nets.faceLandmark68Net.loadFromUri(MODELS_PATH),
+                    faceapi.nets.faceRecognitionNet.loadFromUri(MODELS_PATH)
+                ])
 
-                onProgress?.(80, 'Loading face recognition...')
-                await faceapi.nets.faceRecognitionNet.loadFromUri(MODELS_PATH)
+                // Pre-warm WebGL backend ready state
+                if (faceapi.tf?.ready) {
+                    await faceapi.tf.ready();
+                }
 
-                onProgress?.(100, 'Models ready!')
+                // Initialize Web Worker Client in background for off-main-thread extraction
+                try {
+                    const { getFaceWorkerClient } = await import('@/lib/face-worker-client');
+                    getFaceWorkerClient().init().catch(() => {});
+                } catch {}
+
+                onProgress?.(100, 'AI Models ready!')
                 _modelsLoaded = true
                 return true
+
+
             } catch (err) {
                 _loadingPromise = null
                 console.error('[FaceApiBrowserService] Model loading failed:', err)
