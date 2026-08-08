@@ -101,7 +101,11 @@ export function ExpressKioskApp() {
     const [modelsLoading, setModelsLoading] = useState<boolean>(false);
     const [modelsReady, setModelsReady] = useState<boolean>(false);
     const [modelProgress, setModelProgress] = useState<number>(0);
+    const [isCameraReady, setIsCameraReady] = useState<boolean>(false);
     const [stats, setStats] = useState({ totalEmployees: 0, enrolledEmployees: 0, queuedOffline: 0 });
+
+    const warmupVideoRef = useRef<HTMLVideoElement>(null);
+
 
     const verifyPairingMutation = trpc.kioskDevices.verifyPairingCode.useMutation();
 
@@ -395,10 +399,13 @@ export function ExpressKioskApp() {
     };
 
 
-    // Background Pre-Warm Camera Stream on Kiosk Load (Instant <10ms Modal Opening)
+    // Background Pre-Warm Camera Stream on Kiosk Load (Instant <5ms Modal Opening)
     const prewarmCamera = useCallback(async () => {
         if (typeof window === 'undefined' || !navigator.mediaDevices) return;
-        if (mediaStreamRef.current && mediaStreamRef.current.active) return;
+        if (mediaStreamRef.current && mediaStreamRef.current.active) {
+            setIsCameraReady(true);
+            return;
+        }
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: {
@@ -411,13 +418,19 @@ export function ExpressKioskApp() {
                 audio: false
             });
             mediaStreamRef.current = stream;
+
+            if (warmupVideoRef.current) {
+                warmupVideoRef.current.srcObject = stream;
+                await warmupVideoRef.current.play().catch(() => {});
+            }
+            setIsCameraReady(true);
+            console.log('[Kiosk Camera] Warmup stream active & video element bound');
         } catch (err) {
             console.warn('[Kiosk Camera] Background pre-warm notice:', err);
         }
     }, []);
 
-
-    // Start Camera Stream inside Modal (Clean 1:1 Framing for Max Face Vector Accuracy)
+    // Start Camera Stream inside Modal (Instant 0ms feed swap)
     const startCamera = async () => {
         try {
             if (!mediaStreamRef.current || !mediaStreamRef.current.active) {
@@ -431,7 +444,7 @@ export function ExpressKioskApp() {
                 if (videoRef.current) {
                     videoRef.current.srcObject = mediaStreamRef.current;
                     videoRef.current.muted = true;
-                    videoRef.current.play().catch(() => {});
+                    await videoRef.current.play().catch(() => {});
                 }
             } else {
                 toast.error('Unable to access camera.');
@@ -441,6 +454,7 @@ export function ExpressKioskApp() {
             toast.error('Unable to access camera.');
         }
     };
+
 
 
 
@@ -951,12 +965,23 @@ export function ExpressKioskApp() {
                             <div className="space-y-4 animate-in zoom-in-95 duration-300">
                                 <Button
                                     onClick={openVerificationModal}
-                                    className="w-full max-w-xs h-14 rounded-xl bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white font-bold text-lg tracking-wide shadow-lg shadow-sky-600/30 transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 border border-sky-400/30"
+                                    disabled={!isCameraReady}
+                                    className="w-full max-w-xs h-14 rounded-xl bg-sky-600 hover:bg-sky-500 active:bg-sky-700 disabled:opacity-50 text-white font-bold text-lg tracking-wide shadow-lg shadow-sky-600/30 transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 border border-sky-400/30"
                                 >
-                                    <ScanFace className="h-6 w-6 shrink-0" />
-                                    <span>Start Verification</span>
+                                    {!isCameraReady ? (
+                                        <>
+                                            <RefreshCw className="h-5 w-5 shrink-0 animate-spin text-sky-200" />
+                                            <span>Starting Camera...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <ScanFace className="h-6 w-6 shrink-0 text-white" />
+                                            <span>Start Verification</span>
+                                        </>
+                                    )}
                                 </Button>
                             </div>
+
                         )}
 
                         {/* 3. TERMINAL LOCAL CACHE EMBEDDED INSIDE HERO CARD */}
@@ -1200,7 +1225,17 @@ export function ExpressKioskApp() {
                     </div>
                 </DialogContent>
             </Dialog>
+
+            {/* Hidden background video element keeping camera stream hot & active on page load */}
+            <video
+                ref={warmupVideoRef}
+                autoPlay
+                muted
+                playsInline
+                className="hidden pointer-events-none opacity-0 absolute -z-50"
+            />
         </div>
     );
 }
+
 
