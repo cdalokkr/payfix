@@ -15,7 +15,9 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FaceApiBrowserService } from '@/lib/services/faceapi-browser.service';
+import { KioskIndexedDBService } from '@/lib/services/kiosk-idb.service';
 import { trpc } from '@/lib/trpc/client';
+
 
 interface CachedEmployee {
     id: string;
@@ -209,6 +211,19 @@ export function ExpressKioskApp() {
         };
     }, []);
 
+    // 15-minute background refresh to fetch newly enrolled employee face vectors automatically
+    useEffect(() => {
+        if (!pairingCode) return;
+        
+        const syncInterval = setInterval(() => {
+            console.log('[Kiosk Background] Running 15-minute periodic face vector sync...');
+            fetchEmployeeFaceVectors();
+        }, 15 * 60 * 1000);
+
+        return () => clearInterval(syncInterval);
+    }, [pairingCode]);
+
+
     const handlePairDevice = (e: React.FormEvent) => {
         e.preventDefault();
         const code = inputKey.trim().toUpperCase();
@@ -279,7 +294,7 @@ export function ExpressKioskApp() {
 
     const descriptorMapRef = useRef<Map<string, Float32Array>>(new Map());
 
-    // Fetch and cache employee face vectors locally using Kiosk Pairing Key
+    // Fetch and cache employee face vectors locally using Kiosk Pairing Key (IndexedDB + RAM)
     const fetchEmployeeFaceVectors = async () => {
         if (!pairingCode) return;
         try {
@@ -301,6 +316,9 @@ export function ExpressKioskApp() {
                             : null,
                     }));
                     setEmployees(mapped);
+                    
+                    // Save to IndexedDB (unlimited quota, structured storage) + localStorage fallback
+                    KioskIndexedDBService.saveEmployees(mapped);
                     try { localStorage.setItem('payfix_kiosk_cached_employees', JSON.stringify(mapped)); } catch {}
 
                     // Pre-parse Float32Array descriptors into memory cache for instant matching
@@ -320,27 +338,34 @@ export function ExpressKioskApp() {
                 handleUnpair();
             }
         } catch (err) {
-            console.warn('[Kiosk] Failed to fetch face vectors from cloud. Checking offline cache...');
-            const cached = localStorage.getItem('payfix_kiosk_cached_employees');
-            if (cached) {
-                try {
-                    const mapped: CachedEmployee[] = JSON.parse(cached);
-                    setEmployees(mapped);
+            console.warn('[Kiosk] Failed to fetch face vectors from cloud. Checking IndexedDB offline cache...');
+            const idbEmployees = await KioskIndexedDBService.getEmployees();
+            let mapped: CachedEmployee[] = idbEmployees;
 
-                    const newMap = new Map<string, Float32Array>();
-                    mapped.forEach(e => {
-                        if (e.faceEmbedding && e.faceEmbedding.length === 128) {
-                            newMap.set(e.id, FaceApiBrowserService.arrayToDescriptor(e.faceEmbedding));
-                        }
-                    });
-                    descriptorMapRef.current = newMap;
+            if (!mapped || mapped.length === 0) {
+                const cached = localStorage.getItem('payfix_kiosk_cached_employees');
+                if (cached) {
+                    try { mapped = JSON.parse(cached); } catch {}
+                }
+            }
 
-                    const enrolledCount = mapped.filter(e => e.faceEmbedding !== null).length;
-                    setStats(prev => ({ ...prev, totalEmployees: mapped.length, enrolledEmployees: enrolledCount }));
-                } catch {}
+            if (mapped && mapped.length > 0) {
+                setEmployees(mapped);
+
+                const newMap = new Map<string, Float32Array>();
+                mapped.forEach(e => {
+                    if (e.faceEmbedding && e.faceEmbedding.length === 128) {
+                        newMap.set(e.id, FaceApiBrowserService.arrayToDescriptor(e.faceEmbedding));
+                    }
+                });
+                descriptorMapRef.current = newMap;
+
+                const enrolledCount = mapped.filter(e => e.faceEmbedding !== null).length;
+                setStats(prev => ({ ...prev, totalEmployees: mapped.length, enrolledEmployees: enrolledCount }));
             }
         }
     };
+
 
     // Start Camera Stream inside Modal (Clean 1:1 Framing for Max Face Vector Accuracy)
     const startCamera = async () => {
