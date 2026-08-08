@@ -163,13 +163,15 @@ export function ExpressKioskApp() {
         }
     }, []);
 
-    // Load face-api.js models when paired
+    // Load face-api.js models & pre-warm camera stream when paired
     useEffect(() => {
         if (pairingCode) {
             loadFaceModels();
+            prewarmCamera();
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pairingCode]);
+
 
     // Monitor Network Online/Offline status
     useEffect(() => {
@@ -393,37 +395,52 @@ export function ExpressKioskApp() {
     };
 
 
-    // Start Camera Stream inside Modal (Clean 1:1 Framing for Max Face Vector Accuracy)
-    const startCamera = async () => {
+    // Background Pre-Warm Camera Stream on Kiosk Load (Instant <10ms Modal Opening)
+    const prewarmCamera = useCallback(async () => {
+        if (typeof window === 'undefined' || !navigator.mediaDevices) return;
+        if (mediaStreamRef.current && mediaStreamRef.current.active) return;
         try {
-            if (mediaStreamRef.current) {
-                mediaStreamRef.current.getTracks().forEach(track => track.stop());
-                mediaStreamRef.current = null;
-            }
-
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: {
                     facingMode: 'user',
-                    width: { ideal: 1280, max: 1280 },
-                    height: { ideal: 720, max: 720 },
+                    width: { ideal: 480 },
+                    height: { ideal: 480 },
+                    aspectRatio: { ideal: 1.0 },
                     frameRate: { ideal: 30 }
-                }
+                },
+                audio: false
             });
-
             mediaStreamRef.current = stream;
-            setCameraActive(true);
-            setScanError(null);
+        } catch (err) {
+            console.warn('[Kiosk Camera] Background pre-warm notice:', err);
+        }
+    }, []);
 
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream;
-                videoRef.current.muted = true;
-                videoRef.current.play().catch(() => {});
+    // Start Camera Stream inside Modal (Clean 1:1 Framing for Max Face Vector Accuracy)
+    const startCamera = async () => {
+        try {
+            if (!mediaStreamRef.current || !mediaStreamRef.current.active) {
+                await prewarmCamera();
+            }
+
+            if (mediaStreamRef.current && mediaStreamRef.current.active) {
+                setCameraActive(true);
+                setScanError(null);
+
+                if (videoRef.current) {
+                    videoRef.current.srcObject = mediaStreamRef.current;
+                    videoRef.current.muted = true;
+                    videoRef.current.play().catch(() => {});
+                }
+            } else {
+                toast.error('Unable to access camera.');
             }
         } catch (err) {
             console.error('Camera access error:', err);
             toast.error('Unable to access camera.');
         }
     };
+
 
 
 
@@ -1037,9 +1054,10 @@ export function ExpressKioskApp() {
                         </Button>
                     </DialogHeader>
 
-                    {/* Camera Display Box (Native 1:1 View with Biometric Oval Guide Overlay) */}
-                    <div className="p-4 flex flex-col items-center justify-center relative bg-black min-h-[440px]">
-                        <div className="relative w-full max-w-sm aspect-[3/4] rounded-2xl overflow-hidden border border-slate-800 shadow-2xl bg-black">
+                    {/* Camera Display Box (Native 1:1 Square View for Max Speed & Vector Accuracy) */}
+                    <div className="p-4 flex flex-col items-center justify-center relative bg-black min-h-[380px]">
+                        <div className="relative w-full max-w-xs aspect-square rounded-2xl overflow-hidden border border-slate-800 shadow-2xl bg-black">
+
                             <video
                                 ref={videoRef}
                                 className="w-full h-full object-cover transform -scale-x-100"

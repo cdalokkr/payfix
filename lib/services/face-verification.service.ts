@@ -180,6 +180,26 @@ export const FaceVerificationService = {
         return 1 - THRESHOLD // Returns as similarity (0.60 = 60% similarity minimum)
     },
 
+    /**
+     * Re-extract 128-d face descriptor from a profile image URL using aligned inputSize: 160.
+     * Used on Profile Photo Approval to automatically update Supabase face_embedding DB column.
+     */
+    async extractAlignedDescriptorFromUrl(imageUrl: string): Promise<number[] | null> {
+        try {
+            if (!FaceApiBrowserService.isReady()) {
+                await FaceApiBrowserService.loadModels();
+            }
+            const descriptor = await FaceApiBrowserService.extractDescriptorFromUrl(imageUrl);
+            if (descriptor && descriptor.length === 128) {
+                return Array.from(descriptor);
+            }
+            return null;
+        } catch (err) {
+            console.warn('[FaceVerificationService] Aligned descriptor extraction failed:', err);
+            return null;
+        }
+    },
+
     formatSimilarity(similarity: number): string {
         return `${(similarity * 100).toFixed(0)}%`
     },
