@@ -7,10 +7,12 @@ export async function GET(request: NextRequest) {
     // Dedicated Manifest for Kiosk Terminal PWA Installation
     if (type === 'kiosk') {
         const kioskManifest = {
+            id: '/kiosk',
             name: 'PayFix Attendance Kiosk Terminal',
             short_name: 'PayFix Kiosk',
             description: 'Touchless Entrance Face Verification Attendance Kiosk',
             start_url: '/kiosk',
+            scope: '/kiosk',
             display: 'standalone',
             orientation: 'any',
             background_color: '#020617',
@@ -65,10 +67,12 @@ export async function GET(request: NextRequest) {
     const pwaOrientation = tenant?.branding?.pwa_orientation || 'portrait';
 
     const manifest = {
+        id: '/mobile',
         name: appName,
         short_name: shortName,
         description: tagline,
         start_url: '/mobile',
+        scope: '/',
         display: pwaDisplay,
         orientation: pwaOrientation,
         background_color: secondaryColor,
