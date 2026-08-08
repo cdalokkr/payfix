@@ -96,6 +96,61 @@ export async function saveEmployeeFaces(
   console.log(`[idb FaceDB] Successfully saved ${employees.length} employees (${enrolledCount} enrolled vectors, L2-normalized) to IndexedDB.`);
 }
 
+/**
+ * Pull 128-d embeddings from Supabase → parse stringified vector format → L2-normalize → IndexedDB
+ */
+export async function syncFacesFromSupabase(tenantId: string, supabaseClient?: any) {
+  if (!supabaseClient || typeof window === 'undefined') return { count: 0 };
+
+  try {
+    const { data, error } = await supabaseClient
+      .from('profiles')
+      .select('id, full_name, mobile_no, avatar_url, face_embedding')
+      .eq('tenant_id', tenantId)
+      .not('face_embedding', 'is', null);
+
+    if (error) {
+      console.warn('[FaceDB] Supabase face sync warning:', error.message);
+      return { count: 0 };
+    }
+
+    if (!data || data.length === 0) return { count: 0 };
+
+    const mappedEmployees: EmployeeFace[] = [];
+
+    for (const row of data) {
+      let embedding = row.face_embedding as number[] | string | null;
+
+      if (typeof embedding === 'string') {
+        try {
+          embedding = JSON.parse(embedding.replace(/^\[/, '[').replace(/\]$/, ']'));
+        } catch (e) {
+          console.warn('[FaceDB] Failed to parse stringified vector for:', row.id);
+          continue;
+        }
+      }
+
+      if (!Array.isArray(embedding) || embedding.length !== 128) continue;
+
+      mappedEmployees.push({
+        id: row.id,
+        fullName: row.full_name || 'Employee',
+        employeeCode: row.mobile_no || undefined,
+        avatarUrl: row.avatar_url,
+        embedding: l2Normalize(embedding),
+        updatedAt: Date.now(),
+      });
+    }
+
+    await saveEmployeeFaces(mappedEmployees, tenantId);
+    return { count: mappedEmployees.length };
+  } catch (err) {
+    console.warn('[FaceDB] Sync error:', err);
+    return { count: 0 };
+  }
+}
+
+
 
 // ======================
 // Get all employees
