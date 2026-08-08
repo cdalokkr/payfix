@@ -16,7 +16,9 @@ import {
 import { toast } from 'sonner';
 import { FaceApiBrowserService } from '@/lib/services/faceapi-browser.service';
 import { KioskIndexedDBService } from '@/lib/services/kiosk-idb.service';
+import { saveEmployeeFaces, getSyncInfo as getIdbSyncInfo, getAllEmployeeFaces, EmployeeFace } from '@/lib/face-db';
 import { trpc } from '@/lib/trpc/client';
+
 
 
 interface CachedEmployee {
@@ -320,11 +322,21 @@ export function ExpressKioskApp() {
                     }));
                     setEmployees(mapped);
                     
-                    // Save to IndexedDB (unlimited quota, structured storage) + localStorage fallback
+                    // Save to IndexedDB via 'idb' package (saveEmployeeFaces in lib/face-db.ts)
+                    const idbFormatted: EmployeeFace[] = mapped.map(e => ({
+                        id: e.id,
+                        fullName: e.name,
+                        avatarUrl: e.avatarUrl,
+                        employeeCode: e.biometricUserId || undefined,
+                        embedding: e.faceEmbedding || [],
+                        updatedAt: Date.now()
+                    }));
+                    
+                    saveEmployeeFaces(idbFormatted, pairingCode);
                     KioskIndexedDBService.saveEmployees(mapped, pairingCode);
                     try { localStorage.setItem('payfix_kiosk_cached_employees', JSON.stringify(mapped)); } catch {}
 
-                    const info = await KioskIndexedDBService.getSyncInfo();
+                    const info = await getIdbSyncInfo();
                     if (info) {
                         setIdbSyncInfo({
                             lastSyncedAt: info.lastSyncedAt,
@@ -332,6 +344,7 @@ export function ExpressKioskApp() {
                             enrolledEmployees: info.enrolledEmployees
                         });
                     }
+
 
                     // Pre-parse Float32Array descriptors into memory cache for instant matching
                     const newMap = new Map<string, Float32Array>();
