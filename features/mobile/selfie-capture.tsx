@@ -146,18 +146,20 @@ export function SelfieCapture({
         }
 
         try {
-            // Request Full HD (1080p) for clearer selfies, fallback to basic video on retry
+            // Request 480x640 (3:4 portrait) for consistent face vector alignment across enrollment & kiosk
             const constraints: MediaStreamConstraints = retryCount === 0 ? {
                 video: {
                     facingMode: 'user',
-                    width: { ideal: 1920 },
-                    height: { ideal: 1080 },
+                    width: { ideal: 480 },
+                    height: { ideal: 640 },
+                    aspectRatio: { ideal: 0.75 }
                 },
                 audio: false,
             } : {
                 video: { facingMode: 'user' },
                 audio: false
             }
+
 
             const stream = await navigator.mediaDevices.getUserMedia(constraints)
 

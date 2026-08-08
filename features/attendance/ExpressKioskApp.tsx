@@ -404,8 +404,8 @@ export function ExpressKioskApp() {
                 video: {
                     facingMode: 'user',
                     width: { ideal: 480 },
-                    height: { ideal: 480 },
-                    aspectRatio: { ideal: 1.0 },
+                    height: { ideal: 640 },
+                    aspectRatio: { ideal: 0.75 },
                     frameRate: { ideal: 30 }
                 },
                 audio: false
@@ -415,6 +415,7 @@ export function ExpressKioskApp() {
             console.warn('[Kiosk Camera] Background pre-warm notice:', err);
         }
     }, []);
+
 
     // Start Camera Stream inside Modal (Clean 1:1 Framing for Max Face Vector Accuracy)
     const startCamera = async () => {
@@ -1054,9 +1055,10 @@ export function ExpressKioskApp() {
                         </Button>
                     </DialogHeader>
 
-                    {/* Camera Display Box (Native 1:1 Square View for Max Speed & Vector Accuracy) */}
-                    <div className="p-4 flex flex-col items-center justify-center relative bg-black min-h-[380px]">
-                        <div className="relative w-full max-w-xs aspect-square rounded-2xl overflow-hidden border border-slate-800 shadow-2xl bg-black">
+                    {/* Camera Display Box (Portrait 3:4 View for Max Vector Match Accuracy) */}
+                    <div className="p-4 flex flex-col items-center justify-center relative bg-black min-h-[440px]">
+                        <div className="relative w-full max-w-sm aspect-[3/4] rounded-2xl overflow-hidden border border-slate-800 shadow-2xl bg-black">
+
 
                             <video
                                 ref={videoRef}

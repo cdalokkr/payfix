@@ -115,18 +115,20 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         }
 
         try {
-            // Full HD for clearer selfies with better visibility
+            // 480x640 (3:4 portrait) for consistent face vector alignment across enrollment & kiosk
             const constraints: MediaStreamConstraints = retryCount === 0 ? {
                 video: {
                     facingMode: 'user',
-                    width: { ideal: 1920, min: 1280 },
-                    height: { ideal: 1080, min: 720 },
+                    width: { ideal: 480 },
+                    height: { ideal: 640 },
+                    aspectRatio: { ideal: 0.75 }
                 },
                 audio: false,
             } : {
                 video: { facingMode: 'user' },
                 audio: false
             }
+
 
             // 10s timeout for GUM
             const gumPromise = navigator.mediaDevices.getUserMedia(constraints)
