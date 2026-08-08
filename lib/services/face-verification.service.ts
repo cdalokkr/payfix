@@ -8,6 +8,8 @@
  */
 
 import { FaceApiBrowserService } from './faceapi-browser.service'
+import { l2Normalize, dotProduct } from '../face-threshold'
+
 
 export interface FaceVerificationResult {
     matched: boolean
@@ -148,20 +150,22 @@ export const FaceVerificationService = {
                 }
             }
 
-            // Instant Euclidean vector comparison
-            const distance = FaceApiBrowserService.euclideanDistance(selfieDescriptor, profileDescriptor)
-            const similarity = Math.max(0, 1 - distance)
-            const matched = distance < THRESHOLD
+            // L2-Normalize both vectors and compute dot product similarity
+            const normSelfie = l2Normalize(Array.from(selfieDescriptor))
+            const normProfile = l2Normalize(Array.from(profileDescriptor))
+            const similarity = Math.max(0, dotProduct(normSelfie, normProfile))
+            const matched = similarity >= 0.42
 
-            log(`🎯 Distance: ${distance.toFixed(3)} | Similarity: ${(similarity * 100).toFixed(1)}% | ${matched ? '✅ MATCH' : '❌ NO MATCH'}`)
+            log(`🎯 Cosine Similarity: ${(similarity * 100).toFixed(1)}% | ${matched ? '✅ MATCH' : '❌ NO MATCH'}`)
 
             return {
                 matched,
                 similarity,
                 method: 'face-api',
                 debugLog,
-                error: matched ? undefined : `Face does not match profile photo (${(similarity * 100).toFixed(0)}% similarity, need >${((1 - THRESHOLD) * 100).toFixed(0)}%).`,
+                error: matched ? undefined : `Face does not match profile photo (${(similarity * 100).toFixed(0)}% similarity, need >42%).`,
             }
+
         } catch (error) {
             const msg = error instanceof Error ? error.message : 'Unknown error'
             log(`❌ Error: ${msg}`)

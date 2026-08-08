@@ -8,7 +8,19 @@ const MODEL_URL = '/models';
 // ======================
 // Memory Helpers
 // ======================
+function l2Normalize(embedding) {
+  if (!embedding || embedding.length === 0) return [];
+  let norm = 0;
+  for (let i = 0; i < embedding.length; i++) {
+    norm += embedding[i] * embedding[i];
+  }
+  norm = Math.sqrt(norm);
+  if (norm === 0) return embedding;
+  return embedding.map(v => v / norm);
+}
+
 function disposeTensor(tensor) {
+
   if (tensor && typeof tensor.dispose === 'function') {
     try {
       tensor.dispose();
@@ -126,8 +138,9 @@ self.onmessage = async (event) => {
           return;
         }
 
-        // Convert descriptor safely
-        const descriptor = Array.from(detection.descriptor);
+        // Convert & L2 normalize descriptor safely
+        const descriptor = l2Normalize(Array.from(detection.descriptor));
+
 
         self.postMessage({
           id,

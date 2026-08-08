@@ -17,7 +17,10 @@ declare global {
     }
 }
 
+import { l2Normalize } from '../face-threshold'
+
 const MODELS_PATH = '/models'
+
 
 let _modelsLoaded = false
 let _loadingPromise: Promise<boolean> | null = null
@@ -171,8 +174,10 @@ export const FaceApiBrowserService = {
             }
 
             onLog?.(`Face detected (confidence: ${(detection.detection.score * 100).toFixed(1)}%)`)
-            return detection.descriptor as Float32Array
+            const normalized = l2Normalize(Array.from(detection.descriptor))
+            return new Float32Array(normalized)
         } catch (err) {
+
             onLog?.(`Descriptor extraction error: ${err}`)
             return null
         }

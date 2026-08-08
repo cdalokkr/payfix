@@ -5,16 +5,10 @@
  */
 
 import { openDB, DBSchema, IDBPDatabase } from "idb";
+import { l2Normalize, matchFaceFast, EmployeeFace, MatchResult } from "./face-threshold";
 
-export interface EmployeeFace {
-  id: string;                 // employee_id / profile_id
-  fullName: string;
-  employeeCode?: string;
-  avatarUrl?: string | null;
-  embedding: number[];        // 128-dimensional vector
-  faceQualityScore?: number;
-  updatedAt: number;          // timestamp
-}
+export type { EmployeeFace, MatchResult };
+
 
 export interface SyncInfo {
   key: string;
@@ -81,8 +75,10 @@ export async function saveEmployeeFaces(
   const enrolledCount = employees.filter(e => e.embedding && e.embedding.length === 128).length;
 
   for (const emp of employees) {
+    const normalizedVector = emp.embedding && emp.embedding.length === 128 ? l2Normalize(emp.embedding) : emp.embedding;
     await tx.store.put({
       ...emp,
+      embedding: normalizedVector,
       updatedAt: Date.now(),
     });
   }
@@ -97,8 +93,9 @@ export async function saveEmployeeFaces(
   });
 
   await tx.done;
-  console.log(`[idb FaceDB] Successfully saved ${employees.length} employees (${enrolledCount} enrolled vectors) to IndexedDB.`);
+  console.log(`[idb FaceDB] Successfully saved ${employees.length} employees (${enrolledCount} enrolled vectors, L2-normalized) to IndexedDB.`);
 }
+
 
 // ======================
 // Get all employees
@@ -144,16 +141,11 @@ export function cosineSimilarity(a: number[], b: number[]): number {
 // ======================
 // Offline Face Match
 // ======================
-export interface MatchResult {
-  isMatch: boolean;
-  employee: EmployeeFace | null;
-  similarity: number;
-  message: string;
-}
+
 
 export async function matchFaceOffline(
   queryEmbedding: number[],
-  threshold: number = 0.60
+  threshold: number = 0.42
 ): Promise<MatchResult> {
   const db = await getDB();
   if (!db) {
@@ -176,36 +168,10 @@ export async function matchFaceOffline(
     };
   }
 
-  let bestMatch: EmployeeFace | null = null;
-  let bestScore = -1;
-
-  for (const emp of employees) {
-    if (!emp.embedding || emp.embedding.length === 0) continue;
-
-    const score = cosineSimilarity(queryEmbedding, emp.embedding);
-
-    if (score > bestScore) {
-      bestScore = score;
-      bestMatch = emp;
-    }
-  }
-
-  if (bestMatch && bestScore >= threshold) {
-    return {
-      isMatch: true,
-      employee: bestMatch,
-      similarity: bestScore,
-      message: "Face matched successfully",
-    };
-  }
-
-  return {
-    isMatch: false,
-    employee: null,
-    similarity: bestScore,
-    message: "No matching employee found",
-  };
+  // Use fast L2-normalized dot-product matching with Top-2 gap check
+  return matchFaceFast(queryEmbedding, employees, threshold);
 }
+
 
 // ======================
 // Get Sync Info

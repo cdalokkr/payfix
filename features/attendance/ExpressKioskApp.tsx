@@ -17,7 +17,9 @@ import { toast } from 'sonner';
 import { FaceApiBrowserService } from '@/lib/services/faceapi-browser.service';
 import { KioskIndexedDBService } from '@/lib/services/kiosk-idb.service';
 import { saveEmployeeFaces, getSyncInfo as getIdbSyncInfo, getAllEmployeeFaces, EmployeeFace } from '@/lib/face-db';
+import { l2Normalize, matchFaceFast, isGoodQualityFace, getAdaptiveThreshold } from '@/lib/face-threshold';
 import { trpc } from '@/lib/trpc/client';
+
 
 
 
@@ -167,14 +169,51 @@ export function ExpressKioskApp() {
         }
     }, []);
 
-    // Load face-api.js models & pre-warm camera stream when paired
+    // Background Pre-Warm Camera Stream on Kiosk Load (Instant <5ms Modal Opening)
+    const prewarmCamera = useCallback(async () => {
+        if (typeof window === 'undefined' || !navigator.mediaDevices) return;
+        if (mediaStreamRef.current && mediaStreamRef.current.active) {
+            setIsCameraReady(true);
+            return;
+        }
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: 'user',
+                    width: { ideal: 480 },
+                    height: { ideal: 640 },
+                    aspectRatio: { ideal: 0.75 },
+                    frameRate: { ideal: 30 }
+                },
+                audio: false
+            });
+            mediaStreamRef.current = stream;
+
+            if (warmupVideoRef.current) {
+                warmupVideoRef.current.srcObject = stream;
+                await warmupVideoRef.current.play().catch(() => {});
+            }
+            setIsCameraReady(true);
+            console.log('[Kiosk Camera] Warmup stream active & video element bound');
+        } catch (err) {
+            console.warn('[Kiosk Camera] Background pre-warm notice:', err);
+        }
+    }, []);
+
+    // Pre-warm camera stream immediately on page mount
+    useEffect(() => {
+        prewarmCamera();
+    }, [prewarmCamera]);
+
+    // Load face-api.js models when paired
     useEffect(() => {
         if (pairingCode) {
             loadFaceModels();
-            prewarmCamera();
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pairingCode]);
+
+
 
 
     // Monitor Network Online/Offline status
@@ -399,36 +438,7 @@ export function ExpressKioskApp() {
     };
 
 
-    // Background Pre-Warm Camera Stream on Kiosk Load (Instant <5ms Modal Opening)
-    const prewarmCamera = useCallback(async () => {
-        if (typeof window === 'undefined' || !navigator.mediaDevices) return;
-        if (mediaStreamRef.current && mediaStreamRef.current.active) {
-            setIsCameraReady(true);
-            return;
-        }
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    facingMode: 'user',
-                    width: { ideal: 480 },
-                    height: { ideal: 640 },
-                    aspectRatio: { ideal: 0.75 },
-                    frameRate: { ideal: 30 }
-                },
-                audio: false
-            });
-            mediaStreamRef.current = stream;
 
-            if (warmupVideoRef.current) {
-                warmupVideoRef.current.srcObject = stream;
-                await warmupVideoRef.current.play().catch(() => {});
-            }
-            setIsCameraReady(true);
-            console.log('[Kiosk Camera] Warmup stream active & video element bound');
-        } catch (err) {
-            console.warn('[Kiosk Camera] Background pre-warm notice:', err);
-        }
-    }, []);
 
     // Start Camera Stream inside Modal (Instant 0ms feed swap)
     const startCamera = async () => {
@@ -460,7 +470,42 @@ export function ExpressKioskApp() {
 
 
 
-    // Stop Camera Stream
+    // Auto-attach camera stream to videoRef as soon as modal DOM element mounts
+    useEffect(() => {
+        if (isVerificationModalOpen) {
+            const attachStream = async () => {
+                if (!mediaStreamRef.current || !mediaStreamRef.current.active) {
+                    await prewarmCamera();
+                }
+
+                if (mediaStreamRef.current && mediaStreamRef.current.active) {
+                    setCameraActive(true);
+                    setScanError(null);
+                    if (videoRef.current) {
+                        videoRef.current.srcObject = mediaStreamRef.current;
+                        videoRef.current.muted = true;
+                        await videoRef.current.play().catch(() => {});
+                    }
+                }
+            };
+
+            attachStream();
+            const timer = setTimeout(attachStream, 120);
+            return () => clearTimeout(timer);
+        }
+    }, [isVerificationModalOpen, prewarmCamera]);
+
+    // Clean up mediaStream tracks on page unmount
+    useEffect(() => {
+        return () => {
+            if (mediaStreamRef.current) {
+                mediaStreamRef.current.getTracks().forEach(track => track.stop());
+                mediaStreamRef.current = null;
+            }
+        };
+    }, []);
+
+    // Stop Camera Stream (Only used on unpair or emergency reset)
     const stopCamera = () => {
         if (mediaStreamRef.current) {
             mediaStreamRef.current.getTracks().forEach(track => track.stop());
@@ -473,12 +518,15 @@ export function ExpressKioskApp() {
     };
 
     // Open Verification Modal Flow (Pre-warms WebGL AI Engine)
-    const openVerificationModal = () => {
+    const openVerificationModal = async () => {
         setIsVerificationModalOpen(true);
         setVerificationResult(null);
         setCapturedFreezeUrl(null);
         setScanError(null);
-        startCamera();
+
+        if (!mediaStreamRef.current || !mediaStreamRef.current.active) {
+            await prewarmCamera();
+        }
 
         // Background Pre-Warm Neural Engine to eliminate cold-start latency
         setTimeout(() => {
@@ -491,14 +539,18 @@ export function ExpressKioskApp() {
         }, 100);
     };
 
-    // Close Verification Modal Flow
+    // Close Verification Modal Flow (Keeps camera stream active in background for instant re-opening)
     const closeVerificationModal = () => {
         setIsVerificationModalOpen(false);
         setVerificationResult(null);
         setCapturedFreezeUrl(null);
         setScanError(null);
-        stopCamera();
+        if (videoRef.current) {
+            videoRef.current.srcObject = null;
+        }
+        setCameraActive(false);
     };
+
 
 
     // Capture full-res JPEG snapshot from video stream (deferred until face match confirmed)
@@ -586,23 +638,17 @@ export function ExpressKioskApp() {
                     return;
                 }
 
-                // Fast vector comparison using pre-parsed Float32Array descriptors (<1ms)
-                let matchedEmployee: CachedEmployee | null = null;
-                let bestDistance = Infinity;
+                // 3. Fast L2-Normalized Dot-Product Matching + Adaptive Threshold + Top-2 Gap Check (<0.1ms)
+                const candidateList: EmployeeFace[] = enrolledEmployees.map(emp => ({
+                    id: emp.id,
+                    fullName: emp.name,
+                    embedding: l2Normalize(emp.faceEmbedding!)
+                }));
 
-                for (const emp of enrolledEmployees) {
-                    const storedDescriptor = descriptorMapRef.current.get(emp.id) || FaceApiBrowserService.arrayToDescriptor(emp.faceEmbedding!);
-                    const dist = FaceApiBrowserService.euclideanDistance(liveDescriptor, storedDescriptor);
-                    if (dist < bestDistance) {
-                        bestDistance = dist;
-                        matchedEmployee = emp;
-                    }
-                }
-
-                // Strict Pass Threshold: distance <= 0.40 (requires minimum 60%+ similarity score to pass)
-                if (bestDistance > 0.40) {
-                    matchedEmployee = null;
-                }
+                const matchRes = matchFaceFast(liveDescriptor, candidateList, 0.42, 0.08);
+                const matchedEmployee = matchRes.isMatch && matchRes.employee
+                    ? enrolledEmployees.find(e => e.id === matchRes.employee!.id) || null
+                    : null;
 
                 const now = new Date();
                 const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -613,7 +659,7 @@ export function ExpressKioskApp() {
                     setVerificationResult({
                         status: 'rejected',
                         matched: false,
-                        error: `Face Not Recognized. (Score: ${(Math.max(0, 1 - bestDistance) * 100).toFixed(0)}%)`,
+                        error: matchRes.message.includes('Ambiguous') ? matchRes.message : `Face Not Recognized. (Score: ${(matchRes.similarity * 100).toFixed(0)}%)`,
                         snapshotUrl,
                     });
                     setTimeout(() => {
@@ -626,7 +672,8 @@ export function ExpressKioskApp() {
 
                 // 4. Face MATCHED!
                 const snapshotUrl = freezeUrl || captureSnapshot();
-                const similarity = `${Math.max(0, (1 - bestDistance) * 100).toFixed(1)}%`;
+                const similarity = `${(matchRes.similarity * 100).toFixed(1)}%`;
+
 
 
             // Instant UI Notification & Profile Card Overlay (<100ms)
