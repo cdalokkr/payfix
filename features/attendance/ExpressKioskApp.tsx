@@ -93,6 +93,9 @@ export function ExpressKioskApp() {
     const [lastScanResult, setLastScanResult] = useState<{ name: string; time: string; type: string } | null>(null);
     const [isScanning, setIsScanning] = useState<boolean>(false);
     const [scanError, setScanError] = useState<string | null>(null);
+    const [capturedFreezeUrl, setCapturedFreezeUrl] = useState<string | null>(null);
+    const [idbSyncInfo, setIdbSyncInfo] = useState<{ lastSyncedAt: number; totalEmployees: number; enrolledEmployees: number } | null>(null);
+
     const [modelsLoading, setModelsLoading] = useState<boolean>(false);
     const [modelsReady, setModelsReady] = useState<boolean>(false);
     const [modelProgress, setModelProgress] = useState<number>(0);
@@ -318,8 +321,17 @@ export function ExpressKioskApp() {
                     setEmployees(mapped);
                     
                     // Save to IndexedDB (unlimited quota, structured storage) + localStorage fallback
-                    KioskIndexedDBService.saveEmployees(mapped);
+                    KioskIndexedDBService.saveEmployees(mapped, pairingCode);
                     try { localStorage.setItem('payfix_kiosk_cached_employees', JSON.stringify(mapped)); } catch {}
+
+                    const info = await KioskIndexedDBService.getSyncInfo();
+                    if (info) {
+                        setIdbSyncInfo({
+                            lastSyncedAt: info.lastSyncedAt,
+                            totalEmployees: info.totalEmployees,
+                            enrolledEmployees: info.enrolledEmployees
+                        });
+                    }
 
                     // Pre-parse Float32Array descriptors into memory cache for instant matching
                     const newMap = new Map<string, Float32Array>();
@@ -329,6 +341,7 @@ export function ExpressKioskApp() {
                         }
                     });
                     descriptorMapRef.current = newMap;
+
 
                     const enrolledCount = mapped.filter(e => e.faceEmbedding !== null).length;
                     setStats(prev => ({ ...prev, totalEmployees: data.total, enrolledEmployees: enrolledCount }));
@@ -476,11 +489,14 @@ export function ExpressKioskApp() {
             return;
         }
 
-        // 1. Show UI spinner INSTANTLY (<10ms)
+        // 1. Immediately capture freeze-frame selfie snapshot on click (<5ms)
+        const freezeUrl = captureSnapshot();
+        if (freezeUrl) setCapturedFreezeUrl(freezeUrl);
+
         setIsScanning(true);
         setScanError(null);
 
-        // 2. Yield control to browser renderer — React repaints spinner overlay BEFORE heavy AI extraction
+        // 2. Yield control to browser renderer — React repaints freeze frame & bottom status bar BEFORE heavy AI extraction
         setTimeout(async () => {
             try {
                 // Pre-flight lighting check (<2ms) before heavy neural pass
@@ -496,6 +512,7 @@ export function ExpressKioskApp() {
                             playErrorChimeSound();
                             setScanError('Lighting too dark! Please ensure face area is well lit.');
                             setIsScanning(false);
+                            setCapturedFreezeUrl(null);
                             return;
                         }
                     }
@@ -504,11 +521,9 @@ export function ExpressKioskApp() {
                 // Extract live face descriptor directly from native HTMLVideoElement (zero image distortion)
                 const liveDescriptor = await FaceApiBrowserService.extractDescriptor(video);
 
-
-
                 if (!liveDescriptor) {
                     playErrorChimeSound();
-                    const snapshotUrl = captureSnapshot();
+                    const snapshotUrl = freezeUrl || captureSnapshot();
                     setVerificationResult({
                         status: 'rejected',
                         matched: false,
@@ -517,8 +532,9 @@ export function ExpressKioskApp() {
                     });
                     setTimeout(() => {
                         setVerificationResult(null);
+                        setCapturedFreezeUrl(null);
                         setIsScanning(false);
-                    }, 2000);
+                    }, 2200);
                     return;
                 }
 
@@ -535,35 +551,35 @@ export function ExpressKioskApp() {
                     }
                 }
 
+                // Strict Pass Threshold: distance <= 0.40 (requires minimum 60%+ similarity score to pass)
+                if (bestDistance > 0.40) {
+                    matchedEmployee = null;
+                }
 
-            // Strict Pass Threshold: distance <= 0.40 (requires minimum 60%+ similarity score to pass)
-            if (bestDistance > 0.40) {
-                matchedEmployee = null;
-            }
+                const now = new Date();
+                const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
+                if (!matchedEmployee) {
+                    playErrorChimeSound();
+                    const snapshotUrl = freezeUrl || captureSnapshot();
+                    setVerificationResult({
+                        status: 'rejected',
+                        matched: false,
+                        error: `Face Not Recognized. (Score: ${(Math.max(0, 1 - bestDistance) * 100).toFixed(0)}%)`,
+                        snapshotUrl,
+                    });
+                    setTimeout(() => {
+                        setVerificationResult(null);
+                        setCapturedFreezeUrl(null);
+                        setIsScanning(false);
+                    }, 2200);
+                    return;
+                }
 
-            const now = new Date();
-            const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                // 4. Face MATCHED!
+                const snapshotUrl = freezeUrl || captureSnapshot();
+                const similarity = `${Math.max(0, (1 - bestDistance) * 100).toFixed(1)}%`;
 
-            if (!matchedEmployee) {
-                playErrorChimeSound();
-                const snapshotUrl = captureSnapshot();
-                setVerificationResult({
-                    status: 'rejected',
-                    matched: false,
-                    error: `Face Not Recognized. (Score: ${(Math.max(0, 1 - bestDistance) * 100).toFixed(0)}%)`,
-                    snapshotUrl,
-                });
-                setTimeout(() => {
-                    setVerificationResult(null);
-                    setIsScanning(false);
-                }, 2000);
-                return;
-            }
-
-            // 4. Face MATCHED! Capture full-res snapshot NOW (deferred, only on match)
-            const snapshotUrl = captureSnapshot();
-            const similarity = `${Math.max(0, (1 - bestDistance) * 100).toFixed(1)}%`;
 
             // Instant UI Notification & Profile Card Overlay (<100ms)
             setVerificationResult({
@@ -824,14 +840,21 @@ export function ExpressKioskApp() {
                     <div className="absolute -bottom-24 -right-24 w-72 h-72 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
 
                     {/* Top Header inside Hero Card */}
-                    <div className="flex items-center justify-between relative z-10">
+                    <div className="flex items-center justify-between flex-wrap gap-2 relative z-10">
                         <div className="flex items-center gap-2">
                             <Sparkles className="h-5 w-5 text-sky-400" />
                             <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
                                 Touchless Face Attendance Terminal
                             </span>
                         </div>
+                        {idbSyncInfo && (
+                            <Badge variant="outline" className="border-sky-500/40 bg-sky-950/60 text-sky-300 text-[11px] font-bold gap-1.5 py-1 px-2.5 shadow-md">
+                                <ShieldCheck className="h-3.5 w-3.5 text-sky-400 animate-pulse" />
+                                <span>💾 IndexedDB: {idbSyncInfo.enrolledEmployees} Vectors Cached</span>
+                            </Badge>
+                        )}
                     </div>
+
 
                     {/* Central Area: Paired Device Info + AI Loading OR Start Verification Primary Button */}
                     <div className="my-auto text-center space-y-5 relative z-10 max-w-lg mx-auto py-2">
@@ -1006,12 +1029,19 @@ export function ExpressKioskApp() {
                                 muted
                             />
 
+                            {/* Freeze Frame Captured Selfie Overlay (Prevents background video stutter) */}
+                            {capturedFreezeUrl && (
+                                <img
+                                    src={capturedFreezeUrl}
+                                    alt="Captured Selfie Freeze"
+                                    className="absolute inset-0 w-full h-full object-cover transform -scale-x-100 z-15"
+                                />
+                            )}
+
                             {/* Biometric Oval Guide Overlay (Positioning Reticle) */}
                             <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10">
                                 <div className="w-[78%] h-[82%] rounded-[50%/40%] border-2 border-dashed border-sky-400/50 shadow-[0_0_25px_rgba(56,189,248,0.2)] animate-pulse" />
                             </div>
-
-
 
                             {/* Camera Initializing Loading Spinner Overlay */}
                             {!cameraActive && (
@@ -1026,20 +1056,14 @@ export function ExpressKioskApp() {
                                 </div>
                             )}
 
-                            {/* Scanning Progress Beam */}
+                            {/* Sleek Bottom Status Bar for Vector Extraction */}
                             {isScanning && !verificationResult && (
-                                <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-sky-500 via-emerald-400 to-sky-500 shadow-[0_0_15px_#38bdf8] animate-pulse z-20" />
-                            )}
-
-                            {/* Scanning Progress Spinner Overlay */}
-                            {isScanning && !verificationResult && (
-                                <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-xs flex items-center justify-center z-20">
-                                    <div className="bg-slate-900/90 border border-sky-500/40 p-4 rounded-2xl shadow-2xl text-center space-y-2">
-                                        <RefreshCw className="h-8 w-8 text-sky-400 animate-spin mx-auto" />
-                                        <p className="font-bold text-xs text-sky-300">Extracting Face Vector...</p>
-                                    </div>
+                                <div className="absolute bottom-3 inset-x-3 bg-slate-950/90 border border-sky-500/40 p-2.5 rounded-xl shadow-2xl flex items-center justify-center gap-2.5 z-20 backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 duration-200">
+                                    <RefreshCw className="h-4 w-4 text-sky-400 animate-spin" />
+                                    <span className="font-bold text-xs text-sky-300">Extracting face vector &amp; matching...</span>
                                 </div>
                             )}
+
 
                             {/* =========================================================
                                 INSTANT VERIFICATION RESULT OVERLAY (Glossy Blur Card)

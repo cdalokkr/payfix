@@ -3,13 +3,15 @@
  *
  * Provides:
  * 1. Fast async storage for employee face vectors (unlimited quota, structured storage)
- * 2. Offline attendance punch queueing for background sync when internet drops
+ * 2. Sync metadata tracking (lastSyncedAt, totalEmployees, tenantId)
+ * 3. Offline attendance punch queueing for background sync when internet drops
  */
 
 const DB_NAME = 'payfix_kiosk_db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_EMPLOYEES = 'cached_employees';
 const STORE_PUNCH_QUEUE = 'offline_punch_queue';
+const STORE_META = 'kiosk_meta';
 
 export interface OfflinePunch {
     id: string;
@@ -20,6 +22,14 @@ export interface OfflinePunch {
     actionType: 'check_in' | 'check_out' | 'auto';
     matchScore: number;
     synced: boolean;
+}
+
+export interface SyncInfo {
+    key: string;
+    lastSyncedAt: number;
+    tenantId?: string;
+    totalEmployees: number;
+    enrolledEmployees: number;
 }
 
 function openDB(): Promise<IDBDatabase> {
@@ -39,6 +49,9 @@ function openDB(): Promise<IDBDatabase> {
             if (!db.objectStoreNames.contains(STORE_PUNCH_QUEUE)) {
                 db.createObjectStore(STORE_PUNCH_QUEUE, { keyPath: 'id' });
             }
+            if (!db.objectStoreNames.contains(STORE_META)) {
+                db.createObjectStore(STORE_META, { keyPath: 'key' });
+            }
         };
 
         request.onsuccess = () => resolve(request.result);
@@ -48,27 +61,42 @@ function openDB(): Promise<IDBDatabase> {
 
 export const KioskIndexedDBService = {
     /**
-     * Save employee face vectors to IndexedDB
+     * Save employee face vectors and sync metadata to IndexedDB
      */
-    async saveEmployees(employees: any[]): Promise<void> {
+    async saveEmployees(employees: any[], tenantId?: string): Promise<void> {
         try {
             const db = await openDB();
-            const tx = db.transaction(STORE_EMPLOYEES, 'readwrite');
-            const store = tx.objectStore(STORE_EMPLOYEES);
+            const tx = db.transaction([STORE_EMPLOYEES, STORE_META], 'readwrite');
+            const empStore = tx.objectStore(STORE_EMPLOYEES);
+            const metaStore = tx.objectStore(STORE_META);
 
-            // Clear old cache
+            // Clear old cached employees
             await new Promise((res) => {
-                const clearReq = store.clear();
+                const clearReq = empStore.clear();
                 clearReq.onsuccess = () => res(true);
             });
 
             // Store new employees
             for (const emp of employees) {
-                store.put(emp);
+                empStore.put(emp);
             }
 
+            const enrolledCount = employees.filter(e => e.faceEmbedding && e.faceEmbedding.length === 128).length;
+
+            // Save sync metadata
+            metaStore.put({
+                key: 'sync-info',
+                lastSyncedAt: Date.now(),
+                tenantId: tenantId || 'default',
+                totalEmployees: employees.length,
+                enrolledEmployees: enrolledCount
+            });
+
             return new Promise((resolve, reject) => {
-                tx.oncomplete = () => resolve();
+                tx.oncomplete = () => {
+                    console.log(`[IndexedDB] Successfully cached ${employees.length} employees (${enrolledCount} enrolled vectors) in IndexedDB.`);
+                    resolve();
+                };
                 tx.onerror = () => reject(tx.error);
             });
         } catch (err) {
@@ -92,6 +120,25 @@ export const KioskIndexedDBService = {
             });
         } catch {
             return [];
+        }
+    },
+
+    /**
+     * Get IndexedDB Sync Info (lastSyncedAt, enrolledEmployees, etc.)
+     */
+    async getSyncInfo(): Promise<SyncInfo | null> {
+        try {
+            const db = await openDB();
+            const tx = db.transaction(STORE_META, 'readonly');
+            const store = tx.objectStore(STORE_META);
+            const request = store.get('sync-info');
+
+            return new Promise((resolve) => {
+                request.onsuccess = () => resolve(request.result || null);
+                request.onerror = () => resolve(null);
+            });
+        } catch {
+            return null;
         }
     },
 
