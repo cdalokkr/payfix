@@ -55,9 +55,11 @@ export function MobileAttendanceWizard({
                 const stream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: 'user',
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 },
+                        width: { ideal: 480 },
+                        height: { ideal: 640 },
+                        aspectRatio: { ideal: 0.75 }
                     },
+
                     audio: false,
                 })
                 activeStream = stream

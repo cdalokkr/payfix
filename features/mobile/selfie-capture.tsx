@@ -446,8 +446,9 @@ export function SelfieCapture({
 
     return (
         <div className="fixed inset-0 bg-slate-950 flex flex-col z-[60] overflow-hidden">
-            {/* Immersive Camera View at TOP */}
-            <div className="relative w-full aspect-square bg-slate-900 shadow-2xl overflow-hidden sm:max-w-md sm:mx-auto">
+            {/* Immersive Camera View at TOP (Portrait 3:4 Aligned with Kiosk & Profile Setup) */}
+            <div className="relative w-full aspect-[3/4] bg-slate-900 shadow-2xl overflow-hidden sm:max-w-md sm:mx-auto">
+
                 <AnimatePresence mode="wait">
                     {capturedImage ? (
                         <motion.div

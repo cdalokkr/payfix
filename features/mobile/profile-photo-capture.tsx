@@ -23,8 +23,9 @@ import {
 import { createClient } from "@/lib/supabase/client"
 
 interface ProfileData {
-    fullName: string
+    fullName: string | null
     email: string
+
     role: string
     avatarUrl: string | null
     avatarStatus?: string | null  // 'default' or 'custom'
@@ -316,10 +317,14 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                 }
 
                 setTimeout(() => {
-                    onSuccess?.()
-                    router.push('/mobile')
-                    router.refresh()
+                    if (onSuccess) {
+                        onSuccess()
+                    } else {
+                        router.push('/mobile')
+                        router.refresh()
+                    }
                 }, 1500)
+
             } else {
                 // Subsequent update: Create pending request
                 addLog('Creating approval request...')
@@ -331,9 +336,12 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                 toast.success('Photo submitted for admin approval!')
 
                 setTimeout(() => {
-                    onSuccess?.()
-                    router.push('/mobile')
-                    router.refresh()
+                    if (onSuccess) {
+                        onSuccess()
+                    } else {
+                        router.push('/mobile')
+                        router.refresh()
+                    }
                 }, 1500)
             }
         } catch (error: any) {
@@ -350,8 +358,13 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
     // Handle back button
     const handleBack = useCallback(() => {
         stopCamera()
-        router.back()
-    }, [stopCamera, router])
+        if (onSuccess) {
+            onSuccess()
+        } else {
+            router.back()
+        }
+    }, [stopCamera, router, onSuccess])
+
 
     useEffect(() => {
         // Don't start camera if there's a pending request
@@ -362,8 +375,9 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
 
     return (
         <div className="fixed inset-0 bg-slate-950 flex flex-col z-[60] overflow-hidden">
-            {/* Immersive Camera Section at TOP */}
-            <div className="relative w-full aspect-square sm:max-w-md sm:mx-auto bg-slate-900 shadow-2xl overflow-hidden">
+            {/* Immersive Camera Section at TOP (Portrait 3:4 Aligned with Kiosk & Daily Attendance) */}
+            <div className="relative w-full aspect-[3/4] sm:max-w-md sm:mx-auto bg-slate-900 shadow-2xl overflow-hidden">
+
                 <AnimatePresence mode="wait">
                     {capturedImage ? (
                         <motion.div

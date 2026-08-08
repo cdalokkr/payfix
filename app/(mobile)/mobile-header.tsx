@@ -31,6 +31,8 @@ import {
     AlertTriangle as IconAlertTriangle
 } from "lucide-react"
 
+import { ProfilePhotoCapture } from "@/features/mobile/profile-photo-capture"
+
 interface MobileHeaderProps {
     profile: {
         id: string
@@ -42,9 +44,11 @@ interface MobileHeaderProps {
 
 export function MobileHeader({ profile }: MobileHeaderProps) {
     const router = useRouter()
+    const utils = trpc.useUtils()
     const [isConfirmOpen, setIsConfirmOpen] = useState(false)
     const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false)
     const [isPendingDialogOpen, setIsPendingDialogOpen] = useState(false)
+    const [isPhotoCaptureOpen, setIsPhotoCaptureOpen] = useState(false)
 
     // Query for pending photo request
     const { data: pendingRequest } = trpc.profile.getMyPendingPhotoRequest.useQuery()
@@ -58,14 +62,15 @@ export function MobileHeader({ profile }: MobileHeaderProps) {
 
     const firstName = profile.full_name?.split(' ')[0] || 'User'
 
-    // Handle avatar click - check for pending before navigating
+    // Handle avatar click - open popup dialog modal directly without page reload or navigation
     const handleAvatarClick = () => {
         if (pendingRequest) {
             setIsPendingDialogOpen(true)
         } else {
-            router.push('/mobile/update-photo')
+            setIsPhotoCaptureOpen(true)
         }
     }
+
 
     return (
         <>
@@ -210,6 +215,29 @@ export function MobileHeader({ profile }: MobileHeaderProps) {
                 isOpen={isLogoutModalOpen}
                 onOpenChange={setIsLogoutModalOpen}
             />
+
+            {/* Seamless Profile Selfie Capture Popup Modal (Zero Page Reload / Refresh) */}
+            <Dialog open={isPhotoCaptureOpen} onOpenChange={(open) => !open && setIsPhotoCaptureOpen(false)}>
+                <DialogContent className="max-w-md w-[95vw] p-0 bg-slate-950 border-slate-800 text-slate-100 overflow-hidden rounded-3xl z-[70]">
+                    <ProfilePhotoCapture
+                        profileId={profile.id}
+                        profileData={{
+                            fullName: profile.full_name || 'User',
+                            email: profile.email,
+                            role: 'employee',
+                            avatarUrl: profile.avatar_url,
+                            avatarStatus: profile.avatar_url ? 'custom' : 'default'
+                        }}
+
+                        onSuccess={() => {
+                            setIsPhotoCaptureOpen(false)
+                            utils.profile.invalidate()
+                            utils.attendance.invalidate()
+                        }}
+                    />
+                </DialogContent>
+            </Dialog>
         </>
     )
 }
+

@@ -2,11 +2,14 @@
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { format } from "date-fns"
 import Link from "next/link"
 import { motion } from "framer-motion"
 import { useState, useEffect } from "react"
 import { trpc } from "@/lib/trpc/client"
+import { ProfilePhotoCapture } from "@/features/mobile/profile-photo-capture"
+
 import {
     Clock as IconClock,
     LogIn as IconLogin,
@@ -86,6 +89,8 @@ const quickActions = [
 export function MobileDashboard({ profile, todayAttendance: initialAttendance, isPwaServer }: MobileDashboardProps) {
     const { isPwa, isMobile, isReady } = usePwaCheck(isPwaServer)
     const [isDesktop, setIsDesktop] = useState(false)
+    const [isPhotoCaptureOpen, setIsPhotoCaptureOpen] = useState(false)
+
 
     useEffect(() => {
         setIsDesktop(window.innerWidth >= 1024)
@@ -412,11 +417,12 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
                                 <IconCamera className="w-10 h-10 mx-auto mb-3 text-rose-100" />
                                 <h4 className="text-sm font-black uppercase tracking-widest mb-2 text-rose-50">Update Photo</h4>
                                 <p className="text-[11px] font-medium text-rose-100/80 mb-4">You must upload a custom profile photo to proceed.</p>
-                                <Link href="/mobile/update-photo">
-                                    <Button className="w-full rounded-xl bg-white text-rose-600 font-bold hover:bg-white/90">
-                                        Update Now
-                                    </Button>
-                                </Link>
+                                <Button
+                                    onClick={() => setIsPhotoCaptureOpen(true)}
+                                    className="w-full rounded-xl bg-white text-rose-600 font-bold hover:bg-white/90"
+                                >
+                                    Update Now
+                                </Button>
                             </div>
                         ) : (
                             <motion.div layout className="w-full space-y-3">
@@ -629,17 +635,43 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
                                     <p className="text-xs text-amber-700/80 dark:text-amber-500/80 mb-3 font-medium">
                                         Required for face verification.
                                     </p>
-                                    <Link href="/mobile/profile">
-                                        <Button size="sm" variant="outline" className="h-9 px-4 rounded-xl text-[11px] font-black border-amber-200 dark:border-amber-800/50 hover:bg-amber-500 hover:text-white transition-all uppercase tracking-wider">
-                                            Setup Now
-                                        </Button>
-                                    </Link>
+                                    <Button
+                                        onClick={() => setIsPhotoCaptureOpen(true)}
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-9 px-4 rounded-xl text-[11px] font-black border-amber-200 dark:border-amber-800/50 hover:bg-amber-500 hover:text-white transition-all uppercase tracking-wider"
+                                    >
+                                        Setup Now
+                                    </Button>
                                 </div>
                             </div>
                         </CardContent>
                     </Card>
                 </motion.div>
             )}
+
+            {/* Seamless Profile Selfie Capture Popup Modal (Zero Page Reload / Refresh) */}
+            <Dialog open={isPhotoCaptureOpen} onOpenChange={(open) => !open && setIsPhotoCaptureOpen(false)}>
+                <DialogContent className="max-w-md w-[95vw] p-0 bg-slate-950 border-slate-800 text-slate-100 overflow-hidden rounded-3xl z-[70]">
+                    <ProfilePhotoCapture
+                        profileId={profile.id}
+                        profileData={{
+                            fullName: profile.full_name || 'User',
+                            email: profile.email,
+                            role: profile.role,
+                            avatarUrl: profile.avatar_url,
+                            avatarStatus: profile.avatar_status
+                        }}
+
+                        onSuccess={() => {
+                            setIsPhotoCaptureOpen(false)
+                            utils.profile.invalidate()
+                            utils.attendance.invalidate()
+                        }}
+                    />
+                </DialogContent>
+            </Dialog>
         </motion.div>
     )
 }
+
