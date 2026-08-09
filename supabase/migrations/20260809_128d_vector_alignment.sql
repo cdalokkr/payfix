@@ -1,19 +1,40 @@
 -- =========================================================================
--- PayFix Multi-Tenant 128-d Vector Schema Migration & RPC Alignment
+-- PayFix Multi-Tenant 128-d Vector Schema & Isolation Alignment
 -- Run this in Supabase SQL Editor
 -- =========================================================================
 
 -- 1. Enable pgvector extension
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- 2. Add tenant_id column to profiles if not exists
+-- 2. Add tenant_id and face enrollment columns to public.profiles if not exist
 DO $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns 
-    WHERE table_name = 'profiles' AND column_name = 'tenant_id'
+    WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'tenant_id'
   ) THEN
     ALTER TABLE public.profiles ADD COLUMN tenant_id uuid;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'face_quality_score'
+  ) THEN
+    ALTER TABLE public.profiles ADD COLUMN face_quality_score real;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'face_enrolled_at'
+  ) THEN
+    ALTER TABLE public.profiles ADD COLUMN face_enrolled_at timestamptz;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'face_photo_url'
+  ) THEN
+    ALTER TABLE public.profiles ADD COLUMN face_photo_url text;
   END IF;
 END $$;
 
@@ -38,7 +59,7 @@ ON public.profiles
 USING hnsw (face_embedding vector_cosine_ops)
 WITH (m = 16, ef_construction = 64);
 
--- 5. Create Multi-Tenant 128-d match_employee_face RPC Function
+-- 5. Create Multi-Tenant Isolated 128-d match_employee_face RPC Function
 CREATE OR REPLACE FUNCTION public.match_employee_face(
   query_embedding vector(128),
   match_threshold float DEFAULT 0.42,
@@ -64,7 +85,7 @@ AS $$
     p.mobile_no AS employee_code,
     p.avatar_url,
     (1 - (p.face_embedding <=> query_embedding))::float AS similarity,
-    1.0::real AS face_quality_score
+    COALESCE(p.face_quality_score, 1.0)::real AS face_quality_score
   FROM public.profiles p
   WHERE
     p.face_embedding IS NOT NULL
