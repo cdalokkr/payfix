@@ -23,7 +23,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   isOpen,
   onClose,
   title,
-  subtitle = '128-d Biometric',
+  subtitle,
   icon,
   videoRefOut,
   onStreamReady,
@@ -38,6 +38,14 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   const streamRef = useRef<MediaStream | null>(null);
   const isMountedRef = useRef(true);
 
+  // Store callback refs so parent re-renders never restart stream
+  const onStreamReadyRef = useRef(onStreamReady);
+  const onCameraErrorRef = useRef(onCameraError);
+  useEffect(() => {
+    onStreamReadyRef.current = onStreamReady;
+    onCameraErrorRef.current = onCameraError;
+  }, [onStreamReady, onCameraError]);
+
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -50,9 +58,16 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
   const startCamera = useCallback(async () => {
     if (!isOpen) return;
-    if (streamRef.current && streamRef.current.active) return;
 
-    stopStream();
+    // Stream is active — DO NOT STOP stream!
+    if (streamRef.current && streamRef.current.active) {
+      if (videoRef.current && videoRef.current.srcObject !== streamRef.current) {
+        videoRef.current.srcObject = streamRef.current;
+        videoRef.current.play().catch(() => {});
+      }
+      return;
+    }
+
     setHasError(false);
 
     try {
@@ -91,8 +106,8 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
         // Asynchronous play without blocking rendering
         video.play().catch(() => {});
 
-        if (onStreamReady) {
-          onStreamReady(stream, video);
+        if (onStreamReadyRef.current) {
+          onStreamReadyRef.current(stream, video);
         }
       }
     } catch (err: any) {
@@ -100,11 +115,11 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
       console.error('[BiometricCameraModal] Camera error:', err);
       setHasError(true);
       setErrorMessage(err?.message || 'Failed to start camera');
-      if (onCameraError) {
-        onCameraError(err);
+      if (onCameraErrorRef.current) {
+        onCameraErrorRef.current(err);
       }
     }
-  }, [isOpen, stopStream, videoRef, onStreamReady, onCameraError]);
+  }, [isOpen, videoRef]);
 
   useEffect(() => {
     isMountedRef.current = true;

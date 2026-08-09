@@ -452,7 +452,6 @@ export function SelfieCapture({
             isOpen={true}
             onClose={onBack || (() => {})}
             title="Identify Yourself"
-            subtitle="PWA Daily Attendance"
             icon={<IconScanFace className="w-5 h-5 text-sky-400" />}
             videoRefOut={videoRef}
             onStreamReady={() => setStatus('streaming')}
@@ -460,7 +459,17 @@ export function SelfieCapture({
             isProcessing={status === 'verifying'}
             footerSlot={
                 <div className="space-y-3">
-                    {/* Status Header for Captured state */}
+                    {status === 'streaming' && (
+                        <Button
+                            onClick={handleProceed}
+                            size="lg"
+                            className="w-full h-14 rounded-2xl bg-white text-slate-950 font-black text-base hover:bg-slate-100 shadow-lg transition-all active:scale-95 cursor-pointer"
+                        >
+                            <IconScanFace className="w-5 h-5 mr-2 text-sky-500" />
+                            IDENTIFY NOW
+                        </Button>
+                    )}
+
                     {status === 'captured' && (
                         <div className="text-center space-y-1">
                             <h3 className="text-xl font-bold text-white">Verify &amp; Proceed</h3>
@@ -470,6 +479,7 @@ export function SelfieCapture({
                 </div>
             }
         >
+
             {/* Countdown Progress Ring UI Overlay */}
             {countdown !== null && countdown > 0 && (
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none flex flex-col items-center justify-center z-30">

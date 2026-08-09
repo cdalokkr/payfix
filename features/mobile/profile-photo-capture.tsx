@@ -381,8 +381,8 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
             isOpen={true}
             onClose={handleBack}
             title="Profile Photo"
-            subtitle="128-d Enrollment"
             icon={<IconUser className="w-5 h-5 text-sky-400" />}
+
             videoRefOut={videoRef}
             onStreamReady={() => setStatus('streaming')}
             statusText="Position face inside the oval"
