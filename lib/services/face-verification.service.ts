@@ -238,12 +238,46 @@ export const FaceVerificationService = {
                 }
             }
 
-            return { matched: false, similarity: 0, error: 'No matching employee found (Minimum 60% score required).' }
+            return { matched: false, similarity: 0, error: 'No matching employee face found.' }
         } catch (err: any) {
-            return { matched: false, similarity: 0, error: err.message || 'RPC invocation failed' }
+            return { matched: false, similarity: 0, error: err.message || 'RPC match failed' }
         }
     },
+
+    /**
+     * Client-Side Profile Photo Approve & Enroll Helper
+     */
+    async approveAndEnrollFace(
+        employeeId: string,
+        tenantId: string,
+        rawDescriptor: Float32Array | number[],
+        faceQualityScore?: number,
+        facePhotoUrl?: string
+    ) {
+        const descriptorArray = Array.from(rawDescriptor);
+        if (descriptorArray.length !== 128) {
+            throw new Error(`Invalid descriptor length. Expected 128, got ${descriptorArray.length}`);
+        }
+
+        const res = await fetch(`/api/employees/${employeeId}/enroll-face`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                embedding: descriptorArray,
+                faceQualityScore: faceQualityScore || 1.0,
+                facePhotoUrl: facePhotoUrl || null,
+                tenantId,
+            }),
+        });
+
+        const data = await res.json();
+        if (!data.success) {
+            throw new Error(data.message || 'Enrollment failed');
+        }
+
+        return data.employee;
+    }
 }
 
-export default FaceVerificationService
 
+export default FaceVerificationService

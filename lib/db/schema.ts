@@ -23,6 +23,27 @@ export const designations = pgTable('designations', {
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 
+import { customType } from 'drizzle-orm/pg-core';
+
+export const vector128 = customType<{ data: number[] }>({
+    dataType() {
+        return 'vector(128)';
+    },
+    toDriver(value: number[]): string {
+        return JSON.stringify(value);
+    },
+    fromDriver(value: unknown): number[] {
+        if (typeof value === 'string') {
+            try {
+                return JSON.parse(value);
+            } catch (e) {
+                return [];
+            }
+        }
+        return value as number[];
+    },
+});
+
 // Profiles
 export const profiles = pgTable('profiles', {
     id: uuid('id').primaryKey(),
@@ -41,10 +62,14 @@ export const profiles = pgTable('profiles', {
     status: text('status').default('active'),
     avatar_status: text('avatar_status').default('default'), // 'default' or 'custom'
     allowed_modules: text('allowed_modules').array(),
-    face_embedding: real('face_embedding').array(),
+    face_embedding: vector128('face_embedding'),
+    face_quality_score: real('face_quality_score'),
+    face_enrolled_at: timestamp('face_enrolled_at', { withTimezone: true }),
+    face_photo_url: text('face_photo_url'),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
+
 
 
 // Activities
