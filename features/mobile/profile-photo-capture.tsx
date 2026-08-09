@@ -437,14 +437,18 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                     )}
                 </AnimatePresence>
 
-                {/* Top Controls Overlay */}
-                <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-start z-30">
+                {/* Top Controls Header Overlay: Profile Photo Title + Working Close (X) Icon */}
+                <div className="absolute top-0 left-0 right-0 p-5 flex justify-between items-center z-30 bg-gradient-to-b from-black/70 via-black/30 to-transparent">
+                    <h2 className="text-xl font-black text-white tracking-tight">
+                        Profile Photo
+                    </h2>
                     <motion.button
                         whileTap={{ scale: 0.9 }}
                         onClick={handleBack}
-                        className="p-3 rounded-2xl bg-black/20 backdrop-blur-xl border border-white/10 text-white"
+                        aria-label="Close profile photo setup"
+                        className="p-2.5 rounded-2xl bg-black/40 backdrop-blur-xl border border-white/15 text-white hover:bg-black/60 transition-colors"
                     >
-                        <IconArrowLeft className="w-6 h-6" />
+                        <IconX className="w-6 h-6" />
                     </motion.button>
                 </div>
             </div>
@@ -452,19 +456,20 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
             {/* Bottom Controls Section */}
             <div className="flex-1 bg-slate-950 p-6 flex flex-col justify-between overflow-y-auto">
                 <div className="space-y-6">
-                    {/* Instructions / Status */}
-                    <div className="text-center space-y-2">
-                        <h2 className="text-2xl font-black text-white tracking-tight">
-                            {status === 'captured' ? "Looking Good!" : status === 'uploading' ? "Updating..." : "Selfie Time"}
-                        </h2>
-                        <p className="text-slate-400 text-sm font-medium">
-                            {status === 'captured'
-                                ? "Update your profile with this photo or retake it."
-                                : status === 'uploading'
-                                    ? "Please wait while we update your photo..."
-                                    : "Ensure your face is within the circle and well-lit."}
-                        </p>
-                    </div>
+                    {/* Status Header for Captured state */}
+                    {status === 'captured' && (
+                        <div className="text-center space-y-1">
+                            <h3 className="text-xl font-bold text-white">Looking Good!</h3>
+                            <p className="text-slate-400 text-xs font-medium">Update your profile with this photo or retake it.</p>
+                        </div>
+                    )}
+                    {status === 'uploading' && (
+                        <div className="text-center space-y-1">
+                            <h3 className="text-xl font-bold text-white">Updating Profile...</h3>
+                            <p className="text-slate-400 text-xs font-medium">Please wait while we process your photo.</p>
+                        </div>
+                    )}
+
 
                     {/* Employee Profile Card (Shows ONLY Name and Email) */}
                     <motion.div

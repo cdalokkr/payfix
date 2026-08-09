@@ -523,57 +523,31 @@ export function SelfieCapture({
                     )}
                 </AnimatePresence>
 
-                {/* Navbar Overlay */}
-                <div className="absolute top-0 inset-x-0 p-6 flex justify-between items-center z-30">
+                {/* Top Controls Header Overlay: Identify Yourself Title + Working Close (X) Icon */}
+                <div className="absolute top-0 inset-x-0 p-5 flex justify-between items-center z-30 bg-gradient-to-b from-black/70 via-black/30 to-transparent">
+                    <h2 className="text-xl font-black text-white tracking-tight">
+                        Identify Yourself
+                    </h2>
                     <motion.button
                         whileTap={{ scale: 0.9 }}
                         onClick={onBack}
-                        className="p-3 rounded-2xl bg-black/20 backdrop-blur-xl border border-white/10 text-white"
+                        aria-label="Close selfie verification"
+                        className="p-2.5 rounded-2xl bg-black/40 backdrop-blur-xl border border-white/15 text-white hover:bg-black/60 transition-colors"
                     >
-                        <IconArrowLeft className="w-6 h-6" />
+                        <IconX className="w-6 h-6" />
                     </motion.button>
                 </div>
             </div>
 
             {/* Controls Area */}
-            <div className="flex-1 bg-slate-950 p-8 flex flex-col justify-between overflow-y-auto">
-                <div className="space-y-8">
-                    {/* Attendance Mode Pill centered just after the selfie outer area */}
-                    <div className="flex justify-center -mt-4 mb-2">
-                        <div className="px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 backdrop-blur-md">
-                            <span className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">Attendance Mode</span>
+            <div className="flex-1 bg-slate-950 p-6 flex flex-col justify-between overflow-y-auto">
+                <div className="space-y-6">
+                    {/* Status Header for Captured state */}
+                    {status === 'captured' && (
+                        <div className="text-center space-y-1">
+                            <h3 className="text-xl font-bold text-white">Verify & Proceed</h3>
+                            <p className="text-slate-400 text-xs font-medium">Ensure your face and background are clear.</p>
                         </div>
-                    </div>
-                    <div className="text-center space-y-2">
-                        <h2 className="text-2xl font-black text-white tracking-tight">
-                            {status === 'captured' ? "Verify & Proceed" : "Identify Yourself"}
-                        </h2>
-                        <p className="text-slate-450 text-sm font-medium">
-                            {status === 'captured'
-                                ? "Ensure your face and background are clear."
-                                : "Face verification is required for security."}
-                        </p>
-                    </div>
-
-                    {status === 'streaming' && hasZoomSupport && (
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            className="bg-white/5 border border-white/10 rounded-3xl p-6 px-8 backdrop-blur-lg"
-                        >
-                            <div className="flex items-center gap-6">
-                                <IconZoomIn className="w-5 h-5 text-primary" />
-                                <Slider
-                                    value={[zoom]}
-                                    onValueChange={(v) => setZoom(v[0])}
-                                    min={1}
-                                    max={3}
-                                    step={0.1}
-                                    className="flex-1 py-4"
-                                />
-                                <span className="text-xs font-black text-white w-8">{zoom.toFixed(1)}x</span>
-                            </div>
-                        </motion.div>
                     )}
                 </div>
 

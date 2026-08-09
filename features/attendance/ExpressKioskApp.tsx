@@ -1158,10 +1158,11 @@ export function ExpressKioskApp() {
                                 />
                             )}
 
-                            {/* Biometric Oval Guide Overlay (Positioning Reticle) */}
+                            {/* Biometric Oval Guide Overlay (Aligned with BiometricCamera Standard) */}
                             <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10">
-                                <div className="w-[78%] h-[82%] rounded-[50%/40%] border-2 border-dashed border-sky-400/50 shadow-[0_0_25px_rgba(56,189,248,0.2)] animate-pulse" />
+                                <div className="mt-6 h-[72%] w-[82%] rounded-[50%] border-2 border-dashed border-sky-400/60 shadow-[0_0_25px_rgba(56,189,248,0.25)] transition-colors duration-300" />
                             </div>
+
 
                             {/* Camera Initializing Loading Spinner Overlay */}
                             {!cameraActive && (
