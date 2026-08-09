@@ -4,8 +4,25 @@ import { profiles, employeeSettings } from '@/lib/db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { KioskDeviceService } from '@/lib/services/kiosk-device.service';
 
+function parseVector(val: unknown): number[] | null {
+    if (!val) return null;
+    let vec = val;
+    if (typeof vec === 'string') {
+        try {
+            vec = JSON.parse(vec.replace(/^\[/, '[').replace(/\]$/, ']'));
+        } catch {
+            return null;
+        }
+    }
+    if (Array.isArray(vec) && vec.length > 0) {
+        return vec.map(v => Number(v));
+    }
+    return null;
+}
+
 /**
  * GET /api/kiosk/face-vectors
+
  * Serves cached face vectors ONLY for active employees belonging to the paired tenant workspace.
  * Requires header `x-kiosk-secret` or query parameter `pairingCode`.
  */
@@ -63,12 +80,10 @@ export async function GET(req: NextRequest) {
             }
 
             return activeEmployees.map(emp => {
-                const faceVector: number[] | null =
-                    (Array.isArray(emp.face_embedding) && emp.face_embedding.length === 128)
-                        ? emp.face_embedding
-                        : (Array.isArray(emp.face_vector) && emp.face_vector.length > 0)
-                            ? emp.face_vector
-                            : null;
+                let faceVector: number[] | null = parseVector(emp.face_embedding);
+                if (!faceVector) {
+                    faceVector = parseVector(emp.face_vector);
+                }
 
                 return {
                     id: emp.id,
@@ -77,12 +92,13 @@ export async function GET(req: NextRequest) {
                     biometricUserId: emp.biometric_device_user_id || null,
                     faceVector,
                     faceEmbedding: faceVector,
-                    hasEnrolledFace: faceVector !== null,
+                    hasEnrolledFace: faceVector !== null && faceVector.length === 128,
                 };
             });
         });
 
         const enrolledCount = employeesData.filter(e => e.hasEnrolledFace).length;
+
 
         return NextResponse.json({
             success: true,

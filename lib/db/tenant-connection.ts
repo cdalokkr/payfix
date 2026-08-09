@@ -3,7 +3,8 @@ import postgres from 'postgres';
 import * as schema from './schema'; // Standard business schema
 import { masterDb } from './master-connection';
 import { tenants } from './master-schema';
-import { eq } from 'drizzle-orm';
+import { eq, or } from 'drizzle-orm';
+
 
 interface CachedConnection {
     client: postgres.Sql;
@@ -37,10 +38,15 @@ const LOCKOUT_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
  */
 async function refreshTenantLockoutState(tenantId: string): Promise<boolean> {
     try {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tenantId);
+        
         const tenant = await masterDb.query.tenants.findFirst({
-            where: eq(tenants.id, tenantId),
+            where: isUuid
+                ? eq(tenants.id, tenantId)
+                : or(eq(tenants.tenant_schema, tenantId), eq(tenants.slug, tenantId.replace(/^tenant_/, ''))),
             columns: { status: true, trial_start: true, trial_duration_days: true }
         });
+
 
         if (!tenant) {
             tenantLockoutCache.set(tenantId, { blocked: true, expires: Date.now() + LOCKOUT_CACHE_TTL });
