@@ -1021,7 +1021,7 @@ export function ExpressKioskApp() {
                             </div>
                         ) : (
                             /* 2. REVEALED PRIMARY "START VERIFICATION" BUTTON (After 100% + 2s Delay) */
-                            <div className="w-full space-y-4 animate-in zoom-in-95 duration-300">
+                            <div className="w-full max-w-xl mx-auto space-y-4 animate-in zoom-in-95 duration-300">
                                 <Button
                                     onClick={openVerificationModal}
                                     disabled={!isCameraReady}
@@ -1035,11 +1035,12 @@ export function ExpressKioskApp() {
                                     ) : (
                                         <>
                                             <ScanFace className="h-6 w-6 shrink-0 text-white" />
-                                            <span>Mark Attendance / Face Scan</span>
+                                            <span>Start Verification</span>
                                         </>
                                     )}
                                 </Button>
                             </div>
+
                         )}
 
                         {/* 3. TERMINAL LOCAL CACHE EMBEDDED INSIDE HERO CARD */}
