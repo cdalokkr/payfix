@@ -302,8 +302,10 @@ export function MobileAttendanceWizard({
                         onBack={handleBack}
                         warmedStream={warmedStream}
                         clearWarmedStream={clearWarmedStream}
+                        mode={action === 'clock_out' ? 'check_out' : 'check_in'}
                     />
                 )}
+
 
 
 

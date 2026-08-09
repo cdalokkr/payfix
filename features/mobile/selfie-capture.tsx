@@ -35,7 +35,9 @@ interface SelfieCaptureProps {
     onBack?: () => void
     warmedStream?: MediaStream | null
     clearWarmedStream?: () => void
+    mode?: 'check_in' | 'check_out'
 }
+
 
 // Track whether face-api models have been loaded this session
 let modelsPreloaded = true
@@ -55,8 +57,10 @@ export function SelfieCapture({
     onSubmitAttendance,
     onBack,
     warmedStream,
-    clearWarmedStream
+    clearWarmedStream,
+    mode = 'check_in'
 }: SelfieCaptureProps) {
+
 
     const [status, setStatus] = useState<'idle' | 'streaming' | 'captured' | 'verifying' | 'verified' | 'verify_failed' | 'error'>('idle')
     const [errorMessage, setErrorMessage] = useState<string>('')
@@ -448,68 +452,79 @@ export function SelfieCapture({
     }, [startCamera, stopCamera])
 
     return (
-        <BiometricCameraModal
-            isOpen={true}
-            onClose={onBack || (() => {})}
-            title="Identify Yourself"
-            icon={<IconScanFace className="w-5 h-5 text-sky-400" />}
-            videoRefOut={videoRef}
-            onStreamReady={() => setStatus('streaming')}
-            statusText={status === 'streaming' ? 'Align face within oval target' : undefined}
-            isProcessing={status === 'verifying'}
-            footerSlot={
-                <div className="space-y-3">
-                    {status === 'streaming' && (
-                        <Button
-                            onClick={handleProceed}
-                            size="lg"
-                            className="w-full h-14 rounded-2xl bg-white text-slate-950 font-black text-base hover:bg-slate-100 shadow-lg transition-all active:scale-95 cursor-pointer"
-                        >
-                            <IconScanFace className="w-5 h-5 mr-2 text-sky-500" />
-                            IDENTIFY NOW
-                        </Button>
-                    )}
-
-                    {status === 'captured' && (
-                        <div className="text-center space-y-1">
-                            <h3 className="text-xl font-bold text-white">Verify &amp; Proceed</h3>
-                            <p className="text-slate-400 text-xs font-medium">Ensure your face and background are clear.</p>
+        <div className="fixed inset-0 z-[70] bg-slate-950 flex flex-col overflow-hidden">
+            <BiometricCameraModal
+                isOpen={true}
+                onClose={onBack || (() => {})}
+                title="Identify Yourself"
+                icon={<IconScanFace className="w-5 h-5 text-sky-400" />}
+                videoRefOut={videoRef}
+                onStreamReady={() => setStatus('streaming')}
+                statusText={status === 'streaming' ? 'Align face within oval target' : undefined}
+                isProcessing={status === 'verifying'}
+                footerSlot={
+                    <div className="space-y-3">
+                        {/* Dynamic Attendance Mode Pill Badge: Clocking In / Clocking Out */}
+                        <div className="flex justify-center -mt-1 mb-1">
+                            <div className="px-4 py-1.5 rounded-full bg-sky-500/10 border border-sky-500/25 backdrop-blur-md">
+                                <span className="text-xs font-black text-sky-400 uppercase tracking-widest">
+                                    {mode === 'check_out' ? 'Clocking Out' : 'Clocking In'}
+                                </span>
+                            </div>
                         </div>
-                    )}
-                </div>
-            }
-        >
 
-            {/* Countdown Progress Ring UI Overlay */}
-            {countdown !== null && countdown > 0 && (
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none flex flex-col items-center justify-center z-30">
-                    <div className="relative w-24 h-24 flex items-center justify-center">
-                        <svg className="absolute inset-0 w-full h-full transform -rotate-90">
-                            <circle cx="48" cy="48" r="40" stroke="rgba(255, 255, 255, 0.15)" strokeWidth="4" fill="rgba(15, 23, 42, 0.6)" />
-                            <motion.circle 
-                                cx="48" 
-                                cy="48" 
-                                r="40" 
-                                stroke="rgba(6, 182, 212, 1)" 
-                                strokeWidth="4" 
-                                fill="transparent" 
-                                strokeDasharray={251.2}
-                                animate={{ strokeDashoffset: 251.2 - ((countdown || 0) / 5) * 251.2 }}
-                                transition={{ duration: 0.3, ease: "easeOut" }}
-                                strokeLinecap="round"
-                            />
-                        </svg>
-                        <span className="text-4xl font-black text-white relative z-10">{countdown}</span>
+                        {status === 'streaming' && (
+                            <Button
+                                onClick={handleProceed}
+                                size="lg"
+                                className="w-full h-14 rounded-2xl bg-white text-slate-950 font-black text-base hover:bg-slate-100 shadow-lg transition-all active:scale-95 cursor-pointer"
+                            >
+                                <IconScanFace className="w-5 h-5 mr-2 text-sky-500" />
+                                IDENTIFY NOW
+                            </Button>
+                        )}
+
+                        {status === 'captured' && (
+                            <div className="text-center space-y-1">
+                                <h3 className="text-xl font-bold text-white">Verify &amp; Proceed</h3>
+                                <p className="text-slate-400 text-xs font-medium">Ensure your face and background are clear.</p>
+                            </div>
+                        )}
                     </div>
-                    <p className="text-white/80 text-[10px] uppercase font-black tracking-widest text-center mt-4 bg-slate-900/80 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 shadow-lg">
-                        Auto-Capture
-                    </p>
-                </div>
-            )}
-            <canvas ref={canvasRef} className="hidden" />
-        </BiometricCameraModal>
+                }
+            >
+                {/* Countdown Progress Ring UI Overlay */}
+                {countdown !== null && countdown > 0 && (
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none flex flex-col items-center justify-center z-30">
+                        <div className="relative w-24 h-24 flex items-center justify-center">
+                            <svg className="absolute inset-0 w-full h-full transform -rotate-90">
+                                <circle cx="48" cy="48" r="40" stroke="rgba(255, 255, 255, 0.15)" strokeWidth="4" fill="rgba(15, 23, 42, 0.6)" />
+                                <motion.circle 
+                                    cx="48" 
+                                    cy="48" 
+                                    r="40" 
+                                    stroke="rgba(6, 182, 212, 1)" 
+                                    strokeWidth="4" 
+                                    fill="transparent" 
+                                    strokeDasharray={251.2}
+                                    animate={{ strokeDashoffset: 251.2 - ((countdown || 0) / 5) * 251.2 }}
+                                    transition={{ duration: 0.3, ease: "easeOut" }}
+                                    strokeLinecap="round"
+                                />
+                            </svg>
+                            <span className="text-4xl font-black text-white relative z-10">{countdown}</span>
+                        </div>
+                        <p className="text-white/80 text-[10px] uppercase font-black tracking-widest text-center mt-4 bg-slate-900/80 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 shadow-lg">
+                            Auto-Capture
+                        </p>
+                    </div>
+                )}
+                <canvas ref={canvasRef} className="hidden" />
+            </BiometricCameraModal>
+        </div>
     )
 }
 
 export default SelfieCapture
+
 

@@ -377,87 +377,90 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
     }, [startCamera, stopCamera, hasPendingRequest])
 
     return (
-        <BiometricCameraModal
-            isOpen={true}
-            onClose={handleBack}
-            title="Profile Photo"
-            icon={<IconUser className="w-5 h-5 text-sky-400" />}
+        <div className="fixed inset-0 z-[70] bg-slate-950 flex flex-col overflow-hidden">
+            <BiometricCameraModal
+                isOpen={true}
+                onClose={handleBack}
+                title="Profile Photo"
+                icon={<IconUser className="w-5 h-5 text-sky-400" />}
 
-            videoRefOut={videoRef}
-            onStreamReady={() => setStatus('streaming')}
-            statusText="Position face inside the oval"
-            footerSlot={
-                <div className="space-y-4">
-                    {/* Employee Profile Card */}
-                    <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 backdrop-blur-lg">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-sky-500/30 to-sky-500/10 border-2 border-sky-500/30 flex items-center justify-center overflow-hidden shrink-0">
-                                {profileData.avatarUrl ? (
-                                    <img src={profileData.avatarUrl} alt="Current" className="w-full h-full object-cover" />
-                                ) : (
-                                    <IconUser className="w-5 h-5 text-sky-400" />
-                                )}
-                            </div>
-                            <div className="flex-1 min-w-0 space-y-0.5">
-                                <p className="text-white font-bold text-sm truncate">{profileData.fullName}</p>
-                                <p className="text-slate-400 text-xs truncate">{profileData.email}</p>
+                videoRefOut={videoRef}
+                onStreamReady={() => setStatus('streaming')}
+                statusText="Position face inside the oval"
+                footerSlot={
+                    <div className="space-y-4">
+                        {/* Employee Profile Card */}
+                        <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 backdrop-blur-lg">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-sky-500/30 to-sky-500/10 border-2 border-sky-500/30 flex items-center justify-center overflow-hidden shrink-0">
+                                    {profileData.avatarUrl ? (
+                                        <img src={profileData.avatarUrl} alt="Current" className="w-full h-full object-cover" />
+                                    ) : (
+                                        <IconUser className="w-5 h-5 text-sky-400" />
+                                    )}
+                                </div>
+                                <div className="flex-1 min-w-0 space-y-0.5">
+                                    <p className="text-white font-bold text-sm truncate">{profileData.fullName}</p>
+                                    <p className="text-slate-400 text-xs truncate">{profileData.email}</p>
+                                </div>
                             </div>
                         </div>
+
+                        {status === 'streaming' && (
+                            <Button
+                                onClick={capturePhoto}
+                                size="lg"
+                                className="w-full h-14 rounded-2xl bg-white text-slate-950 font-black text-base hover:bg-slate-100 shadow-lg transition-all active:scale-95 cursor-pointer"
+                            >
+                                <IconCamera className="w-5 h-5 mr-2" />
+                                CAPTURE NOW
+                            </Button>
+                        )}
+
+                        {status === 'captured' && !isUploading && (
+                            <div className="grid grid-cols-2 gap-3">
+                                <Button
+                                    onClick={handleRetake}
+                                    variant="outline"
+                                    className="h-12 rounded-2xl border-white/20 text-white hover:bg-white/10 font-bold"
+                                >
+                                    <IconRefresh className="w-4 h-4 mr-2" />
+                                    Retake
+                                </Button>
+                                <Button
+                                    onClick={handleUpload}
+                                    className="h-12 rounded-2xl bg-sky-500 hover:bg-sky-400 text-white font-bold"
+                                >
+                                    <IconCheck className="w-4 h-4 mr-2" />
+                                    Submit
+                                </Button>
+                            </div>
+                        )}
                     </div>
-
-                    {status === 'streaming' && (
-                        <Button
-                            onClick={capturePhoto}
-                            size="lg"
-                            className="w-full h-14 rounded-2xl bg-white text-slate-950 font-black text-base hover:bg-slate-100 shadow-lg transition-all active:scale-95 cursor-pointer"
+                }
+            >
+                {hasPendingRequest && (
+                    <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-slate-950 p-6 text-center text-white">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            className="p-8 bg-amber-500/10 backdrop-blur-md rounded-3xl border border-amber-500/20 max-w-sm"
                         >
-                            <IconCamera className="w-5 h-5 mr-2" />
-                            CAPTURE NOW
-                        </Button>
-                    )}
-
-                    {status === 'captured' && !isUploading && (
-                        <div className="grid grid-cols-2 gap-3">
-                            <Button
-                                onClick={handleRetake}
-                                variant="outline"
-                                className="h-12 rounded-2xl border-white/20 text-white hover:bg-white/10 font-bold"
-                            >
-                                <IconRefresh className="w-4 h-4 mr-2" />
-                                Retake
+                            <IconClock className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+                            <p className="text-base font-bold text-amber-200 mb-2">Photo Update Pending</p>
+                            <p className="text-sm text-amber-100/70">Your photo update request is awaiting admin approval.</p>
+                            <Button onClick={handleBack} variant="outline" className="mt-6 border-amber-500/30 text-amber-100 hover:bg-amber-500/20 rounded-xl">
+                                Go Back
                             </Button>
-                            <Button
-                                onClick={handleUpload}
-                                className="h-12 rounded-2xl bg-sky-500 hover:bg-sky-400 text-white font-bold"
-                            >
-                                <IconCheck className="w-4 h-4 mr-2" />
-                                Submit
-                            </Button>
-                        </div>
-                    )}
-                </div>
-            }
-        >
-            {hasPendingRequest && (
-                <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-slate-950 p-6 text-center text-white">
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="p-8 bg-amber-500/10 backdrop-blur-md rounded-3xl border border-amber-500/20 max-w-sm"
-                    >
-                        <IconClock className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-                        <p className="text-base font-bold text-amber-200 mb-2">Photo Update Pending</p>
-                        <p className="text-sm text-amber-100/70">Your photo update request is awaiting admin approval.</p>
-                        <Button onClick={handleBack} variant="outline" className="mt-6 border-amber-500/30 text-amber-100 hover:bg-amber-500/20 rounded-xl">
-                            Go Back
-                        </Button>
-                    </motion.div>
-                </div>
-            )}
-            {/* Hidden canvas for capture */}
-            <canvas ref={canvasRef} className="hidden" />
-        </BiometricCameraModal>
+                        </motion.div>
+                    </div>
+                )}
+                {/* Hidden canvas for capture */}
+                <canvas ref={canvasRef} className="hidden" />
+            </BiometricCameraModal>
+        </div>
     )
 }
+
 
 

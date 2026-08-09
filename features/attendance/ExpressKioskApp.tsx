@@ -1021,11 +1021,11 @@ export function ExpressKioskApp() {
                             </div>
                         ) : (
                             /* 2. REVEALED PRIMARY "START VERIFICATION" BUTTON (After 100% + 2s Delay) */
-                            <div className="space-y-4 animate-in zoom-in-95 duration-300">
+                            <div className="w-full space-y-4 animate-in zoom-in-95 duration-300">
                                 <Button
                                     onClick={openVerificationModal}
                                     disabled={!isCameraReady}
-                                    className="w-full max-w-xs h-14 rounded-xl bg-sky-600 hover:bg-sky-500 active:bg-sky-700 disabled:opacity-50 text-white font-bold text-lg tracking-wide shadow-lg shadow-sky-600/30 transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 border border-sky-400/30"
+                                    className="w-full h-16 rounded-2xl bg-sky-600 hover:bg-sky-500 active:bg-sky-700 disabled:opacity-50 text-white font-black text-lg tracking-wide shadow-xl shadow-sky-600/30 transition-all transform hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-3 border border-sky-400/30 cursor-pointer"
                                 >
                                     {!isCameraReady ? (
                                         <>
@@ -1035,12 +1035,11 @@ export function ExpressKioskApp() {
                                     ) : (
                                         <>
                                             <ScanFace className="h-6 w-6 shrink-0 text-white" />
-                                            <span>Start Verification</span>
+                                            <span>Mark Attendance / Face Scan</span>
                                         </>
                                     )}
                                 </Button>
                             </div>
-
                         )}
 
                         {/* 3. TERMINAL LOCAL CACHE EMBEDDED INSIDE HERO CARD */}
@@ -1124,165 +1123,46 @@ export function ExpressKioskApp() {
                 VERIFICATION CAMERA MODAL DIALOG
                ========================================================================= */}
             <Dialog open={isVerificationModalOpen} onOpenChange={(open) => !open && closeVerificationModal()}>
-                <DialogContent className="max-w-md w-[95vw] bg-slate-950/95 border-slate-800 text-slate-100 p-0 overflow-hidden shadow-2xl rounded-3xl backdrop-blur-2xl">
-                    <DialogHeader className="p-4 bg-slate-900/80 border-b border-slate-800 flex items-center justify-between flex-row space-y-0">
-                        <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
-                            <ScanFace className="h-5 w-5 text-sky-400" /> Face Verification Scanner
-                        </DialogTitle>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={closeVerificationModal}
-                            className="text-slate-400 hover:text-white hover:bg-slate-800 h-8 w-8 rounded-full"
-                        >
-                            <X className="h-4 w-4" />
-                        </Button>
-                    </DialogHeader>
-
-                    {/* Camera Display Box (Portrait 3:4 View for Max Vector Match Accuracy) */}
-                    <div className="p-4 flex flex-col items-center justify-center relative bg-black min-h-[440px]">
-                        <div className="relative w-full max-w-sm aspect-[3/4] rounded-2xl overflow-hidden border border-slate-800 shadow-2xl bg-black">
-
-
-                            <video
-                                ref={videoRef}
-                                className="w-full h-full object-cover transform -scale-x-100"
-                                playsInline
-                                muted
-                            />
-
-                            {/* Freeze Frame Captured Selfie Overlay (Prevents background video stutter) */}
-                            {capturedFreezeUrl && (
-                                <img
-                                    src={capturedFreezeUrl}
-                                    alt="Captured Selfie Freeze"
-                                    className="absolute inset-0 w-full h-full object-cover transform -scale-x-100 z-15"
-                                />
-                            )}
-
-                            {/* Biometric Oval Guide Overlay (Aligned with BiometricCamera Standard) */}
-                            <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10">
-                                <div className="mt-6 h-[72%] w-[82%] rounded-[50%] border-2 border-dashed border-sky-400/60 shadow-[0_0_25px_rgba(56,189,248,0.25)] transition-colors duration-300" />
-                            </div>
-
-
-                            {/* Camera Initializing Loading Spinner Overlay */}
-                            {!cameraActive && (
-                                <div className="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center space-y-3 z-10">
-                                    <div className="w-14 h-14 rounded-2xl bg-sky-500/10 border border-sky-500/30 text-sky-400 flex items-center justify-center shadow-lg">
-                                        <Camera className="h-7 w-7 animate-pulse" />
-                                    </div>
-                                    <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
-                                        <RefreshCw className="h-4 w-4 text-sky-400 animate-spin" />
-                                        <span>Initializing Camera Stream...</span>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Sleek Bottom Status Bar for Vector Extraction */}
-                            {isScanning && !verificationResult && (
-                                <div className="absolute bottom-3 inset-x-3 bg-slate-950/90 border border-sky-500/40 p-2.5 rounded-xl shadow-2xl flex items-center justify-center gap-2.5 z-20 backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 duration-200">
-                                    <RefreshCw className="h-4 w-4 text-sky-400 animate-spin" />
-                                    <span className="font-bold text-xs text-sky-300">Extracting face vector &amp; matching...</span>
-                                </div>
-                            )}
-
-
-                            {/* =========================================================
-                                INSTANT VERIFICATION RESULT OVERLAY (Glossy Blur Card)
-                               ========================================================= */}
-                            {verificationResult && (
-                                <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-xl flex flex-col items-center justify-center p-5 space-y-3 z-30 text-center animate-in fade-in zoom-in-95 duration-200">
-                                    {verificationResult.matched ? (
+                <DialogContent className="max-w-md w-[95vw] bg-slate-950 border-slate-800 text-slate-100 p-0 overflow-hidden shadow-2xl rounded-3xl backdrop-blur-2xl [&>button]:hidden">
+                    <BiometricCameraModal
+                        isOpen={isVerificationModalOpen}
+                        onClose={closeVerificationModal}
+                        title="Face Verification Scanner"
+                        icon={<ScanFace className="h-5 w-5 text-sky-400" />}
+                        videoRefOut={videoRef}
+                        statusText={isScanning && !verificationResult ? "Extracting face vector & matching..." : undefined}
+                        isProcessing={isScanning && !verificationResult}
+                        footerSlot={
+                            <div className="w-full flex items-center justify-center">
+                                <Button
+                                    onClick={handleFaceScan}
+                                    disabled={isScanning || !cameraActive || !modelsReady}
+                                    className="w-full h-14 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-base shadow-xl shadow-emerald-600/25 cursor-pointer"
+                                >
+                                    {isScanning ? (
                                         <>
-                                            {/* VERIFIED SUCCESS CARD */}
-                                            <div className="w-16 h-16 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 p-0.5 shadow-[0_0_40px_rgba(16,185,129,0.6)] flex items-center justify-center animate-bounce-short">
-                                                <div className="w-full h-full bg-slate-950 rounded-full flex items-center justify-center">
-                                                    <CheckCheck className="h-8 w-8 text-emerald-400" />
-                                                </div>
-                                            </div>
-
-                                            <div className="space-y-1">
-                                                <div className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-400">
-                                                    VERIFICATION SUCCESSFUL
-                                                </div>
-                                                <h3 className="text-xl font-bold text-white">
-                                                    {verificationResult.employeeName}
-                                                </h3>
-                                                <Badge variant="outline" className="border-emerald-500/40 text-emerald-400 font-bold text-xs">
-                                                    Verified {verificationResult.similarity} Match
-                                                </Badge>
-                                            </div>
-
-                                            <div className="text-xs text-slate-400 pt-1 space-y-0.5">
-                                                <div>Time: <span className="font-mono text-white font-bold">{verificationResult.time}</span></div>
-                                                <div className="text-[11px] text-emerald-400/90 font-semibold">📍 Geofence Verified</div>
-                                            </div>
+                                            <RefreshCw className="h-5 w-5 mr-2 animate-spin" /> Verifying Face...
                                         </>
                                     ) : (
                                         <>
-                                            {/* REJECTED / NOT VERIFIED CARD */}
-                                            <div className="w-16 h-16 rounded-full bg-gradient-to-r from-rose-600 to-red-600 p-0.5 shadow-[0_0_40px_rgba(244,63,94,0.6)] flex items-center justify-center">
-                                                <div className="w-full h-full bg-slate-950 rounded-full flex items-center justify-center">
-                                                    <XCircle className="h-8 w-8 text-rose-400" />
-                                                </div>
-                                            </div>
-
-                                            <div className="space-y-1">
-                                                <div className="text-[10px] font-extrabold uppercase tracking-widest text-rose-400">
-                                                    NOT VERIFIED
-                                                </div>
-                                                <p className="text-xs text-slate-300 max-w-xs">
-                                                    {verificationResult.error || 'Face not recognized in employee records.'}
-                                                </p>
-                                            </div>
-
-                                            <Button
-                                                onClick={() => setVerificationResult(null)}
-                                                size="sm"
-                                                className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs mt-2"
-                                            >
-                                                Try Again
-                                            </Button>
+                                            <ScanFace className="h-5 w-5 mr-2" /> Mark Attendance
                                         </>
                                     )}
-                                </div>
-                            )}
-                        </div>
-
-                        {scanError && !verificationResult && (
-                            <div className="mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-medium flex items-center gap-2.5 max-w-sm w-full shadow-sm">
-                                <AlertCircle className="h-4 w-4 text-amber-400 shrink-0" />
-                                <span>{scanError}</span>
+                                </Button>
                             </div>
+                        }
+                    >
+                        {/* Freeze Frame Captured Selfie Overlay (Prevents background video stutter) */}
+                        {capturedFreezeUrl && (
+                            <img
+                                src={capturedFreezeUrl}
+                                alt="Captured Selfie Freeze"
+                                className="absolute inset-0 w-full h-full object-cover transform -scale-x-100 z-15"
+                            />
                         )}
-                    </div>
+                    </BiometricCameraModal>
 
-                    {/* Modal Control Footer */}
-                    <div className="p-4 bg-slate-900/80 border-t border-slate-800 flex items-center justify-between gap-3">
-                        <Button
-                            onClick={closeVerificationModal}
-                            className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold text-xs shadow-sm hover:text-white"
-                        >
-                            Cancel
-                        </Button>
 
-                        <Button
-                            onClick={handleFaceScan}
-                            disabled={isScanning || !cameraActive || !modelsReady}
-                            className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-sm px-6 shadow-lg shadow-emerald-600/20"
-                        >
-                            {isScanning ? (
-                                <>
-                                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Verifying...
-                                </>
-                            ) : (
-                                <>
-                                    <ScanFace className="h-4 w-4 mr-2" /> Mark Attendance
-                                </>
-                            )}
-                        </Button>
-                    </div>
                 </DialogContent>
             </Dialog>
 
