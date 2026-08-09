@@ -55,14 +55,20 @@ interface PendingRequest {
 export class FaceEmbeddingWorker {
   private worker: Worker | null = null;
   private ready = false;
+  public activeBackend = 'unknown';
   private messageId = 0;
   private pending = new Map<string, PendingRequest>();
-  private initPromise: Promise<void> | null = null;
+  private initPromise: Promise<any> | null = null;
+
+  get backend(): string {
+    return this.activeBackend;
+  }
 
   constructor(
     private modelUrl: string = '/models',
     private defaultTimeout = 15000
   ) {}
+
 
   /**
    * Initialize worker and load models
@@ -90,9 +96,10 @@ export class FaceEmbeddingWorker {
         };
 
         // Load models
-        await this.send('LOAD_MODELS', { modelUrl: this.modelUrl });
+        const res = await this.send('LOAD_MODELS', { modelUrl: this.modelUrl });
         this.ready = true;
-        resolve();
+        resolve(res || { backend: this.activeBackend });
+
       } catch (err) {
         this.initPromise = null;
         reject(err);
@@ -301,15 +308,15 @@ export class FaceEmbeddingWorker {
 
     this.pending.delete(data.id);
 
-    if (data.type === 'ERROR' || (data as any).success === false) {
-      pending.reject(new Error((data as WorkerErrorResponse).error || 'Unknown error'));
-      return;
+    if ((data as any).backend) {
+      this.activeBackend = (data as any).backend;
     }
 
     if (data.type === 'MODELS_LOADED') {
-      pending.resolve(true);
+      pending.resolve({ success: true, backend: this.activeBackend });
       return;
     }
+
 
     if (data.type === 'EXTRACT_RESULT' && 'descriptor' in data) {
       pending.resolve({

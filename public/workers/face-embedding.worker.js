@@ -1,132 +1,205 @@
 // public/workers/face-embedding.worker.js
+// Drop-in: backend auto-select (webgpu → webgl → wasm → cpu) + face embedding
 
-importScripts('/js/face-api.min.js');
+importScripts(
+  'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js',
+  'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgpu@4.22.0/dist/tf-backend-webgpu.js',
+  'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/dist/face-api.js'
+);
 
 let modelsLoaded = false;
-const MODEL_URL = '/models';
+let activeBackend = 'unknown';
+let extractCount = 0;
 
-// ======================
-// Memory Helpers
-// ======================
-function l2Normalize(embedding) {
-  if (!embedding || embedding.length === 0) return [];
-  let norm = 0;
-  for (let i = 0; i < embedding.length; i++) {
-    norm += embedding[i] * embedding[i];
+const DEFAULT_MODEL_URL = '/models';
+const GC_EVERY_N = 15;
+
+// ------------------ Backend init ------------------
+
+async function initBackend() {
+  const tf = self.tf || (typeof faceapi !== 'undefined' ? faceapi.tf : null);
+  if (!tf) throw new Error('TensorFlow.js not found in worker');
+
+  // 1) WebGPU
+  try {
+    if (typeof navigator !== 'undefined' && navigator.gpu) {
+      const ok = await tf.setBackend('webgpu');
+      if (ok) {
+        await tf.ready();
+        if (tf.getBackend() === 'webgpu') {
+          activeBackend = 'webgpu';
+          return activeBackend;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[worker] WebGPU unavailable:', e?.message || e);
   }
-  norm = Math.sqrt(norm);
-  if (norm === 0) return embedding;
-  return embedding.map(v => v / norm);
+
+  // 2) WebGL
+  try {
+    const ok = await tf.setBackend('webgl');
+    if (ok) {
+      await tf.ready();
+      activeBackend = tf.getBackend() || 'webgl';
+      return activeBackend;
+    }
+  } catch (e) {
+    console.warn('[worker] WebGL unavailable:', e?.message || e);
+  }
+
+  // 3) WASM (optional – only if backend registered)
+  try {
+    const ok = await tf.setBackend('wasm');
+    if (ok) {
+      await tf.ready();
+      activeBackend = tf.getBackend() || 'wasm';
+      return activeBackend;
+    }
+  } catch (e) {
+    console.warn('[worker] WASM unavailable:', e?.message || e);
+  }
+
+  // 4) CPU
+  await tf.setBackend('cpu');
+  await tf.ready();
+  activeBackend = 'cpu';
+  return activeBackend;
 }
 
-function disposeTensor(tensor) {
+// ------------------ Memory helpers ------------------
 
-  if (tensor && typeof tensor.dispose === 'function') {
+function safeCloseBitmap(bitmap) {
+  if (bitmap && typeof bitmap.close === 'function') {
     try {
-      tensor.dispose();
-    } catch (e) {}
+      bitmap.close();
+    } catch (_) {}
   }
 }
 
-function forceGC() {
-  // TensorFlow.js memory cleanup
-  if (typeof self.tf !== 'undefined' && self.tf.engine) {
-    try {
-      const engine = self.tf.engine();
+function lightCleanup() {
+  try {
+    const tf = faceapi.tf || self.tf;
+    const engine = tf?.engine?.();
+    if (!engine?.scopeStack) return;
+    while (engine.scopeStack.length > 0) {
+      try {
+        engine.endScope();
+      } catch (_) {
+        break;
+      }
+    }
+  } catch (_) {}
+}
+
+function deepCleanup() {
+  lightCleanup();
+  try {
+    const tf = faceapi.tf || self.tf;
+    const engine = tf?.engine?.();
+    if (engine) {
       engine.startScope();
       engine.endScope();
-    } catch (e) {}
-  }
+    }
+  } catch (_) {}
 }
 
-// ======================
-// Main Message Handler
-// ======================
+// ------------------ Messages ------------------
+
 self.onmessage = async (event) => {
   const { type, payload, id } = event.data;
 
   try {
-    // ---------- LOAD MODELS ----------
-    if (type === 'LOAD_MODELS') {
-      if (modelsLoaded) {
-        self.postMessage({ id, type: 'MODELS_LOADED', success: true });
-        return;
-      }
-
-      const url = payload?.modelUrl || MODEL_URL;
-      const faceapi = self.faceapi;
-
-      if (!faceapi) {
-        throw new Error('face-api.js not loaded in worker environment');
-      }
-
-      await Promise.all([
-        faceapi.nets.tinyFaceDetector.loadFromUri(url),
-        faceapi.nets.faceLandmark68Net.loadFromUri(url),
-        faceapi.nets.faceRecognitionNet.loadFromUri(url),
-      ]);
-
-      modelsLoaded = true;
-
-      // Warm-up + initial cleanup
-      forceGC();
-
-      self.postMessage({ id, type: 'MODELS_LOADED', success: true });
+    // ===== INIT BACKEND ONLY =====
+    if (type === 'INIT_BACKEND') {
+      const backend = await initBackend();
+      self.postMessage({
+        id,
+        type: 'BACKEND_READY',
+        success: true,
+        backend,
+      });
       return;
     }
 
-    // ---------- EXTRACT EMBEDDING ----------
-    if (type === 'EXTRACT_EMBEDDING') {
+    // ===== LOAD MODELS (backend + weights) =====
+    if (type === 'LOAD_MODELS') {
       if (!modelsLoaded) {
-        throw new Error('Models not loaded');
+        const backend = await initBackend();
+        const modelUrl = payload?.modelUrl || DEFAULT_MODEL_URL;
+
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(modelUrl),
+          faceapi.nets.faceLandmark68TinyNet.loadFromUri(modelUrl),
+          faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl),
+        ]);
+
+        modelsLoaded = true;
+        deepCleanup();
+
+        self.postMessage({
+          id,
+          type: 'MODELS_LOADED',
+          success: true,
+          backend,
+        });
+      } else {
+        self.postMessage({
+          id,
+          type: 'MODELS_LOADED',
+          success: true,
+          backend: activeBackend,
+        });
       }
+      return;
+    }
+
+    // ===== EXTRACT =====
+    if (type === 'EXTRACT_EMBEDDING') {
+      if (!modelsLoaded) throw new Error('Models not loaded');
 
       const {
         imageBitmap,
         inputSize = 160,
-        scoreThreshold = 0.4,
+        scoreThreshold = 0.5,
       } = payload;
 
       let canvas = null;
-      let detection = null;
-      const faceapi = self.faceapi;
+      let bitmapClosed = false;
 
       try {
-        // Create OffscreenCanvas
         canvas = new OffscreenCanvas(imageBitmap.width, imageBitmap.height);
         const ctx = canvas.getContext('2d', {
-          alpha: false,           // slightly better performance
-          desynchronized: true,   // reduce latency
+          alpha: false,
+          desynchronized: true,
+          willReadFrequently: false,
         });
+        if (!ctx) throw new Error('2d context failed');
+        ctx.drawImage(imageBitmap, 0, 0);
 
-        if (ctx) {
-          ctx.drawImage(imageBitmap, 0, 0);
+        safeCloseBitmap(imageBitmap);
+        bitmapClosed = true;
+
+        const tf = faceapi.tf || self.tf;
+        const engine = tf.engine();
+        engine.startScope();
+
+        let detection;
+        try {
+          detection = await faceapi
+            .detectSingleFace(
+              canvas,
+              new faceapi.TinyFaceDetectorOptions({ inputSize, scoreThreshold })
+            )
+            .withFaceLandmarks(true)
+            .withFaceDescriptor();
+        } finally {
+          engine.endScope();
         }
 
-        // Run detection inside tf scope for auto cleanup
-        if (faceapi.tf?.engine) {
-          await faceapi.tf.engine().startScope();
-        }
-
-        detection = await faceapi
-          .detectSingleFace(
-            canvas,
-            new faceapi.TinyFaceDetectorOptions({
-              inputSize,
-              scoreThreshold,
-            })
-          )
-          .withFaceLandmarks()
-          .withFaceDescriptor();
-
-        if (faceapi.tf?.engine) {
-          await faceapi.tf.engine().endScope();
-        }
-
-        // Close bitmap ASAP
-        if (imageBitmap && typeof imageBitmap.close === 'function') {
-          imageBitmap.close();
-        }
+        canvas.width = 0;
+        canvas.height = 0;
+        canvas = null;
 
         if (!detection) {
           self.postMessage({
@@ -134,54 +207,81 @@ self.onmessage = async (event) => {
             type: 'EXTRACT_RESULT',
             success: false,
             error: 'No face detected',
+            backend: activeBackend,
           });
           return;
         }
 
-        // Convert & L2 normalize descriptor safely
-        const descriptor = l2Normalize(Array.from(detection.descriptor));
-
+        const descriptor = Array.from(detection.descriptor);
+        const score = detection.detection.score;
+        const box = {
+          x: detection.detection.box.x,
+          y: detection.detection.box.y,
+          width: detection.detection.box.width,
+          height: detection.detection.box.height,
+        };
 
         self.postMessage({
           id,
           type: 'EXTRACT_RESULT',
           success: true,
           descriptor,
-          score: detection.detection.score,
-          box: {
-            x: detection.detection.box.x,
-            y: detection.detection.box.y,
-            width: detection.detection.box.width,
-            height: detection.detection.box.height,
-          },
+          score,
+          box,
+          backend: activeBackend,
         });
       } finally {
-        // ========== CRITICAL CLEANUP ==========
-        if (imageBitmap && typeof imageBitmap.close === 'function') {
+        if (!bitmapClosed) safeCloseBitmap(imageBitmap);
+        if (canvas) {
           try {
-            imageBitmap.close();
-          } catch (e) {}
+            canvas.width = 0;
+            canvas.height = 0;
+          } catch (_) {}
         }
-        canvas = null;
-        detection = null;
-        forceGC();
+        lightCleanup();
+        extractCount += 1;
+        if (extractCount % GC_EVERY_N === 0) deepCleanup();
       }
-
       return;
     }
 
-    // ---------- MANUAL CLEANUP ----------
+    // ===== CLEANUP =====
     if (type === 'CLEANUP') {
-      forceGC();
-      self.postMessage({ id, type: 'CLEANUP_DONE', success: true });
+      deepCleanup();
+      extractCount = 0;
+      self.postMessage({
+        id,
+        type: 'CLEANUP_DONE',
+        success: true,
+        backend: activeBackend,
+      });
+      return;
+    }
+
+    // ===== STATUS =====
+    if (type === 'STATUS') {
+      let tfMemory = null;
+      try {
+        const tf = faceapi.tf || self.tf;
+        tfMemory = tf?.memory?.() ?? null;
+      } catch (_) {}
+
+      self.postMessage({
+        id,
+        type: 'STATUS_RESULT',
+        modelsLoaded,
+        backend: activeBackend,
+        extractCount,
+        tfMemory,
+      });
     }
   } catch (error) {
-    forceGC();
-
+    lightCleanup();
     self.postMessage({
       id,
       type: 'ERROR',
       error: error?.message || 'Worker error',
+      backend: activeBackend,
     });
   }
 };
