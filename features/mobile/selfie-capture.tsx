@@ -22,6 +22,8 @@ import { format } from "date-fns"
 import { Slider } from "@/components/ui/slider"
 import { FaceVerificationService } from "@/lib/services/face-verification.service"
 import { OfflineSyncService } from "@/lib/services/offline-sync.service"
+import { BiometricCamera } from "@/components/biometrics/BiometricCamera"
+
 
 interface SelfieCaptureProps {
     profileImageUrl: string | null
@@ -481,109 +483,43 @@ export function SelfieCapture({
                             key="camera-container"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
-                            className="absolute inset-0 bg-slate-900"
+                            className="absolute inset-0 bg-slate-950 flex items-center justify-center"
                         >
-                            <video
-                                ref={videoRef}
-                                autoPlay
-                                playsInline
-                                muted
-                                className={`w-full h-full object-cover mirror transition-opacity duration-500 ${status === 'streaming' ? 'opacity-100' : 'opacity-0'}`}
-                                style={{ transform: 'scaleX(-1)' }}
-                            />
-
-                            {status === 'streaming' ? (
-                                <>
-                                    {/* Immersive SVG Scanning Mask & Glowing Border */}
-                                    <svg className="absolute inset-0 w-full h-full pointer-events-none z-20">
-                                        <defs>
-                                            <mask id="face-guide-mask">
-                                                {/* White mask blocks nothing */}
-                                                <rect width="100%" height="100%" fill="white" />
-                                                {/* Black cut-out for the face oval */}
-                                                <ellipse cx="50%" cy="50%" rx="35%" ry="38%" fill="black" />
-                                            </mask>
-                                        </defs>
-                                        
-                                        {/* Dimmed background overlay outside the oval cutout */}
-                                        <rect width="100%" height="100%" fill="rgba(2, 6, 23, 0.65)" mask="url(#face-guide-mask)" />
-                                        
-                                        {/* Stylized Glowing Scanning Border */}
-                                        <ellipse cx="50%" cy="50%" rx="35%" ry="38%" fill="none" stroke="rgba(255, 255, 255, 0.2)" strokeWidth="3" />
-                                        <motion.ellipse 
-                                            cx="50%" 
-                                            cy="50%" 
-                                            rx="35%" 
-                                            ry="38%" 
-                                            fill="none" 
-                                            stroke="rgba(6, 182, 212, 0.8)" 
-                                            strokeWidth="3" 
-                                            animate={{ 
-                                                stroke: ['rgba(6, 182, 212, 0.8)', 'rgba(34, 197, 94, 0.8)', 'rgba(6, 182, 212, 0.8)'] 
-                                            }}
-                                            transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
-                                        />
-                                    </svg>
-
-                                    {/* Scanning Wave Animation */}
-                                    <motion.div
-                                        className="absolute inset-x-0 h-24 bg-gradient-to-b from-primary/0 via-primary/10 to-primary/0 z-10 pointer-events-none"
-                                        animate={{ top: ['12.5%', '70%', '12.5%'] }}
-                                        transition={{ repeat: Infinity, duration: 2.5, ease: "easeInOut" }}
-                                    />
-
-                                    <motion.div
-                                        className="absolute inset-x-0 h-px bg-primary/40 z-10 shadow-[0_0_10px_rgba(var(--primary),0.3)] pointer-events-none"
-                                        animate={{ top: ['12.5%', '87.5%', '12.5%'] }}
-                                        transition={{ repeat: Infinity, duration: 2.5, ease: "easeInOut" }}
-                                    />
-
-                                    {/* Countdown Progress Ring UI */}
-                                    {countdown !== null && countdown > 0 && (
-                                         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none flex flex-col items-center justify-center z-30">
-                                             <div className="relative w-24 h-24 flex items-center justify-center">
-                                                 <svg className="absolute inset-0 w-full h-full transform -rotate-90">
-                                                     <circle cx="48" cy="48" r="40" stroke="rgba(255, 255, 255, 0.15)" strokeWidth="4" fill="rgba(15, 23, 42, 0.6)" />
-                                                     <motion.circle 
-                                                         cx="48" 
-                                                         cy="48" 
-                                                         r="40" 
-                                                         stroke="rgba(6, 182, 212, 1)" 
-                                                         strokeWidth="4" 
-                                                         fill="transparent" 
-                                                         strokeDasharray={251.2}
-                                                         animate={{ strokeDashoffset: 251.2 - ((countdown || 0) / 5) * 251.2 }}
-                                                         transition={{ duration: 0.3, ease: "easeOut" }}
-                                                         strokeLinecap="round"
-                                                     />
-                                                 </svg>
-                                                 <span className="text-4xl font-black text-white relative z-10">{countdown}</span>
-                                             </div>
-                                             <p className="text-white/80 text-[10px] uppercase font-black tracking-widest text-center mt-4 bg-slate-900/80 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 shadow-lg">
-                                                 Auto-Capture
-                                             </p>
+                            <BiometricCamera
+                                videoRefOut={videoRef}
+                                onStreamReady={() => setStatus('streaming')}
+                                statusText="Align face within oval target"
+                                className="h-full w-full max-w-none rounded-none border-none"
+                            >
+                                {/* Countdown Progress Ring UI */}
+                                {countdown !== null && countdown > 0 && (
+                                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none flex flex-col items-center justify-center z-30">
+                                         <div className="relative w-24 h-24 flex items-center justify-center">
+                                             <svg className="absolute inset-0 w-full h-full transform -rotate-90">
+                                                 <circle cx="48" cy="48" r="40" stroke="rgba(255, 255, 255, 0.15)" strokeWidth="4" fill="rgba(15, 23, 42, 0.6)" />
+                                                 <motion.circle 
+                                                     cx="48" 
+                                                     cy="48" 
+                                                     r="40" 
+                                                     stroke="rgba(6, 182, 212, 1)" 
+                                                     strokeWidth="4" 
+                                                     fill="transparent" 
+                                                     strokeDasharray={251.2}
+                                                     animate={{ strokeDashoffset: 251.2 - ((countdown || 0) / 5) * 251.2 }}
+                                                     transition={{ duration: 0.3, ease: "easeOut" }}
+                                                     strokeLinecap="round"
+                                                 />
+                                             </svg>
+                                             <span className="text-4xl font-black text-white relative z-10">{countdown}</span>
                                          </div>
-                                    )}
-                                </>
-                            ) : (
-                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/40 backdrop-blur-sm">
-                                    {status === 'error' ? (
-                                        <div className="text-center p-8 bg-red-500/10 backdrop-blur-md rounded-3xl border border-red-500/20">
-                                            <IconX className="w-12 h-12 text-red-500 mx-auto mb-4" />
-                                            <p className="text-xs font-black text-red-200 uppercase tracking-widest">{errorMessage}</p>
-                                            <Button onClick={() => startCamera()} className="mt-4 bg-red-500 hover:bg-red-600 rounded-xl">Retry Camera</Button>
-                                        </div>
-                                    ) : (
-                                        <div className="flex flex-col items-center gap-4 text-white/50">
-                                            <IconLoader2 className="w-12 h-12 animate-spin text-primary" />
-                                            <p className="text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">
-                                                {!modelsReady ? 'Loading Face Recognition...' : 'Initializing Camera'}
-                                            </p>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+                                         <p className="text-white/80 text-[10px] uppercase font-black tracking-widest text-center mt-4 bg-slate-900/80 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 shadow-lg">
+                                             Auto-Capture
+                                         </p>
+                                     </div>
+                                )}
+                            </BiometricCamera>
                         </motion.div>
+
                     )}
                 </AnimatePresence>
 

@@ -1,5 +1,5 @@
 // src/lib/face-pipeline.ts
-// Same settings for enrollment & verification
+// Standard settings for enrollment, verification, PWA, & Kiosk
 
 import {
   prepareEmbedding,
@@ -10,10 +10,20 @@ import {
   EMBEDDING_SIZE,
 } from './face-matching';
 
-/** Shared detector options – keep identical everywhere */
-export const FACE_DETECT_OPTIONS = {
+/** Shared camera configuration – 480x640 (3:4 portrait) */
+export const BIOMETRIC_CAMERA_CONFIG = {
+  width: 480,
+  height: 640,
+  aspectRatio: 0.75, // 3:4 portrait ratio
+  facingMode: 'user' as const,
   inputSize: 160 as const,
   scoreThreshold: 0.5,
+};
+
+/** Shared detector options – keep identical everywhere */
+export const FACE_DETECT_OPTIONS = {
+  inputSize: BIOMETRIC_CAMERA_CONFIG.inputSize,
+  scoreThreshold: BIOMETRIC_CAMERA_CONFIG.scoreThreshold,
 };
 
 export interface ExtractedFace {

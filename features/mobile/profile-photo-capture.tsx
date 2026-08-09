@@ -7,6 +7,8 @@ import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import { trpc } from "@/lib/trpc/client"
 import { FaceApiBrowserService } from "@/lib/services/faceapi-browser.service"
+import { BiometricCamera } from "@/components/biometrics/BiometricCamera"
+
 import {
     Camera as IconCamera,
     Loader2 as IconLoader2,
@@ -404,67 +406,33 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                             key="camera-container"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
-                            className="absolute inset-0 bg-slate-900"
+                            className="absolute inset-0 bg-slate-950 flex items-center justify-center"
                         >
-                            {/* Video is always rendered so videoRef is never null */}
-                            <video
-                                ref={videoRef}
-                                autoPlay
-                                playsInline
-                                muted
-                                className={`w-full h-full object-cover mirror transition-opacity duration-500 ${status === 'streaming' ? 'opacity-100' : 'opacity-0'}`}
-                                style={{ transform: 'scaleX(-1)' }}
-                            />
-
-                            {status === 'streaming' && (
-                                <>
-                                    {/* Modern Overlay Gradient */}
-                                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-slate-950/20 pointer-events-none" />
-
-                                    {/* Circular Guide Ring */}
-                                    <div className="absolute inset-0 flex items-center justify-center">
-                                        <div className="w-3/4 aspect-square rounded-full border-2 border-white/20 border-dashed animate-[spin_20s_linear_infinite]" />
-                                        <div className="absolute w-3/4 aspect-square rounded-full border border-white/40" />
-                                    </div>
-                                </>
-                            )}
-
-                            {status !== 'streaming' && (
-                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/40 backdrop-blur-sm text-white/50">
-                                    {hasPendingRequest ? (
-                                        <motion.div
-                                            initial={{ opacity: 0, scale: 0.9 }}
-                                            animate={{ opacity: 1, scale: 1 }}
-                                            className="text-center p-8 bg-amber-500/10 backdrop-blur-md rounded-3xl border border-amber-500/20 mx-6"
-                                        >
-                                            <IconClock className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-                                            <p className="text-base font-bold text-amber-200 mb-2">Photo Update Pending</p>
-                                            <p className="text-sm text-amber-100/70">Your photo update request is awaiting admin approval.</p>
-                                            <Button onClick={handleBack} variant="outline" className="mt-6 border-amber-500/30 text-amber-100 hover:bg-amber-500/20 rounded-xl">
-                                                Go Back
-                                            </Button>
-                                        </motion.div>
-                                    ) : status === 'error' ? (
-                                        <motion.div
-                                            initial={{ opacity: 0, scale: 0.9 }}
-                                            animate={{ opacity: 1, scale: 1 }}
-                                            className="text-center p-8 bg-red-500/10 backdrop-blur-md rounded-3xl border border-red-500/20"
-                                        >
-                                            <IconX className="w-12 h-12 text-red-500 mx-auto mb-4" />
-                                            <p className="text-sm font-bold text-red-200 uppercase tracking-widest">{errorMessage}</p>
-                                            <Button onClick={() => startCamera()} className="mt-6 bg-red-500 hover:bg-red-600 rounded-xl">
-                                                Retry Camera
-                                            </Button>
-                                        </motion.div>
-                                    ) : (
-                                        <div className="flex flex-col items-center gap-4">
-                                            <IconLoader2 className="w-12 h-12 animate-spin text-primary" />
-                                            <p className="text-[10px] uppercase font-black tracking-[0.3em] animate-pulse">Initializing Camera</p>
-                                        </div>
-                                    )}
+                            {hasPendingRequest ? (
+                                <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-950 p-6 text-center text-white">
+                                    <motion.div
+                                        initial={{ opacity: 0, scale: 0.9 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        className="p-8 bg-amber-500/10 backdrop-blur-md rounded-3xl border border-amber-500/20 max-w-sm"
+                                    >
+                                        <IconClock className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+                                        <p className="text-base font-bold text-amber-200 mb-2">Photo Update Pending</p>
+                                        <p className="text-sm text-amber-100/70">Your photo update request is awaiting admin approval.</p>
+                                        <Button onClick={handleBack} variant="outline" className="mt-6 border-amber-500/30 text-amber-100 hover:bg-amber-500/20 rounded-xl">
+                                            Go Back
+                                        </Button>
+                                    </motion.div>
                                 </div>
+                            ) : (
+                                <BiometricCamera
+                                    videoRefOut={videoRef}
+                                    onStreamReady={() => setStatus('streaming')}
+                                    statusText="Position face inside the oval"
+                                    className="h-full w-full max-w-none rounded-none border-none"
+                                />
                             )}
                         </motion.div>
+
                     )}
                 </AnimatePresence>
 

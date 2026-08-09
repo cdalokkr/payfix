@@ -21,6 +21,8 @@ import {
   getSyncInfo,
 } from '@/lib/face-db';
 import type { MatchResult } from '@/lib/face-matching';
+import { BiometricCamera } from '@/components/biometrics/BiometricCamera';
+
 
 // ---------- Types ----------
 type UiStatus =
@@ -249,14 +251,11 @@ export default function KioskAttendance({ tenantId }: Props) {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-gray-950 p-4 text-white">
       {/* Camera */}
-      <div className="relative aspect-[3/4] w-full max-w-sm overflow-hidden rounded-2xl bg-black">
-        <video
-          ref={videoRef}
-          autoPlay
-          muted
-          playsInline
-          className="h-full w-full object-cover"
-        />
+      <BiometricCamera
+        videoRefOut={videoRef}
+        statusText={status === 'ready' ? 'Position face inside oval frame' : undefined}
+      >
+
 
         {/* Overlay states */}
         {status !== 'ready' && status !== 'booting' && (
@@ -307,7 +306,8 @@ export default function KioskAttendance({ tenantId }: Props) {
             <p className="text-center text-lg">{message}</p>
           </div>
         )}
-      </div>
+      </BiometricCamera>
+
 
       {/* Status line */}
       <p className="mt-6 text-center text-lg">{message}</p>
