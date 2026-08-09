@@ -25,12 +25,15 @@ export class ProfileService {
                 );
 
                 ALTER TABLE IF EXISTS "profiles"
-                    ADD COLUMN IF NOT EXISTS "face_embedding" real[];
+                    ADD COLUMN IF NOT EXISTS "face_quality_score" real,
+                    ADD COLUMN IF NOT EXISTS "face_enrolled_at" timestamp with time zone,
+                    ADD COLUMN IF NOT EXISTS "face_photo_url" text;
             `)
         } catch (e) {
             // Ignore — table already exists or concurrent creation
         }
     }
+
 
     /**
      * Get user profile by ID with designation relation
@@ -302,12 +305,16 @@ export class ProfileService {
         requestId,
         action,
         rejectionReason,
-        reviewerId
+        reviewerId,
+        faceEmbedding,
+        faceQualityScore,
     }: {
         requestId: string
         action: 'approve' | 'reject'
         rejectionReason?: string
         reviewerId: string
+        faceEmbedding?: number[]
+        faceQualityScore?: number
     }) {
         await ProfileService.ensurePhotoRequestsSchema()
         const request = await db.query.profilePhotoRequests.findFirst({
@@ -319,13 +326,23 @@ export class ProfileService {
         if (request.status !== 'pending') throwAppError('FORBIDDEN', 'This request has already been reviewed')
 
         if (action === 'approve') {
+            const updatePayload: any = {
+                avatar_url: request.pending_photo_url,
+                avatar_status: 'custom',
+                face_photo_url: request.pending_photo_url,
+                updated_at: new Date()
+            }
+
+            if (faceEmbedding && Array.isArray(faceEmbedding) && faceEmbedding.length === 128) {
+                updatePayload.face_embedding = faceEmbedding
+                updatePayload.face_quality_score = faceQualityScore || 1.0
+                updatePayload.face_enrolled_at = new Date()
+            }
+
             await db.update(profiles)
-                .set({
-                    avatar_url: request.pending_photo_url,
-                    avatar_status: 'custom',
-                    updated_at: new Date()
-                })
+                .set(updatePayload)
                 .where(eq(profiles.id, request.profile_id))
+
 
             await db.update(profilePhotoRequests)
                 .set({

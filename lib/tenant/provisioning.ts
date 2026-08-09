@@ -157,12 +157,37 @@ export async function provisionTenant(
                 "updated_at"    timestamp with time zone DEFAULT now()
             );
 
-            ALTER TABLE IF EXISTS ${sql.raw(schemaName)}.profiles
-                ADD COLUMN IF NOT EXISTS "face_embedding" real[];
+            CREATE EXTENSION IF NOT EXISTS vector;
 
-            ALTER TABLE IF EXISTS ${sql.raw(schemaName)}.employee_settings
-                ADD COLUMN IF NOT EXISTS "face_vector" jsonb;
+            ALTER TABLE IF EXISTS ${sql.raw(schemaName)}.profiles
+                ADD COLUMN IF NOT EXISTS "face_quality_score" real,
+                ADD COLUMN IF NOT EXISTS "face_enrolled_at" timestamp with time zone,
+                ADD COLUMN IF NOT EXISTS "face_photo_url" text;
+
+            DO $$
+            BEGIN
+                BEGIN
+                    ALTER TABLE ${sql.raw(schemaName)}.profiles
+                        ALTER COLUMN "face_embedding" TYPE vector(128)
+                        USING (
+                            CASE 
+                                WHEN "face_embedding" IS NULL THEN NULL 
+                                ELSE ('[' || array_to_string("face_embedding", ',') || ']')::vector(128) 
+                            END
+                        );
+                EXCEPTION WHEN others THEN
+                    NULL;
+                END;
+            END $$;
+
+            DROP INDEX IF EXISTS ${sql.raw(schemaName)}.idx_${sql.raw(schemaName)}_face_embedding_hnsw;
+
+            CREATE INDEX IF NOT EXISTS idx_face_embedding_hnsw_${sql.raw(slug.replace(/-/g, '_'))}
+            ON ${sql.raw(schemaName)}.profiles
+            USING hnsw ("face_embedding" vector_cosine_ops)
+            WITH (m = 16, ef_construction = 64);
         `);
+
 
         // 4. Seed initial designations & office settings using explicit schema-qualified names
 
