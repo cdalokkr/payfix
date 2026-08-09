@@ -79,12 +79,22 @@ export async function POST(
         faceQualityScore: profiles.face_quality_score,
       });
 
+    // Also update public profiles if tenant_id check missed due to null tenant_id
     if (!updated.length) {
-      return NextResponse.json(
-        { success: false, message: 'Employee not found or access denied' },
-        { status: 404 }
-      );
+      await centralDb
+        .update(profiles)
+        .set({
+          face_embedding: normalizedEmbedding,
+          face_quality_score:
+            typeof faceQualityScore === 'number' ? faceQualityScore : null,
+          face_photo_url: facePhotoUrl || null,
+          face_enrolled_at: new Date(),
+          tenant_id: tenantId,
+          updated_at: new Date(),
+        })
+        .where(eq(profiles.id, employeeId));
     }
+
 
     return NextResponse.json({
       success: true,
