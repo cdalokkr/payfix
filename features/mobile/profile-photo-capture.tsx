@@ -376,9 +376,10 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
     }, [startCamera, stopCamera, hasPendingRequest])
 
     return (
-        <div className="fixed inset-0 bg-slate-950 flex flex-col z-[60] overflow-hidden">
+        <div className="relative w-full h-full min-h-[85vh] bg-slate-950 flex flex-col overflow-hidden rounded-3xl">
             {/* Immersive Camera Section at TOP (Portrait 3:4 Aligned with Kiosk & Daily Attendance) */}
-            <div className="relative w-full aspect-[3/4] sm:max-w-md sm:mx-auto bg-slate-900 shadow-2xl overflow-hidden">
+            <div className="relative w-full aspect-[3/4] bg-slate-900 shadow-2xl overflow-hidden shrink-0">
+
 
                 <AnimatePresence mode="wait">
                     {capturedImage ? (

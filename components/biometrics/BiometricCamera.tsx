@@ -32,6 +32,14 @@ export const BiometricCamera: React.FC<BiometricCameraProps> = ({
   const streamRef = useRef<MediaStream | null>(null);
   const isMountedRef = useRef(true);
 
+  // Store callback refs so parent re-renders never restart stream
+  const onStreamReadyRef = useRef(onStreamReady);
+  const onCameraErrorRef = useRef(onCameraError);
+  useEffect(() => {
+    onStreamReadyRef.current = onStreamReady;
+    onCameraErrorRef.current = onCameraError;
+  }, [onStreamReady, onCameraError]);
+
   const [cameraState, setCameraState] = useState<'initializing' | 'active' | 'error'>('initializing');
   const [errorMessage, setErrorMessage] = useState<string>('');
 
@@ -43,6 +51,11 @@ export const BiometricCamera: React.FC<BiometricCameraProps> = ({
   }, []);
 
   const startCamera = useCallback(async () => {
+    // If stream is already active and playing, don't restart it
+    if (streamRef.current && streamRef.current.active && cameraState === 'active') {
+      return;
+    }
+
     stopStream();
     setCameraState('initializing');
     setErrorMessage('');
@@ -94,8 +107,8 @@ export const BiometricCamera: React.FC<BiometricCameraProps> = ({
         await video.play().catch(() => {});
         setCameraState('active');
 
-        if (onStreamReady) {
-          onStreamReady(stream, video);
+        if (onStreamReadyRef.current) {
+          onStreamReadyRef.current(stream, video);
         }
       }
     } catch (err: any) {
@@ -107,11 +120,11 @@ export const BiometricCamera: React.FC<BiometricCameraProps> = ({
           ? 'Camera permission denied. Please allow camera access in browser settings.'
           : err?.message || 'Failed to start camera';
       setErrorMessage(msg);
-      if (onCameraError) {
-        onCameraError(err);
+      if (onCameraErrorRef.current) {
+        onCameraErrorRef.current(err);
       }
     }
-  }, [stopStream, videoRef, onStreamReady, onCameraError]);
+  }, [stopStream, videoRef, cameraState]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -121,7 +134,7 @@ export const BiometricCamera: React.FC<BiometricCameraProps> = ({
       isMountedRef.current = false;
       stopStream();
     };
-  }, [startCamera, stopStream]);
+  }, []); // Run ONCE on mount
 
   return (
     <div className={`relative aspect-[3/4] w-full max-w-sm overflow-hidden rounded-2xl bg-gray-950 shadow-2xl border border-gray-800 ${className}`}>
@@ -148,7 +161,7 @@ export const BiometricCamera: React.FC<BiometricCameraProps> = ({
           <AlertCircle className="mb-3 h-12 w-12 text-red-400" />
           <p className="mb-4 text-sm text-red-200">{errorMessage}</p>
           <button
-            onClick={startCamera}
+            onClick={() => startCamera()}
             className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500"
           >
             <RefreshCw className="h-4 w-4" /> Try Again

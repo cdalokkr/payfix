@@ -200,18 +200,28 @@ export function ExpressKioskApp() {
         }
     }, []);
 
-    // Pre-warm camera stream immediately on page mount
+    // Parallel initialization: Pre-warm camera + Load Models + Sync Vectors on Page Load
     useEffect(() => {
-        prewarmCamera();
-    }, [prewarmCamera]);
+        let mounted = true;
+        
+        async function parallelInit() {
+            // Start camera pre-warm asynchronously in background
+            void prewarmCamera();
 
-    // Load face-api.js models when paired
-    useEffect(() => {
-        if (pairingCode) {
-            loadFaceModels();
+            // Load face models and face vectors in parallel
+            if (pairingCode) {
+                void loadFaceModels();
+            }
         }
+
+        parallelInit();
+
+        return () => {
+            mounted = false;
+        };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pairingCode]);
+
 
 
 
