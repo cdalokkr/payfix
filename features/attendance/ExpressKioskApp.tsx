@@ -19,6 +19,8 @@ import { KioskIndexedDBService } from '@/lib/services/kiosk-idb.service';
 import { saveEmployeeFaces, getSyncInfo as getIdbSyncInfo, getAllEmployeeFaces, EmployeeFace } from '@/lib/face-db';
 import { l2Normalize, matchFaceFast, isGoodQualityFace, getAdaptiveThreshold } from '@/lib/face-threshold';
 import { trpc } from '@/lib/trpc/client';
+import { BiometricCameraModal } from '@/components/biometrics/BiometricCameraModal';
+
 
 
 

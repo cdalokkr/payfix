@@ -7,7 +7,8 @@ import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import { trpc } from "@/lib/trpc/client"
 import { FaceApiBrowserService } from "@/lib/services/faceapi-browser.service"
-import { BiometricCamera } from "@/components/biometrics/BiometricCamera"
+import { BiometricCameraModal } from "@/components/biometrics/BiometricCameraModal"
+
 
 import {
     Camera as IconCamera,
@@ -376,319 +377,87 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
     }, [startCamera, stopCamera, hasPendingRequest])
 
     return (
-        <div className="relative w-full h-full min-h-[85vh] bg-slate-950 flex flex-col overflow-hidden rounded-3xl">
-            {/* Immersive Camera Section at TOP (Portrait 3:4 Aligned with Kiosk & Daily Attendance) */}
-            <div className="relative w-full aspect-[3/4] bg-slate-900 shadow-2xl overflow-hidden shrink-0">
-
-
-                <AnimatePresence mode="wait">
-                    {capturedImage ? (
-                        <motion.div
-                            key="captured"
-                            initial={{ scale: 1.1, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            className="absolute inset-0"
-                        >
-                            <img src={capturedImage} alt="Captured" className="w-full h-full object-cover" />
-                            {status === 'success' && (
-                                <div className="absolute inset-0 bg-green-500/40 backdrop-blur-sm flex items-center justify-center">
-                                    <motion.div
-                                        initial={{ scale: 0 }}
-                                        animate={{ scale: 1 }}
-                                        className="bg-white rounded-full p-6 shadow-2xl"
-                                    >
-                                        <IconCheck className="w-16 h-16 text-green-500" />
-                                    </motion.div>
-                                </div>
-                            )}
-                        </motion.div>
-                    ) : (
-                        <motion.div
-                            key="camera-container"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            className="absolute inset-0 bg-slate-950 flex items-center justify-center"
-                        >
-                            {hasPendingRequest ? (
-                                <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-950 p-6 text-center text-white">
-                                    <motion.div
-                                        initial={{ opacity: 0, scale: 0.9 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        className="p-8 bg-amber-500/10 backdrop-blur-md rounded-3xl border border-amber-500/20 max-w-sm"
-                                    >
-                                        <IconClock className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-                                        <p className="text-base font-bold text-amber-200 mb-2">Photo Update Pending</p>
-                                        <p className="text-sm text-amber-100/70">Your photo update request is awaiting admin approval.</p>
-                                        <Button onClick={handleBack} variant="outline" className="mt-6 border-amber-500/30 text-amber-100 hover:bg-amber-500/20 rounded-xl">
-                                            Go Back
-                                        </Button>
-                                    </motion.div>
-                                </div>
-                            ) : (
-                                <BiometricCamera
-                                    videoRefOut={videoRef}
-                                    onStreamReady={() => setStatus('streaming')}
-                                    statusText="Position face inside the oval"
-                                    className="h-full w-full max-w-none rounded-none border-none"
-                                />
-                            )}
-                        </motion.div>
-
-                    )}
-                </AnimatePresence>
-
-                {/* Top Controls Header Overlay: Profile Photo Title + Working Close (X) Icon */}
-                <div className="absolute top-0 left-0 right-0 p-5 flex justify-between items-center z-30 bg-gradient-to-b from-black/70 via-black/30 to-transparent">
-                    <h2 className="text-xl font-black text-white tracking-tight">
-                        Profile Photo
-                    </h2>
-                    <motion.button
-                        whileTap={{ scale: 0.9 }}
-                        onClick={handleBack}
-                        aria-label="Close profile photo setup"
-                        className="p-2.5 rounded-2xl bg-black/40 backdrop-blur-xl border border-white/15 text-white hover:bg-black/60 transition-colors"
-                    >
-                        <IconX className="w-6 h-6" />
-                    </motion.button>
-                </div>
-            </div>
-
-            {/* Bottom Controls Section */}
-            <div className="flex-1 bg-slate-950 p-6 flex flex-col justify-between overflow-y-auto">
-                <div className="space-y-6">
-                    {/* Status Header for Captured state */}
-                    {status === 'captured' && (
-                        <div className="text-center space-y-1">
-                            <h3 className="text-xl font-bold text-white">Looking Good!</h3>
-                            <p className="text-slate-400 text-xs font-medium">Update your profile with this photo or retake it.</p>
-                        </div>
-                    )}
-                    {status === 'uploading' && (
-                        <div className="text-center space-y-1">
-                            <h3 className="text-xl font-bold text-white">Updating Profile...</h3>
-                            <p className="text-slate-400 text-xs font-medium">Please wait while we process your photo.</p>
-                        </div>
-                    )}
-
-
-                    {/* Employee Profile Card (Shows ONLY Name and Email) */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-lg"
-                    >
-                        <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 border-2 border-primary/30 flex items-center justify-center overflow-hidden shrink-0">
+        <BiometricCameraModal
+            isOpen={true}
+            onClose={handleBack}
+            title="Profile Photo"
+            subtitle="128-d Enrollment"
+            icon={<IconUser className="w-5 h-5 text-sky-400" />}
+            videoRefOut={videoRef}
+            onStreamReady={() => setStatus('streaming')}
+            statusText="Position face inside the oval"
+            footerSlot={
+                <div className="space-y-4">
+                    {/* Employee Profile Card */}
+                    <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 backdrop-blur-lg">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-sky-500/30 to-sky-500/10 border-2 border-sky-500/30 flex items-center justify-center overflow-hidden shrink-0">
                                 {profileData.avatarUrl ? (
                                     <img src={profileData.avatarUrl} alt="Current" className="w-full h-full object-cover" />
                                 ) : (
-                                    <IconUser className="w-6 h-6 text-primary" />
+                                    <IconUser className="w-5 h-5 text-sky-400" />
                                 )}
                             </div>
-                            <div className="flex-1 min-w-0 space-y-1">
-                                <p className="text-white font-bold text-base truncate">{profileData.fullName}</p>
-                                <div className="flex items-center gap-2">
-                                    <IconMail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                    <p className="text-slate-300 text-xs truncate">{profileData.email}</p>
-                                </div>
+                            <div className="flex-1 min-w-0 space-y-0.5">
+                                <p className="text-white font-bold text-sm truncate">{profileData.fullName}</p>
+                                <p className="text-slate-400 text-xs truncate">{profileData.email}</p>
                             </div>
                         </div>
-                    </motion.div>
-                </div>
+                    </div>
 
-                <div className="space-y-4 pt-6">
                     {status === 'streaming' && (
                         <Button
                             onClick={capturePhoto}
                             size="lg"
-                            className="w-full h-16 rounded-[2rem] bg-white text-slate-950 font-black text-lg hover:bg-slate-100 shadow-[0_20px_40px_rgba(255,255,255,0.1)] transition-all active:scale-95"
+                            className="w-full h-14 rounded-2xl bg-white text-slate-950 font-black text-base hover:bg-slate-100 shadow-lg transition-all active:scale-95 cursor-pointer"
                         >
-                            <IconCamera className="w-6 h-6 mr-3" />
+                            <IconCamera className="w-5 h-5 mr-2" />
                             CAPTURE NOW
                         </Button>
                     )}
 
                     {status === 'captured' && !isUploading && (
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-2 gap-3">
                             <Button
                                 onClick={handleRetake}
                                 variant="outline"
-                                className="h-16 rounded-[2rem] border-white/10 text-white bg-white/5 hover:bg-white/10 font-bold"
+                                className="h-12 rounded-2xl border-white/20 text-white hover:bg-white/10 font-bold"
                             >
-                                <IconRefresh className="w-5 h-5 mr-3" />
-                                RETAKE
+                                <IconRefresh className="w-4 h-4 mr-2" />
+                                Retake
                             </Button>
                             <Button
                                 onClick={handleUpload}
-                                className="h-16 rounded-[2rem] bg-primary hover:bg-primary/90 text-white font-black shadow-xl shadow-primary/20 transition-all active:scale-95"
+                                className="h-12 rounded-2xl bg-sky-500 hover:bg-sky-400 text-white font-bold"
                             >
-                                <IconCheck className="w-5 h-5 mr-3" />
-                                UPDATE
+                                <IconCheck className="w-4 h-4 mr-2" />
+                                Submit
                             </Button>
                         </div>
                     )}
-
-                    {status === 'uploading' && (
-                        <Button disabled className="w-full h-16 rounded-[2rem] bg-white/10 text-white font-bold opacity-80 cursor-not-allowed">
-                            <IconLoader2 className="w-5 h-5 mr-3 animate-spin" />
-                            UPLOADING...
-                        </Button>
-                    )}
                 </div>
-            </div>
-
-            {/* Bottom Slide-up Overlay for Progress/Success/Error */}
-            <AnimatePresence>
-                {(status === 'uploading' || status === 'success' || status === 'error') && (
+            }
+        >
+            {hasPendingRequest && (
+                <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-slate-950 p-6 text-center text-white">
                     <motion.div
-                        initial={{ y: '100%' }}
-                        animate={{ y: 0 }}
-                        exit={{ y: '100%' }}
-                        transition={{ type: 'spring', stiffness: 400, damping: 40 }}
-                        className="fixed bottom-0 left-0 right-0 z-[70] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]"
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="p-8 bg-amber-500/10 backdrop-blur-md rounded-3xl border border-amber-500/20 max-w-sm"
                     >
-                        <div className="max-w-md mx-auto bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden shadow-2xl">
-                            {status === 'uploading' && (
-                                <motion.div
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    className="p-5"
-                                >
-                                    <div className="flex items-center gap-4">
-                                        <div className="relative w-14 h-14 flex-shrink-0">
-                                            <motion.div
-                                                animate={{ rotate: 360 }}
-                                                transition={{ repeat: Infinity, duration: 1.5, ease: 'linear' }}
-                                                className="absolute inset-0 rounded-full border-3 border-t-primary border-r-primary/30 border-b-primary/10 border-l-primary/30"
-                                            />
-                                            <div className="absolute inset-0 flex items-center justify-center">
-                                                <IconCamera className="w-6 h-6 text-primary" />
-                                            </div>
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-white font-bold text-base">Uploading Photo...</p>
-                                            <div className="mt-2 space-y-0.5 max-h-16 overflow-y-auto">
-                                                {debugLogs.slice(-3).map((log, i) => (
-                                                    <p key={i} className={`text-xs truncate ${log.includes('ERROR') ? 'text-red-400' : 'text-slate-400'}`}>
-                                                        {log}
-                                                    </p>
-                                                ))}
-                                                {debugLogs.length === 0 && (
-                                                    <p className="text-slate-500 text-xs">Initializing...</p>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    {/* Progress bar */}
-                                    <motion.div
-                                        initial={{ scaleX: 0 }}
-                                        animate={{ scaleX: 1 }}
-                                        transition={{ duration: 3, ease: 'easeOut' }}
-                                        className="mt-4 h-1 bg-gradient-to-r from-primary via-primary/80 to-primary rounded-full origin-left"
-                                    />
-                                </motion.div>
-                            )}
-
-                            {status === 'success' && (
-                                <motion.div
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    className="p-5"
-                                >
-                                    <div className="flex items-center gap-4">
-                                        <motion.div
-                                            initial={{ scale: 0 }}
-                                            animate={{ scale: 1 }}
-                                            transition={{ type: 'spring', stiffness: 300, damping: 15 }}
-                                            className="w-14 h-14 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0"
-                                        >
-                                            <motion.div
-                                                initial={{ scale: 0 }}
-                                                animate={{ scale: 1 }}
-                                                transition={{ type: 'spring', delay: 0.15, stiffness: 400, damping: 10 }}
-                                            >
-                                                <IconCheck className="w-7 h-7 text-green-500" />
-                                            </motion.div>
-                                        </motion.div>
-                                        <div className="flex-1">
-                                            <motion.p
-                                                initial={{ opacity: 0, x: -10 }}
-                                                animate={{ opacity: 1, x: 0 }}
-                                                transition={{ delay: 0.1 }}
-                                                className="text-white font-bold text-base"
-                                            >
-                                                {isFirstTimeUpload ? 'Photo Updated!' : 'Photo Submitted for Approval!'}
-                                            </motion.p>
-                                            <motion.p
-                                                initial={{ opacity: 0, x: -10 }}
-                                                animate={{ opacity: 1, x: 0 }}
-                                                transition={{ delay: 0.2 }}
-                                                className="text-slate-400 text-sm mt-0.5"
-                                            >
-                                                {isFirstTimeUpload
-                                                    ? 'Redirecting to dashboard...'
-                                                    : 'An admin will review your request soon.'}
-                                            </motion.p>
-                                        </div>
-                                        <motion.div
-                                            initial={{ scale: 0, rotate: -180 }}
-                                            animate={{ scale: 1, rotate: 0 }}
-                                            transition={{ type: 'spring', delay: 0.25, stiffness: 300, damping: 15 }}
-                                            className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center"
-                                        >
-                                            <IconCheck className="w-5 h-5 text-white" />
-                                        </motion.div>
-                                    </div>
-                                </motion.div>
-                            )}
-
-                            {status === 'error' && (
-                                <motion.div
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    className="p-5"
-                                >
-                                    <div className="flex items-center gap-4">
-                                        <motion.div
-                                            initial={{ scale: 0 }}
-                                            animate={{ scale: 1 }}
-                                            transition={{ type: 'spring', stiffness: 300, damping: 15 }}
-                                            className="w-14 h-14 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0"
-                                        >
-                                            <IconX className="w-7 h-7 text-red-500" />
-                                        </motion.div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-white font-bold text-base">Upload Failed</p>
-                                            <p className="text-red-400 text-sm mt-0.5 truncate">
-                                                {errorMessage || 'Something went wrong'}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="mt-4 flex gap-3">
-                                        <Button
-                                            onClick={handleRetake}
-                                            variant="outline"
-                                            className="flex-1 h-11 rounded-xl border-white/10 bg-white/5 text-white hover:bg-white/10"
-                                        >
-                                            <IconRefresh className="w-4 h-4 mr-2" />
-                                            Retake
-                                        </Button>
-                                        <Button
-                                            onClick={handleUpload}
-                                            className="flex-1 h-11 rounded-xl bg-primary hover:bg-primary/90"
-                                        >
-                                            Try Again
-                                        </Button>
-                                    </div>
-                                </motion.div>
-                            )}
-                        </div>
+                        <IconClock className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+                        <p className="text-base font-bold text-amber-200 mb-2">Photo Update Pending</p>
+                        <p className="text-sm text-amber-100/70">Your photo update request is awaiting admin approval.</p>
+                        <Button onClick={handleBack} variant="outline" className="mt-6 border-amber-500/30 text-amber-100 hover:bg-amber-500/20 rounded-xl">
+                            Go Back
+                        </Button>
                     </motion.div>
-                )}
-            </AnimatePresence>
-
+                </div>
+            )}
             {/* Hidden canvas for capture */}
             <canvas ref={canvasRef} className="hidden" />
-        </div>
+        </BiometricCameraModal>
     )
 }
+
+
