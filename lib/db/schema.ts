@@ -26,6 +26,7 @@ export const designations = pgTable('designations', {
 // Profiles
 export const profiles = pgTable('profiles', {
     id: uuid('id').primaryKey(),
+    tenant_id: uuid('tenant_id'),
     email: text('email').notNull().unique(),
     full_name: text('full_name'),
     avatar_url: text('avatar_url'),
@@ -44,6 +45,7 @@ export const profiles = pgTable('profiles', {
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
+
 
 // Activities
 export const activities = pgTable('activities', {

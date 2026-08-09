@@ -1,38 +1,44 @@
 -- =========================================================================
--- Supabase Migration: 128-d Vector Schema & Face Matching RPC Alignment
--- PayFix Multi-Tenant Biometric Architecture
+-- PayFix Multi-Tenant 128-d Vector Schema Migration & RPC Alignment
+-- Run this in Supabase SQL Editor
 -- =========================================================================
 
--- 1. Ensure pgvector extension is enabled
+-- 1. Enable pgvector extension
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- 2. Ensure face_embedding column in profiles table is vector(128)
+-- 2. Add tenant_id column to profiles if not exists
 DO $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns 
-    WHERE table_name = 'profiles' AND column_name = 'face_embedding'
+    WHERE table_name = 'profiles' AND column_name = 'tenant_id'
   ) THEN
-    ALTER TABLE profiles ADD COLUMN face_embedding vector(128);
-  ELSE
-    BEGIN
-      ALTER TABLE profiles ALTER COLUMN face_embedding TYPE vector(128);
-    EXCEPTION WHEN others THEN
-      ALTER TABLE profiles DROP COLUMN IF EXISTS face_embedding;
-      ALTER TABLE profiles ADD COLUMN face_embedding vector(128);
-    END;
+    ALTER TABLE public.profiles ADD COLUMN tenant_id uuid;
   END IF;
 END $$;
 
--- 3. Create HNSW Cosine Similarity Index for fast vector search (<1ms)
-DROP INDEX IF EXISTS idx_profiles_face_embedding_hnsw;
+-- 3. Convert face_embedding column in public.profiles to vector(128)
+DO $$
+BEGIN
+  BEGIN
+    ALTER TABLE public.profiles 
+      ALTER COLUMN face_embedding TYPE vector(128) 
+      USING face_embedding::text::vector(128);
+  EXCEPTION WHEN others THEN
+    ALTER TABLE public.profiles DROP COLUMN IF EXISTS face_embedding;
+    ALTER TABLE public.profiles ADD COLUMN face_embedding vector(128);
+  END;
+END $$;
+
+-- 4. Create HNSW Cosine Similarity Index for sub-millisecond search (<1ms)
+DROP INDEX IF EXISTS public.idx_profiles_face_embedding_hnsw;
 
 CREATE INDEX idx_profiles_face_embedding_hnsw
-ON profiles
+ON public.profiles
 USING hnsw (face_embedding vector_cosine_ops)
 WITH (m = 16, ef_construction = 64);
 
--- 4. Complete 128-d match_employee_face RPC Function
+-- 5. Create Multi-Tenant 128-d match_employee_face RPC Function
 CREATE OR REPLACE FUNCTION public.match_employee_face(
   query_embedding vector(128),
   match_threshold float DEFAULT 0.42,
@@ -59,7 +65,7 @@ AS $$
     p.avatar_url,
     (1 - (p.face_embedding <=> query_embedding))::float AS similarity,
     1.0::real AS face_quality_score
-  FROM profiles p
+  FROM public.profiles p
   WHERE
     p.face_embedding IS NOT NULL
     AND (p_tenant_id IS NULL OR p.tenant_id = p_tenant_id)
@@ -68,7 +74,7 @@ AS $$
   LIMIT match_count;
 $$;
 
--- 5. Helper: Single Best Match Verification Function
+-- 6. Create Multi-Tenant verify_employee_face Helper Function
 CREATE OR REPLACE FUNCTION public.verify_employee_face(
   query_embedding vector(128),
   p_tenant_id uuid DEFAULT NULL,
