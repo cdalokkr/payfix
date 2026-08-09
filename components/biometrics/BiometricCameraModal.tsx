@@ -3,7 +3,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { X, RefreshCw, AlertCircle } from 'lucide-react';
 import { BIOMETRIC_CAMERA_CONFIG } from '@/lib/face-pipeline';
-import { motion } from 'framer-motion';
 
 interface BiometricCameraModalProps {
   isOpen: boolean;
@@ -39,15 +38,8 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   const streamRef = useRef<MediaStream | null>(null);
   const isMountedRef = useRef(true);
 
-  const onStreamReadyRef = useRef(onStreamReady);
-  const onCameraErrorRef = useRef(onCameraError);
-  useEffect(() => {
-    onStreamReadyRef.current = onStreamReady;
-    onCameraErrorRef.current = onCameraError;
-  }, [onStreamReady, onCameraError]);
-
-  const [cameraState, setCameraState] = useState<'initializing' | 'active' | 'error'>('initializing');
-  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [hasError, setHasError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const stopStream = useCallback(() => {
     if (streamRef.current) {
@@ -58,14 +50,10 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
   const startCamera = useCallback(async () => {
     if (!isOpen) return;
-
-    if (streamRef.current && streamRef.current.active && cameraState === 'active') {
-      return;
-    }
+    if (streamRef.current && streamRef.current.active) return;
 
     stopStream();
-    setCameraState('initializing');
-    setErrorMessage('');
+    setHasError(false);
 
     try {
       const primaryConstraints: MediaStreamConstraints = {
@@ -100,33 +88,23 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
         video.srcObject = stream;
         video.setAttribute('playsinline', 'true');
         video.muted = true;
+        // Asynchronous play without blocking rendering
+        video.play().catch(() => {});
 
-        await new Promise<void>((resolve) => {
-          if (video.readyState >= 2) resolve();
-          else video.onloadeddata = () => resolve();
-        });
-
-        await video.play().catch(() => {});
-        setCameraState('active');
-
-        if (onStreamReadyRef.current) {
-          onStreamReadyRef.current(stream, video);
+        if (onStreamReady) {
+          onStreamReady(stream, video);
         }
       }
     } catch (err: any) {
       if (!isMountedRef.current) return;
-      console.error('[BiometricCameraModal] Camera start error:', err);
-      setCameraState('error');
-      const msg =
-        err?.name === 'NotAllowedError'
-          ? 'Camera permission denied. Please check browser settings.'
-          : err?.message || 'Failed to start camera';
-      setErrorMessage(msg);
-      if (onCameraErrorRef.current) {
-        onCameraErrorRef.current(err);
+      console.error('[BiometricCameraModal] Camera error:', err);
+      setHasError(true);
+      setErrorMessage(err?.message || 'Failed to start camera');
+      if (onCameraError) {
+        onCameraError(err);
       }
     }
-  }, [isOpen, stopStream, videoRef, cameraState]);
+  }, [isOpen, stopStream, videoRef, onStreamReady, onCameraError]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -146,8 +124,9 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
   return (
     <div className="relative w-full h-full min-h-[580px] bg-slate-950 flex flex-col overflow-hidden rounded-3xl p-0">
-      {/* Edge-to-Edge Camera Viewport Container (Zero Padding) */}
+      {/* Edge-to-Edge Camera Viewport Container */}
       <div className="relative w-full aspect-[3/4] bg-black overflow-hidden flex-1 p-0">
+        {/* Instant HTML Video Element */}
         <video
           ref={videoRef}
           autoPlay
@@ -156,8 +135,8 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           className="h-full w-full object-cover transform -scale-x-100"
         />
 
-        {/* 1. Header Bar: Dynamic Title + Relative Close X Button (Glassmorphism Overlay) */}
-        <div className="absolute top-0 inset-x-0 p-4 z-30 flex items-center justify-between bg-gradient-to-b from-black/85 via-black/40 to-transparent backdrop-blur-xs">
+        {/* 1. Header Bar Overlay: Icon + Title + Styled Close (X) Icon Button */}
+        <div className="absolute top-0 inset-x-0 p-4 z-30 flex items-center justify-between bg-gradient-to-b from-black/90 via-black/40 to-transparent">
           <div className="flex items-center gap-3">
             {icon && (
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10 text-white backdrop-blur-md border border-white/15">
@@ -187,8 +166,8 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           </button>
         </div>
 
-        {/* 2. Biometric Oval Reticle with Outside Dimmed Backdrop */}
-        {cameraState === 'active' && (
+        {/* 2. Biometric Oval Reticle with Outside Dimmed Backdrop Overlay */}
+        {!hasError && (
           <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-between p-6">
             {/* Oval Face Guide Reticle with 9999px Dimmed Backdrop Mask */}
             <div className="relative mt-12 h-[68%] w-[82%] rounded-[50%] border-2 border-dashed border-sky-400/80 shadow-[0_0_0_9999px_rgba(2,6,23,0.65)] transition-colors duration-300">
@@ -207,23 +186,15 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           </div>
         )}
 
-        {/* Loading / Camera Initializing Overlay */}
-        {cameraState === 'initializing' && (
-          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-950 p-6 text-center text-white">
-            <div className="mb-3 h-12 w-12 animate-spin rounded-full border-4 border-sky-500/30 border-t-sky-400" />
-            <p className="text-sm font-semibold text-slate-300">Initializing camera feed...</p>
-          </div>
-        )}
-
         {/* Camera Error State Overlay */}
-        {cameraState === 'error' && (
+        {hasError && (
           <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-950 p-6 text-center text-white">
             <AlertCircle className="mb-3 h-12 w-12 text-red-400" />
             <p className="mb-4 text-sm text-red-200">{errorMessage}</p>
             <button
               type="button"
               onClick={() => startCamera()}
-              className="flex items-center gap-2 rounded-2xl bg-sky-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-sky-500 shadow-lg"
+              className="flex items-center gap-2 rounded-2xl bg-sky-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-sky-500 shadow-lg cursor-pointer"
             >
               <RefreshCw className="h-4 w-4" /> Retry Camera
             </button>
@@ -242,7 +213,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
         {children}
       </div>
 
-      {/* 3. Footer Slot (Zero Padding Constraint Integration) */}
+      {/* 3. Footer Slot Container */}
       {footerSlot && (
         <div className="w-full bg-slate-950 p-5 border-t border-slate-900 z-30 shrink-0">
           {footerSlot}
