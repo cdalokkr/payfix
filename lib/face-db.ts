@@ -96,6 +96,98 @@ export async function saveEmployeeFaces(
   console.log(`[idb FaceDB] Successfully saved ${employees.length} employees (${enrolledCount} enrolled vectors, L2-normalized) to IndexedDB.`);
 }
 
+/** Parse embedding from Supabase (array or string) */
+export function parseEmbedding(value: unknown): number[] | null {
+  let emb = value;
+  if (typeof emb === 'string') {
+    try {
+      emb = JSON.parse(emb.replace(/^\[/, '[').replace(/\]$/, ']'));
+    } catch {
+      return null;
+    }
+  }
+  if (!Array.isArray(emb) || emb.length !== 128) return null;
+  return emb;
+}
+
+/** Save single employee face to IndexedDB */
+export async function saveEmployeeFace(face: {
+  id: string;
+  fullName: string;
+  employeeCode?: string;
+  avatarUrl?: string | null;
+  embedding: number[];
+  faceQualityScore?: number;
+}): Promise<void> {
+  const normalized = l2Normalize(face.embedding);
+  const db = await getDB();
+  if (!db) return;
+  await db.put('employees', {
+    id: face.id,
+    fullName: face.fullName,
+    employeeCode: face.employeeCode,
+    avatarUrl: face.avatarUrl,
+    embedding: normalized,
+    faceQualityScore: face.faceQualityScore,
+    updatedAt: Date.now(),
+  });
+}
+
+/** Bulk replace all faces for a tenant */
+export async function saveEmployeeFacesBulk(
+  rows: Array<{
+    id: string;
+    fullName: string;
+    employeeCode?: string;
+    avatarUrl?: string | null;
+    embedding: unknown;
+    faceQualityScore?: number;
+  }>,
+  tenantId: string
+): Promise<{ saved: number; skipped: number }> {
+  const db = await getDB();
+  if (!db) return { saved: 0, skipped: rows.length };
+  const tx = db.transaction('employees', 'readwrite');
+  await tx.store.clear();
+
+  let saved = 0;
+  let skipped = 0;
+
+  for (const row of rows) {
+    const parsed = parseEmbedding(row.embedding);
+    if (!parsed) {
+      skipped++;
+      continue;
+    }
+
+    const normalized = l2Normalize(parsed);
+
+    await tx.store.put({
+      id: row.id,
+      fullName: row.fullName,
+      employeeCode: row.employeeCode,
+      avatarUrl: row.avatarUrl,
+      embedding: normalized,
+      faceQualityScore: row.faceQualityScore,
+      updatedAt: Date.now(),
+    });
+    saved++;
+  }
+
+  await tx.done;
+
+  await db.put('meta', {
+    key: 'sync-info',
+    lastSyncedAt: Date.now(),
+    tenantId,
+    totalEmployees: saved,
+    enrolledEmployees: saved,
+  });
+
+  return { saved, skipped };
+}
+
+
 /**
  * Pull 128-d embeddings from Supabase → parse stringified vector format → L2-normalize → IndexedDB
  */
