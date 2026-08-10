@@ -452,77 +452,123 @@ export function SelfieCapture({
     }, [startCamera, stopCamera])
 
     return (
-        <div className="fixed inset-0 z-[70] bg-slate-950 flex flex-col overflow-hidden">
-            <BiometricCameraModal
-                isOpen={true}
-                onClose={onBack || (() => {})}
-                title="Identify Yourself"
-                icon={<IconScanFace className="w-5 h-5 text-sky-400" />}
-                videoRefOut={videoRef}
-                onStreamReady={() => setStatus('streaming')}
-                statusText={status === 'streaming' ? 'Align face within oval target' : undefined}
-                isProcessing={status === 'verifying'}
-                footerSlot={
-                    <div className="space-y-3">
-                        {/* Dynamic Attendance Mode Pill Badge: Clocking In / Clocking Out */}
-                        <div className="flex justify-center -mt-1 mb-1">
-                            <div className="px-4 py-1.5 rounded-full bg-sky-500/10 border border-sky-500/25 backdrop-blur-md">
-                                <span className="text-xs font-black text-sky-400 uppercase tracking-widest">
-                                    {mode === 'check_out' ? 'Clocking Out' : 'Clocking In'}
-                                </span>
+        <div className="fixed inset-0 z-[70] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-hidden">
+            <div className="w-full max-w-md">
+                <BiometricCameraModal
+                    isOpen={true}
+                    onClose={onBack || (() => {})}
+                    title="Identify Yourself"
+                    icon={<IconScanFace className="w-5 h-5 text-sky-400" />}
+                    videoRefOut={videoRef}
+                    onStreamReady={() => setStatus('streaming')}
+                    statusText={status === 'streaming' ? 'Align face within circle target' : undefined}
+                    isProcessing={status === 'verifying'}
+                    footerSlot={
+                        <div className="space-y-3">
+                            {/* Dynamic Attendance Mode Pill Badge: Clocking In / Clocking Out */}
+                            <div className="flex justify-center -mt-1 mb-1">
+                                <div className="px-4 py-1.5 rounded-full bg-sky-500/10 border border-sky-500/25 backdrop-blur-md">
+                                    <span className="text-xs font-black text-sky-400 uppercase tracking-widest">
+                                        {mode === 'check_out' ? 'Clocking Out' : 'Clocking In'}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {status === 'streaming' && (
+                                <Button
+                                    onClick={handleProceed}
+                                    size="lg"
+                                    className="w-full h-14 rounded-2xl bg-sky-500 text-white font-black text-base hover:bg-sky-400 shadow-lg shadow-sky-500/25 transition-all active:scale-95 cursor-pointer"
+                                >
+                                    <IconScanFace className="w-5 h-5 mr-2" />
+                                    IDENTIFY NOW
+                                </Button>
+                            )}
+                        </div>
+                    }
+                >
+                    {/* Captured Selfie Preview Overlay (Stays 100% continuous without black screen) */}
+                    {capturedImage && status !== 'streaming' && status !== 'idle' && (
+                        <div className="absolute inset-0 z-25 bg-slate-950 flex items-center justify-center overflow-hidden">
+                            <img
+                                src={capturedImage}
+                                alt="Captured Selfie Preview"
+                                className="w-full h-full object-cover"
+                            />
+                        </div>
+                    )}
+
+                    {/* Verification Result Status Pill Card (Positions at exact bottom status location over clear selfie photo) */}
+                    {status === 'verified' && (
+                        <div className="absolute bottom-4 inset-x-4 z-30 flex flex-col items-center justify-center animate-in zoom-in-95 fade-in duration-200">
+                            <div className="w-full max-w-sm p-4 bg-slate-950/95 border-2 border-emerald-500/70 rounded-2xl backdrop-blur-md shadow-2xl space-y-1 text-center">
+                                <div className="flex items-center justify-center gap-2 text-emerald-400 font-black text-sm">
+                                    <IconCheckCheck className="w-5 h-5 text-emerald-400 shrink-0" />
+                                    <span>Success at {format(capturedAt || new Date(), "hh:mm:ss a, dd MMM yyyy")}</span>
+                                </div>
+                                <div className="text-[11px] font-mono text-emerald-200/90 flex items-center justify-center gap-2">
+                                    <span>Similarity: {(similarity * 100).toFixed(1)}%</span>
+                                </div>
+                                <div className="text-[10px] font-bold text-emerald-400/90 pt-0.5">
+                                    ✅ Attendance Recorded ({mode === 'check_out' ? 'Clock Out' : 'Clock In'})
+                                </div>
                             </div>
                         </div>
+                    )}
 
-                        {status === 'streaming' && (
-                            <Button
-                                onClick={handleProceed}
-                                size="lg"
-                                className="w-full h-14 rounded-2xl bg-white text-slate-950 font-black text-base hover:bg-slate-100 shadow-lg transition-all active:scale-95 cursor-pointer"
-                            >
-                                <IconScanFace className="w-5 h-5 mr-2 text-sky-500" />
-                                IDENTIFY NOW
-                            </Button>
-                        )}
-
-                        {status === 'captured' && (
-                            <div className="text-center space-y-1">
-                                <h3 className="text-xl font-bold text-white">Verify &amp; Proceed</h3>
-                                <p className="text-slate-400 text-xs font-medium">Ensure your face and background are clear.</p>
+                    {/* Verification Failed Result Status Pill Card */}
+                    {status === 'verify_failed' && (
+                        <div className="absolute bottom-4 inset-x-4 z-30 flex flex-col items-center justify-center animate-in zoom-in-95 fade-in duration-200">
+                            <div className="w-full max-w-sm p-4 bg-slate-950/95 border-2 border-rose-500/70 rounded-2xl backdrop-blur-md shadow-2xl space-y-1.5 text-center">
+                                <div className="flex items-center justify-center gap-2 text-rose-400 font-black text-sm">
+                                    <IconAlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
+                                    <span>Verification Unsuccessful</span>
+                                </div>
+                                <div className="text-xs font-bold text-rose-200">
+                                    {errorMessage || 'Face verification failed'}
+                                </div>
+                                <Button
+                                    onClick={retakePhoto}
+                                    className="mt-1 h-9 px-4 rounded-xl bg-sky-500 hover:bg-sky-400 text-white font-bold text-xs shadow-md cursor-pointer"
+                                >
+                                    <IconRefresh className="w-3.5 h-3.5 mr-1.5" /> Retake Selfie
+                                </Button>
                             </div>
-                        )}
-                    </div>
-                }
-            >
-                {/* Countdown Progress Ring UI Overlay */}
-                {countdown !== null && countdown > 0 && (
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none flex flex-col items-center justify-center z-30">
-                        <div className="relative w-24 h-24 flex items-center justify-center">
-                            <svg className="absolute inset-0 w-full h-full transform -rotate-90">
-                                <circle cx="48" cy="48" r="40" stroke="rgba(255, 255, 255, 0.15)" strokeWidth="4" fill="rgba(15, 23, 42, 0.6)" />
-                                <motion.circle 
-                                    cx="48" 
-                                    cy="48" 
-                                    r="40" 
-                                    stroke="rgba(6, 182, 212, 1)" 
-                                    strokeWidth="4" 
-                                    fill="transparent" 
-                                    strokeDasharray={251.2}
-                                    animate={{ strokeDashoffset: 251.2 - ((countdown || 0) / 5) * 251.2 }}
-                                    transition={{ duration: 0.3, ease: "easeOut" }}
-                                    strokeLinecap="round"
-                                />
-                            </svg>
-                            <span className="text-4xl font-black text-white relative z-10">{countdown}</span>
                         </div>
-                        <p className="text-white/80 text-[10px] uppercase font-black tracking-widest text-center mt-4 bg-slate-900/80 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 shadow-lg">
-                            Auto-Capture
-                        </p>
-                    </div>
-                )}
-                <canvas ref={canvasRef} className="hidden" />
-            </BiometricCameraModal>
+                    )}
+
+                    {/* Countdown Progress Ring UI Overlay */}
+                    {countdown !== null && countdown > 0 && status === 'streaming' && (
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none flex flex-col items-center justify-center z-30">
+                            <div className="relative w-24 h-24 flex items-center justify-center">
+                                <svg className="absolute inset-0 w-full h-full transform -rotate-90">
+                                    <circle cx="48" cy="48" r="40" stroke="rgba(255, 255, 255, 0.15)" strokeWidth="4" fill="rgba(15, 23, 42, 0.6)" />
+                                    <motion.circle 
+                                        cx="48" 
+                                        cy="48" 
+                                        r="40" 
+                                        stroke="rgba(6, 182, 212, 1)" 
+                                        strokeWidth="4" 
+                                        fill="transparent" 
+                                        strokeDasharray={251.2}
+                                        animate={{ strokeDashoffset: 251.2 - ((countdown || 0) / 5) * 251.2 }}
+                                        transition={{ duration: 0.3, ease: "easeOut" }}
+                                        strokeLinecap="round"
+                                    />
+                                </svg>
+                                <span className="text-4xl font-black text-white relative z-10">{countdown}</span>
+                            </div>
+                            <p className="text-white/80 text-[10px] uppercase font-black tracking-widest text-center mt-4 bg-slate-900/80 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 shadow-lg">
+                                Auto-Capture
+                            </p>
+                        </div>
+                    )}
+                    <canvas ref={canvasRef} className="hidden" />
+                </BiometricCameraModal>
+            </div>
         </div>
     )
+
 }
 
 export default SelfieCapture
