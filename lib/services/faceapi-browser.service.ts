@@ -202,13 +202,13 @@ export const FaceApiBrowserService = {
 
         try {
             const faceapi = window.faceapi;
-            // 0. Always pre-scale input to 320px off-screen canvas for guaranteed <50ms tensor extraction
+            // 0. Pre-scale input to 240px off-screen canvas for instant <80ms mobile GPU tensor pass
             let processInput: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement = input;
             const srcW = (input as HTMLVideoElement).videoWidth || (input as HTMLImageElement | HTMLCanvasElement).width || 480;
             const srcH = (input as HTMLVideoElement).videoHeight || (input as HTMLImageElement | HTMLCanvasElement).height || 640;
 
-            const targetW = 320;
-            const targetH = Math.round(320 * (srcH / (srcW || 1)));
+            const targetW = 240;
+            const targetH = Math.round(240 * (srcH / (srcW || 1)));
 
             if (typeof document !== 'undefined') {
                 if (!_scaledCanvas) _scaledCanvas = document.createElement('canvas');
@@ -220,6 +220,7 @@ export const FaceApiBrowserService = {
                     processInput = _scaledCanvas;
                 }
             }
+
 
 
             const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.4 });

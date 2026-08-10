@@ -192,11 +192,14 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
 
 
-            {/* Status Badge Overlay */}
-            {statusText && (
-              <div className="z-30 mb-2 rounded-full bg-slate-900/85 px-4 py-1.5 backdrop-blur-md border border-white/10 shadow-lg">
-                <p className="text-xs font-semibold text-sky-300">
-                  {statusText}
+            {/* Status Badge & Processing Indicator Overlay (Positioned below face area without blurring selfie) */}
+            {(statusText || isProcessing) && (
+              <div className="z-30 mb-2 rounded-full bg-slate-900/90 px-4 py-2 backdrop-blur-md border border-sky-500/30 shadow-xl flex items-center gap-2">
+                {isProcessing && (
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-sky-400/30 border-t-sky-400 shrink-0" />
+                )}
+                <p className="text-xs font-bold text-sky-300">
+                  {statusText || 'Extracting face vector & matching...'}
                 </p>
               </div>
             )}
@@ -218,16 +221,9 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           </div>
         )}
 
-        {/* Processing Spinner Overlay */}
-        {isProcessing && (
-          <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-slate-950/75 backdrop-blur-xs text-white">
-            <div className="mb-3 h-12 w-12 animate-spin rounded-full border-4 border-sky-400/30 border-t-sky-400" />
-            <p className="text-sm font-bold text-white">{statusText || 'Extracting face vector...'}</p>
-          </div>
-        )}
-
         {/* Custom Inner Slots */}
         {children}
+
       </div>
 
       {/* 3. Footer Slot Container */}
