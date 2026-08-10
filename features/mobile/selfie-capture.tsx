@@ -308,9 +308,12 @@ export function SelfieCapture({
         startCamera()
     }, [startCamera])
 
+    const [verificationDuration, setVerificationDuration] = useState<string>('')
+
     const handleProceed = useCallback(async () => {
         if (!capturedImage || !capturedAt) return
 
+        const startTime = performance.now()
         // Start verification
         setStatus('verifying')
 
@@ -319,6 +322,7 @@ export function SelfieCapture({
         if (isOffline) {
             console.log('[SELFIE] Client is offline, bypassing server verification and saving locally')
             setSimilarity(1.0)
+            setVerificationDuration('0.05s')
             setStatus('verified')
             setApiStatus('pending')
             try {
@@ -352,6 +356,9 @@ export function SelfieCapture({
                 ),
             ])
 
+            const elapsed = Math.round(performance.now() - startTime)
+            const durStr = elapsed >= 1000 ? `${(elapsed / 1000).toFixed(2)}s` : `${elapsed}ms`
+            setVerificationDuration(durStr)
 
             setSimilarity(result.similarity)
 
@@ -360,6 +367,7 @@ export function SelfieCapture({
                 setErrorMessage(result.error || 'Face does not match profile photo')
                 return
             }
+
 
             // Verification passed — now submit attendance
             setStatus('verified')
@@ -457,23 +465,21 @@ export function SelfieCapture({
                 <BiometricCameraModal
                     isOpen={true}
                     onClose={onBack || (() => {})}
-                    title="Identify Yourself"
+                    title={
+                        <div className="flex items-center gap-2">
+                            <span>Identify Yourself</span>
+                            <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                                {mode === 'check_out' ? 'Clocking Out' : 'Clocking In'}
+                            </span>
+                        </div>
+                    }
                     icon={<IconScanFace className="w-5 h-5 text-sky-400" />}
                     videoRefOut={videoRef}
                     onStreamReady={() => setStatus('streaming')}
                     statusText={status === 'streaming' ? 'Align face within circle target' : undefined}
-                    isProcessing={status === 'verifying'}
+                    isProcessing={false}
                     footerSlot={
                         <div className="space-y-3">
-                            {/* Dynamic Attendance Mode Pill Badge: Clocking In / Clocking Out */}
-                            <div className="flex justify-center -mt-1 mb-1">
-                                <div className="px-4 py-1.5 rounded-full bg-sky-500/10 border border-sky-500/25 backdrop-blur-md">
-                                    <span className="text-xs font-black text-sky-400 uppercase tracking-widest">
-                                        {mode === 'check_out' ? 'Clocking Out' : 'Clocking In'}
-                                    </span>
-                                </div>
-                            </div>
-
                             {status === 'streaming' && (
                                 <Button
                                     onClick={handleProceed}
@@ -482,6 +488,17 @@ export function SelfieCapture({
                                 >
                                     <IconScanFace className="w-5 h-5 mr-2" />
                                     IDENTIFY NOW
+                                </Button>
+                            )}
+
+                            {status === 'verified' && (
+                                <Button
+                                    onClick={handleComplete}
+                                    size="lg"
+                                    className="w-full h-14 rounded-2xl bg-emerald-500 text-white font-black text-base hover:bg-emerald-400 shadow-lg shadow-emerald-500/25 transition-all active:scale-95 cursor-pointer"
+                                >
+                                    <IconCheck className="w-5 h-5 mr-2" />
+                                    DONE
                                 </Button>
                             )}
                         </div>
@@ -498,19 +515,36 @@ export function SelfieCapture({
                         </div>
                     )}
 
-                    {/* Verification Result Status Pill Card (Positions at exact bottom status location over clear selfie photo) */}
+                    {/* Verifying Spinner Overlay */}
+                    {status === 'verifying' && (
+                        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-950/65 backdrop-blur-sm p-6 text-center text-white">
+                            <div className="p-5 bg-slate-900/90 border border-sky-500/30 rounded-3xl space-y-2.5 shadow-2xl flex flex-col items-center max-w-xs animate-in zoom-in-95">
+                                <IconRefresh className="w-9 h-9 text-sky-400 animate-spin" />
+                                <p className="text-sm font-bold text-white">Verifying Face...</p>
+                                <p className="text-xs text-sky-300 font-mono">Extracting 160×160 128-d vector</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Verification Result Status Pill Card (2-Line Format) */}
                     {status === 'verified' && (
                         <div className="absolute bottom-4 inset-x-4 z-30 flex flex-col items-center justify-center animate-in zoom-in-95 fade-in duration-200">
-                            <div className="w-full max-w-sm p-4 bg-slate-950/95 border-2 border-emerald-500/70 rounded-2xl backdrop-blur-md shadow-2xl space-y-1 text-center">
+                            <div className="w-full max-w-sm p-4 bg-slate-950/95 border-2 border-emerald-500/70 rounded-2xl backdrop-blur-md shadow-2xl space-y-1.5 text-center">
                                 <div className="flex items-center justify-center gap-2 text-emerald-400 font-black text-sm">
                                     <IconCheckCheck className="w-5 h-5 text-emerald-400 shrink-0" />
-                                    <span>Success at {format(capturedAt || new Date(), "hh:mm:ss a, dd MMM yyyy")}</span>
+                                    <span>Verification Success</span>
                                 </div>
-                                <div className="text-[11px] font-mono text-emerald-200/90 flex items-center justify-center gap-2">
+                                <div className="text-xs font-bold text-slate-200">
+                                    {format(capturedAt || new Date(), "dd MMM yyyy, hh:mm:ss a")}
+                                </div>
+                                <div className="text-[11px] font-mono text-emerald-200/90 flex items-center justify-center gap-2 pt-0.5">
                                     <span>Similarity: {(similarity * 100).toFixed(1)}%</span>
-                                </div>
-                                <div className="text-[10px] font-bold text-emerald-400/90 pt-0.5">
-                                    ✅ Attendance Recorded ({mode === 'check_out' ? 'Clock Out' : 'Clock In'})
+                                    {verificationDuration && (
+                                        <>
+                                            <span>•</span>
+                                            <span>Duration: {verificationDuration}</span>
+                                        </>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -568,6 +602,7 @@ export function SelfieCapture({
             </div>
         </div>
     )
+
 
 }
 

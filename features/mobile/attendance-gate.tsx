@@ -4,6 +4,7 @@ import React, { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
 import {
     AlertCircle as IconAlertCircle,
     Image as IconPhoto,
@@ -11,7 +12,40 @@ import {
     LogIn as IconLogin,
     LogOut as IconLogout,
     Loader2 as IconLoader2,
+    Cpu,
 } from "lucide-react"
+
+function getHardwareAccelerationInfo(): { backend: string; isGpu: boolean } {
+    if (typeof window === 'undefined') return { backend: 'CPU', isGpu: false };
+    try {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        if (!gl) return { backend: 'CPU (No WebGL)', isGpu: false };
+        const debugInfo = (gl as any).getExtension('WEBGL_debug_renderer_info');
+        if (debugInfo) {
+            const renderer = (gl as any).getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || '';
+            const isSoftware = renderer.toLowerCase().includes('swiftshader') || renderer.toLowerCase().includes('llvmpipe') || renderer.toLowerCase().includes('software');
+            if (isSoftware) return { backend: 'CPU Software', isGpu: false };
+            
+            let label = renderer.replace(/^ANGLE\s*\((.*)\)$/, '$1').split(',')[0].trim();
+            const upper = renderer.toUpperCase();
+            if (upper.includes('ARM') || upper.includes('MALI')) {
+                label = 'ARM Mali GPU';
+            } else if (upper.includes('ADRENO') || upper.includes('QUALCOMM')) {
+                label = 'Adreno GPU';
+            } else if (upper.includes('APPLE')) {
+                label = 'Apple GPU';
+            } else if (label.length > 18) {
+                label = label.slice(0, 18);
+            }
+            return { backend: `GPU: ${label}`, isGpu: true };
+        }
+        return { backend: 'WebGL GPU', isGpu: true };
+    } catch {
+        return { backend: 'CPU Fallback', isGpu: false };
+    }
+}
+
 import { trpc } from "@/lib/trpc/client"
 import { MobileAttendanceWizard } from "./mobile-attendance-wizard"
 
@@ -23,7 +57,9 @@ interface AttendanceGateProps {
 export function AttendanceGate({ profileImageUrl, hasProfileImage }: AttendanceGateProps) {
     const [showWizard, setShowWizard] = useState(false)
     const [wizardAction, setWizardAction] = useState<'clock_in' | 'clock_out'>('clock_in')
+    const [hardwareInfo] = useState(() => getHardwareAccelerationInfo())
     const utils = trpc.useUtils()
+
 
     // Get today's attendance status using IST date
     const { data: todayStatus, isLoading: statusLoading } = trpc.attendance.getTodayStatus.useQuery({
@@ -128,16 +164,24 @@ export function AttendanceGate({ profileImageUrl, hasProfileImage }: AttendanceG
             {/* Attendance Card */}
             <Card>
                 <CardHeader>
-                    <CardTitle>Today's Attendance</CardTitle>
-                    <CardDescription>
-                        {new Date().toLocaleDateString('en-IN', {
-                            weekday: 'long',
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric',
-                        })}
-                    </CardDescription>
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div>
+                            <CardTitle>Today's Attendance</CardTitle>
+                            <CardDescription>
+                                {new Date().toLocaleDateString('en-IN', {
+                                    weekday: 'long',
+                                    year: 'numeric',
+                                    month: 'long',
+                                    day: 'numeric',
+                                })}
+                            </CardDescription>
+                        </div>
+                        <Badge variant="outline" className={hardwareInfo.isGpu ? "bg-sky-500/10 text-sky-400 border-sky-500/30 px-2.5 py-1 font-bold text-xs flex items-center gap-1.5 shadow-sm" : "bg-amber-500/10 text-amber-400 border-amber-500/30 px-2.5 py-1 font-bold text-xs flex items-center gap-1.5 shadow-sm"}>
+                            <Cpu className="h-3.5 w-3.5 text-sky-400" /> {hardwareInfo.backend}
+                        </Badge>
+                    </div>
                 </CardHeader>
+
                 <CardContent className="space-y-4">
                     {isLoading ? (
                         <div className="flex justify-center py-8">

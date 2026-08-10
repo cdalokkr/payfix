@@ -7,7 +7,8 @@ import { BIOMETRIC_CAMERA_CONFIG } from '@/lib/face-pipeline';
 interface BiometricCameraModalProps {
   isOpen: boolean;
   onClose: () => void;
-  title: string;
+  title: string | React.ReactNode;
+
   subtitle?: string;
   icon?: React.ReactNode;
   videoRefOut?: React.RefObject<HTMLVideoElement | null>;
