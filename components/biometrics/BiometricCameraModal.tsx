@@ -184,11 +184,12 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
         {/* 2. Biometric Oval Reticle with Outside Dimmed Backdrop Overlay */}
         {!hasError && (
           <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-between p-6">
-            {/* Circular Face Guide Reticle with 9999px Dimmed Backdrop Mask */}
-            <div className="relative mt-10 w-[76%] aspect-square rounded-full border-2 border-dashed border-sky-400/80 shadow-[0_0_0_9999px_rgba(2,6,23,0.65)] transition-colors duration-300 flex items-center justify-center">
+            {/* Circular Face Guide Reticle (5% Larger w-[81%]) with 9999px Dimmed Backdrop Mask */}
+            <div className="relative mt-8 w-[81%] aspect-square rounded-full border-2 border-dashed border-sky-400/80 shadow-[0_0_0_9999px_rgba(2,6,23,0.65)] transition-colors duration-300 flex items-center justify-center">
               <div className="absolute -top-1 left-1/2 h-3 w-8 -translate-x-1/2 rounded-full bg-sky-400/90 shadow-[0_0_10px_rgba(56,189,248,0.8)]" />
               <div className="absolute -bottom-1 left-1/2 h-3 w-8 -translate-x-1/2 rounded-full bg-sky-400/90 shadow-[0_0_10px_rgba(56,189,248,0.8)]" />
             </div>
+
 
 
             {/* Status Badge Overlay */}

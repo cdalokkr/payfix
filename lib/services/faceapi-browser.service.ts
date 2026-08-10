@@ -184,6 +184,99 @@ export const FaceApiBrowserService = {
     },
 
     /**
+     * Standardized Landmark Alignment & 20% Padded Square Crop (160x160).
+     * 1. Detects face + 68 landmarks using inputSize 160.
+     * 2. Computes eye alignment angle and rotates face horizontally.
+     * 3. Calculates 20% padded square bounding box around face.
+     * 4. Crops and resizes to 160x160 canvas.
+     * 5. Extracts L2-normalized 128-d descriptor.
+     */
+    async extractAlignedSquareFaceCrop(
+        input: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement,
+        onLog?: (msg: string) => void
+    ): Promise<{ descriptor: Float32Array; croppedDataUrl: string; score: number } | null> {
+        if (!_modelsLoaded || !window.faceapi) {
+            onLog?.('Models not loaded.');
+            return null;
+        }
+
+        try {
+            const faceapi = window.faceapi;
+            const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.4 });
+
+            const detection = await faceapi
+                .detectSingleFace(input, options)
+                .withFaceLandmarks()
+                .withFaceDescriptor();
+
+            if (!detection) {
+                onLog?.('No face detected.');
+                return null;
+            }
+
+            // 1. Get face bounding box & landmarks
+            const { box } = detection.detection;
+            const landmarks = detection.landmarks;
+
+            // 2. Compute eye alignment angle
+            const leftEye = landmarks.getLeftEye();
+            const rightEye = landmarks.getRightEye();
+
+            const leftEyeCenter = {
+                x: leftEye.reduce((sum: number, p: any) => sum + p.x, 0) / leftEye.length,
+                y: leftEye.reduce((sum: number, p: any) => sum + p.y, 0) / leftEye.length,
+            };
+            const rightEyeCenter = {
+                x: rightEye.reduce((sum: number, p: any) => sum + p.x, 0) / rightEye.length,
+                y: rightEye.reduce((sum: number, p: any) => sum + p.y, 0) / rightEye.length,
+            };
+
+            const dx = rightEyeCenter.x - leftEyeCenter.x;
+            const dy = rightEyeCenter.y - leftEyeCenter.y;
+            const angle = Math.atan2(dy, dx); // radians
+
+            // 3. Compute 20% padded square bounding box
+            const maxDim = Math.max(box.width, box.height);
+            const padding = maxDim * 0.20;
+            const squareSize = maxDim + padding * 2;
+
+            const centerX = box.x + box.width / 2;
+            const centerY = box.y + box.height / 2;
+
+            // 4. Create 160x160 crop canvas
+            const cropCanvas = document.createElement('canvas');
+            cropCanvas.width = 160;
+            cropCanvas.height = 160;
+            const ctx = cropCanvas.getContext('2d');
+
+            if (ctx) {
+                ctx.save();
+                ctx.translate(80, 80);
+                const scale = 160 / squareSize;
+                ctx.scale(scale, scale);
+                ctx.rotate(-angle);
+                ctx.drawImage(input, -centerX, -centerY);
+                ctx.restore();
+            }
+
+            const croppedDataUrl = cropCanvas.toDataURL('image/jpeg', 0.88);
+            const normalized = l2Normalize(Array.from(detection.descriptor));
+
+            onLog?.(`Face aligned & cropped to 160x160 (${(detection.detection.score * 100).toFixed(1)}% score)`);
+
+            return {
+                descriptor: new Float32Array(normalized),
+                croppedDataUrl,
+                score: detection.detection.score,
+            };
+        } catch (err) {
+            onLog?.(`Aligned crop extraction error: ${err}`);
+            return null;
+        }
+    },
+
+
+    /**
      * Client-side Quality Gate: Checks brightness & contrast before running heavy AI passes.
      * Rejects dark or unlit frames in <2ms.
      */

@@ -207,8 +207,8 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         }
     }, [stopCamera])
 
-    // Capture photo
-    const capturePhoto = useCallback(() => {
+    // Capture photo using 160x160 Padded Square Face Alignment
+    const capturePhoto = useCallback(async () => {
         if (!videoRef.current || !canvasRef.current || status !== 'streaming') return
 
         const video = videoRef.current
@@ -216,32 +216,40 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         const ctx = canvas.getContext('2d')
         if (!ctx) return
 
-        // Higher resolution for clearer photos (720x720 for quality)
-        canvas.width = 720
-        canvas.height = 720
+        // 1. Try 160x160 Aligned Face Crop
+        try {
+            const alignedResult = await FaceApiBrowserService.extractAlignedSquareFaceCrop(video);
+            if (alignedResult?.croppedDataUrl) {
+                setCapturedImage(alignedResult.croppedDataUrl);
+                setStatus('captured');
+                stopCamera();
+                return;
+            }
+        } catch (e) {
+            console.warn('[ProfilePhotoCapture] Aligned crop fallback:', e);
+        }
 
-        // Source dimensions
+        // 2. Fallback center square crop if face-api alignment is offline
+        canvas.width = 480
+        canvas.height = 480
         const vw = video.videoWidth
         const vh = video.videoHeight
         const size = Math.min(vw, vh)
-
-        // Calculate crop for center square
         const sx = (vw - size) / 2
         const sy = (vh - size) / 2
 
-        // Draw cropped square video frame
         ctx.save()
-        // Mirror if it's the user camera
         ctx.translate(canvas.width, 0)
         ctx.scale(-1, 1)
         ctx.drawImage(video, sx, sy, size, size, 0, 0, canvas.width, canvas.height)
         ctx.restore()
-        // Use 0.85 quality for good compression with minimal visual difference
+
         const imageDataUrl = canvas.toDataURL('image/jpeg', 0.85)
         setCapturedImage(imageDataUrl)
         setStatus('captured')
         stopCamera()
     }, [stopCamera, status])
+
 
     // Retake photo
     const handleRetake = useCallback(() => {

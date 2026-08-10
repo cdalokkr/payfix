@@ -630,8 +630,13 @@ export function ExpressKioskApp() {
                     }
                 }
 
-                // Extract live face descriptor directly from native HTMLVideoElement (zero image distortion)
-                const liveDescriptor = await FaceApiBrowserService.extractDescriptor(video);
+                // Extract aligned 160x160 square face crop & 128-d descriptor
+                const alignedResult = await FaceApiBrowserService.extractAlignedSquareFaceCrop(video);
+                const liveDescriptor = alignedResult?.descriptor || await FaceApiBrowserService.extractDescriptor(video);
+                if (alignedResult?.croppedDataUrl) {
+                    setCapturedFreezeUrl(alignedResult.croppedDataUrl);
+                }
+
 
                 if (!liveDescriptor) {
                     playErrorChimeSound();
