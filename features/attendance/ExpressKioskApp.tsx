@@ -1139,15 +1139,22 @@ export function ExpressKioskApp() {
             {/* =========================================================================
                 VERIFICATION CAMERA MODAL DIALOG
                ========================================================================= */}
-            <Dialog open={isVerificationModalOpen} onOpenChange={(open) => !open && closeVerificationModal()}>
+            <Dialog
+                open={isVerificationModalOpen}
+                onOpenChange={(open) => {
+                    if (!open && !isScanning) closeVerificationModal();
+                }}
+            >
                 <DialogContent className="max-w-md w-[95vw] bg-slate-950 border-slate-800 text-slate-100 p-0 overflow-hidden shadow-2xl rounded-3xl backdrop-blur-2xl [&>button]:hidden">
                     <BiometricCameraModal
                         isOpen={isVerificationModalOpen}
-                        onClose={closeVerificationModal}
+                        onClose={() => {
+                            if (!isScanning) closeVerificationModal();
+                        }}
                         title="Face Verification Scanner"
                         icon={<ScanFace className="h-5 w-5 text-sky-400" />}
                         videoRefOut={videoRef}
-                        statusText={isScanning && !verificationResult ? "Extracting face vector & matching..." : undefined}
+                        statusText={isScanning && !verificationResult ? "Extracting 160×160 vector & matching..." : undefined}
                         isProcessing={isScanning && !verificationResult}
                         footerSlot={
                             <div className="w-full flex items-center justify-center">
@@ -1178,9 +1185,10 @@ export function ExpressKioskApp() {
                             />
                         )}
 
-                        {/* Detailed Verification Result Step Overlay Card (Success / Unsuccess) */}
+                        {/* Detailed Verification Result Step Overlay Card (Over Clear Selfie Preview) */}
                         {verificationResult && (
-                            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center p-6 bg-slate-950/92 backdrop-blur-xl animate-in zoom-in-95 duration-200 text-center">
+                            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center p-5 bg-slate-950/65 backdrop-blur-sm animate-in zoom-in-95 duration-200 text-center">
+
                                 {verificationResult.matched ? (
                                     <div className="w-full max-w-sm p-6 bg-emerald-500/10 border border-emerald-500/30 rounded-3xl space-y-4 shadow-2xl">
                                         <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center border-2 border-emerald-500/40 shadow-lg">

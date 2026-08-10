@@ -202,26 +202,25 @@ export const FaceApiBrowserService = {
 
         try {
             const faceapi = window.faceapi;
-            // 0. Downscale input to 480px max-dim for ultra-fast <40ms tensor extraction
+            // 0. Always pre-scale input to 320px off-screen canvas for guaranteed <50ms tensor extraction
             let processInput: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement = input;
-            const srcW = (input as HTMLVideoElement).videoWidth || (input as HTMLImageElement | HTMLCanvasElement).width || 0;
-            const srcH = (input as HTMLVideoElement).videoHeight || (input as HTMLImageElement | HTMLCanvasElement).height || 0;
+            const srcW = (input as HTMLVideoElement).videoWidth || (input as HTMLImageElement | HTMLCanvasElement).width || 480;
+            const srcH = (input as HTMLVideoElement).videoHeight || (input as HTMLImageElement | HTMLCanvasElement).height || 640;
 
-            if (srcW > 480 || srcH > 480) {
-                const scale = Math.min(480 / srcW, 480 / srcH);
-                const targetW = Math.round(srcW * scale);
-                const targetH = Math.round(srcH * scale);
-                if (typeof document !== 'undefined') {
-                    if (!_scaledCanvas) _scaledCanvas = document.createElement('canvas');
-                    _scaledCanvas.width = targetW;
-                    _scaledCanvas.height = targetH;
-                    const ctx = _scaledCanvas.getContext('2d');
-                    if (ctx) {
-                        ctx.drawImage(input, 0, 0, targetW, targetH);
-                        processInput = _scaledCanvas;
-                    }
+            const targetW = 320;
+            const targetH = Math.round(320 * (srcH / (srcW || 1)));
+
+            if (typeof document !== 'undefined') {
+                if (!_scaledCanvas) _scaledCanvas = document.createElement('canvas');
+                _scaledCanvas.width = targetW;
+                _scaledCanvas.height = targetH;
+                const ctx = _scaledCanvas.getContext('2d');
+                if (ctx) {
+                    ctx.drawImage(input, 0, 0, targetW, targetH);
+                    processInput = _scaledCanvas;
                 }
             }
+
 
             const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.4 });
 
