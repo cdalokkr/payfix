@@ -385,7 +385,7 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
 
             videoRefOut={videoRef}
             onStreamReady={() => setStatus('streaming')}
-            statusText="Position face inside the oval"
+            statusText={status === 'captured' ? 'Photo captured! Review below' : 'Position face inside the circle'}
             footerSlot={
                 <div className="space-y-4">
                     {/* Employee Profile Card */}
@@ -420,15 +420,14 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                         <div className="grid grid-cols-2 gap-3">
                             <Button
                                 onClick={handleRetake}
-                                variant="outline"
-                                className="h-12 rounded-2xl border-white/20 text-white hover:bg-white/10 font-bold"
+                                className="h-12 rounded-2xl border border-white/20 bg-slate-800 hover:bg-slate-700 text-white font-extrabold text-sm shadow-md"
                             >
-                                <IconRefresh className="w-4 h-4 mr-2" />
+                                <IconRefresh className="w-4 h-4 mr-2 text-sky-400" />
                                 Retake
                             </Button>
                             <Button
                                 onClick={handleUpload}
-                                className="h-12 rounded-2xl bg-sky-500 hover:bg-sky-400 text-white font-bold"
+                                className="h-12 rounded-2xl bg-sky-500 hover:bg-sky-400 text-white font-black text-sm shadow-lg shadow-sky-500/25"
                             >
                                 <IconCheck className="w-4 h-4 mr-2" />
                                 Submit
@@ -438,6 +437,18 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                 </div>
             }
         >
+            {/* Captured Selfie Photo Preview Overlay */}
+            {capturedImage && status === 'captured' && (
+                <div className="absolute inset-0 z-25 bg-slate-950 flex items-center justify-center overflow-hidden">
+                    <img
+                        src={capturedImage}
+                        alt="Captured Selfie Preview"
+                        className="w-full h-full object-cover transform -scale-x-100"
+                    />
+                </div>
+            )}
+
+
             {hasPendingRequest && (
                 <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-slate-950 p-6 text-center text-white">
                     <motion.div
