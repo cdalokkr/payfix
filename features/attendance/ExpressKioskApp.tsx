@@ -32,14 +32,26 @@ function getHardwareAccelerationInfo(): { backend: string; isGpu: boolean } {
             const renderer = (gl as any).getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || '';
             const isSoftware = renderer.toLowerCase().includes('swiftshader') || renderer.toLowerCase().includes('llvmpipe') || renderer.toLowerCase().includes('software');
             if (isSoftware) return { backend: 'CPU Software', isGpu: false };
-            const cleanName = renderer.replace(/^ANGLE\s*\((.*)\)$/, '$1').split(',')[0].trim();
-            return { backend: `GPU: ${cleanName.slice(0, 16)}`, isGpu: true };
+            
+            let label = renderer.replace(/^ANGLE\s*\((.*)\)$/, '$1').split(',')[0].trim();
+            const upper = renderer.toUpperCase();
+            if (upper.includes('ARM') || upper.includes('MALI')) {
+                label = 'ARM Mali GPU';
+            } else if (upper.includes('ADRENO') || upper.includes('QUALCOMM')) {
+                label = 'Adreno GPU';
+            } else if (upper.includes('APPLE')) {
+                label = 'Apple GPU';
+            } else if (label.length > 18) {
+                label = label.slice(0, 18);
+            }
+            return { backend: `GPU: ${label}`, isGpu: true };
         }
         return { backend: 'WebGL GPU', isGpu: true };
     } catch {
         return { backend: 'CPU Fallback', isGpu: false };
     }
 }
+
 
 
 
