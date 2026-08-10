@@ -460,19 +460,19 @@ export function SelfieCapture({
     }, [startCamera, stopCamera])
 
     return (
-        <div className="fixed inset-0 z-[70] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-hidden">
+        <div className="fixed inset-0 z-[70] bg-slate-950/80 backdrop-blur-md flex flex-col items-center justify-center p-3 sm:p-6 overflow-hidden">
+            {/* Topmost Mode Badge Row above Camera Screen Header */}
+            <div className="w-full max-w-md flex justify-center pb-2">
+                <span className="text-[11px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/35 backdrop-blur-md shadow-lg">
+                    {mode === 'check_out' ? 'CLOCKING OUT' : 'CLOCKING IN'}
+                </span>
+            </div>
+
             <div className="w-full max-w-md">
                 <BiometricCameraModal
                     isOpen={true}
                     onClose={onBack || (() => {})}
-                    title={
-                        <div className="flex items-center gap-2">
-                            <span>Identify Yourself</span>
-                            <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30">
-                                {mode === 'check_out' ? 'Clocking Out' : 'Clocking In'}
-                            </span>
-                        </div>
-                    }
+                    title="Identify Yourself"
                     icon={<IconScanFace className="w-5 h-5 text-sky-400" />}
                     videoRefOut={videoRef}
                     onStreamReady={() => setStatus('streaming')}
@@ -515,16 +515,19 @@ export function SelfieCapture({
                         </div>
                     )}
 
-                    {/* Verifying Spinner Overlay */}
+                    {/* Verifying Spinner Status Pill (Positions at exact bottom status location over clear selfie) */}
                     {status === 'verifying' && (
-                        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-950/65 backdrop-blur-sm p-6 text-center text-white">
-                            <div className="p-5 bg-slate-900/90 border border-sky-500/30 rounded-3xl space-y-2.5 shadow-2xl flex flex-col items-center max-w-xs animate-in zoom-in-95">
-                                <IconRefresh className="w-9 h-9 text-sky-400 animate-spin" />
-                                <p className="text-sm font-bold text-white">Verifying Face...</p>
-                                <p className="text-xs text-sky-300 font-mono">Extracting 160×160 128-d vector</p>
+                        <div className="absolute bottom-4 inset-x-4 z-30 flex flex-col items-center justify-center animate-in zoom-in-95 fade-in duration-200">
+                            <div className="w-full max-w-sm p-3.5 bg-slate-950/95 border-2 border-sky-500/70 rounded-2xl backdrop-blur-md shadow-2xl flex items-center justify-center gap-3 text-center">
+                                <IconRefresh className="w-5 h-5 text-sky-400 animate-spin shrink-0" />
+                                <div className="text-left">
+                                    <p className="text-xs font-bold text-white">Verifying Face...</p>
+                                    <p className="text-[10px] text-sky-300 font-mono">Extracting 160×160 128-d vector</p>
+                                </div>
                             </div>
                         </div>
                     )}
+
 
                     {/* Verification Result Status Pill Card (2-Line Format) */}
                     {status === 'verified' && (

@@ -38,10 +38,44 @@ import {
     IndianRupee,
     Receipt,
     TicketCheck,
-    Briefcase
+    Briefcase,
+    ShieldAlert,
+    Smartphone,
+    Cpu
 } from "lucide-react"
 import { usePwaCheck } from "@/hooks/use-pwa-check"
 import { isDefaultAvatar } from "@/lib/utils/avatar-helper"
+
+function getHardwareAccelerationInfo(): { backend: string; isGpu: boolean } {
+    if (typeof window === 'undefined') return { backend: 'CPU', isGpu: false };
+    try {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        if (!gl) return { backend: 'CPU (No WebGL)', isGpu: false };
+        const debugInfo = (gl as any).getExtension('WEBGL_debug_renderer_info');
+        if (debugInfo) {
+            const renderer = (gl as any).getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || '';
+            const isSoftware = renderer.toLowerCase().includes('swiftshader') || renderer.toLowerCase().includes('llvmpipe') || renderer.toLowerCase().includes('software');
+            if (isSoftware) return { backend: 'CPU Software', isGpu: false };
+            
+            let label = renderer.replace(/^ANGLE\s*\((.*)\)$/, '$1').split(',')[0].trim();
+            const upper = renderer.toUpperCase();
+            if (upper.includes('ARM') || upper.includes('MALI')) {
+                label = 'ARM Mali GPU';
+            } else if (upper.includes('ADRENO') || upper.includes('QUALCOMM')) {
+                label = 'Adreno GPU';
+            } else if (upper.includes('APPLE')) {
+                label = 'Apple GPU';
+            } else if (label.length > 18) {
+                label = label.slice(0, 18);
+            }
+            return { backend: `GPU: ${label}`, isGpu: true };
+        }
+        return { backend: 'WebGL GPU', isGpu: true };
+    } catch {
+        return { backend: 'CPU Fallback', isGpu: false };
+    }
+}
 
 interface MobileDashboardProps {
     profile: {
@@ -90,6 +124,8 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
     const { isPwa, isMobile, isReady } = usePwaCheck(isPwaServer)
     const [isDesktop, setIsDesktop] = useState(false)
     const [isPhotoCaptureOpen, setIsPhotoCaptureOpen] = useState(false)
+    const [hardwareInfo] = useState(() => getHardwareAccelerationInfo())
+
 
 
     useEffect(() => {
@@ -367,7 +403,16 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
                                     </span>
                                 </motion.div>
                             )}
+
+                            {/* Hardware Acceleration Badge */}
+                            <div className="inline-flex items-center gap-1.5 mt-1 px-2.5 py-1 rounded-full bg-white/10 dark:bg-black/25 border border-white/10 backdrop-blur-md w-fit">
+                                <Cpu className="w-3 h-3 text-white/90 shrink-0" />
+                                <span className="text-[10px] font-black text-white/95 tracking-tight font-mono">
+                                    Hardware Acceleration: {hardwareInfo.backend}
+                                </span>
+                            </div>
                         </div>
+
 
                         {/* Integrated Calendar UI */}
                         <div className="relative group shrink-0">
