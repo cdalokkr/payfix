@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import {
     AlertCircle, Camera, CheckCircle2, CheckCheck, XCircle, RefreshCw, Wifi, WifiOff,
     Zap, ScanFace, UserX, Key, MapPin, Tablet, ShieldCheck, LogOut, Sparkles, Clock, X,
-    Maximize2, User
+    Maximize2, User, Cpu
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FaceApiBrowserService } from '@/lib/services/faceapi-browser.service';
@@ -20,6 +20,27 @@ import { saveEmployeeFaces, getSyncInfo as getIdbSyncInfo, getAllEmployeeFaces, 
 import { l2Normalize, matchFaceFast, isGoodQualityFace, getAdaptiveThreshold } from '@/lib/face-threshold';
 import { trpc } from '@/lib/trpc/client';
 import { BiometricCameraModal } from '@/components/biometrics/BiometricCameraModal';
+
+function getHardwareAccelerationInfo(): { backend: string; isGpu: boolean } {
+    if (typeof window === 'undefined') return { backend: 'CPU', isGpu: false };
+    try {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        if (!gl) return { backend: 'CPU (No WebGL)', isGpu: false };
+        const debugInfo = (gl as any).getExtension('WEBGL_debug_renderer_info');
+        if (debugInfo) {
+            const renderer = (gl as any).getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || '';
+            const isSoftware = renderer.toLowerCase().includes('swiftshader') || renderer.toLowerCase().includes('llvmpipe') || renderer.toLowerCase().includes('software');
+            if (isSoftware) return { backend: 'CPU Software', isGpu: false };
+            const cleanName = renderer.replace(/^ANGLE\s*\((.*)\)$/, '$1').split(',')[0].trim();
+            return { backend: `GPU: ${cleanName.slice(0, 16)}`, isGpu: true };
+        }
+        return { backend: 'WebGL GPU', isGpu: true };
+    } catch {
+        return { backend: 'CPU Fallback', isGpu: false };
+    }
+}
+
 
 
 
@@ -102,6 +123,8 @@ export function ExpressKioskApp() {
     const [isScanning, setIsScanning] = useState<boolean>(false);
     const [scanError, setScanError] = useState<string | null>(null);
     const [capturedFreezeUrl, setCapturedFreezeUrl] = useState<string | null>(null);
+    const [hardwareInfo] = useState(() => getHardwareAccelerationInfo());
+
     const [idbSyncInfo, setIdbSyncInfo] = useState<{ lastSyncedAt: number; totalEmployees: number; enrolledEmployees: number } | null>(null);
 
     const [modelsLoading, setModelsLoading] = useState<boolean>(false);
@@ -933,6 +956,11 @@ export function ExpressKioskApp() {
                         <span className="text-[10px] text-slate-400 mt-0.5">{currentDate}</span>
                     </div>
 
+                    {/* Hardware Acceleration Status Badge (WebGL GPU / CPU) */}
+                    <Badge variant="outline" className={hardwareInfo.isGpu ? "bg-sky-500/10 text-sky-400 border-sky-500/30 px-2.5 py-0.5 font-semibold text-xs flex items-center gap-1 hidden sm:flex" : "bg-amber-500/10 text-amber-400 border-amber-500/30 px-2.5 py-0.5 font-semibold text-xs flex items-center gap-1 hidden sm:flex"}>
+                        <Cpu className="h-3 w-3" /> {hardwareInfo.backend}
+                    </Badge>
+
                     {/* Online / Offline Status Badge */}
                     {isOnline ? (
                         <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 px-2.5 py-0.5 font-semibold text-xs flex items-center gap-1">
@@ -943,6 +971,7 @@ export function ExpressKioskApp() {
                             <WifiOff className="h-3 w-3" /> Offline ({stats.queuedOffline})
                         </Badge>
                     )}
+
 
                     <Button
                         variant="ghost"
