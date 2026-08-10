@@ -304,27 +304,27 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
             addLog('Upload complete!')
             addLog(`URL: ${result.path?.slice(0, 40)}...`)
 
+            // Extract and save 128-d face embedding for attendance matching (Kiosk & PWA)
+            if (capturedImage) {
+                try {
+                    addLog('Extracting 128-d face vector for attendance matching...')
+                    await FaceApiBrowserService.loadModels()
+                    const descriptor = await FaceApiBrowserService.extractDescriptorFromDataUrl(capturedImage)
+                    if (descriptor && descriptor.length === 128) {
+                        const embedding = FaceApiBrowserService.descriptorToArray(descriptor)
+                        await saveFaceEmbedding.mutateAsync({ embedding })
+                        addLog('✅ Face vector saved to DB for Kiosk & PWA matching.')
+                    }
+                } catch (faceErr) {
+                    addLog('⚠️ Face vector extraction warning: ' + String(faceErr))
+                }
+            }
+
             // Handle differently based on first-time vs update
             if (isFirstTimeUpload) {
                 // First-time: Direct update
                 setStatus('success')
                 toast.success('Profile photo updated successfully!')
-
-                // Background: Extract and save face embedding for kiosk & PWA verification
-                if (capturedImage) {
-                    try {
-                        addLog('Extracting face vector for attendance verification...')
-                        await FaceApiBrowserService.loadModels()
-                        const descriptor = await FaceApiBrowserService.extractDescriptorFromDataUrl(capturedImage)
-                        if (descriptor && descriptor.length === 128) {
-                            const embedding = FaceApiBrowserService.descriptorToArray(descriptor)
-                            await saveFaceEmbedding.mutateAsync({ embedding })
-                            addLog('✅ Face vector saved for attendance matching.')
-                        }
-                    } catch (faceErr) {
-                        addLog('⚠️ Face enrollment failed: ' + String(faceErr))
-                    }
-                }
             } else {
                 // Subsequent update: Create pending request
                 addLog('Creating approval request...')
@@ -334,6 +334,7 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                 setStatus('submitted')
                 toast.success('Photo submitted for admin approval!')
             }
+
         } catch (error: any) {
             const errMsg = error?.message || 'Unknown error'
             addLog(`ERROR: ${errMsg}`)

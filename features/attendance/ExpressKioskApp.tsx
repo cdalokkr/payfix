@@ -662,7 +662,8 @@ export function ExpressKioskApp() {
                     embedding: l2Normalize(emp.faceEmbedding!)
                 }));
 
-                const matchRes = matchFaceFast(liveDescriptor, candidateList, 0.42, 0.08);
+                const matchRes = matchFaceFast(liveDescriptor, candidateList, 0.40, 0.04);
+
                 const matchedEmployee = matchRes.isMatch && matchRes.employee
                     ? enrolledEmployees.find(e => e.id === matchRes.employee!.id) || null
                     : null;

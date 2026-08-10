@@ -127,8 +127,8 @@ export function matchFaceFast(
 
     const minThreshold = threshold ?? 0.42;
 
-    // 3. Top-2 Gap Check (Eliminate ambiguous matches when multiple candidates exist)
-    if (employees.length > 1 && bestScore >= minThreshold && (bestScore - secondBestScore < top2GapThreshold)) {
+    // 3. Top-2 Gap Check (Only apply for borderline scores < 0.55 to prevent false ambiguous rejects on strong matches)
+    if (employees.length > 1 && bestScore >= minThreshold && bestScore < 0.55 && (bestScore - secondBestScore < top2GapThreshold)) {
         return {
             isMatch: false,
             employee: null,
@@ -137,6 +137,7 @@ export function matchFaceFast(
             message: 'Ambiguous face match. Please align face clearly.'
         };
     }
+
 
     if (bestEmployee && bestScore >= minThreshold) {
         return {
