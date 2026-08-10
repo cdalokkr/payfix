@@ -440,9 +440,9 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
 
                             <Button
                                 onClick={handleBack}
-                                className="w-full h-13 rounded-2xl bg-white hover:bg-slate-100 text-slate-950 font-black text-base shadow-xl active:scale-95 transition-all cursor-pointer"
+                                className="w-full h-13 rounded-2xl bg-sky-500 hover:bg-sky-400 text-white font-black text-base shadow-lg shadow-sky-500/25 active:scale-95 transition-all cursor-pointer"
                             >
-                                OK / Close
+                                OK
                             </Button>
                         </div>
                     )}
@@ -450,16 +450,28 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
             }
 
         >
-            {/* Captured Selfie Photo Preview Overlay (Visible during review & submitted confirmation) */}
-            {capturedImage && (status === 'captured' || status === 'submitted' || status === 'success') && (
+            {/* Captured Selfie Photo Preview Overlay (Stays 100% continuous without black screen) */}
+            {capturedImage && status !== 'streaming' && status !== 'idle' && (
                 <div className="absolute inset-0 z-25 bg-slate-950 flex items-center justify-center overflow-hidden">
                     <img
                         src={capturedImage}
                         alt="Captured Selfie Preview"
                         className="w-full h-full object-cover"
                     />
+
+                    {/* Uploading & Vector Extraction Spinner Overlay */}
+                    {status === 'uploading' && (
+                        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-950/65 backdrop-blur-md p-6 text-center text-white">
+                            <div className="p-6 bg-slate-900/90 border border-white/15 rounded-3xl space-y-3 shadow-2xl flex flex-col items-center max-w-xs animate-in zoom-in-95">
+                                <IconRefresh className="w-10 h-10 text-sky-400 animate-spin" />
+                                <p className="text-sm font-bold text-white">Submitting Profile Photo...</p>
+                                <p className="text-xs text-slate-300">Extracting 160×160 face vector</p>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
+
 
 
 

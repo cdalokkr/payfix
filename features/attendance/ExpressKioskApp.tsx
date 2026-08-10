@@ -62,9 +62,11 @@ interface VerificationOverlayState {
     avatarUrl?: string | null;
     time?: string;
     similarity?: string;
+    duration?: string;
     error?: string;
     snapshotUrl?: string | null;
 }
+
 
 export function ExpressKioskApp() {
     const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -582,6 +584,12 @@ export function ExpressKioskApp() {
     const handleFaceScan = useCallback(async () => {
         if (isScanning || !modelsReady || !pairingCode) return;
 
+        const scanStartTime = performance.now();
+        const getDurationStr = () => {
+            const ms = Math.round(performance.now() - scanStartTime);
+            return ms >= 1000 ? `${(ms / 1000).toFixed(2)}s` : `${ms}ms`;
+        };
+
         const video = videoRef.current;
         if (!video || !cameraActive) {
             toast.error('Camera stream not ready. Please try again.');
@@ -637,21 +645,21 @@ export function ExpressKioskApp() {
                     setCapturedFreezeUrl(alignedResult.croppedDataUrl);
                 }
 
-
                 if (!liveDescriptor) {
                     playErrorChimeSound();
                     const snapshotUrl = freezeUrl || captureSnapshot();
                     setVerificationResult({
                         status: 'rejected',
                         matched: false,
-                        error: 'No face detected. Please align face in camera view.',
+                        error: 'No face detected. Please align face inside camera circle.',
+                        duration: getDurationStr(),
                         snapshotUrl,
                     });
                     setTimeout(() => {
                         setVerificationResult(null);
                         setCapturedFreezeUrl(null);
                         setIsScanning(false);
-                    }, 2200);
+                    }, 2400);
                     return;
                 }
 
@@ -678,32 +686,34 @@ export function ExpressKioskApp() {
                         status: 'rejected',
                         matched: false,
                         error: matchRes.message.includes('Ambiguous') ? matchRes.message : `Face Not Recognized. (Score: ${(matchRes.similarity * 100).toFixed(0)}%)`,
+                        duration: getDurationStr(),
                         snapshotUrl,
                     });
                     setTimeout(() => {
                         setVerificationResult(null);
                         setCapturedFreezeUrl(null);
                         setIsScanning(false);
-                    }, 2200);
+                    }, 2400);
                     return;
                 }
 
                 // 4. Face MATCHED!
                 const snapshotUrl = freezeUrl || captureSnapshot();
                 const similarity = `${(matchRes.similarity * 100).toFixed(1)}%`;
+                const duration = getDurationStr();
 
+                // Instant UI Notification & Profile Card Overlay (<100ms)
+                setVerificationResult({
+                    status: 'verified',
+                    matched: true,
+                    employeeName: matchedEmployee.name,
+                    avatarUrl: matchedEmployee.avatarUrl,
+                    time: timeStr,
+                    similarity,
+                    duration,
+                    snapshotUrl,
+                });
 
-
-            // Instant UI Notification & Profile Card Overlay (<100ms)
-            setVerificationResult({
-                status: 'verified',
-                matched: true,
-                employeeName: matchedEmployee.name,
-                avatarUrl: matchedEmployee.avatarUrl,
-                time: timeStr,
-                similarity,
-                snapshotUrl,
-            });
 
             setLastScanResult({
                 name: matchedEmployee.name,
@@ -1186,6 +1196,11 @@ export function ExpressKioskApp() {
                                             <p className="text-xs text-emerald-200/80 font-mono mt-1">
                                                 Match Score: {verificationResult.similarity} | Time: {verificationResult.time}
                                             </p>
+                                            {verificationResult.duration && (
+                                                <p className="text-xs font-mono text-emerald-300 font-bold mt-1">
+                                                    Duration: {verificationResult.duration}
+                                                </p>
+                                            )}
                                         </div>
                                         <div className="p-3 bg-emerald-500/20 rounded-2xl text-emerald-100 font-bold text-xs shadow-inner">
                                             ✅ Attendance Recorded (Clock In)
@@ -1203,12 +1218,18 @@ export function ExpressKioskApp() {
                                             <p className="text-sm font-bold text-rose-200 mt-2 leading-snug">
                                                 {verificationResult.error || 'Face Not Recognized'}
                                             </p>
+                                            {verificationResult.duration && (
+                                                <p className="text-xs font-mono text-rose-300/90 font-bold mt-1.5">
+                                                    Duration: {verificationResult.duration}
+                                                </p>
+                                            )}
                                         </div>
                                         <div className="p-3 bg-rose-500/15 rounded-2xl text-slate-300 text-xs leading-relaxed">
                                             Please align your face inside the target circle and try again.
                                         </div>
                                     </div>
                                 )}
+
                             </div>
                         )}
 
