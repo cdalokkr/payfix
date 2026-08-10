@@ -235,34 +235,35 @@ export const FaceApiBrowserService = {
             const dy = rightEyeCenter.y - leftEyeCenter.y;
             const angle = Math.atan2(dy, dx); // radians
 
-            // 3. Compute 20% padded square bounding box
+            // 3. Compute 25% padded square bounding box around face
             const maxDim = Math.max(box.width, box.height);
-            const padding = maxDim * 0.20;
+            const padding = maxDim * 0.25;
             const squareSize = maxDim + padding * 2;
 
             const centerX = box.x + box.width / 2;
             const centerY = box.y + box.height / 2;
 
-            // 4. Create 160x160 crop canvas
+            // 4. Create 320x320 high-quality crop canvas (natural orientation matching camera preview)
             const cropCanvas = document.createElement('canvas');
-            cropCanvas.width = 160;
-            cropCanvas.height = 160;
+            cropCanvas.width = 320;
+            cropCanvas.height = 320;
             const ctx = cropCanvas.getContext('2d');
 
             if (ctx) {
                 ctx.save();
-                ctx.translate(80, 80);
-                const scale = 160 / squareSize;
-                ctx.scale(scale, scale);
-                ctx.rotate(-angle);
+                ctx.translate(160, 160);
+                const scale = 320 / squareSize;
+                // Mirror horizontally matching live video (-scale-x-100)
+                ctx.scale(-scale, scale);
                 ctx.drawImage(input, -centerX, -centerY);
                 ctx.restore();
             }
 
-            const croppedDataUrl = cropCanvas.toDataURL('image/jpeg', 0.88);
+            const croppedDataUrl = cropCanvas.toDataURL('image/jpeg', 0.90);
             const normalized = l2Normalize(Array.from(detection.descriptor));
 
-            onLog?.(`Face aligned & cropped to 160x160 (${(detection.detection.score * 100).toFixed(1)}% score)`);
+            onLog?.(`Face cropped to natural 320x320 (${(detection.detection.score * 100).toFixed(1)}% score)`);
+
 
             return {
                 descriptor: new Float32Array(normalized),

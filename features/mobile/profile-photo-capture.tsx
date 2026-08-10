@@ -207,7 +207,7 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         }
     }, [stopCamera])
 
-    // Capture photo using 160x160 Padded Square Face Alignment
+    // Capture photo matching live stream orientation 100%
     const capturePhoto = useCallback(async () => {
         if (!videoRef.current || !canvasRef.current || status !== 'streaming') return
 
@@ -216,39 +216,24 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         const ctx = canvas.getContext('2d')
         if (!ctx) return
 
-        // 1. Try 160x160 Aligned Face Crop
-        try {
-            const alignedResult = await FaceApiBrowserService.extractAlignedSquareFaceCrop(video);
-            if (alignedResult?.croppedDataUrl) {
-                setCapturedImage(alignedResult.croppedDataUrl);
-                setStatus('captured');
-                stopCamera();
-                return;
-            }
-        } catch (e) {
-            console.warn('[ProfilePhotoCapture] Aligned crop fallback:', e);
-        }
-
-        // 2. Fallback center square crop if face-api alignment is offline
-        canvas.width = 480
-        canvas.height = 480
-        const vw = video.videoWidth
-        const vh = video.videoHeight
-        const size = Math.min(vw, vh)
-        const sx = (vw - size) / 2
-        const sy = (vh - size) / 2
+        // 1. Capture exact live frame matching camera viewport aspect ratio (480x640)
+        const vw = video.videoWidth || 480
+        const vh = video.videoHeight || 640
+        canvas.width = vw
+        canvas.height = vh
 
         ctx.save()
-        ctx.translate(canvas.width, 0)
-        ctx.scale(-1, 1)
-        ctx.drawImage(video, sx, sy, size, size, 0, 0, canvas.width, canvas.height)
+        ctx.translate(vw, 0)
+        ctx.scale(-1, 1) // Mirror matching video stream
+        ctx.drawImage(video, 0, 0, vw, vh)
         ctx.restore()
 
-        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.85)
+        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.90)
         setCapturedImage(imageDataUrl)
         setStatus('captured')
         stopCamera()
     }, [stopCamera, status])
+
 
 
     // Retake photo
@@ -451,8 +436,9 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                     <img
                         src={capturedImage}
                         alt="Captured Selfie Preview"
-                        className="w-full h-full object-cover transform -scale-x-100"
+                        className="w-full h-full object-cover"
                     />
+
                 </div>
             )}
 
