@@ -241,7 +241,7 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         startCamera()
     }, [startCamera])
 
-    // Upload photo via server API (bypasses client-side RLS)
+    // Upload photo via server API (crops to 160x160 square face avatar ~20KB before saving)
     const handleUpload = useCallback(async () => {
         if (!capturedImage) return
 
@@ -250,10 +250,25 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         setStatus('uploading')
 
         try {
-            addLog('Starting upload...')
+            addLog('Starting 160x160 face crop & upload...')
 
-            // Convert data URL to blob directly (mobile compatible)
-            const base64Data = capturedImage.split(',')[1]
+            // 1. Convert captured photo to 160x160 padded square face crop
+            let uploadDataUrl = capturedImage;
+            try {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                await new Promise((res) => { img.onload = res; img.src = capturedImage; });
+                const cropResult = await FaceApiBrowserService.extractAlignedSquareFaceCrop(img);
+                if (cropResult?.croppedDataUrl) {
+                    uploadDataUrl = cropResult.croppedDataUrl;
+                    addLog('✅ Face cropped to 160x160 square avatar');
+                }
+            } catch (cropErr) {
+                console.warn('[ProfileUpload] Crop fallback to full image:', cropErr);
+            }
+
+            // 2. Convert data URL to blob (mobile compatible ~20KB)
+            const base64Data = uploadDataUrl.split(',')[1]
             const byteCharacters = atob(base64Data)
             const byteNumbers = new Array(byteCharacters.length)
             for (let i = 0; i < byteCharacters.length; i++) {
@@ -261,17 +276,17 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
             }
             const byteArray = new Uint8Array(byteNumbers)
             const blob = new Blob([byteArray], { type: 'image/jpeg' })
-            addLog(`Blob: ${Math.round(blob.size / 1024)}KB`)
+            addLog(`Avatar Size: ${Math.round(blob.size / 1024)}KB`)
 
-            // Send to server API route (uses service role, bypasses RLS)
+            // 3. Send to server API route (uses service role, bypasses RLS)
             addLog('Sending to server...')
             const formData = new FormData()
             formData.append('file', blob, 'avatar.jpg')
             formData.append('profileId', profileId)
-            // Use different path for pending photos
             if (!isFirstTimeUpload) {
                 formData.append('isPending', 'true')
             }
+
 
             const response = await fetch('/api/upload-avatar', {
                 method: 'POST',
