@@ -957,9 +957,10 @@ export function ExpressKioskApp() {
                     </div>
 
                     {/* Hardware Acceleration Status Badge (WebGL GPU / CPU) */}
-                    <Badge variant="outline" className={hardwareInfo.isGpu ? "bg-sky-500/10 text-sky-400 border-sky-500/30 px-2.5 py-0.5 font-semibold text-xs flex items-center gap-1 hidden sm:flex" : "bg-amber-500/10 text-amber-400 border-amber-500/30 px-2.5 py-0.5 font-semibold text-xs flex items-center gap-1 hidden sm:flex"}>
+                    <Badge variant="outline" className={hardwareInfo.isGpu ? "bg-sky-500/10 text-sky-400 border-sky-500/30 px-2.5 py-0.5 font-semibold text-xs flex items-center gap-1" : "bg-amber-500/10 text-amber-400 border-amber-500/30 px-2.5 py-0.5 font-semibold text-xs flex items-center gap-1"}>
                         <Cpu className="h-3 w-3" /> {hardwareInfo.backend}
                     </Badge>
+
 
                     {/* Online / Offline Status Badge */}
                     {isOnline ? (
@@ -1001,12 +1002,19 @@ export function ExpressKioskApp() {
                                 Touchless Face Attendance Terminal
                             </span>
                         </div>
-                        {idbSyncInfo && (
-                            <Badge variant="outline" className="border-sky-500/40 bg-sky-950/60 text-sky-300 text-[11px] font-bold gap-1.5 py-1 px-2.5 shadow-md">
-                                <ShieldCheck className="h-3.5 w-3.5 text-sky-400 animate-pulse" />
-                                <span>💾 IndexedDB: {idbSyncInfo.enrolledEmployees} Vectors Cached</span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <Badge variant="outline" className={hardwareInfo.isGpu ? "border-sky-500/40 bg-sky-950/60 text-sky-300 text-[11px] font-bold gap-1.5 py-1 px-2.5 shadow-md flex items-center" : "border-amber-500/40 bg-amber-950/60 text-amber-300 text-[11px] font-bold gap-1.5 py-1 px-2.5 shadow-md flex items-center"}>
+                                <Cpu className="h-3.5 w-3.5 text-sky-400" />
+                                <span>{hardwareInfo.backend}</span>
                             </Badge>
-                        )}
+                            {idbSyncInfo && (
+                                <Badge variant="outline" className="border-sky-500/40 bg-sky-950/60 text-sky-300 text-[11px] font-bold gap-1.5 py-1 px-2.5 shadow-md">
+                                    <ShieldCheck className="h-3.5 w-3.5 text-sky-400 animate-pulse" />
+                                    <span>💾 IndexedDB: {idbSyncInfo.enrolledEmployees} Vectors Cached</span>
+                                </Badge>
+                            )}
+                        </div>
+
                     </div>
 
 
@@ -1214,61 +1222,40 @@ export function ExpressKioskApp() {
                             />
                         )}
 
-                        {/* Detailed Verification Result Step Overlay Card (Over Clear Selfie Preview) */}
+                        {/* Verification Result Status Pill (Positions at exact bottom status location over clear selfie photo) */}
                         {verificationResult && (
-                            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center p-5 bg-slate-950/65 backdrop-blur-sm animate-in zoom-in-95 duration-200 text-center">
-
+                            <div className="absolute bottom-4 inset-x-4 z-30 flex flex-col items-center justify-center animate-in zoom-in-95 fade-in duration-200">
                                 {verificationResult.matched ? (
-                                    <div className="w-full max-w-sm p-6 bg-emerald-500/10 border border-emerald-500/30 rounded-3xl space-y-4 shadow-2xl">
-                                        <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center border-2 border-emerald-500/40 shadow-lg">
-                                            <CheckCircle2 className="w-9 h-9" />
+                                    <div className="w-full max-w-sm p-4 bg-slate-950/95 border-2 border-emerald-500/70 rounded-2xl backdrop-blur-md shadow-2xl space-y-1 text-center">
+                                        <div className="flex items-center justify-center gap-2 text-emerald-400 font-black text-sm">
+                                            <CheckCheck className="w-5 h-5 text-emerald-400 shrink-0" />
+                                            <span className="truncate">Verified: {verificationResult.employeeName}</span>
                                         </div>
-                                        <div>
-                                            <span className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-400">
-                                                Verification Successful
-                                            </span>
-                                            <h3 className="text-xl font-black text-white mt-1 truncate">
-                                                {verificationResult.employeeName}
-                                            </h3>
-                                            <p className="text-xs text-emerald-200/80 font-mono mt-1">
-                                                Match Score: {verificationResult.similarity} | Time: {verificationResult.time}
-                                            </p>
-                                            {verificationResult.duration && (
-                                                <p className="text-xs font-mono text-emerald-300 font-bold mt-1">
-                                                    Duration: {verificationResult.duration}
-                                                </p>
-                                            )}
+                                        <div className="text-[11px] font-mono text-emerald-200/90 flex items-center justify-center gap-2">
+                                            <span>Score: {verificationResult.similarity}</span>
+                                            <span>•</span>
+                                            <span>Duration: {verificationResult.duration}</span>
                                         </div>
-                                        <div className="p-3 bg-emerald-500/20 rounded-2xl text-emerald-100 font-bold text-xs shadow-inner">
+                                        <div className="text-[10px] font-bold text-emerald-400/90 pt-0.5">
                                             ✅ Attendance Recorded (Clock In)
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="w-full max-w-sm p-6 bg-rose-500/10 border border-rose-500/30 rounded-3xl space-y-4 shadow-2xl">
-                                        <div className="w-16 h-16 rounded-full bg-rose-500/20 text-rose-400 mx-auto flex items-center justify-center border-2 border-rose-500/40 shadow-lg">
-                                            <XCircle className="w-9 h-9" />
+                                    <div className="w-full max-w-sm p-4 bg-slate-950/95 border-2 border-rose-500/70 rounded-2xl backdrop-blur-md shadow-2xl space-y-1 text-center">
+                                        <div className="flex items-center justify-center gap-2 text-rose-400 font-black text-sm">
+                                            <XCircle className="w-5 h-5 text-rose-400 shrink-0" />
+                                            <span className="truncate">{verificationResult.error || 'Verification Unsuccessful'}</span>
                                         </div>
-                                        <div>
-                                            <span className="text-[10px] font-extrabold uppercase tracking-widest text-rose-400">
-                                                Verification Unsuccessful
-                                            </span>
-                                            <p className="text-sm font-bold text-rose-200 mt-2 leading-snug">
-                                                {verificationResult.error || 'Face Not Recognized'}
-                                            </p>
-                                            {verificationResult.duration && (
-                                                <p className="text-xs font-mono text-rose-300/90 font-bold mt-1.5">
-                                                    Duration: {verificationResult.duration}
-                                                </p>
-                                            )}
-                                        </div>
-                                        <div className="p-3 bg-rose-500/15 rounded-2xl text-slate-300 text-xs leading-relaxed">
-                                            Please align your face inside the target circle and try again.
-                                        </div>
+                                        {verificationResult.duration && (
+                                            <div className="text-[11px] font-mono text-rose-200/90 pt-0.5">
+                                                Duration: {verificationResult.duration}
+                                            </div>
+                                        )}
                                     </div>
                                 )}
-
                             </div>
                         )}
+
 
                     </BiometricCameraModal>
 
