@@ -57,7 +57,8 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
     const isFirstTimeUpload = profileData.avatarStatus !== 'custom'
     const hasPendingRequest = !!pendingRequest
 
-    const [status, setStatus] = useState<'idle' | 'streaming' | 'captured' | 'uploading' | 'success' | 'error'>('idle')
+    const [status, setStatus] = useState<'idle' | 'streaming' | 'captured' | 'uploading' | 'success' | 'submitted' | 'error'>('idle')
+
     const [errorMessage, setErrorMessage] = useState<string>('')
     const [capturedImage, setCapturedImage] = useState<string | null>(null)
     const [isUploading, setIsUploading] = useState(false)
@@ -305,7 +306,7 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
 
             // Handle differently based on first-time vs update
             if (isFirstTimeUpload) {
-                // First-time: Direct update (current behavior)
+                // First-time: Direct update
                 setStatus('success')
                 toast.success('Profile photo updated successfully!')
 
@@ -319,41 +320,19 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                             const embedding = FaceApiBrowserService.descriptorToArray(descriptor)
                             await saveFaceEmbedding.mutateAsync({ embedding })
                             addLog('✅ Face vector saved for attendance matching.')
-                        } else {
-                            addLog('⚠️ No face detected in photo — enrollment skipped.')
                         }
                     } catch (faceErr) {
-                        addLog('⚠️ Face enrollment failed (non-critical): ' + String(faceErr))
+                        addLog('⚠️ Face enrollment failed: ' + String(faceErr))
                     }
                 }
-
-                setTimeout(() => {
-                    if (onSuccess) {
-                        onSuccess()
-                    } else {
-                        router.push('/mobile')
-                        router.refresh()
-                    }
-                }, 1500)
-
             } else {
                 // Subsequent update: Create pending request
                 addLog('Creating approval request...')
                 await createPhotoRequest.mutateAsync({
                     pendingPhotoUrl: result.path
                 })
-
-                setStatus('success')
+                setStatus('submitted')
                 toast.success('Photo submitted for admin approval!')
-
-                setTimeout(() => {
-                    if (onSuccess) {
-                        onSuccess()
-                    } else {
-                        router.push('/mobile')
-                        router.refresh()
-                    }
-                }, 1500)
             }
         } catch (error: any) {
             const errMsg = error?.message || 'Unknown error'
@@ -364,7 +343,8 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         } finally {
             setIsUploading(false)
         }
-    }, [capturedImage, profileId, router, onSuccess, addLog, isFirstTimeUpload, createPhotoRequest])
+    }, [capturedImage, profileId, addLog, isFirstTimeUpload, createPhotoRequest, saveFaceEmbedding])
+
 
     // Handle back button
     const handleBack = useCallback(() => {
@@ -442,20 +422,44 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                             </Button>
                         </div>
                     )}
+
+                    {(status === 'submitted' || status === 'success') && (
+                        <div className="space-y-3 animate-in fade-in zoom-in-95 duration-200">
+                            <div className="p-4 bg-emerald-500/10 border border-emerald-500/25 rounded-2xl text-center space-y-1.5 backdrop-blur-md">
+                                <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center border border-emerald-500/30">
+                                    <IconCheck className="w-6 h-6 text-emerald-400" />
+                                </div>
+                                <p className="text-sm font-bold text-emerald-200">
+                                    Photo Submitted Successfully
+                                </p>
+                                <p className="text-xs text-slate-300 leading-snug">
+                                    Your profile photo is submitted for admin review and approval.
+                                </p>
+                            </div>
+
+                            <Button
+                                onClick={handleBack}
+                                className="w-full h-13 rounded-2xl bg-white hover:bg-slate-100 text-slate-950 font-black text-base shadow-xl active:scale-95 transition-all cursor-pointer"
+                            >
+                                OK / Close
+                            </Button>
+                        </div>
+                    )}
                 </div>
             }
+
         >
-            {/* Captured Selfie Photo Preview Overlay */}
-            {capturedImage && status === 'captured' && (
+            {/* Captured Selfie Photo Preview Overlay (Visible during review & submitted confirmation) */}
+            {capturedImage && (status === 'captured' || status === 'submitted' || status === 'success') && (
                 <div className="absolute inset-0 z-25 bg-slate-950 flex items-center justify-center overflow-hidden">
                     <img
                         src={capturedImage}
                         alt="Captured Selfie Preview"
                         className="w-full h-full object-cover"
                     />
-
                 </div>
             )}
+
 
 
             {hasPendingRequest && (

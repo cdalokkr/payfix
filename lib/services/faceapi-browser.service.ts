@@ -202,17 +202,40 @@ export const FaceApiBrowserService = {
 
         try {
             const faceapi = window.faceapi;
+            // 0. Downscale input to 480px max-dim for ultra-fast <40ms tensor extraction
+            let processInput: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement = input;
+            const srcW = (input as HTMLVideoElement).videoWidth || (input as HTMLImageElement | HTMLCanvasElement).width || 0;
+            const srcH = (input as HTMLVideoElement).videoHeight || (input as HTMLImageElement | HTMLCanvasElement).height || 0;
+
+            if (srcW > 480 || srcH > 480) {
+                const scale = Math.min(480 / srcW, 480 / srcH);
+                const targetW = Math.round(srcW * scale);
+                const targetH = Math.round(srcH * scale);
+                if (typeof document !== 'undefined') {
+                    if (!_scaledCanvas) _scaledCanvas = document.createElement('canvas');
+                    _scaledCanvas.width = targetW;
+                    _scaledCanvas.height = targetH;
+                    const ctx = _scaledCanvas.getContext('2d');
+                    if (ctx) {
+                        ctx.drawImage(input, 0, 0, targetW, targetH);
+                        processInput = _scaledCanvas;
+                    }
+                }
+            }
+
             const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.4 });
 
             const detection = await faceapi
-                .detectSingleFace(input, options)
+                .detectSingleFace(processInput, options)
                 .withFaceLandmarks()
                 .withFaceDescriptor();
+
 
             if (!detection) {
                 onLog?.('No face detected.');
                 return null;
             }
+
 
             // 1. Get face bounding box & landmarks
             const { box } = detection.detection;

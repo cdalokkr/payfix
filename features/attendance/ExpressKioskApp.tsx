@@ -1166,6 +1166,51 @@ export function ExpressKioskApp() {
                                 className="absolute inset-0 w-full h-full object-cover transform -scale-x-100 z-15"
                             />
                         )}
+
+                        {/* Detailed Verification Result Step Overlay Card (Success / Unsuccess) */}
+                        {verificationResult && (
+                            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center p-6 bg-slate-950/92 backdrop-blur-xl animate-in zoom-in-95 duration-200 text-center">
+                                {verificationResult.matched ? (
+                                    <div className="w-full max-w-sm p-6 bg-emerald-500/10 border border-emerald-500/30 rounded-3xl space-y-4 shadow-2xl">
+                                        <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center border-2 border-emerald-500/40 shadow-lg">
+                                            <CheckCircle2 className="w-9 h-9" />
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-400">
+                                                Verification Successful
+                                            </span>
+                                            <h3 className="text-xl font-black text-white mt-1 truncate">
+                                                {verificationResult.employeeName}
+                                            </h3>
+                                            <p className="text-xs text-emerald-200/80 font-mono mt-1">
+                                                Match Score: {verificationResult.similarity} | Time: {verificationResult.time}
+                                            </p>
+                                        </div>
+                                        <div className="p-3 bg-emerald-500/20 rounded-2xl text-emerald-100 font-bold text-xs shadow-inner">
+                                            ✅ Attendance Recorded (Clock In)
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="w-full max-w-sm p-6 bg-rose-500/10 border border-rose-500/30 rounded-3xl space-y-4 shadow-2xl">
+                                        <div className="w-16 h-16 rounded-full bg-rose-500/20 text-rose-400 mx-auto flex items-center justify-center border-2 border-rose-500/40 shadow-lg">
+                                            <XCircle className="w-9 h-9" />
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] font-extrabold uppercase tracking-widest text-rose-400">
+                                                Verification Unsuccessful
+                                            </span>
+                                            <p className="text-sm font-bold text-rose-200 mt-2 leading-snug">
+                                                {verificationResult.error || 'Face Not Recognized'}
+                                            </p>
+                                        </div>
+                                        <div className="p-3 bg-rose-500/15 rounded-2xl text-slate-300 text-xs leading-relaxed">
+                                            Please align your face inside the target circle and try again.
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                     </BiometricCameraModal>
 
 
