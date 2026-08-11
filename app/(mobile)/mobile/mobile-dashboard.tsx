@@ -9,6 +9,9 @@ import { motion } from "framer-motion"
 import { useState, useEffect } from "react"
 import { trpc } from "@/lib/trpc/client"
 import { ProfilePhotoCapture } from "@/features/mobile/profile-photo-capture"
+import FaceVerificationService from "@/lib/services/faceapi-browser.service"
+
+
 
 import {
     Clock as IconClock,
@@ -125,15 +128,15 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
     const [isDesktop, setIsDesktop] = useState(false)
     const [isPhotoCaptureOpen, setIsPhotoCaptureOpen] = useState(false)
     const [hardwareInfo] = useState(() => getHardwareAccelerationInfo())
-
-
-
     useEffect(() => {
+        FaceVerificationService.loadModels()
         setIsDesktop(window.innerWidth >= 1024)
+
         const handleResize = () => setIsDesktop(window.innerWidth >= 1024)
         window.addEventListener('resize', handleResize)
         return () => window.removeEventListener('resize', handleResize)
     }, [])
+
 
     // Initialize from sessionStorage if available (persists across navigation) and not expired
     const [geofenceResult, setGeofenceResult] = useState<{
@@ -146,7 +149,7 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
             const cachedTime = sessionStorage.getItem('mobileGeofenceTimestamp')
             if (cached && cachedTime) {
                 const age = Date.now() - Number(cachedTime)
-                if (age < 30000) { // 30 seconds cache validity
+                if (age < 600000) { // 10 minutes cache validity
                     return JSON.parse(cached)
                 }
             }
@@ -165,7 +168,7 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
             const cachedTime = sessionStorage.getItem('mobileGeofenceTimestamp')
             if (cached && cachedTime) {
                 const age = Date.now() - Number(cachedTime)
-                if (age < 30000) {
+                if (age < 600000) {
                     return false
                 }
             }
@@ -179,13 +182,14 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
             const cachedTime = sessionStorage.getItem('mobileGeofenceTimestamp')
             if (cached && cachedTime) {
                 const age = Date.now() - Number(cachedTime)
-                if (age < 30000) {
+                if (age < 600000) {
                     return JSON.parse(cached)
                 }
             }
         }
         return null
     })
+
 
     const utils = trpc.useUtils()
 
@@ -372,6 +376,14 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
                     <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full -mr-24 -mt-24 blur-2xl" />
                     <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full -ml-16 -mb-16 blur-xl" />
 
+                    {/* Full-width Hardware Acceleration Badge Pill at the top row of the card */}
+                    <div className="w-full mb-2 py-1.5 px-3 rounded-xl bg-white/10 dark:bg-black/30 border border-white/15 backdrop-blur-md flex items-center justify-center gap-2 shadow-sm text-center">
+                        <Cpu className="w-3.5 h-3.5 text-white/95 shrink-0" />
+                        <span className="text-[11px] font-black text-white/95 tracking-wide font-mono">
+                            Hardware Acceleration: {hardwareInfo.backend}
+                        </span>
+                    </div>
+
                     <div className="relative flex items-start justify-between gap-4">
                         <div className="flex flex-col gap-1.5 py-0.5">
                             {/* Today's Attendance Heading with CalendarClock icon */}
@@ -403,15 +415,8 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
                                     </span>
                                 </motion.div>
                             )}
-
-                            {/* Hardware Acceleration Badge */}
-                            <div className="inline-flex items-center gap-1.5 mt-1 px-2.5 py-1 rounded-full bg-white/10 dark:bg-black/25 border border-white/10 backdrop-blur-md w-fit">
-                                <Cpu className="w-3 h-3 text-white/90 shrink-0" />
-                                <span className="text-[10px] font-black text-white/95 tracking-tight font-mono">
-                                    Hardware Acceleration: {hardwareInfo.backend}
-                                </span>
-                            </div>
                         </div>
+
 
 
                         {/* Integrated Calendar UI */}

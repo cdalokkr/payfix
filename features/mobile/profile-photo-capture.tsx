@@ -358,6 +358,29 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
     }, [stopCamera, router, onSuccess])
 
 
+    const [sessionTimeout, setSessionTimeout] = useState<number>(10)
+
+    // 10-Second Security Session Timeout
+    useEffect(() => {
+        if (status === 'streaming' && !capturedImage) {
+            setSessionTimeout(10)
+            const interval = setInterval(() => {
+                setSessionTimeout(prev => {
+                    if (prev <= 1) {
+                        clearInterval(interval)
+                        toast.error("Camera session expired (10s limit). Please re-open camera.")
+                        stopCamera()
+                        handleBack()
+                        return 0
+                    }
+                    return prev - 1
+                })
+            }, 1000)
+            return () => clearInterval(interval)
+        }
+    }, [status, capturedImage, stopCamera, handleBack])
+
+
     useEffect(() => {
         // Don't start camera if there's a pending request
         if (hasPendingRequest) return
@@ -365,17 +388,18 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         return () => stopCamera()
     }, [startCamera, stopCamera, hasPendingRequest])
 
+
     return (
         <BiometricCameraModal
             isOpen={true}
             onClose={handleBack}
-            title="Profile Photo"
+            title="Profile Photo Setup"
             icon={<IconUser className="w-5 h-5 text-sky-400" />}
-
             videoRefOut={videoRef}
             onStreamReady={() => setStatus('streaming')}
             statusText={status === 'captured' ? 'Photo captured! Review below' : 'Position face inside the circle'}
             footerSlot={
+
                 <div className="space-y-4">
                     {/* Employee Profile Card */}
                     <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 backdrop-blur-lg">
@@ -450,7 +474,19 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
             }
 
         >
+            {/* 10s Security Session Timeout Badge Overlay */}
+            {status === 'streaming' && !capturedImage && (
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
+
+                    <div className="px-3.5 py-1 rounded-full bg-slate-950/90 border border-amber-500/50 text-amber-400 text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xl backdrop-blur-md">
+                        <IconClock className="w-3.5 h-3.5 animate-pulse text-amber-400" />
+                        <span>Session Timeout: {sessionTimeout}s</span>
+                    </div>
+                </div>
+            )}
+
             {/* Captured Selfie Photo Preview Overlay (Stays 100% continuous without black screen) */}
+
             {capturedImage && status !== 'streaming' && status !== 'idle' && (
                 <div className="absolute inset-0 z-25 bg-slate-950 flex items-center justify-center overflow-hidden">
                     <img

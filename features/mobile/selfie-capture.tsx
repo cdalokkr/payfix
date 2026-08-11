@@ -16,8 +16,10 @@ import {
     ShieldCheck as IconShieldCheck,
     CheckCheck as IconCheckCheck,
     ScanFace as IconScanFace,
-    AlertTriangle as IconAlertTriangle
+    AlertTriangle as IconAlertTriangle,
+    Clock as IconClock
 } from "lucide-react"
+
 import { format } from "date-fns"
 import { Slider } from "@/components/ui/slider"
 import { FaceVerificationService } from "@/lib/services/face-verification.service"
@@ -424,6 +426,28 @@ export function SelfieCapture({
         }
     }, [apiStatus, similarity, onVerified, apiError])
 
+    const [sessionTimeout, setSessionTimeout] = useState<number>(10)
+
+    // 10-Second Security Session Timeout (Closes camera if user doesn't complete selfie in 10s)
+    useEffect(() => {
+        if (status === 'streaming' && !capturedImage) {
+            setSessionTimeout(10)
+            const interval = setInterval(() => {
+                setSessionTimeout(prev => {
+                    if (prev <= 1) {
+                        clearInterval(interval)
+                        toast.error("Camera session expired (10s limit). Please re-verify location.")
+                        stopCamera()
+                        onBack?.()
+                        return 0
+                    }
+                    return prev - 1
+                })
+            }, 1000)
+            return () => clearInterval(interval)
+        }
+    }, [status, capturedImage, stopCamera, onBack])
+
     // Auto-capture countdown — only starts after face-api models are loaded
     useEffect(() => {
         if (status === 'streaming' && !capturedImage && modelsReady) {
@@ -441,7 +465,8 @@ export function SelfieCapture({
             }, 1000)
             return () => clearInterval(timer)
         }
-    }, [status, capturedImage, capturePhoto])
+    }, [status, capturedImage, capturePhoto, modelsReady])
+
 
     // Auto-verify immediately after capture (no confirm step)
     useEffect(() => {
@@ -504,7 +529,18 @@ export function SelfieCapture({
                         </div>
                     }
                 >
+                    {/* 10s Security Session Timeout Badge Overlay */}
+                    {status === 'streaming' && !capturedImage && (
+                        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
+                            <div className="px-3.5 py-1 rounded-full bg-slate-950/90 border border-amber-500/50 text-amber-400 text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xl backdrop-blur-md">
+                                <IconClock className="w-3.5 h-3.5 animate-pulse text-amber-400" />
+                                <span>Session Timeout: {sessionTimeout}s</span>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Captured Selfie Preview Overlay (Stays 100% continuous without black screen) */}
+
                     {capturedImage && status !== 'streaming' && status !== 'idle' && (
                         <div className="absolute inset-0 z-25 bg-slate-950 flex items-center justify-center overflow-hidden">
                             <img

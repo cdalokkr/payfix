@@ -139,7 +139,38 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="relative w-full h-full min-h-[580px] bg-slate-950 flex flex-col overflow-hidden rounded-3xl p-0">
+    <div className="relative w-full h-full min-h-[580px] bg-slate-950 flex flex-col overflow-hidden rounded-3xl p-0 border border-slate-800 shadow-2xl">
+      {/* 1. Header Bar OUTSIDE Camera Viewport (Above camera screen area) */}
+      <div className="w-full px-5 py-4 z-30 flex items-center justify-between bg-slate-900 border-b border-slate-800/80 shrink-0">
+        <div className="flex items-center gap-3">
+          {icon && (
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-500/15 text-sky-400 border border-sky-500/30 shadow-md">
+              {icon}
+            </div>
+          )}
+          <div>
+            <h2 className="text-base font-black text-white tracking-tight leading-tight">
+              {title}
+            </h2>
+            {subtitle && (
+              <span className="text-[10px] font-bold text-sky-400 uppercase tracking-widest">
+                {subtitle}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Styled Close (X) Icon Button */}
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close modal"
+          className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-300 transition-all border border-slate-700 shadow-md cursor-pointer"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+
       {/* Edge-to-Edge Camera Viewport Container */}
       <div className="relative w-full aspect-[3/4] bg-black overflow-hidden flex-1 p-0">
         {/* Instant HTML Video Element */}
@@ -151,38 +182,8 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           className="h-full w-full object-cover transform -scale-x-100"
         />
 
-        {/* 1. Header Bar Overlay: Icon + Title + Styled Close (X) Icon Button */}
-        <div className="absolute top-0 inset-x-0 p-4 z-30 flex items-center justify-between bg-gradient-to-b from-black/90 via-black/40 to-transparent">
-          <div className="flex items-center gap-3">
-            {icon && (
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10 text-white backdrop-blur-md border border-white/15">
-                {icon}
-              </div>
-            )}
-            <div>
-              <h2 className="text-lg font-black text-white tracking-tight leading-tight">
-                {title}
-              </h2>
-              {subtitle && (
-                <span className="text-[10px] font-bold text-sky-400 uppercase tracking-widest">
-                  {subtitle}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Styled Close (X) Icon Button with relative background color */}
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close modal"
-            className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10 hover:bg-white/20 active:bg-white/30 text-white backdrop-blur-md border border-white/20 transition-all shadow-lg cursor-pointer"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
         {/* 2. Biometric Oval Reticle with Outside Dimmed Backdrop Overlay */}
+
         {!hasError && (
           <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-between p-6">
             {/* Circular Face Guide Reticle (5% Larger w-[81%]) with 9999px Dimmed Backdrop Mask */}
