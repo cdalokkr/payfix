@@ -298,4 +298,30 @@ export const AsyncErrorBoundary: React.FC<Props & {
   )
 }
 
+// Next.js 16.3 catchError boundary export for Server Component error recovery
+export function catchErrorFallback(
+  props: { title?: string },
+  { error, retry }: { error: Error; retry: () => void }
+) {
+  return (
+    <div className="p-6 m-4 bg-destructive/10 border border-destructive/20 rounded-lg text-center space-y-4">
+      <AlertCircle className="w-10 h-10 text-destructive mx-auto" />
+      <h3 className="text-lg font-semibold text-foreground">
+        {props.title || 'Something went wrong'}
+      </h3>
+      <p className="text-sm text-muted-foreground max-w-md mx-auto">
+        {error.message || 'An unexpected error occurred while loading this section.'}
+      </p>
+      <Button
+        onClick={() => retry()}
+        variant="outline"
+        className="gap-2 border-destructive/30 hover:bg-destructive/10"
+      >
+        <RefreshCw className="w-4 h-4" />
+        Try Again
+      </Button>
+    </div>
+  )
+}
+
 export default ErrorBoundary

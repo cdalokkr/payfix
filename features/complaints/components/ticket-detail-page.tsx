@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { trpc } from "@/lib/trpc/client"
 import { Button } from "@/components/ui/button"
@@ -29,6 +29,7 @@ interface Props {
 
 export default function TicketDetailPage({ ticketId, basePath, isEmployeeView = false }: Props) {
   const router = useRouter()
+  const [isPending, startTransition] = useTransition()
   const [showResolutionSheet, setShowResolutionSheet] = useState(false)
   const [showCallLogSheet, setShowCallLogSheet] = useState(false)
 
