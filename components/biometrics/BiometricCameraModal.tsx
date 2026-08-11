@@ -173,19 +173,9 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
         </button>
       </div>
 
-      {/* 10-Second Animated Outer Progress Border Bar */}
-      {timerSeconds !== undefined && timerSeconds > 0 && (
-        <div className="w-full h-1.5 bg-slate-900 overflow-hidden shrink-0">
-          <div
-            className="h-full bg-gradient-to-r from-sky-400 via-emerald-400 to-amber-500 transition-all duration-1000 ease-linear shadow-[0_0_12px_rgba(56,189,248,0.9)]"
-            style={{ width: `${Math.max(0, Math.min(100, (timerSeconds / 10) * 100))}%` }}
-          />
-        </div>
-      )}
 
       {/* Edge-to-Edge Camera Viewport Container */}
       <div className="relative w-full aspect-[3/4] bg-black overflow-hidden flex-1 p-0">
-
         {/* Instant HTML Video Element */}
         <video
           ref={videoRef}
@@ -200,7 +190,11 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
         {!hasError && (
           <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-between p-6">
             {/* Circular Face Guide Reticle (5% Larger w-[81%]) with 9999px Dimmed Backdrop Mask */}
-            <div className="relative mt-8 w-[81%] aspect-square rounded-full border-2 border-dashed border-sky-400/80 shadow-[0_0_0_9999px_rgba(2,6,23,0.65)] transition-colors duration-300 flex items-center justify-center">
+            <div className={`relative mt-8 w-[81%] aspect-square rounded-full border-2 border-dashed transition-all duration-300 flex items-center justify-center ${
+              timerSeconds !== undefined && timerSeconds <= 3
+                ? 'border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.8)] animate-pulse'
+                : 'border-sky-400/80 shadow-[0_0_0_9999px_rgba(2,6,23,0.65)]'
+            }`}>
               {/* 10-Second Dynamic Circular Countdown Progress Ring around face circle */}
               {timerSeconds !== undefined && (
                 <svg className="absolute -inset-3 w-[calc(100%+24px)] h-[calc(100%+24px)] transform -rotate-90 pointer-events-none z-30">
@@ -208,7 +202,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                     cx="50%"
                     cy="50%"
                     r="47%"
-                    stroke="rgba(56, 189, 248, 0.2)"
+                    stroke={timerSeconds <= 3 ? "rgba(239, 68, 68, 0.25)" : "rgba(56, 189, 248, 0.2)"}
                     strokeWidth="4"
                     fill="transparent"
                   />
@@ -216,15 +210,17 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                     cx="50%"
                     cy="50%"
                     r="47%"
-                    stroke="url(#timerGradient)"
-                    strokeWidth="5"
+                    stroke={timerSeconds <= 3 ? "url(#timerRedGradient)" : "url(#timerGradient)"}
+                    strokeWidth="6"
                     fill="transparent"
                     strokeLinecap="round"
                     pathLength="100"
                     strokeDasharray="100"
+                    className={timerSeconds <= 3 ? "animate-pulse" : ""}
                     style={{
                       strokeDashoffset: `${100 - (Math.max(0, Math.min(10, timerSeconds)) / 10) * 100}`,
                       transition: 'stroke-dashoffset 1s linear',
+                      filter: timerSeconds <= 3 ? 'drop-shadow(0px 0px 8px rgba(239, 68, 68, 0.9))' : 'drop-shadow(0px 0px 6px rgba(56, 189, 248, 0.6))',
                     }}
                   />
                   <defs>
@@ -233,9 +229,15 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                       <stop offset="50%" stopColor="#34d399" />
                       <stop offset="100%" stopColor="#f59e0b" />
                     </linearGradient>
+                    <linearGradient id="timerRedGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#f87171" />
+                      <stop offset="50%" stopColor="#ef4444" />
+                      <stop offset="100%" stopColor="#dc2626" />
+                    </linearGradient>
                   </defs>
                 </svg>
               )}
+
               <div className="absolute -top-1 left-1/2 h-3 w-8 -translate-x-1/2 rounded-full bg-sky-400/90 shadow-[0_0_10px_rgba(56,189,248,0.8)]" />
               <div className="absolute -bottom-1 left-1/2 h-3 w-8 -translate-x-1/2 rounded-full bg-sky-400/90 shadow-[0_0_10px_rgba(56,189,248,0.8)]" />
             </div>

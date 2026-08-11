@@ -604,14 +604,14 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
                                                     <motion.div whileTap={{ scale: 0.97 }} className="w-full">
                                                         <Link
                                                             href={`/mobile/attendance?action=${hasCheckedIn ? 'clock_out' : 'clock_in'}`}
-                                                            className={`flex items-center justify-center gap-2.5 w-full h-11 px-3.5 rounded-xl border transition-all shadow-lg active:scale-98 backdrop-blur-md
+                                                            className={`flex items-center justify-center gap-2.5 w-full h-11 px-3.5 rounded-xl border transition-all shadow-md active:scale-98 backdrop-blur-md
                                                                 ${hasCheckedIn
-                                                                    ? 'bg-rose-600/35 border-rose-400/60 hover:bg-rose-600/45 text-white'
+                                                                    ? 'bg-rose-500/20 border-rose-400/35 hover:bg-rose-500/30 text-white'
                                                                     : 'bg-indigo-600/35 border-indigo-400/60 hover:bg-indigo-600/45 text-white'}`}
                                                         >
-                                                            <div className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center shadow-md shrink-0 border border-white/20
+                                                            <div className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center shadow-sm shrink-0 border border-white/20
                                                                 ${hasCheckedIn
-                                                                    ? 'bg-rose-600 text-white'
+                                                                    ? 'bg-rose-500/90 text-white'
                                                                     : 'bg-indigo-600 text-white'}`}>
                                                                 {hasCheckedIn
                                                                     ? <ClockArrowUp className="w-4 h-4 text-white stroke-[2.5]" />
@@ -622,6 +622,7 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
                                                             </span>
                                                             <IconArrowRight className="w-4 h-4 text-white/80 ml-auto" />
                                                         </Link>
+
                                                     </motion.div>
                                                 )}
 
