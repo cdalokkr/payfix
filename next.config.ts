@@ -202,6 +202,8 @@ const nextConfig: NextConfig = {
     },
     // Bundle all segment data into a single response per link (Next.js 16.2)
     prefetchInlining: true,
+    // Enable TypeScript 7 native compiler CLI typechecking (Next.js 16.3)
+    useTypeScriptCli: true,
   },
 
   // Turbopack config — acknowledge webpack config coexistence (Next.js 16)
@@ -254,10 +256,9 @@ const nextConfig: NextConfig = {
     return config;
   },
 
-  // Skip TypeScript type-checking during build
-  // Code compiles successfully; strict type inference issues will be fixed incrementally
+  // Strict TypeScript type-checking during build via TypeScript 7 engine
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
 };
 

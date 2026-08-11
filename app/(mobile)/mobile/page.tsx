@@ -10,10 +10,6 @@ export const metadata = {
     title: 'Mobile Dashboard',
 }
 
-// Force dynamic rendering - no caching
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
-
 // Get today's date in IST (Asia/Kolkata timezone)
 function getLocalDateIST(): string {
     const dateStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Kolkata' })

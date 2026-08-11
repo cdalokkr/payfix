@@ -3,9 +3,6 @@ import { UserDashboardStreaming } from '@/components/dashboard/user-dashboard-st
 import { getServerClient } from '@/lib/trpc/server-client'
 import { DASHBOARD_QUERY_PARAMS } from '@/lib/dashboard-config'
 
-// Force dynamic rendering - this page requires runtime auth context
-export const dynamic = 'force-dynamic'
-
 export default async function ModeratorDashboardPage() {
     let initialData = null
 

@@ -11,10 +11,6 @@ export const metadata = {
     title: 'Mark Attendance',
 }
 
-// Force dynamic rendering - no caching
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
-
 // Get today's date in IST (Asia/Kolkata timezone)
 function getLocalDateIST(): string {
     return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Kolkata' })
