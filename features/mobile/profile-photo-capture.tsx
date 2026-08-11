@@ -398,7 +398,9 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
             videoRefOut={videoRef}
             onStreamReady={() => setStatus('streaming')}
             statusText={status === 'captured' ? 'Photo captured! Review below' : 'Position face inside the circle'}
+            timerSeconds={status === 'streaming' && !capturedImage ? sessionTimeout : undefined}
             footerSlot={
+
 
                 <div className="space-y-4">
                     {/* Employee Profile Card */}

@@ -503,7 +503,9 @@ export function SelfieCapture({
                     onStreamReady={() => setStatus('streaming')}
                     statusText={status === 'streaming' ? 'Align face within circle target' : undefined}
                     isProcessing={false}
+                    timerSeconds={status === 'streaming' && !capturedImage ? sessionTimeout : undefined}
                     footerSlot={
+
                         <div className="space-y-3">
                             {status === 'streaming' && (
                                 <Button

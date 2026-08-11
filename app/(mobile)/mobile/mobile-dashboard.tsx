@@ -376,13 +376,14 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
                     <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full -mr-24 -mt-24 blur-2xl" />
                     <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full -ml-16 -mb-16 blur-xl" />
 
-                    {/* Full-width Hardware Acceleration Badge Pill at the top row of the card */}
-                    <div className="w-full mb-2 py-1.5 px-3 rounded-xl bg-white/10 dark:bg-black/30 border border-white/15 backdrop-blur-md flex items-center justify-center gap-2 shadow-sm text-center">
-                        <Cpu className="w-3.5 h-3.5 text-white/95 shrink-0" />
-                        <span className="text-[11px] font-black text-white/95 tracking-wide font-mono">
-                            Hardware Acceleration: {hardwareInfo.backend}
+                    {/* Hardware Acceleration Badge Pill at the top row of the card */}
+                    <div className="w-full mb-2.5 py-1.5 px-3 rounded-xl bg-slate-950/85 border border-sky-500/40 text-sky-400 font-mono font-black text-xs shadow-lg backdrop-blur-md flex items-center justify-center gap-2 text-center">
+                        <Cpu className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                        <span className="tracking-wider text-sky-300">
+                            {hardwareInfo.backend}
                         </span>
                     </div>
+
 
                     <div className="relative flex items-start justify-between gap-4">
                         <div className="flex flex-col gap-1.5 py-0.5">
@@ -603,26 +604,27 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
                                                     <motion.div whileTap={{ scale: 0.97 }} className="w-full">
                                                         <Link
                                                             href={`/mobile/attendance?action=${hasCheckedIn ? 'clock_out' : 'clock_in'}`}
-                                                            className={`flex items-center justify-center gap-3 w-full px-4 py-3 rounded-2xl border transition-all shadow-lg
+                                                            className={`flex items-center justify-center gap-2.5 w-full h-11 px-3.5 rounded-xl border transition-all shadow-md active:scale-98
                                                                 ${hasCheckedIn
-                                                                    ? 'bg-gradient-to-r from-orange-500/40 to-rose-500/40 border-orange-400/40 hover:from-orange-500/50 hover:to-rose-500/50'
-                                                                    : 'bg-gradient-to-r from-emerald-500/40 to-teal-500/40 border-emerald-400/40 hover:from-emerald-500/50 hover:to-teal-500/50'}`}
+                                                                    ? 'bg-amber-500/25 border-amber-400/40 hover:bg-amber-500/35 text-amber-100'
+                                                                    : 'bg-emerald-500/25 border-emerald-400/40 hover:bg-emerald-500/35 text-emerald-100'}`}
                                                         >
-                                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-lg
+                                                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shadow-sm shrink-0
                                                                 ${hasCheckedIn
-                                                                    ? 'bg-orange-500 shadow-orange-600/30'
-                                                                    : 'bg-emerald-500 shadow-emerald-600/30'}`}>
+                                                                    ? 'bg-amber-500 text-slate-950'
+                                                                    : 'bg-emerald-500 text-slate-950'}`}>
                                                                 {hasCheckedIn
-                                                                    ? <ClockArrowUp className="w-5 h-5 text-white" />
-                                                                    : <ClockArrowDown className="w-5 h-5 text-white" />}
+                                                                    ? <ClockArrowUp className="w-4 h-4 text-slate-950 stroke-[2.5]" />
+                                                                    : <ClockArrowDown className="w-4 h-4 text-slate-950 stroke-[2.5]" />}
                                                             </div>
-                                                            <span className="text-sm font-black uppercase tracking-widest text-white">
+                                                            <span className="text-xs font-black uppercase tracking-wider text-white">
                                                                 {hasCheckedIn ? 'Mark Office Out' : 'Mark Office In'}
                                                             </span>
-                                                            <IconArrowRight className="w-5 h-5 text-white/60 ml-auto" />
+                                                            <IconArrowRight className="w-4 h-4 text-white/70 ml-auto" />
                                                         </Link>
                                                     </motion.div>
                                                 )}
+
 
                                                 {/* Attendance Complete Badge */}
                                                 {isComplete && (

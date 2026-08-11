@@ -8,7 +8,6 @@ interface BiometricCameraModalProps {
   isOpen: boolean;
   onClose: () => void;
   title: string | React.ReactNode;
-
   subtitle?: string;
   icon?: React.ReactNode;
   videoRefOut?: React.RefObject<HTMLVideoElement | null>;
@@ -18,6 +17,7 @@ interface BiometricCameraModalProps {
   isProcessing?: boolean;
   footerSlot?: React.ReactNode;
   children?: React.ReactNode;
+  timerSeconds?: number;
 }
 
 export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
@@ -33,7 +33,9 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   isProcessing = false,
   footerSlot,
   children,
+  timerSeconds,
 }) => {
+
   const internalVideoRef = useRef<HTMLVideoElement | null>(null);
   const videoRef = videoRefOut || internalVideoRef;
   const streamRef = useRef<MediaStream | null>(null);
@@ -171,8 +173,19 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
         </button>
       </div>
 
+      {/* 10-Second Animated Outer Progress Border Bar */}
+      {timerSeconds !== undefined && timerSeconds > 0 && (
+        <div className="w-full h-1.5 bg-slate-900 overflow-hidden shrink-0">
+          <div
+            className="h-full bg-gradient-to-r from-sky-400 via-emerald-400 to-amber-500 transition-all duration-1000 ease-linear shadow-[0_0_12px_rgba(56,189,248,0.9)]"
+            style={{ width: `${Math.max(0, Math.min(100, (timerSeconds / 10) * 100))}%` }}
+          />
+        </div>
+      )}
+
       {/* Edge-to-Edge Camera Viewport Container */}
       <div className="relative w-full aspect-[3/4] bg-black overflow-hidden flex-1 p-0">
+
         {/* Instant HTML Video Element */}
         <video
           ref={videoRef}
