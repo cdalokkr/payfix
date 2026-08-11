@@ -201,9 +201,45 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-between p-6">
             {/* Circular Face Guide Reticle (5% Larger w-[81%]) with 9999px Dimmed Backdrop Mask */}
             <div className="relative mt-8 w-[81%] aspect-square rounded-full border-2 border-dashed border-sky-400/80 shadow-[0_0_0_9999px_rgba(2,6,23,0.65)] transition-colors duration-300 flex items-center justify-center">
+              {/* 10-Second Dynamic Circular Countdown Progress Ring around face circle */}
+              {timerSeconds !== undefined && (
+                <svg className="absolute -inset-3 w-[calc(100%+24px)] h-[calc(100%+24px)] transform -rotate-90 pointer-events-none z-30">
+                  <circle
+                    cx="50%"
+                    cy="50%"
+                    r="47%"
+                    stroke="rgba(56, 189, 248, 0.2)"
+                    strokeWidth="4"
+                    fill="transparent"
+                  />
+                  <circle
+                    cx="50%"
+                    cy="50%"
+                    r="47%"
+                    stroke="url(#timerGradient)"
+                    strokeWidth="5"
+                    fill="transparent"
+                    strokeLinecap="round"
+                    pathLength="100"
+                    strokeDasharray="100"
+                    style={{
+                      strokeDashoffset: `${100 - (Math.max(0, Math.min(10, timerSeconds)) / 10) * 100}`,
+                      transition: 'stroke-dashoffset 1s linear',
+                    }}
+                  />
+                  <defs>
+                    <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#38bdf8" />
+                      <stop offset="50%" stopColor="#34d399" />
+                      <stop offset="100%" stopColor="#f59e0b" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+              )}
               <div className="absolute -top-1 left-1/2 h-3 w-8 -translate-x-1/2 rounded-full bg-sky-400/90 shadow-[0_0_10px_rgba(56,189,248,0.8)]" />
               <div className="absolute -bottom-1 left-1/2 h-3 w-8 -translate-x-1/2 rounded-full bg-sky-400/90 shadow-[0_0_10px_rgba(56,189,248,0.8)]" />
             </div>
+
 
 
 

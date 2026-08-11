@@ -604,26 +604,27 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
                                                     <motion.div whileTap={{ scale: 0.97 }} className="w-full">
                                                         <Link
                                                             href={`/mobile/attendance?action=${hasCheckedIn ? 'clock_out' : 'clock_in'}`}
-                                                            className={`flex items-center justify-center gap-2.5 w-full h-11 px-3.5 rounded-xl border transition-all shadow-md active:scale-98
+                                                            className={`flex items-center justify-center gap-2.5 w-full h-11 px-3.5 rounded-xl border transition-all shadow-lg active:scale-98 backdrop-blur-md
                                                                 ${hasCheckedIn
-                                                                    ? 'bg-amber-500/25 border-amber-400/40 hover:bg-amber-500/35 text-amber-100'
-                                                                    : 'bg-emerald-500/25 border-emerald-400/40 hover:bg-emerald-500/35 text-emerald-100'}`}
+                                                                    ? 'bg-rose-600/35 border-rose-400/60 hover:bg-rose-600/45 text-white'
+                                                                    : 'bg-indigo-600/35 border-indigo-400/60 hover:bg-indigo-600/45 text-white'}`}
                                                         >
-                                                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shadow-sm shrink-0
+                                                            <div className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center shadow-md shrink-0 border border-white/20
                                                                 ${hasCheckedIn
-                                                                    ? 'bg-amber-500 text-slate-950'
-                                                                    : 'bg-emerald-500 text-slate-950'}`}>
+                                                                    ? 'bg-rose-600 text-white'
+                                                                    : 'bg-indigo-600 text-white'}`}>
                                                                 {hasCheckedIn
-                                                                    ? <ClockArrowUp className="w-4 h-4 text-slate-950 stroke-[2.5]" />
-                                                                    : <ClockArrowDown className="w-4 h-4 text-slate-950 stroke-[2.5]" />}
+                                                                    ? <ClockArrowUp className="w-4 h-4 text-white stroke-[2.5]" />
+                                                                    : <ClockArrowDown className="w-4 h-4 text-white stroke-[2.5]" />}
                                                             </div>
                                                             <span className="text-xs font-black uppercase tracking-wider text-white">
                                                                 {hasCheckedIn ? 'Mark Office Out' : 'Mark Office In'}
                                                             </span>
-                                                            <IconArrowRight className="w-4 h-4 text-white/70 ml-auto" />
+                                                            <IconArrowRight className="w-4 h-4 text-white/80 ml-auto" />
                                                         </Link>
                                                     </motion.div>
                                                 )}
+
 
 
                                                 {/* Attendance Complete Badge */}
