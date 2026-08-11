@@ -269,7 +269,7 @@ export class SalaryService {
         return {
             advances: advances.map(a => ({
                 ...a,
-                employeeName: a.profile.full_name,
+                employeeName: a.profile?.full_name || 'Unknown Employee',
                 designation: a.profile?.designation?.name || 'N/A'
             })),
             total,
