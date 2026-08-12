@@ -18,6 +18,7 @@ import { AppButton } from "@/components/ui/button-system";
 import { FormInput } from "@/components/ui/form-input";
 import CreateUserButton from "@/components/ui/create-user-button";
 import { CancelButton } from "@/components/ui/action-button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
 // Zod schemas for card validations
 const adminInfoSchema = z.object({
@@ -50,6 +51,11 @@ export default function TenantsPage() {
   const [isAddTenantModalOpen, setIsAddTenantModalOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
 
+  // Dedicated Modal Popup States for Cards
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+  const [isSubModalOpen, setIsSubModalOpen] = useState(false);
+  const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
+
   // New tenant form states
   const [newCompanyName, setNewCompanyName] = useState("");
   const [newSlug, setNewSlug] = useState("");
@@ -65,18 +71,15 @@ export default function TenantsPage() {
   const [deletingTenant, setDeletingTenant] = useState<any | null>(null);
   const [deleteConfirmSlug, setDeleteConfirmSlug] = useState("");
 
-  // Middle Cards Edit States & Errors
-  const [isAdminEditing, setIsAdminEditing] = useState(false);
+  // Middle Cards Form States & Errors
   const [adminNameInput, setAdminNameInput] = useState("");
   const [adminEmailInput, setAdminEmailInput] = useState("");
   const [adminPhoneInput, setAdminPhoneInput] = useState("");
   const [isAdminSaving, setIsAdminSaving] = useState(false);
   const [adminErrors, setAdminErrors] = useState<{ adminName?: string; adminEmail?: string; adminPhone?: string }>({});
 
-  const [isSubEditing, setIsSubEditing] = useState(false);
   const [isSubSaving, setIsSubSaving] = useState(false);
 
-  const [isSecurityEditing, setIsSecurityEditing] = useState(false);
   const [newSecPassword, setNewSecPassword] = useState("");
   const [confirmSecPassword, setConfirmSecPassword] = useState("");
   const [isSecuritySaving, setIsSecuritySaving] = useState(false);
@@ -105,12 +108,25 @@ export default function TenantsPage() {
 
   const updatePlanMutation = trpc.superadmin.updateTenantPlan.useMutation({
     onSuccess: () => {
-      toast.success("Tenant plan and overrides updated!");
       utils.superadmin.listTenants.invalidate();
-      setIsEditModalOpen(false);
     },
     onError: (err: any) => {
       toast.error(err.message || "Failed to update tenant plan");
+    }
+  });
+
+  const updateAdminInfoMutation = trpc.superadmin.updateAdminInfo.useMutation({
+    onSuccess: () => {
+      utils.superadmin.listTenants.invalidate();
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to update admin info");
+    }
+  });
+
+  const resetAdminPasswordMutation = trpc.superadmin.resetAdminPassword.useMutation({
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to reset admin password");
     }
   });
 
@@ -184,6 +200,7 @@ export default function TenantsPage() {
   }) || [];
 
   const handleSaveAdminInfo = async () => {
+    if (!selectedTenant) return;
     setAdminErrors({});
     const validation = adminInfoSchema.safeParse({
       adminName: adminNameInput,
@@ -202,12 +219,19 @@ export default function TenantsPage() {
 
     setIsAdminSaving(true);
     try {
-      await new Promise(r => setTimeout(r, 600));
+      await updateAdminInfoMutation.mutateAsync({
+        tenantId: selectedTenant.id,
+        adminName: adminNameInput,
+        adminEmail: adminEmailInput,
+        adminPhone: adminPhoneInput,
+      });
       toast.success("Admin information updated successfully!");
-      setIsAdminEditing(false);
+      // 2-second delay before auto-closing modal dialog
+      await new Promise(r => setTimeout(r, 2000));
+      setIsAdminModalOpen(false);
       setAdminErrors({});
     } catch (err) {
-      toast.error("Failed to update admin info");
+      // Handled in mutation onError
     } finally {
       setIsAdminSaving(false);
     }
@@ -225,15 +249,19 @@ export default function TenantsPage() {
         maxModeratorsOverride: modOverride.trim() !== "" ? parseInt(modOverride) : null,
         licenseExpiresAt: expiryDate ? expiryDate.toISOString() : new Date().toISOString(),
       });
-      setIsSubEditing(false);
+      toast.success("Subscription details updated successfully!");
+      // 2-second delay before auto-closing modal dialog
+      await new Promise(r => setTimeout(r, 2000));
+      setIsSubModalOpen(false);
     } catch (err) {
-      // Handled in mutation
+      // Handled in mutation onError
     } finally {
       setIsSubSaving(false);
     }
   };
 
   const handleSaveSecurity = async () => {
+    if (!selectedTenant) return;
     setSecurityErrors({});
     const validation = securitySchema.safeParse({
       newPassword: newSecPassword,
@@ -251,27 +279,26 @@ export default function TenantsPage() {
 
     setIsSecuritySaving(true);
     try {
-      await new Promise(r => setTimeout(r, 800));
-      toast.success("Security password reset successfully!");
+      await resetAdminPasswordMutation.mutateAsync({
+        tenantId: selectedTenant.id,
+        newPassword: newSecPassword,
+      });
+      toast.success("Admin password reset successfully!");
+      // 2-second delay before auto-closing modal dialog
+      await new Promise(r => setTimeout(r, 2000));
       setNewSecPassword("");
       setConfirmSecPassword("");
       setSecurityErrors({});
-      setIsSecurityEditing(false);
+      setIsSecurityModalOpen(false);
     } catch (err) {
-      toast.error("Failed to reset password");
+      // Handled in mutation onError
     } finally {
       setIsSecuritySaving(false);
     }
   };
 
-  // Default selection to first available tenant if none selected
-  useEffect(() => {
-    if (!selectedTenantId && tenantsList && tenantsList.length > 0) {
-      setSelectedTenantId(tenantsList[0].id);
-    }
-  }, [tenantsList, selectedTenantId]);
-
-  const selectedTenant = tenantsList?.find((t: any) => t.id === selectedTenantId) || tenantsList?.[0] || null;
+  // No default tenant selected initially (User directive)
+  const selectedTenant = selectedTenantId ? (tenantsList?.find((t: any) => t.id === selectedTenantId) || null) : null;
 
   // Sync form states whenever selectedTenant changes
   useEffect(() => {
@@ -279,9 +306,6 @@ export default function TenantsPage() {
       setAdminNameInput(selectedTenant.adminName || "");
       setAdminEmailInput(selectedTenant.adminEmail || "");
       setAdminPhoneInput(selectedTenant.adminPhone || "");
-      setIsAdminEditing(false);
-      setIsSubEditing(false);
-      setIsSecurityEditing(false);
       setNewSecPassword("");
       setConfirmSecPassword("");
 
@@ -686,140 +710,70 @@ export default function TenantsPage() {
                   <span className="text-sm font-medium text-slate-900 dark:text-slate-100">Admin Information</span>
                 </div>
 
-                {/* Rows / Fields */}
-                {!isAdminEditing ? (
-                  /* View Mode: Clean side-by-side list */
-                  <div className="space-y-2">
-                    {/* Contact Name */}
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <UserCheck className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Contact Name</span>
-                      </div>
-                      <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate text-right">
-                        {selectedTenant.adminName || "—"}
-                      </span>
+                {/* View Mode: Clean side-by-side list */}
+                <div className="space-y-2">
+                  {/* Contact Name */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <UserCheck className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
+                      <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Contact Name</span>
                     </div>
-
-                    <div className="h-px bg-slate-100 dark:bg-slate-800" />
-
-                    {/* Email */}
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <Mail className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Email</span>
-                      </div>
-                      <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate text-right">
-                        {selectedTenant.adminEmail}
-                      </span>
-                    </div>
-
-                    <div className="h-px bg-slate-100 dark:bg-slate-800" />
-
-                    {/* Phone */}
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <Phone className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Phone</span>
-                      </div>
-                      <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 text-right">
-                        {selectedTenant.adminPhone || "—"}
-                      </span>
-                    </div>
-
-                    <div className="h-px bg-slate-100 dark:bg-slate-800" />
-
-                    {/* Registration Date */}
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <Clock className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Registered</span>
-                      </div>
-                      <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 text-right">
-                        {formattedCreated}
-                      </span>
-                    </div>
+                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate text-right">
+                      {selectedTenant.adminName || "—"}
+                    </span>
                   </div>
-                ) : (
-                  /* Edit Mode: FormInput components */
-                  <div className="space-y-2.5">
-                    <FormInput
-                      label="Contact Name"
-                      icon={<UserCheck className="w-3.5 h-3.5 text-[#635BFF]" />}
-                      value={adminNameInput}
-                      onChange={(e) => {
-                        setAdminNameInput(e.target.value);
-                        if (adminErrors.adminName) setAdminErrors((prev) => ({ ...prev, adminName: undefined }));
-                      }}
-                      placeholder="Enter contact name..."
-                      error={adminErrors.adminName}
-                    />
 
-                    <FormInput
-                      label="Email Address"
-                      icon={<Mail className="w-3.5 h-3.5 text-[#635BFF]" />}
-                      type="email"
-                      value={adminEmailInput}
-                      onChange={(e) => {
-                        setAdminEmailInput(e.target.value);
-                        if (adminErrors.adminEmail) setAdminErrors((prev) => ({ ...prev, adminEmail: undefined }));
-                      }}
-                      placeholder="Enter admin email..."
-                      error={adminErrors.adminEmail}
-                    />
+                  <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
-                    <FormInput
-                      label="Phone Number"
-                      icon={<Phone className="w-3.5 h-3.5 text-[#635BFF]" />}
-                      value={adminPhoneInput}
-                      onChange={(e) => {
-                        setAdminPhoneInput(e.target.value);
-                        if (adminErrors.adminPhone) setAdminErrors((prev) => ({ ...prev, adminPhone: undefined }));
-                      }}
-                      placeholder="Enter phone number..."
-                      error={adminErrors.adminPhone}
-                    />
+                  {/* Email */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Mail className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
+                      <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Email</span>
+                    </div>
+                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate text-right">
+                      {selectedTenant.adminEmail}
+                    </span>
                   </div>
-                )}
+
+                  <div className="h-px bg-slate-100 dark:bg-slate-800" />
+
+                  {/* Phone */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Phone className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
+                      <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Phone</span>
+                    </div>
+                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 text-right">
+                      {selectedTenant.adminPhone || "—"}
+                    </span>
+                  </div>
+
+                  <div className="h-px bg-slate-100 dark:bg-slate-800" />
+
+                  {/* Registration Date */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Clock className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
+                      <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Registered</span>
+                    </div>
+                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 text-right">
+                      {formattedCreated}
+                    </span>
+                  </div>
+                </div>
               </div>
 
               {/* Bottom Action Area */}
               <div className="pt-3 border-t border-slate-100 dark:border-slate-800 mt-3">
-                {!isAdminEditing ? (
-                  <AppButton
-                    variant="primary"
-                    fullWidth
-                    leftIcon={<Edit2 className="w-4 h-4 text-white" />}
-                    onClick={() => setIsAdminEditing(true)}
-                  >
-                    Edit Admin Info
-                  </AppButton>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <CancelButton
-                      size="md"
-                      className="flex-1"
-                      onClick={() => {
-                        setIsAdminEditing(false);
-                        setAdminNameInput(selectedTenant.adminName || "");
-                        setAdminEmailInput(selectedTenant.adminEmail || "");
-                        setAdminPhoneInput(selectedTenant.adminPhone || "");
-                        setAdminErrors({});
-                      }}
-                    >
-                      Cancel
-                    </CancelButton>
-                    <CreateUserButton
-                      mode="edit"
-                      size="md"
-                      className="flex-1"
-                      asyncState={isAdminSaving ? 'loading' : 'idle'}
-                      onClick={handleSaveAdminInfo}
-                    >
-                      Save
-                    </CreateUserButton>
-                  </div>
-                )}
+                <AppButton
+                  variant="primary"
+                  fullWidth
+                  leftIcon={<Edit2 className="w-4 h-4 text-white" />}
+                  onClick={() => setIsAdminModalOpen(true)}
+                >
+                  Edit Admin Info
+                </AppButton>
               </div>
             </div>
 
@@ -832,120 +786,68 @@ export default function TenantsPage() {
                   <span className="text-sm font-medium text-slate-900 dark:text-slate-100">Subscription Details</span>
                 </div>
 
-                {/* Rows / Fields */}
-                {!isSubEditing ? (
-                  /* View Mode: Clean side-by-side list */
-                  <div className="space-y-2">
-                    {/* Current Plan */}
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <Gift className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Current Plan</span>
-                      </div>
-                      <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 text-right">
-                        {selectedTenant.plan?.displayName || "Free Plan"}
-                      </span>
+                {/* View Mode: Clean side-by-side list */}
+                <div className="space-y-2">
+                  {/* Current Plan */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Gift className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
+                      <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Current Plan</span>
                     </div>
-
-                    <div className="h-px bg-slate-100 dark:bg-slate-800" />
-
-                    {/* Billing Cycle */}
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <Calendar className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Billing Cycle</span>
-                      </div>
-                      <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 text-right">Monthly</span>
-                    </div>
-
-                    <div className="h-px bg-slate-100 dark:bg-slate-800" />
-
-                    {/* Amount */}
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <DollarSign className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Amount</span>
-                      </div>
-                      <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 text-right">₹0 / month</span>
-                    </div>
-
-                    <div className="h-px bg-slate-100 dark:bg-slate-800" />
-
-                    {/* Expiry Date */}
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <Clock className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Expiry Date</span>
-                      </div>
-                      <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 text-right">
-                        {formattedExpiry}
-                      </span>
-                    </div>
+                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 text-right">
+                      {selectedTenant.plan?.displayName || "Free Plan"}
+                    </span>
                   </div>
-                ) : (
-                  /* Edit Mode: Label above + full width input control */
-                  <div className="space-y-2.5">
-                    {/* Current Plan */}
-                    <div className="flex flex-col gap-1 text-left">
-                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1">
-                        <Gift className="w-3.5 h-3.5 text-[#635BFF]" /> Select Plan
-                      </label>
-                      <select
-                        value={selectedPlanId}
-                        onChange={(e) => setSelectedPlanId(e.target.value)}
-                        className="w-full h-[38px] px-3 bg-white dark:bg-[#0B131A] border border-slate-200 dark:border-slate-700 rounded-[12px] text-xs font-medium text-slate-900 dark:text-slate-100 outline-none transition-all focus:ring-[3px] focus:ring-indigo-500/10 focus:border-[#635BFF]"
-                      >
-                        <option value="">Free Plan ($0.00)</option>
-                        {paidPlansList.map((p: any) => (
-                          <option key={p.id} value={p.id}>{p.displayName} (₹{p.priceMonthly}/mo)</option>
-                        ))}
-                      </select>
-                    </div>
 
-                    {/* Expiry Date */}
-                    <div className="flex flex-col gap-1 text-left">
-                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5 text-[#635BFF]" /> License Expiry Date
-                      </label>
-                      <div className="w-full">
-                        <DatePicker date={expiryDate} setDate={setExpiryDate} />
-                      </div>
+                  <div className="h-px bg-slate-100 dark:bg-slate-800" />
+
+                  {/* Billing Cycle */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Calendar className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
+                      <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Billing Cycle</span>
                     </div>
+                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 text-right">Monthly</span>
                   </div>
-                )}
+
+                  <div className="h-px bg-slate-100 dark:bg-slate-800" />
+
+                  {/* Amount */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <DollarSign className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
+                      <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Amount</span>
+                    </div>
+                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 text-right">
+                      {selectedTenant.plan?.priceMonthly ? `₹${selectedTenant.plan.priceMonthly} / month` : '₹0 / month'}
+                    </span>
+                  </div>
+
+                  <div className="h-px bg-slate-100 dark:bg-slate-800" />
+
+                  {/* Expiry Date */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Clock className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
+                      <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Expiry Date</span>
+                    </div>
+                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 text-right">
+                      {formattedExpiry}
+                    </span>
+                  </div>
+                </div>
               </div>
 
               {/* Bottom Action Area */}
               <div className="pt-3 border-t border-slate-100 dark:border-slate-800 mt-3">
-                {!isSubEditing ? (
-                  <AppButton
-                    variant="primary"
-                    fullWidth
-                    leftIcon={<Edit2 className="w-4 h-4 text-white" />}
-                    onClick={() => setIsSubEditing(true)}
-                  >
-                    Edit Subscription
-                  </AppButton>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <CancelButton
-                      size="md"
-                      className="flex-1"
-                      onClick={() => setIsSubEditing(false)}
-                    >
-                      Cancel
-                    </CancelButton>
-                    <CreateUserButton
-                      mode="edit"
-                      size="md"
-                      className="flex-1"
-                      asyncState={isSubSaving ? 'loading' : 'idle'}
-                      onClick={handleSaveSubDetails}
-                    >
-                      Save
-                    </CreateUserButton>
-                  </div>
-                )}
+                <AppButton
+                  variant="primary"
+                  fullWidth
+                  leftIcon={<Edit2 className="w-4 h-4 text-white" />}
+                  onClick={() => setIsSubModalOpen(true)}
+                >
+                  Edit Subscription
+                </AppButton>
               </div>
             </div>
 
@@ -958,109 +860,51 @@ export default function TenantsPage() {
                   <span className="text-sm font-medium text-slate-900 dark:text-slate-100">Card Security</span>
                 </div>
 
-                {/* Rows / Fields */}
-                {!isSecurityEditing ? (
-                  /* View Mode: Masked side-by-side list */
-                  <div className="space-y-2">
-                    {/* New Password */}
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <Lock className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">New Password</span>
-                      </div>
-                      <span className="text-xs font-mono text-slate-400 dark:text-slate-500 text-right">••••••••</span>
+                {/* View Mode: Masked side-by-side list */}
+                <div className="space-y-2">
+                  {/* New Password */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Lock className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
+                      <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Password</span>
                     </div>
-
-                    <div className="h-px bg-slate-100 dark:bg-slate-800" />
-
-                    {/* Confirm Password */}
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <ShieldCheck className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Confirm Password</span>
-                      </div>
-                      <span className="text-xs font-mono text-slate-400 dark:text-slate-500 text-right">••••••••</span>
-                    </div>
-
-                    <div className="h-px bg-slate-100 dark:bg-slate-800" />
-
-                    {/* Encryption Status */}
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Encryption</span>
-                      </div>
-                      <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 text-right">Active (AES-256)</span>
-                    </div>
+                    <span className="text-xs font-mono text-slate-400 dark:text-slate-500 text-right">••••••••</span>
                   </div>
-                ) : (
-                  /* Edit Mode: FormInput components */
-                  <div className="space-y-2.5">
-                    <FormInput
-                      label="New Password"
-                      icon={<Lock className="w-3.5 h-3.5 text-[#635BFF]" />}
-                      type="password"
-                      value={newSecPassword}
-                      onChange={(e) => {
-                        setNewSecPassword(e.target.value);
-                        if (securityErrors.newPassword) setSecurityErrors((prev) => ({ ...prev, newPassword: undefined }));
-                      }}
-                      placeholder="Enter new password..."
-                      error={securityErrors.newPassword}
-                    />
 
-                    <FormInput
-                      label="Confirm Password"
-                      icon={<ShieldCheck className="w-3.5 h-3.5 text-[#635BFF]" />}
-                      type="password"
-                      value={confirmSecPassword}
-                      onChange={(e) => {
-                        setConfirmSecPassword(e.target.value);
-                        if (securityErrors.confirmPassword) setSecurityErrors((prev) => ({ ...prev, confirmPassword: undefined }));
-                      }}
-                      placeholder="Confirm new password..."
-                      error={securityErrors.confirmPassword}
-                    />
+                  <div className="h-px bg-slate-100 dark:bg-slate-800" />
+
+                  {/* Encryption Status */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Encryption</span>
+                    </div>
+                    <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 text-right">Active (AES-256)</span>
                   </div>
-                )}
+
+                  <div className="h-px bg-slate-100 dark:bg-slate-800" />
+
+                  {/* Auth System */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <ShieldCheck className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
+                      <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Auth Engine</span>
+                    </div>
+                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 text-right">Supabase Auth</span>
+                  </div>
+                </div>
               </div>
 
               {/* Bottom Action Area */}
               <div className="pt-3 border-t border-slate-100 dark:border-slate-800 mt-3">
-                {!isSecurityEditing ? (
-                  <AppButton
-                    variant="primary"
-                    fullWidth
-                    leftIcon={<Edit2 className="w-4 h-4 text-white" />}
-                    onClick={() => setIsSecurityEditing(true)}
-                  >
-                    Reset Password
-                  </AppButton>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <CancelButton
-                      size="md"
-                      className="flex-1"
-                      onClick={() => {
-                        setIsSecurityEditing(false);
-                        setNewSecPassword("");
-                        setConfirmSecPassword("");
-                        setSecurityErrors({});
-                      }}
-                    >
-                      Cancel
-                    </CancelButton>
-                    <CreateUserButton
-                      mode="edit"
-                      size="md"
-                      className="flex-1"
-                      asyncState={isSecuritySaving ? 'loading' : 'idle'}
-                      onClick={handleSaveSecurity}
-                    >
-                      Save
-                    </CreateUserButton>
-                  </div>
-                )}
+                <AppButton
+                  variant="primary"
+                  fullWidth
+                  leftIcon={<Edit2 className="w-4 h-4 text-white" />}
+                  onClick={() => setIsSecurityModalOpen(true)}
+                >
+                  Reset Password
+                </AppButton>
               </div>
             </div>
           </div>
@@ -1462,6 +1306,236 @@ export default function TenantsPage() {
           </div>
         </div>
       )}
+
+      {/* Dedicated Modal Dialog 1: Edit Admin Information */}
+      <Dialog open={isAdminModalOpen} onOpenChange={(open) => { if (!open && !isAdminSaving) setIsAdminModalOpen(false); }}>
+        <DialogContent 
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+          className="sm:max-w-[480px] p-6 bg-white dark:bg-[#0E1726] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl"
+        >
+          <DialogHeader className="pb-4 border-b border-slate-100 dark:border-slate-800 text-left">
+            <DialogTitle className="text-lg font-bold flex items-center gap-2 text-slate-900 dark:text-slate-100">
+              <Users className="w-5 h-5 text-[#635BFF]" />
+              Edit Admin Information
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-slate-400">
+              Update administrator contact information for {selectedTenant?.companyName}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3.5 py-4">
+            <FormInput
+              label="Contact Name"
+              icon={<UserCheck className="w-4 h-4 text-[#635BFF]" />}
+              value={adminNameInput}
+              onChange={(e) => {
+                setAdminNameInput(e.target.value);
+                if (adminErrors.adminName) setAdminErrors((prev) => ({ ...prev, adminName: undefined }));
+              }}
+              placeholder="Enter admin name..."
+              error={adminErrors.adminName}
+            />
+
+            <FormInput
+              label="Email Address"
+              icon={<Mail className="w-4 h-4 text-[#635BFF]" />}
+              type="email"
+              value={adminEmailInput}
+              onChange={(e) => {
+                setAdminEmailInput(e.target.value);
+                if (adminErrors.adminEmail) setAdminErrors((prev) => ({ ...prev, adminEmail: undefined }));
+              }}
+              placeholder="Enter admin email..."
+              error={adminErrors.adminEmail}
+            />
+
+            <FormInput
+              label="Phone Number"
+              icon={<Phone className="w-4 h-4 text-[#635BFF]" />}
+              value={adminPhoneInput}
+              onChange={(e) => {
+                setAdminPhoneInput(e.target.value);
+                if (adminErrors.adminPhone) setAdminErrors((prev) => ({ ...prev, adminPhone: undefined }));
+              }}
+              placeholder="Enter phone number..."
+              error={adminErrors.adminPhone}
+            />
+          </div>
+
+          <DialogFooter className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-3">
+            <CancelButton
+              size="md"
+              disabled={isAdminSaving}
+              onClick={() => setIsAdminModalOpen(false)}
+            >
+              Cancel
+            </CancelButton>
+            <CreateUserButton
+              mode="edit"
+              size="md"
+              asyncState={isAdminSaving ? 'loading' : 'idle'}
+              onClick={handleSaveAdminInfo}
+            >
+              Save
+            </CreateUserButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dedicated Modal Dialog 2: Edit Subscription */}
+      <Dialog open={isSubModalOpen} onOpenChange={(open) => { if (!open && !isSubSaving) setIsSubModalOpen(false); }}>
+        <DialogContent 
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+          className="sm:max-w-[520px] p-6 bg-white dark:bg-[#0E1726] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl"
+        >
+          <DialogHeader className="pb-4 border-b border-slate-100 dark:border-slate-800 text-left">
+            <DialogTitle className="text-lg font-bold flex items-center gap-2 text-slate-900 dark:text-slate-100">
+              <CreditCard className="w-5 h-5 text-[#635BFF]" />
+              Edit Subscription & Plan Setup
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-slate-400">
+              Select plan assignments and customized employee/moderator limits for {selectedTenant?.companyName}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* Plan selection listing ALL plans */}
+            <div className="flex flex-col gap-1 text-left">
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <Gift className="w-4 h-4 text-[#635BFF]" /> Subscription Plan
+              </label>
+              <select
+                value={selectedPlanId}
+                onChange={(e) => setSelectedPlanId(e.target.value)}
+                className="w-full h-11 px-3 bg-white dark:bg-[#0B131A] border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-[#635BFF]"
+              >
+                <option value="">Free Plan ($0.00/mo)</option>
+                {plansList?.map((p: any) => (
+                  <option key={p.id} value={p.id}>
+                    {p.displayName} (₹{p.priceMonthly}/mo — Max {p.maxEmployees} Employees, {p.maxModerators} Moderators)
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Employee Limit Override */}
+            <FormInput
+              label="Custom Max Employees Override"
+              type="number"
+              value={empOverride}
+              onChange={(e) => setEmpOverride(e.target.value)}
+              placeholder="Leave blank to use plan default limit"
+            />
+
+            {/* Moderator Limit Override */}
+            <FormInput
+              label="Custom Max Moderators Override"
+              type="number"
+              value={modOverride}
+              onChange={(e) => setModOverride(e.target.value)}
+              placeholder="Leave blank to use plan default limit"
+            />
+
+            {/* License Expiry Date */}
+            <div className="flex flex-col gap-1 text-left">
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <Clock className="w-4 h-4 text-[#635BFF]" /> License Expiry Date
+              </label>
+              <div className="w-full">
+                <DatePicker date={expiryDate} setDate={setExpiryDate} />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-3">
+            <CancelButton
+              size="md"
+              disabled={isSubSaving}
+              onClick={() => setIsSubModalOpen(false)}
+            >
+              Cancel
+            </CancelButton>
+            <CreateUserButton
+              mode="edit"
+              size="md"
+              asyncState={isSubSaving ? 'loading' : 'idle'}
+              onClick={handleSaveSubDetails}
+            >
+              Save
+            </CreateUserButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dedicated Modal Dialog 3: Reset Admin Password */}
+      <Dialog open={isSecurityModalOpen} onOpenChange={(open) => { if (!open && !isSecuritySaving) setIsSecurityModalOpen(false); }}>
+        <DialogContent 
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+          className="sm:max-w-[480px] p-6 bg-white dark:bg-[#0E1726] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl"
+        >
+          <DialogHeader className="pb-4 border-b border-slate-100 dark:border-slate-800 text-left">
+            <DialogTitle className="text-lg font-bold flex items-center gap-2 text-slate-900 dark:text-slate-100">
+              <Key className="w-5 h-5 text-[#635BFF]" />
+              Reset Admin Password
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-slate-400">
+              Reset login credentials for {selectedTenant?.adminEmail}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <FormInput
+              label="New Password"
+              type="password"
+              icon={<Lock className="w-4 h-4 text-[#635BFF]" />}
+              value={newSecPassword}
+              onChange={(e) => {
+                setNewSecPassword(e.target.value);
+                if (securityErrors.newPassword) setSecurityErrors((prev) => ({ ...prev, newPassword: undefined }));
+              }}
+              placeholder="Enter new password (min 6 characters)"
+              error={securityErrors.newPassword}
+            />
+
+            <FormInput
+              label="Confirm Password"
+              type="password"
+              icon={<ShieldCheck className="w-4 h-4 text-[#635BFF]" />}
+              value={confirmSecPassword}
+              onChange={(e) => {
+                setConfirmSecPassword(e.target.value);
+                if (securityErrors.confirmPassword) setSecurityErrors((prev) => ({ ...prev, confirmPassword: undefined }));
+              }}
+              placeholder="Re-enter password to confirm"
+              error={securityErrors.confirmPassword}
+            />
+          </div>
+
+          <DialogFooter className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-3">
+            <CancelButton
+              size="md"
+              disabled={isSecuritySaving}
+              onClick={() => setIsSecurityModalOpen(false)}
+            >
+              Cancel
+            </CancelButton>
+            <CreateUserButton
+              mode="edit"
+              size="md"
+              asyncState={isSecuritySaving ? 'loading' : 'idle'}
+              onClick={handleSaveSecurity}
+            >
+              Save
+            </CreateUserButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

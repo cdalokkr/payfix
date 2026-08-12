@@ -332,4 +332,107 @@ export const superadminRouter = router({
         });
       }
     }),
+
+  // 8. Update tenant admin contact information
+  updateAdminInfo: superAdminProcedure
+    .input(z.object({
+      tenantId: z.string().uuid(),
+      adminName: z.string().trim().min(2),
+      adminEmail: z.string().trim().email(),
+      adminPhone: z.string().trim().min(10),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        const tenant = await masterDb.query.tenants.findFirst({
+          where: eq(tenants.id, input.tenantId),
+        });
+
+        if (!tenant) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Tenant not found' });
+        }
+
+        // Update admin email in master tenant record
+        await masterDb
+          .update(tenants)
+          .set({
+            admin_email: input.adminEmail,
+            updated_at: new Date(),
+          })
+          .where(eq(tenants.id, input.tenantId));
+
+        // Update profiles table in tenant schema
+        if (tenant.tenant_schema) {
+          await centralDb.execute(sql`
+            UPDATE ${sql.raw(tenant.tenant_schema)}.profiles
+            SET full_name = ${input.adminName},
+                email = ${input.adminEmail},
+                mobile_no = ${input.adminPhone},
+                updated_at = NOW()
+            WHERE role = 'admin';
+          `);
+        }
+
+        return { success: true };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        console.error('[SUPERADMIN] updateAdminInfo error:', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to update admin information',
+        });
+      }
+    }),
+
+  // 9. Reset admin user password
+  resetAdminPassword: superAdminProcedure
+    .input(z.object({
+      tenantId: z.string().uuid(),
+      newPassword: z.string().min(6),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const tenant = await masterDb.query.tenants.findFirst({
+          where: eq(tenants.id, input.tenantId),
+        });
+
+        if (!tenant || !tenant.tenant_schema) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Tenant schema not found' });
+        }
+
+        // Fetch admin user ID from tenant schema profiles table
+        const adminRes = await centralDb.execute(sql`
+          SELECT id FROM ${sql.raw(tenant.tenant_schema)}.profiles
+          WHERE role = 'admin'
+          LIMIT 1;
+        `);
+
+        const adminUserId = adminRes[0]?.id as string | undefined;
+
+        if (!adminUserId) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Admin profile not found for tenant' });
+        }
+
+        const { error: authError } = await ctx.supabase.auth.admin.updateUserById(
+          adminUserId,
+          { password: input.newPassword }
+        );
+
+        if (authError) {
+          console.error('[SUPERADMIN] resetAdminPassword auth error:', authError);
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: authError.message || 'Failed to update auth password',
+          });
+        }
+
+        return { success: true };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        console.error('[SUPERADMIN] resetAdminPassword error:', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to reset admin password',
+        });
+      }
+    }),
 });
