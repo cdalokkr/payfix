@@ -45,13 +45,22 @@ export const superadminRouter = router({
               `);
               moderatorCount = (modRes[0]?.count as number) || 0;
 
-              // Fetch admin details
-              const adminRes = await centralDb.execute(sql`
-                SELECT full_name, mobile_no 
+              // Fetch primary admin details by matching tenant's admin_email
+              let adminRes = await centralDb.execute(sql`
+                SELECT full_name, mobile_no, email 
                 FROM ${sql.raw(tenant.tenant_schema)}.profiles 
-                WHERE role = 'admin' 
+                WHERE LOWER(email) = LOWER(${tenant.admin_email})
                 LIMIT 1;
               `);
+              if (!adminRes[0]) {
+                adminRes = await centralDb.execute(sql`
+                  SELECT full_name, mobile_no, email 
+                  FROM ${sql.raw(tenant.tenant_schema)}.profiles 
+                  WHERE role = 'admin' 
+                  ORDER BY created_at ASC 
+                  LIMIT 1;
+                `);
+              }
               if (adminRes[0]) {
                 adminName = (adminRes[0].full_name as string) || tenant.company_name + " Admin";
                 adminPhone = (adminRes[0].mobile_no as string) || "N/A";
@@ -361,12 +370,21 @@ export const superadminRouter = router({
           .where(eq(tenants.id, input.tenantId));
 
         if (tenant.tenant_schema) {
-          // Fetch existing admin profile ID
-          const adminRes = await centralDb.execute(sql`
+          // Fetch primary admin profile ID matching tenant.admin_email first
+          let adminRes = await centralDb.execute(sql`
             SELECT id, email FROM ${sql.raw(tenant.tenant_schema)}.profiles
-            WHERE role = 'admin'
+            WHERE LOWER(email) = LOWER(${tenant.admin_email})
             LIMIT 1;
           `);
+
+          if (!adminRes[0]) {
+            adminRes = await centralDb.execute(sql`
+              SELECT id, email FROM ${sql.raw(tenant.tenant_schema)}.profiles
+              WHERE role = 'admin'
+              ORDER BY created_at ASC
+              LIMIT 1;
+            `);
+          }
 
           const adminUser = adminRes[0];
 

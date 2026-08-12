@@ -34,11 +34,13 @@ function DialogOverlay({
   className,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
+  const isCleanOverlay = className?.includes('bg-transparent') || className?.includes('hidden') || className?.includes('opacity-0')
   return (
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/60 backdrop-blur-xs",
+        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50",
+        isCleanOverlay ? "bg-transparent pointer-events-none" : "bg-black/60 backdrop-blur-xs",
         className
       )}
       {...props}

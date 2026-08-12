@@ -1310,7 +1310,7 @@ export default function TenantsPage() {
       {/* Dedicated Modal Dialog 1: Edit Admin Information */}
       <Dialog open={isAdminModalOpen} onOpenChange={(open) => { if (!open && !isAdminSaving) setIsAdminModalOpen(false); }}>
         <DialogContent 
-          overlayClassName="bg-transparent backdrop-none shadow-none pointer-events-none"
+          overlayClassName="bg-transparent pointer-events-none"
           onPointerDownOutside={(e) => e.preventDefault()}
           onInteractOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
@@ -1382,7 +1382,7 @@ export default function TenantsPage() {
       {/* Dedicated Modal Dialog 2: Edit Subscription */}
       <Dialog open={isSubModalOpen} onOpenChange={(open) => { if (!open && !isSubSaving) setIsSubModalOpen(false); }}>
         <DialogContent 
-          overlayClassName="bg-transparent backdrop-none shadow-none pointer-events-none"
+          overlayClassName="bg-transparent pointer-events-none"
           onPointerDownOutside={(e) => e.preventDefault()}
           onInteractOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
@@ -1464,7 +1464,7 @@ export default function TenantsPage() {
       {/* Dedicated Modal Dialog 3: Reset Admin Password */}
       <Dialog open={isSecurityModalOpen} onOpenChange={(open) => { if (!open && !isSecuritySaving) setIsSecurityModalOpen(false); }}>
         <DialogContent 
-          overlayClassName="bg-transparent backdrop-none shadow-none pointer-events-none"
+          overlayClassName="bg-transparent pointer-events-none"
           onPointerDownOutside={(e) => e.preventDefault()}
           onInteractOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
