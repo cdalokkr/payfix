@@ -341,7 +341,7 @@ export const superadminRouter = router({
       adminEmail: z.string().trim().email(),
       adminPhone: z.string().trim().min(10),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       try {
         const tenant = await masterDb.query.tenants.findFirst({
           where: eq(tenants.id, input.tenantId),
@@ -360,25 +360,68 @@ export const superadminRouter = router({
           })
           .where(eq(tenants.id, input.tenantId));
 
-        // Update profiles table in tenant schema
         if (tenant.tenant_schema) {
-          await centralDb.execute(sql`
-            UPDATE ${sql.raw(tenant.tenant_schema)}.profiles
-            SET full_name = ${input.adminName},
-                email = ${input.adminEmail},
-                mobile_no = ${input.adminPhone},
-                updated_at = NOW()
-            WHERE role = 'admin';
+          // Fetch existing admin profile ID
+          const adminRes = await centralDb.execute(sql`
+            SELECT id, email FROM ${sql.raw(tenant.tenant_schema)}.profiles
+            WHERE role = 'admin'
+            LIMIT 1;
           `);
+
+          const adminUser = adminRes[0];
+
+          if (adminUser) {
+            const adminUserId = adminUser.id as string;
+            const currentEmail = adminUser.email as string;
+
+            // If email changed, check for conflict in tenant profiles
+            if (currentEmail !== input.adminEmail) {
+              const conflictCheck = await centralDb.execute(sql`
+                SELECT id FROM ${sql.raw(tenant.tenant_schema)}.profiles
+                WHERE email = ${input.adminEmail} AND id != ${adminUserId}
+                LIMIT 1;
+              `);
+
+              if (conflictCheck[0]) {
+                throw new TRPCError({
+                  code: 'CONFLICT',
+                  message: `The email "${input.adminEmail}" is already assigned to another profile in this tenant.`,
+                });
+              }
+            }
+
+            // Update profile
+            await centralDb.execute(sql`
+              UPDATE ${sql.raw(tenant.tenant_schema)}.profiles
+              SET full_name = ${input.adminName},
+                  email = ${input.adminEmail},
+                  mobile_no = ${input.adminPhone},
+                  updated_at = NOW()
+              WHERE id = ${adminUserId};
+            `);
+
+            // Also update Supabase Auth user email/metadata if available
+            try {
+              await ctx.supabase.auth.admin.updateUserById(adminUserId, {
+                email: input.adminEmail,
+                user_metadata: { full_name: input.adminName },
+              });
+            } catch (authErr) {
+              console.warn('[SUPERADMIN] Non-fatal auth email update notice:', authErr);
+            }
+          }
         }
 
         return { success: true };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
+        const rawMsg = error instanceof Error ? error.message : 'Failed to update admin information';
         console.error('[SUPERADMIN] updateAdminInfo error:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to update admin information',
+          message: rawMsg.includes('duplicate key') || rawMsg.includes('23505')
+            ? `The email "${input.adminEmail}" is already registered in this tenant schema.`
+            : rawMsg,
         });
       }
     }),

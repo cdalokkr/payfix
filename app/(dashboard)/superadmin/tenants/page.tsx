@@ -92,7 +92,7 @@ export default function TenantsPage() {
   // Helper variables for plans
   const freeDbPlan = plansList?.find((p: any) => p.name === 'free' || p.displayName?.toLowerCase() === 'free plan');
   const freeDbPlanId = freeDbPlan?.id;
-  const paidPlansList = plansList?.filter((p: any) => p.name !== 'free' && p.displayName?.toLowerCase() === 'free plan') || [];
+  const paidPlansList = plansList?.filter((p: any) => p.name !== 'free' && p.displayName?.toLowerCase() !== 'free plan') || [];
 
   // Mutations
   const updateStatusMutation = trpc.superadmin.updateTenantStatus.useMutation({
@@ -1310,10 +1310,11 @@ export default function TenantsPage() {
       {/* Dedicated Modal Dialog 1: Edit Admin Information */}
       <Dialog open={isAdminModalOpen} onOpenChange={(open) => { if (!open && !isAdminSaving) setIsAdminModalOpen(false); }}>
         <DialogContent 
+          overlayClassName="bg-transparent backdrop-none shadow-none pointer-events-none"
           onPointerDownOutside={(e) => e.preventDefault()}
           onInteractOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
-          className="sm:max-w-[480px] p-6 bg-white dark:bg-[#0E1726] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl"
+          className="sm:max-w-[480px] p-6 bg-white dark:bg-[#0E1726] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 pointer-events-auto"
         >
           <DialogHeader className="pb-4 border-b border-slate-100 dark:border-slate-800 text-left">
             <DialogTitle className="text-lg font-bold flex items-center gap-2 text-slate-900 dark:text-slate-100">
@@ -1364,17 +1365,11 @@ export default function TenantsPage() {
             />
           </div>
 
-          <DialogFooter className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-3">
-            <CancelButton
-              size="md"
-              disabled={isAdminSaving}
-              onClick={() => setIsAdminModalOpen(false)}
-            >
-              Cancel
-            </CancelButton>
+          <DialogFooter className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end">
             <CreateUserButton
               mode="edit"
               size="md"
+              className="w-full"
               asyncState={isAdminSaving ? 'loading' : 'idle'}
               onClick={handleSaveAdminInfo}
             >
@@ -1387,10 +1382,11 @@ export default function TenantsPage() {
       {/* Dedicated Modal Dialog 2: Edit Subscription */}
       <Dialog open={isSubModalOpen} onOpenChange={(open) => { if (!open && !isSubSaving) setIsSubModalOpen(false); }}>
         <DialogContent 
+          overlayClassName="bg-transparent backdrop-none shadow-none pointer-events-none"
           onPointerDownOutside={(e) => e.preventDefault()}
           onInteractOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
-          className="sm:max-w-[520px] p-6 bg-white dark:bg-[#0E1726] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl"
+          className="sm:max-w-[520px] p-6 bg-white dark:bg-[#0E1726] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 pointer-events-auto"
         >
           <DialogHeader className="pb-4 border-b border-slate-100 dark:border-slate-800 text-left">
             <DialogTitle className="text-lg font-bold flex items-center gap-2 text-slate-900 dark:text-slate-100">
@@ -1451,17 +1447,11 @@ export default function TenantsPage() {
             </div>
           </div>
 
-          <DialogFooter className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-3">
-            <CancelButton
-              size="md"
-              disabled={isSubSaving}
-              onClick={() => setIsSubModalOpen(false)}
-            >
-              Cancel
-            </CancelButton>
+          <DialogFooter className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end">
             <CreateUserButton
               mode="edit"
               size="md"
+              className="w-full"
               asyncState={isSubSaving ? 'loading' : 'idle'}
               onClick={handleSaveSubDetails}
             >
@@ -1474,10 +1464,11 @@ export default function TenantsPage() {
       {/* Dedicated Modal Dialog 3: Reset Admin Password */}
       <Dialog open={isSecurityModalOpen} onOpenChange={(open) => { if (!open && !isSecuritySaving) setIsSecurityModalOpen(false); }}>
         <DialogContent 
+          overlayClassName="bg-transparent backdrop-none shadow-none pointer-events-none"
           onPointerDownOutside={(e) => e.preventDefault()}
           onInteractOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
-          className="sm:max-w-[480px] p-6 bg-white dark:bg-[#0E1726] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl"
+          className="sm:max-w-[480px] p-6 bg-white dark:bg-[#0E1726] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 pointer-events-auto"
         >
           <DialogHeader className="pb-4 border-b border-slate-100 dark:border-slate-800 text-left">
             <DialogTitle className="text-lg font-bold flex items-center gap-2 text-slate-900 dark:text-slate-100">
@@ -1517,17 +1508,11 @@ export default function TenantsPage() {
             />
           </div>
 
-          <DialogFooter className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-3">
-            <CancelButton
-              size="md"
-              disabled={isSecuritySaving}
-              onClick={() => setIsSecurityModalOpen(false)}
-            >
-              Cancel
-            </CancelButton>
+          <DialogFooter className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end">
             <CreateUserButton
               mode="edit"
               size="md"
+              className="w-full"
               asyncState={isSecuritySaving ? 'loading' : 'idle'}
               onClick={handleSaveSecurity}
             >
