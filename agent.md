@@ -254,8 +254,22 @@ Always wrap server or transaction errors inside a smooth Framer Motion container
 
 ---
 
-## 5. Client-Side Cache Invalidation Flow
-On any successful write operation (`create`/`edit`/`delete`), follow this systematic invalidation sequence to prevent showing stale cached data to the user:
-1. **Server-Side Cache Clearance**: Await a server invalidation call to clear backend or Redis keys first.
-2. **Client-Side Cache Invalidation**: Invalidate relevant tRPC queries (e.g., list queries, metrics queries) so that table lists update instantly.
-3. **Background Prefetch**: Eagerly prefetch fresh dashboard data (or high-traffic route cache chunks) in a non-blocking background promise to eliminate post-navigation loading spinners.
+257: ## 5. Client-Side Cache Invalidation Flow
+258: On any successful write operation (`create`/`edit`/`delete`), follow this systematic invalidation sequence to prevent showing stale cached data to the user:
+259: 1. **Server-Side Cache Clearance**: Await a server invalidation call to clear backend or Redis keys first.
+260: 2. **Client-Side Cache Invalidation**: Invalidate relevant tRPC queries (e.g., list queries, metrics queries) so that table lists update instantly.
+261: 3. **Background Prefetch**: Eagerly prefetch fresh dashboard data (or high-traffic route cache chunks) in a non-blocking background promise to eliminate post-navigation loading spinners.
+
+---
+
+## 6. Standard Modal Dialog & Primary Action Button System (`design.md`)
+
+All page implementations across SuperAdmin (`/superadmin/*`) and Tenants (`/admin/*`, `/moderator/*`) must adhere to standard UI components defined in `design.md`:
+
+1. **Standard Reusable Modal Dialog (`<ModalDialog>`)**:
+   - Component: `@/components/ui/modal-dialog`
+   - Features: No backdrop blur screen (`overlayClassName="bg-transparent pointer-events-none"`), non-dismissible outside clicks/escape key, Windows close button hover effect (`hover:bg-[#E81123] hover:text-white`), built-in full-width `<CreateUserButton>` with 2-second success state display (`asyncState="success"`) before auto-closing.
+
+2. **Standard Primary Action Button**:
+   - Component: `@/components/ui/create-user-button`
+   - Usage: All creation/action triggers (e.g. "Add Tenant", "Create Plan", "Add User") must use `<CreateUserButton>` for unified aesthetic and stateful multi-mode async handling.

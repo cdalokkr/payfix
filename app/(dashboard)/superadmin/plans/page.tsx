@@ -8,6 +8,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { MetricCard } from "@/components/dashboard/metric-card";
+import CreateUserButton, { AsyncState } from "@/components/ui/create-user-button";
+import ModalDialog from "@/components/ui/modal-dialog";
 
 export default function PlansPage() {
   const utils = trpc.useUtils();
@@ -22,6 +24,7 @@ export default function PlansPage() {
     maxModerators: 2,
   });
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
+  const [planAsyncState, setPlanAsyncState] = useState<AsyncState>('idle');
 
   // Queries
   const { data: tenantsList, isLoading: loadingTenants } = trpc.superadmin.listTenants.useQuery();
@@ -29,25 +32,18 @@ export default function PlansPage() {
 
   // Mutations
   const createPlanMutation = trpc.superadmin.createPlan.useMutation({
-    onSuccess: () => {
-      toast.success("New subscription plan created!");
-      setIsPlanModalOpen(false);
-      utils.superadmin.listPlans.invalidate();
-    },
     onError: (err) => {
       toast.error(err.message || "Failed to create plan");
+      setPlanAsyncState('error');
+      setTimeout(() => setPlanAsyncState('idle'), 3000);
     }
   });
 
   const updatePlanLimitsMutation = trpc.superadmin.updatePlan.useMutation({
-    onSuccess: () => {
-      toast.success("Plan updated successfully!");
-      setEditingPlan(null);
-      setIsPlanModalOpen(false);
-      utils.superadmin.listPlans.invalidate();
-    },
     onError: (err) => {
       toast.error(err.message || "Failed to update plan");
+      setPlanAsyncState('error');
+      setTimeout(() => setPlanAsyncState('idle'), 3000);
     }
   });
 
@@ -60,6 +56,7 @@ export default function PlansPage() {
       maxModerators: 2,
     });
     setEditingPlan(null);
+    setPlanAsyncState('idle');
     setIsPlanModalOpen(true);
   };
 
@@ -72,29 +69,46 @@ export default function PlansPage() {
       maxEmployees: plan.maxEmployees,
       maxModerators: plan.maxModerators,
     });
+    setPlanAsyncState('idle');
     setIsPlanModalOpen(true);
   };
 
-  const handleSavePlan = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (editingPlan) {
-      updatePlanLimitsMutation.mutate({
-        id: editingPlan.id,
-        displayName: planForm.displayName,
-        priceMonthly: planForm.priceMonthly,
-        maxEmployees: planForm.maxEmployees,
-        maxModerators: planForm.maxModerators,
-        isActive: true,
-      });
-    } else {
-      createPlanMutation.mutate({
-        name: planForm.name,
-        displayName: planForm.displayName,
-        priceMonthly: planForm.priceMonthly,
-        maxEmployees: planForm.maxEmployees,
-        maxModerators: planForm.maxModerators,
-        features: {},
-      });
+  const handleSavePlan = async () => {
+    if (!planForm.displayName.trim()) {
+      toast.error("Please enter a display name for the plan.");
+      return;
+    }
+    setPlanAsyncState('loading');
+    try {
+      if (editingPlan) {
+        await updatePlanLimitsMutation.mutateAsync({
+          id: editingPlan.id,
+          displayName: planForm.displayName,
+          priceMonthly: planForm.priceMonthly,
+          maxEmployees: planForm.maxEmployees,
+          maxModerators: planForm.maxModerators,
+          isActive: true,
+        });
+        toast.success("Plan updated successfully!");
+      } else {
+        await createPlanMutation.mutateAsync({
+          name: planForm.name || planForm.displayName.toLowerCase().replace(/\s+/g, '-'),
+          displayName: planForm.displayName,
+          priceMonthly: planForm.priceMonthly,
+          maxEmployees: planForm.maxEmployees,
+          maxModerators: planForm.maxModerators,
+          features: {},
+        });
+        toast.success("New subscription plan created!");
+      }
+      setPlanAsyncState('success');
+      utils.superadmin.listPlans.invalidate();
+      await new Promise(r => setTimeout(r, 2000));
+      setIsPlanModalOpen(false);
+      setPlanAsyncState('idle');
+    } catch (err) {
+      setPlanAsyncState('error');
+      setTimeout(() => setPlanAsyncState('idle'), 3000);
     }
   };
 
@@ -193,13 +207,13 @@ export default function PlansPage() {
       <div className="space-y-6">
         <div className="flex justify-between items-center bg-white dark:bg-[#121B22] p-4 border border-slate-200/90 dark:border-slate-800/80 rounded-2xl shadow-xs">
           <span className="text-sm text-slate-500 dark:text-slate-400 font-medium">Manage platform product tiers dynamically.</span>
-          <button
+          <CreateUserButton
+            mode="create"
+            size="md"
             onClick={handleOpenCreatePlan}
-            className="flex items-center gap-2 h-[38px] px-5 btn-save-superadmin font-bold rounded-[12px] text-sm cursor-pointer"
           >
-            <Plus className="h-4 w-4" />
             Create Plan
-          </button>
+          </CreateUserButton>
         </div>
 
         {loadingPlans ? (
@@ -220,19 +234,22 @@ export default function PlansPage() {
                   <th className="py-4 px-6 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border/40 text-sm">
+              <tbody className="divide-y divide-border/60 text-sm font-medium">
                 {plansList?.map((plan) => (
-                  <tr key={plan.id} className="hover:bg-muted/40 transition-colors">
-                    <td className="py-4 px-6 font-bold text-foreground">{plan.displayName}</td>
-                    <td className="py-4 px-6 font-mono text-xs text-primary">{plan.name}</td>
-                    <td className="py-4 px-6 font-semibold text-card-foreground">${plan.priceMonthly}</td>
-                    <td className="py-4 px-6 font-mono font-semibold text-muted-foreground">{plan.maxEmployees}</td>
-                    <td className="py-4 px-6 font-mono font-semibold text-muted-foreground">{plan.maxModerators}</td>
+                  <tr key={plan.id} className="hover:bg-muted/20 transition-colors">
+                    <td className="py-4 px-6 font-semibold flex items-center gap-2">
+                      <CreditCard className="h-4 w-4 text-primary" />
+                      {plan.displayName}
+                    </td>
+                    <td className="py-4 px-6 font-mono text-xs text-muted-foreground">{plan.name}</td>
+                    <td className="py-4 px-6 text-emerald-600 dark:text-emerald-400 font-bold">₹{plan.priceMonthly}/mo</td>
+                    <td className="py-4 px-6">{plan.maxEmployees}</td>
+                    <td className="py-4 px-6">{plan.maxModerators}</td>
                     <td className="py-4 px-6 text-right">
                       <button
                         onClick={() => handleOpenEditPlan(plan)}
-                        className="p-2 bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-lg transition-colors cursor-pointer"
-                        title="Edit Plan Configuration"
+                        className="p-2 hover:bg-muted rounded-xl transition-colors text-muted-foreground hover:text-foreground cursor-pointer"
+                        title="Edit Plan Tiers"
                       >
                         <Edit2 className="h-4 w-4" />
                       </button>
@@ -245,110 +262,80 @@ export default function PlansPage() {
         )}
       </div>
 
-      {/* Create/Edit Plan Dialog / Modal */}
-      {isPlanModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 dark:bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#121B22] border border-gray-200 dark:border-slate-800 rounded-[20px] p-6 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200 text-left">
-            <div className="flex justify-between items-center pb-4 border-b border-gray-100 dark:border-slate-800 mb-5">
-              <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-indigo-600 dark:text-indigo-400 stroke-[1.8]" />
-                {editingPlan ? "Edit Plan Details" : "Create Subscription Plan"}
-              </h2>
-              <button 
-                onClick={() => setIsPlanModalOpen(false)} 
-                className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors cursor-pointer"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSavePlan} className="space-y-4">
-              <div className="flex flex-col gap-1">
-                <label className="text-[13px] font-medium text-slate-600 dark:text-slate-400">Plan Display Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Silver Plan"
-                  value={planForm.displayName}
-                  onChange={(e) => setPlanForm({ ...planForm, displayName: e.target.value })}
-                  className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-gray-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 shadow-xs"
-                  required
-                />
-              </div>
-
-              {!editingPlan && (
-                <div className="flex flex-col gap-1">
-                  <label className="text-[13px] font-medium text-slate-600 dark:text-slate-400">Plan Key Name (Immutable)</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. silver"
-                    value={planForm.name}
-                    onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })}
-                    className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-gray-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 font-mono shadow-xs"
-                    required
-                  />
-                </div>
-              )}
-
-              <div className="flex flex-col gap-1">
-                <label className="text-[13px] font-medium text-slate-600 dark:text-slate-400">Monthly Price (USD)</label>
-                <input
-                  type="text"
-                  placeholder="29.99"
-                  value={planForm.priceMonthly}
-                  onChange={(e) => setPlanForm({ ...planForm, priceMonthly: e.target.value })}
-                  className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-gray-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 shadow-xs"
-                  required
-                />
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="text-[13px] font-medium text-slate-600 dark:text-slate-400">Max Allowed Employees</label>
-                <input
-                  type="number"
-                  placeholder="15"
-                  value={planForm.maxEmployees}
-                  onChange={(e) => setPlanForm({ ...planForm, maxEmployees: parseInt(e.target.value) || 0 })}
-                  className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-gray-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 shadow-xs"
-                  required
-                />
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="text-[13px] font-medium text-slate-600 dark:text-slate-400">Max Allowed Moderators</label>
-                <input
-                  type="number"
-                  placeholder="2"
-                  value={planForm.maxModerators}
-                  onChange={(e) => setPlanForm({ ...planForm, maxModerators: parseInt(e.target.value) || 0 })}
-                  className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-gray-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 shadow-xs"
-                  required
-                />
-              </div>
-
-              {/* Submit Buttons */}
-              <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-slate-800 mt-5">
-                <button
-                  type="button"
-                  onClick={() => setIsPlanModalOpen(false)}
-                  className="h-[38px] px-4 rounded-[12px] border border-slate-200/80 dark:border-slate-700 bg-white/70 dark:bg-slate-800/70 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 font-medium text-xs transition-all cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createPlanMutation.isPending || updatePlanLimitsMutation.isPending}
-                  className="h-[38px] px-5 btn-save-superadmin font-semibold text-xs rounded-[12px] flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  {(createPlanMutation.isPending || updatePlanLimitsMutation.isPending) && (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  )}
-                  {editingPlan ? "Save Plan" : "Create Plan"}
-                </button>
-              </div>
-            </form>
-          </div>
+      {/* Plan Edit/Create Modal Dialog */}
+      <ModalDialog
+        open={isPlanModalOpen}
+        onOpenChange={setIsPlanModalOpen}
+        title={editingPlan ? "Edit Plan Details" : "Create New Subscription Plan"}
+        description="Set resource caps and pricing model for this plan tier."
+        icon={<Shield className="w-5 h-5 text-[#635BFF]" />}
+        saveText={editingPlan ? "Save Plan" : "Create Plan"}
+        buttonMode={editingPlan ? "edit" : "create"}
+        asyncState={planAsyncState}
+        onSave={handleSavePlan}
+      >
+        <div className="flex flex-col gap-1">
+          <label className="text-[13px] font-medium text-slate-600 dark:text-slate-400">Display Name</label>
+          <input
+            type="text"
+            placeholder="e.g. Silver Plan"
+            value={planForm.displayName}
+            onChange={(e) => setPlanForm({ ...planForm, displayName: e.target.value })}
+            className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-gray-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 shadow-xs"
+            required
+          />
         </div>
-      )}
+
+        {!editingPlan && (
+          <div className="flex flex-col gap-1">
+            <label className="text-[13px] font-medium text-slate-600 dark:text-slate-400">Plan Key Name (Immutable)</label>
+            <input
+              type="text"
+              placeholder="e.g. silver"
+              value={planForm.name}
+              onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })}
+              className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-gray-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 font-mono shadow-xs"
+              required
+            />
+          </div>
+        )}
+
+        <div className="flex flex-col gap-1">
+          <label className="text-[13px] font-medium text-slate-600 dark:text-slate-400">Monthly Price (INR/USD)</label>
+          <input
+            type="text"
+            placeholder="29.99"
+            value={planForm.priceMonthly}
+            onChange={(e) => setPlanForm({ ...planForm, priceMonthly: e.target.value })}
+            className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-gray-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 shadow-xs"
+            required
+          />
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-[13px] font-medium text-slate-600 dark:text-slate-400">Max Allowed Employees</label>
+          <input
+            type="number"
+            placeholder="15"
+            value={planForm.maxEmployees}
+            onChange={(e) => setPlanForm({ ...planForm, maxEmployees: parseInt(e.target.value) || 0 })}
+            className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-gray-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 shadow-xs"
+            required
+          />
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-[13px] font-medium text-slate-600 dark:text-slate-400">Max Allowed Moderators</label>
+          <input
+            type="number"
+            placeholder="2"
+            value={planForm.maxModerators}
+            onChange={(e) => setPlanForm({ ...planForm, maxModerators: parseInt(e.target.value) || 0 })}
+            className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-gray-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 shadow-xs"
+            required
+          />
+        </div>
+      </ModalDialog>
     </div>
   );
 }

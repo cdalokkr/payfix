@@ -16,9 +16,10 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { AppButton } from "@/components/ui/button-system";
 import { FormInput } from "@/components/ui/form-input";
-import CreateUserButton from "@/components/ui/create-user-button";
+import CreateUserButton, { AsyncState } from "@/components/ui/create-user-button";
 import { CancelButton } from "@/components/ui/action-button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import ModalDialog from "@/components/ui/modal-dialog";
 
 // Zod schemas for card validations
 const adminInfoSchema = z.object({
@@ -76,13 +77,16 @@ export default function TenantsPage() {
   const [adminEmailInput, setAdminEmailInput] = useState("");
   const [adminPhoneInput, setAdminPhoneInput] = useState("");
   const [isAdminSaving, setIsAdminSaving] = useState(false);
+  const [adminAsyncState, setAdminAsyncState] = useState<AsyncState>('idle');
   const [adminErrors, setAdminErrors] = useState<{ adminName?: string; adminEmail?: string; adminPhone?: string }>({});
 
   const [isSubSaving, setIsSubSaving] = useState(false);
+  const [subAsyncState, setSubAsyncState] = useState<AsyncState>('idle');
 
   const [newSecPassword, setNewSecPassword] = useState("");
   const [confirmSecPassword, setConfirmSecPassword] = useState("");
   const [isSecuritySaving, setIsSecuritySaving] = useState(false);
+  const [securityAsyncState, setSecurityAsyncState] = useState<AsyncState>('idle');
   const [securityErrors, setSecurityErrors] = useState<{ newPassword?: string; confirmPassword?: string }>({});
 
   // Queries
@@ -218,6 +222,7 @@ export default function TenantsPage() {
     }
 
     setIsAdminSaving(true);
+    setAdminAsyncState('loading');
     try {
       await updateAdminInfoMutation.mutateAsync({
         tenantId: selectedTenant.id,
@@ -226,12 +231,15 @@ export default function TenantsPage() {
         adminPhone: adminPhoneInput,
       });
       toast.success("Admin information updated successfully!");
-      // 2-second delay before auto-closing modal dialog
+      setAdminAsyncState('success');
+      // 2-second delay showing emerald success state before auto-closing modal dialog
       await new Promise(r => setTimeout(r, 2000));
       setIsAdminModalOpen(false);
+      setAdminAsyncState('idle');
       setAdminErrors({});
     } catch (err) {
-      // Handled in mutation onError
+      setAdminAsyncState('error');
+      setTimeout(() => setAdminAsyncState('idle'), 3000);
     } finally {
       setIsAdminSaving(false);
     }
@@ -240,6 +248,7 @@ export default function TenantsPage() {
   const handleSaveSubDetails = async () => {
     if (!selectedTenant) return;
     setIsSubSaving(true);
+    setSubAsyncState('loading');
     try {
       const targetPlanId = selectedPlanId === "" ? (freeDbPlanId || null) : selectedPlanId;
       await updatePlanMutation.mutateAsync({
@@ -250,11 +259,14 @@ export default function TenantsPage() {
         licenseExpiresAt: expiryDate ? expiryDate.toISOString() : new Date().toISOString(),
       });
       toast.success("Subscription details updated successfully!");
-      // 2-second delay before auto-closing modal dialog
+      setSubAsyncState('success');
+      // 2-second delay showing emerald success state before auto-closing modal dialog
       await new Promise(r => setTimeout(r, 2000));
       setIsSubModalOpen(false);
+      setSubAsyncState('idle');
     } catch (err) {
-      // Handled in mutation onError
+      setSubAsyncState('error');
+      setTimeout(() => setSubAsyncState('idle'), 3000);
     } finally {
       setIsSubSaving(false);
     }
@@ -278,20 +290,24 @@ export default function TenantsPage() {
     }
 
     setIsSecuritySaving(true);
+    setSecurityAsyncState('loading');
     try {
       await resetAdminPasswordMutation.mutateAsync({
         tenantId: selectedTenant.id,
         newPassword: newSecPassword,
       });
       toast.success("Admin password reset successfully!");
-      // 2-second delay before auto-closing modal dialog
+      setSecurityAsyncState('success');
+      // 2-second delay showing emerald success state before auto-closing modal dialog
       await new Promise(r => setTimeout(r, 2000));
       setNewSecPassword("");
       setConfirmSecPassword("");
       setSecurityErrors({});
       setIsSecurityModalOpen(false);
+      setSecurityAsyncState('idle');
     } catch (err) {
-      // Handled in mutation onError
+      setSecurityAsyncState('error');
+      setTimeout(() => setSecurityAsyncState('idle'), 3000);
     } finally {
       setIsSecuritySaving(false);
     }
@@ -1308,219 +1324,145 @@ export default function TenantsPage() {
       )}
 
       {/* Dedicated Modal Dialog 1: Edit Admin Information */}
-      <Dialog open={isAdminModalOpen} onOpenChange={(open) => { if (!open && !isAdminSaving) setIsAdminModalOpen(false); }}>
-        <DialogContent 
-          overlayClassName="bg-transparent pointer-events-none"
-          onPointerDownOutside={(e) => e.preventDefault()}
-          onInteractOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e) => e.preventDefault()}
-          className="sm:max-w-[480px] p-6 bg-white dark:bg-[#0E1726] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 pointer-events-auto"
-        >
-          <DialogHeader className="pb-4 border-b border-slate-100 dark:border-slate-800 text-left">
-            <DialogTitle className="text-lg font-bold flex items-center gap-2 text-slate-900 dark:text-slate-100">
-              <Users className="w-5 h-5 text-[#635BFF]" />
-              Edit Admin Information
-            </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500 dark:text-slate-400">
-              Update administrator contact information for {selectedTenant?.companyName}.
-            </DialogDescription>
-          </DialogHeader>
+      <ModalDialog
+        open={isAdminModalOpen}
+        onOpenChange={setIsAdminModalOpen}
+        title="Edit Admin Information"
+        description={`Update administrator contact information for ${selectedTenant?.companyName || 'tenant'}.`}
+        icon={<Users className="w-5 h-5 text-[#635BFF]" />}
+        asyncState={adminAsyncState}
+        onSave={handleSaveAdminInfo}
+      >
+        <FormInput
+          label="Contact Name"
+          icon={<UserCheck className="w-4 h-4 text-[#635BFF]" />}
+          value={adminNameInput}
+          onChange={(e) => {
+            setAdminNameInput(e.target.value);
+            if (adminErrors.adminName) setAdminErrors((prev) => ({ ...prev, adminName: undefined }));
+          }}
+          placeholder="Enter admin name..."
+          error={adminErrors.adminName}
+        />
 
-          <div className="space-y-3.5 py-4">
-            <FormInput
-              label="Contact Name"
-              icon={<UserCheck className="w-4 h-4 text-[#635BFF]" />}
-              value={adminNameInput}
-              onChange={(e) => {
-                setAdminNameInput(e.target.value);
-                if (adminErrors.adminName) setAdminErrors((prev) => ({ ...prev, adminName: undefined }));
-              }}
-              placeholder="Enter admin name..."
-              error={adminErrors.adminName}
-            />
+        <FormInput
+          label="Email Address"
+          icon={<Mail className="w-4 h-4 text-[#635BFF]" />}
+          type="email"
+          value={adminEmailInput}
+          onChange={(e) => {
+            setAdminEmailInput(e.target.value);
+            if (adminErrors.adminEmail) setAdminErrors((prev) => ({ ...prev, adminEmail: undefined }));
+          }}
+          placeholder="Enter admin email..."
+          error={adminErrors.adminEmail}
+        />
 
-            <FormInput
-              label="Email Address"
-              icon={<Mail className="w-4 h-4 text-[#635BFF]" />}
-              type="email"
-              value={adminEmailInput}
-              onChange={(e) => {
-                setAdminEmailInput(e.target.value);
-                if (adminErrors.adminEmail) setAdminErrors((prev) => ({ ...prev, adminEmail: undefined }));
-              }}
-              placeholder="Enter admin email..."
-              error={adminErrors.adminEmail}
-            />
-
-            <FormInput
-              label="Phone Number"
-              icon={<Phone className="w-4 h-4 text-[#635BFF]" />}
-              value={adminPhoneInput}
-              onChange={(e) => {
-                setAdminPhoneInput(e.target.value);
-                if (adminErrors.adminPhone) setAdminErrors((prev) => ({ ...prev, adminPhone: undefined }));
-              }}
-              placeholder="Enter phone number..."
-              error={adminErrors.adminPhone}
-            />
-          </div>
-
-          <DialogFooter className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end">
-            <CreateUserButton
-              mode="edit"
-              size="md"
-              className="w-full"
-              asyncState={isAdminSaving ? 'loading' : 'idle'}
-              onClick={handleSaveAdminInfo}
-            >
-              Save
-            </CreateUserButton>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        <FormInput
+          label="Phone Number"
+          icon={<Phone className="w-4 h-4 text-[#635BFF]" />}
+          value={adminPhoneInput}
+          onChange={(e) => {
+            setAdminPhoneInput(e.target.value);
+            if (adminErrors.adminPhone) setAdminErrors((prev) => ({ ...prev, adminPhone: undefined }));
+          }}
+          placeholder="Enter phone number..."
+          error={adminErrors.adminPhone}
+        />
+      </ModalDialog>
 
       {/* Dedicated Modal Dialog 2: Edit Subscription */}
-      <Dialog open={isSubModalOpen} onOpenChange={(open) => { if (!open && !isSubSaving) setIsSubModalOpen(false); }}>
-        <DialogContent 
-          overlayClassName="bg-transparent pointer-events-none"
-          onPointerDownOutside={(e) => e.preventDefault()}
-          onInteractOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e) => e.preventDefault()}
-          className="sm:max-w-[520px] p-6 bg-white dark:bg-[#0E1726] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 pointer-events-auto"
-        >
-          <DialogHeader className="pb-4 border-b border-slate-100 dark:border-slate-800 text-left">
-            <DialogTitle className="text-lg font-bold flex items-center gap-2 text-slate-900 dark:text-slate-100">
-              <CreditCard className="w-5 h-5 text-[#635BFF]" />
-              Edit Subscription & Plan Setup
-            </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500 dark:text-slate-400">
-              Select plan assignments and customized employee/moderator limits for {selectedTenant?.companyName}.
-            </DialogDescription>
-          </DialogHeader>
+      <ModalDialog
+        open={isSubModalOpen}
+        onOpenChange={setIsSubModalOpen}
+        title="Edit Subscription & Plan Setup"
+        description={`Select plan assignments and customized employee/moderator limits for ${selectedTenant?.companyName || 'tenant'}.`}
+        icon={<CreditCard className="w-5 h-5 text-[#635BFF]" />}
+        maxWidth="sm:max-w-[520px]"
+        asyncState={subAsyncState}
+        onSave={handleSaveSubDetails}
+      >
+        <div className="flex flex-col gap-1 text-left">
+          <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+            <Gift className="w-4 h-4 text-[#635BFF]" /> Subscription Plan
+          </label>
+          <select
+            value={selectedPlanId}
+            onChange={(e) => setSelectedPlanId(e.target.value)}
+            className="w-full h-11 px-3 bg-white dark:bg-[#0B131A] border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-[#635BFF]"
+          >
+            <option value="">Free Plan ($0.00/mo)</option>
+            {plansList?.map((p: any) => (
+              <option key={p.id} value={p.id}>
+                {p.displayName} (₹{p.priceMonthly}/mo — Max {p.maxEmployees} Employees, {p.maxModerators} Moderators)
+              </option>
+            ))}
+          </select>
+        </div>
 
-          <div className="space-y-4 py-4">
-            {/* Plan selection listing ALL plans */}
-            <div className="flex flex-col gap-1 text-left">
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <Gift className="w-4 h-4 text-[#635BFF]" /> Subscription Plan
-              </label>
-              <select
-                value={selectedPlanId}
-                onChange={(e) => setSelectedPlanId(e.target.value)}
-                className="w-full h-11 px-3 bg-white dark:bg-[#0B131A] border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-[#635BFF]"
-              >
-                <option value="">Free Plan ($0.00/mo)</option>
-                {plansList?.map((p: any) => (
-                  <option key={p.id} value={p.id}>
-                    {p.displayName} (₹{p.priceMonthly}/mo — Max {p.maxEmployees} Employees, {p.maxModerators} Moderators)
-                  </option>
-                ))}
-              </select>
-            </div>
+        <FormInput
+          label="Custom Max Employees Override"
+          type="number"
+          value={empOverride}
+          onChange={(e) => setEmpOverride(e.target.value)}
+          placeholder="Leave blank to use plan default limit"
+        />
 
-            {/* Employee Limit Override */}
-            <FormInput
-              label="Custom Max Employees Override"
-              type="number"
-              value={empOverride}
-              onChange={(e) => setEmpOverride(e.target.value)}
-              placeholder="Leave blank to use plan default limit"
-            />
+        <FormInput
+          label="Custom Max Moderators Override"
+          type="number"
+          value={modOverride}
+          onChange={(e) => setModOverride(e.target.value)}
+          placeholder="Leave blank to use plan default limit"
+        />
 
-            {/* Moderator Limit Override */}
-            <FormInput
-              label="Custom Max Moderators Override"
-              type="number"
-              value={modOverride}
-              onChange={(e) => setModOverride(e.target.value)}
-              placeholder="Leave blank to use plan default limit"
-            />
-
-            {/* License Expiry Date */}
-            <div className="flex flex-col gap-1 text-left">
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <Clock className="w-4 h-4 text-[#635BFF]" /> License Expiry Date
-              </label>
-              <div className="w-full">
-                <DatePicker date={expiryDate} setDate={setExpiryDate} />
-              </div>
-            </div>
+        <div className="flex flex-col gap-1 text-left">
+          <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+            <Clock className="w-4 h-4 text-[#635BFF]" /> License Expiry Date
+          </label>
+          <div className="w-full">
+            <DatePicker date={expiryDate} setDate={setExpiryDate} />
           </div>
-
-          <DialogFooter className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end">
-            <CreateUserButton
-              mode="edit"
-              size="md"
-              className="w-full"
-              asyncState={isSubSaving ? 'loading' : 'idle'}
-              onClick={handleSaveSubDetails}
-            >
-              Save
-            </CreateUserButton>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+      </ModalDialog>
 
       {/* Dedicated Modal Dialog 3: Reset Admin Password */}
-      <Dialog open={isSecurityModalOpen} onOpenChange={(open) => { if (!open && !isSecuritySaving) setIsSecurityModalOpen(false); }}>
-        <DialogContent 
-          overlayClassName="bg-transparent pointer-events-none"
-          onPointerDownOutside={(e) => e.preventDefault()}
-          onInteractOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e) => e.preventDefault()}
-          className="sm:max-w-[480px] p-6 bg-white dark:bg-[#0E1726] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 pointer-events-auto"
-        >
-          <DialogHeader className="pb-4 border-b border-slate-100 dark:border-slate-800 text-left">
-            <DialogTitle className="text-lg font-bold flex items-center gap-2 text-slate-900 dark:text-slate-100">
-              <Key className="w-5 h-5 text-[#635BFF]" />
-              Reset Admin Password
-            </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500 dark:text-slate-400">
-              Reset login credentials for {selectedTenant?.adminEmail}.
-            </DialogDescription>
-          </DialogHeader>
+      <ModalDialog
+        open={isSecurityModalOpen}
+        onOpenChange={setIsSecurityModalOpen}
+        title="Reset Admin Password"
+        description={`Reset login credentials for ${selectedTenant?.adminEmail || 'admin'}.`}
+        icon={<Key className="w-5 h-5 text-[#635BFF]" />}
+        buttonMode="reset"
+        asyncState={securityAsyncState}
+        onSave={handleSaveSecurity}
+      >
+        <FormInput
+          label="New Password"
+          type="password"
+          icon={<Lock className="w-4 h-4 text-[#635BFF]" />}
+          value={newSecPassword}
+          onChange={(e) => {
+            setNewSecPassword(e.target.value);
+            if (securityErrors.newPassword) setSecurityErrors((prev) => ({ ...prev, newPassword: undefined }));
+          }}
+          placeholder="Enter new password (min 6 characters)"
+          error={securityErrors.newPassword}
+        />
 
-          <div className="space-y-4 py-4">
-            <FormInput
-              label="New Password"
-              type="password"
-              icon={<Lock className="w-4 h-4 text-[#635BFF]" />}
-              value={newSecPassword}
-              onChange={(e) => {
-                setNewSecPassword(e.target.value);
-                if (securityErrors.newPassword) setSecurityErrors((prev) => ({ ...prev, newPassword: undefined }));
-              }}
-              placeholder="Enter new password (min 6 characters)"
-              error={securityErrors.newPassword}
-            />
-
-            <FormInput
-              label="Confirm Password"
-              type="password"
-              icon={<ShieldCheck className="w-4 h-4 text-[#635BFF]" />}
-              value={confirmSecPassword}
-              onChange={(e) => {
-                setConfirmSecPassword(e.target.value);
-                if (securityErrors.confirmPassword) setSecurityErrors((prev) => ({ ...prev, confirmPassword: undefined }));
-              }}
-              placeholder="Re-enter password to confirm"
-              error={securityErrors.confirmPassword}
-            />
-          </div>
-
-          <DialogFooter className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end">
-            <CreateUserButton
-              mode="edit"
-              size="md"
-              className="w-full"
-              asyncState={isSecuritySaving ? 'loading' : 'idle'}
-              onClick={handleSaveSecurity}
-            >
-              Save
-            </CreateUserButton>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        <FormInput
+          label="Confirm Password"
+          type="password"
+          icon={<ShieldCheck className="w-4 h-4 text-[#635BFF]" />}
+          value={confirmSecPassword}
+          onChange={(e) => {
+            setConfirmSecPassword(e.target.value);
+            if (securityErrors.confirmPassword) setSecurityErrors((prev) => ({ ...prev, confirmPassword: undefined }));
+          }}
+          placeholder="Re-enter password to confirm"
+          error={securityErrors.confirmPassword}
+        />
+      </ModalDialog>
     </div>
   );
 }
