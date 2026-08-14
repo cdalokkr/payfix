@@ -1,17 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, type InputHTMLAttributes } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Search } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-
-const COUNTRIES = [
-  { code: "+91", flag: "🇮🇳", name: "India", maxLen: 10 },
-  { code: "+1", flag: "🇺🇸", name: "US", maxLen: 10 },
-  { code: "+44", flag: "🇬🇧", name: "UK", maxLen: 11 },
-  { code: "+61", flag: "🇦🇺", name: "AU", maxLen: 9 },
-  { code: "+49", flag: "🇩🇪", name: "DE", maxLen: 11 },
-];
+import { PHONE_COUNTRY_CODES } from "@/lib/data/countries";
 
 interface PhoneInputProps
   extends Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "placeholder"> {
@@ -33,22 +26,30 @@ export default function PhoneInput({
 }: PhoneInputProps) {
   const [focused, setFocused] = useState(false);
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const [dropStyle, setDropStyle] = useState<React.CSSProperties>({});
   const inputId = id ?? "phone";
-  const selected = COUNTRIES.find((c) => c.code === countryCode) ?? COUNTRIES[0];
+  const selected = PHONE_COUNTRY_CODES.find((c) => c.code === countryCode) ?? PHONE_COUNTRY_CODES[0];
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
+
+  const filteredCountries = PHONE_COUNTRY_CODES.filter(
+    (c) =>
+      c.name.toLowerCase().includes(search.toLowerCase()) ||
+      c.code.includes(search) ||
+      c.iso.toLowerCase().includes(search.toLowerCase())
+  );
 
   // Fixed-position dropdown
   const updatePosition = useCallback(() => {
     if (!triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
     const spaceBelow = window.innerHeight - rect.bottom;
-    const dropUp = spaceBelow < 200 && rect.top > 200;
+    const dropUp = spaceBelow < 260 && rect.top > 260;
     setDropStyle({
       position: "fixed" as const,
       left: rect.left,
-      width: 160,
+      width: 240,
       ...(dropUp
         ? { bottom: window.innerHeight - rect.top + 4 }
         : { top: rect.bottom + 4 }),
@@ -56,7 +57,10 @@ export default function PhoneInput({
   }, []);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setSearch("");
+      return;
+    }
     updatePosition();
     window.addEventListener("scroll", updatePosition, true);
     window.addEventListener("resize", updatePosition);
@@ -150,27 +154,46 @@ export default function PhoneInput({
               exit={{ opacity: 0, y: -4, scale: 0.95 }}
               transition={{ duration: 0.15 }}
               style={dropStyle}
-              className="z-[100] rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden"
+              className="z-[100] rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-64"
             >
-              {COUNTRIES.map((c) => (
-                <button
-                  key={c.code + c.name}
-                  type="button"
-                  onClick={() => {
-                    onCountryChange?.(c.code);
-                    setOpen(false);
-                  }}
-                  className={cn(
-                    "flex items-center gap-2 w-full px-3 py-2 text-[13px] hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer",
-                    c.code === countryCode &&
-                      "bg-brand-light/30 dark:bg-brand-primary/10 text-brand-primary font-medium"
-                  )}
-                >
-                  <span className="text-sm">{c.flag}</span>
-                  <span className="text-slate-600 dark:text-slate-300">{c.name}</span>
-                  <span className="ml-auto text-slate-400 text-[11px]">{c.code}</span>
-                </button>
-              ))}
+              {/* Search input */}
+              <div className="p-2 border-b border-slate-100 dark:border-slate-800 flex items-center gap-1.5 bg-slate-50/50 dark:bg-slate-950/50">
+                <Search size={13} className="text-slate-400 shrink-0 ml-1" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search country or code..."
+                  className="w-full text-[12px] bg-transparent outline-none text-slate-800 dark:text-slate-200 placeholder:text-slate-400"
+                  autoFocus
+                />
+              </div>
+
+              {/* Country list */}
+              <div className="overflow-y-auto flex-1 divide-y divide-slate-50 dark:divide-slate-800/40">
+                {filteredCountries.map((c) => (
+                  <button
+                    key={c.code + c.name}
+                    type="button"
+                    onClick={() => {
+                      onCountryChange?.(c.code);
+                      setOpen(false);
+                    }}
+                    className={cn(
+                      "flex items-center gap-2 w-full px-3 py-2 text-[12px] hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left",
+                      c.code === countryCode &&
+                        "bg-brand-light/30 dark:bg-brand-primary/10 text-brand-primary font-semibold"
+                    )}
+                  >
+                    <span className="text-sm">{c.flag}</span>
+                    <span className="text-slate-700 dark:text-slate-200 truncate flex-1">{c.name}</span>
+                    <span className="text-slate-400 dark:text-slate-500 font-mono text-[11px] shrink-0">{c.code}</span>
+                  </button>
+                ))}
+                {filteredCountries.length === 0 && (
+                  <div className="p-3 text-center text-xs text-slate-400">No country found</div>
+                )}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>

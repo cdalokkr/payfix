@@ -1,13 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Building2, ArrowRight, ArrowLeft } from "lucide-react";
+import { Building2, Globe, Briefcase, ArrowRight, ArrowLeft, Loader2 } from "lucide-react";
 import { Input } from "@/components/auth/ui/input";
 import { SelectCustom as Select } from "@/components/auth/ui/select";
 import { Button } from "@/components/auth/ui/button";
 import { companyStepSchema } from "@/lib/validations/signup-wizard";
+import { trpc } from "@/lib/trpc/client";
 import type { RegisterFormData } from "./types";
 
 const INDUSTRIES = [
@@ -41,10 +43,14 @@ export default function CompanyStep({
   onNext: () => void;
   onBack: () => void;
 }) {
+  const [isValidating, setIsValidating] = useState(false);
+  const checkWorkspaceMutation = trpc.auth.checkWorkspaceAvailability.useMutation();
+
   const {
     register,
     handleSubmit,
     setValue,
+    setError,
     watch,
     formState: { errors, isValid, isSubmitted },
   } = useForm<Step2Data>({
@@ -52,53 +58,147 @@ export default function CompanyStep({
     mode: "onChange",
     defaultValues: {
       companyName: data.companyName,
+      workspaceDisplayName: data.workspaceDisplayName || data.companyName,
       workspaceName: data.workspaceName,
       industry: data.industry,
       teamSize: data.teamSize,
     },
   });
 
+  const companyName = watch("companyName");
+  const workspaceDisplayName = watch("workspaceDisplayName");
+  const workspaceSlug = watch("workspaceName");
   const industry = watch("industry");
   const teamSize = watch("teamSize");
 
-  const onSubmit = (formData: Step2Data) => {
-    update(formData);
-    onNext();
+  const onSubmit = async (formData: Step2Data) => {
+    setIsValidating(true);
+    try {
+      const check = await checkWorkspaceMutation.mutateAsync({
+        slug: formData.workspaceName,
+        companyName: formData.companyName,
+      });
+
+      if (!check.available) {
+        const errRes = check as { available: false; field?: string; message?: string };
+        if (errRes.field === "slug") {
+          setError("workspaceName", {
+            type: "manual",
+            message: errRes.message || "Workspace slug is already in use.",
+          });
+        } else if (errRes.field === "companyName") {
+          setError("companyName", {
+            type: "manual",
+            message: errRes.message || "Company name is already registered.",
+          });
+        }
+        setIsValidating(false);
+        return;
+      }
+
+      update(formData);
+      onNext();
+    } catch (err) {
+      update(formData);
+      onNext();
+    } finally {
+      setIsValidating(false);
+    }
   };
 
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
       <div className="text-center mb-6">
         <h2 className="text-[20px] sm:text-[22px] font-bold tracking-[-0.02em] text-slate-900 dark:text-white">
-          Tell us about your company
+          Workspace Information
         </h2>
         <p className="hidden sm:block text-[13px] sm:text-[14px] text-slate-500 dark:text-slate-400 mt-1.5">
-          We&apos;ll customize your workspace experience
+          Configure your registered organization and custom workspace URL
         </p>
       </div>
 
       <div className="space-y-3.5">
-        <Input
-          label="Company Name"
-          id="companyName"
-          icon={<Building2 size={16} />}
-          error={errors.companyName?.message}
-          autoComplete="organization"
-          {...register("companyName")}
-        />
+        {/* Row 1: Company Name (Full Width) */}
+        <div>
+          <Input
+            label="Company Name"
+            id="companyName"
+            icon={<Building2 size={16} />}
+            error={errors.companyName?.message}
+            placeholder="e.g. KANISHKAM ENTERPRISES PRIVATE LIMITED"
+            autoComplete="organization"
+            {...register("companyName")}
+            onChange={(e) => {
+              const val = e.target.value;
+              setValue("companyName", val, { shouldValidate: true });
 
-        <Input
-          label="Workspace Name (Subdomain)"
-          id="workspaceName"
-          error={errors.workspaceName?.message}
-          {...register("workspaceName")}
-          onChange={(e) => {
-            setValue("workspaceName", e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""), { shouldValidate: true });
-          }}
-        />
+              // Auto-suggest workspace display name & slug if not manually customized
+              const simplifiedName = val
+                .replace(/\b(PVT|LTD|PRIVATE|LIMITED|LLP|INC|CORP|LLC)\b/gi, "")
+                .trim();
+              if (!workspaceDisplayName || workspaceDisplayName === companyName) {
+                setValue("workspaceDisplayName", simplifiedName || val, { shouldValidate: isSubmitted });
+              }
 
-        {/* Industry + Team Size — side by side on lg+, stacked on mobile/tablet */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              const autoSlug = (simplifiedName || val)
+                .toLowerCase()
+                .trim()
+                .replace(/[^a-z0-9]/g, "-")
+                .replace(/-+/g, "-")
+                .replace(/^-|-$/g, "");
+              if (!workspaceSlug || workspaceSlug === companyName.toLowerCase().replace(/[^a-z0-9-]/g, "")) {
+                setValue("workspaceName", autoSlug, { shouldValidate: isSubmitted });
+              }
+            }}
+          />
+          <span className="block text-[10px] text-slate-400 dark:text-slate-500 mt-1 pl-0.5">
+            Official registered legal entity name
+          </span>
+        </div>
+
+        {/* Row 2: Workspace Name & Workspace Slug in 2 Columns */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <Input
+              label="Workspace Name"
+              id="workspaceDisplayName"
+              icon={<Briefcase size={16} />}
+              error={errors.workspaceDisplayName?.message}
+              placeholder="e.g. Kanishkam Enterprises"
+              value={workspaceDisplayName || ""}
+              {...register("workspaceDisplayName")}
+              onChange={(e) => {
+                setValue("workspaceDisplayName", e.target.value, { shouldValidate: true });
+              }}
+            />
+            <span className="block text-[10px] text-slate-400 dark:text-slate-500 mt-1 pl-0.5">
+              Display name inside your workspace & reports
+            </span>
+          </div>
+
+          <div>
+            <Input
+              label="Workspace Slug"
+              id="workspaceName"
+              icon={<Globe size={16} />}
+              error={errors.workspaceName?.message}
+              placeholder="e.g. kanishkam"
+              value={workspaceSlug || ""}
+              {...register("workspaceName")}
+              onChange={(e) => {
+                // Strict no-space alphanumeric + hyphens filter
+                const sanitized = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "");
+                setValue("workspaceName", sanitized, { shouldValidate: true });
+              }}
+            />
+            <span className="block text-[10px] text-slate-400 dark:text-slate-500 mt-1 pl-0.5">
+              Access URL: <code className="font-semibold text-brand-primary">{workspaceSlug || "slug"}.payfix.com</code>
+            </span>
+          </div>
+        </div>
+
+        {/* Row 3: Industry + Team Size in 2 Columns */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Select
             label="Industry"
             id="industry"
@@ -118,20 +218,29 @@ export default function CompanyStep({
         </div>
       </div>
 
-      <div className="mt-5 grid grid-cols-2 gap-3">
+      <div className="mt-6 grid grid-cols-2 gap-3">
         <Button variant="secondary" type="button" onClick={onBack} fullWidth>
           <span className="flex items-center justify-center gap-2">
             <ArrowLeft size={16} />
             Back
           </span>
         </Button>
-        <Button type="submit" disabled={isSubmitted && !isValid} className="group" fullWidth>
+        <Button type="submit" disabled={(isSubmitted && !isValid) || isValidating} className="group" fullWidth>
           <span className="flex items-center justify-center gap-2">
-            Next Step
-            <ArrowRight
-              size={16}
-              className="transition-transform duration-300 group-hover:translate-x-1"
-            />
+            {isValidating ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Checking Availability...
+              </>
+            ) : (
+              <>
+                Next Step
+                <ArrowRight
+                  size={16}
+                  className="transition-transform duration-300 group-hover:translate-x-1"
+                />
+              </>
+            )}
           </span>
         </Button>
       </div>

@@ -16,13 +16,15 @@ export const personalStepSchema = z.object({
   country: z.string().min(1, "Country selection is required"),
 });
 
-// Register Step 2: Company Schema
+// Register Step 2: Company & Workspace Schema
 export const companyStepSchema = z.object({
-  companyName: z.string().min(1, "Company name is required"),
+  companyName: z.string().min(2, "Company name must be at least 2 characters"),
+  workspaceDisplayName: z.string().min(2, "Workspace name must be at least 2 characters"),
   workspaceName: z
     .string()
-    .min(1, "Workspace name is required")
-    .regex(/^[a-z0-9-]+$/, "Workspace URL can only contain lowercase letters, numbers, and hyphens"),
+    .min(3, "Workspace slug must be at least 3 characters")
+    .max(30, "Workspace slug cannot exceed 30 characters")
+    .regex(/^[a-z0-9-]+$/, "Workspace slug can only contain lowercase letters, numbers, and hyphens (no spaces allowed)"),
   industry: z.string().min(1, "Industry selection is required"),
   teamSize: z.string().min(1, "Team size is required"),
 });

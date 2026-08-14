@@ -1,25 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Mail, ArrowRight } from "lucide-react";
+import { Mail, ArrowRight, Loader2 } from "lucide-react";
 import { Input } from "@/components/auth/ui/input";
 import PhoneInput from "@/components/auth/ui/phone-input";
 import { SelectCustom as Select } from "@/components/auth/ui/select";
 import { Button } from "@/components/auth/ui/button";
 import { personalStepSchema } from "@/lib/validations/signup-wizard";
+import { COUNTRY_OPTIONS, WORLD_COUNTRIES } from "@/lib/data/countries";
+import { trpc } from "@/lib/trpc/client";
 import type { RegisterFormData } from "./types";
-
-const COUNTRIES = [
-  { value: "IN", label: "India" },
-  { value: "US", label: "United States" },
-  { value: "GB", label: "United Kingdom" },
-  { value: "CA", label: "Canada" },
-  { value: "AU", label: "Australia" },
-  { value: "DE", label: "Germany" },
-  { value: "OTHER", label: "Other" },
-];
 
 type Step1Data = z.infer<typeof personalStepSchema>;
 
@@ -32,10 +25,14 @@ export default function PersonalStep({
   update: (patch: Partial<RegisterFormData>) => void;
   onNext: () => void;
 }) {
+  const [isValidating, setIsValidating] = useState(false);
+  const checkContactMutation = trpc.auth.checkContactAvailability.useMutation();
+
   const {
     register,
     handleSubmit,
     setValue,
+    setError,
     watch,
     formState: { errors, isValid, isSubmitted },
   } = useForm<Step1Data>({
@@ -46,8 +43,8 @@ export default function PersonalStep({
       lastName: data.lastName,
       email: data.email,
       phone: data.phone,
-      countryCode: data.countryCode,
-      country: data.country,
+      countryCode: data.countryCode || "+91",
+      country: data.country || "IN",
     },
   });
 
@@ -55,9 +52,49 @@ export default function PersonalStep({
   const country = watch("country");
   const phone = watch("phone");
 
-  const onSubmit = (formData: Step1Data) => {
-    update(formData);
-    onNext();
+  const handleCountryChange = (countryIso: string) => {
+    setValue("country", countryIso, { shouldValidate: true });
+    const matched = WORLD_COUNTRIES.find((c) => c.code === countryIso);
+    if (matched) {
+      setValue("countryCode", matched.dialCode, { shouldValidate: true });
+    }
+  };
+
+  const handlePhoneCountryChange = (dialCode: string) => {
+    setValue("countryCode", dialCode, { shouldValidate: true });
+    const matched = WORLD_COUNTRIES.find((c) => c.dialCode === dialCode);
+    if (matched) {
+      setValue("country", matched.code, { shouldValidate: true });
+    }
+  };
+
+  const onSubmit = async (formData: Step1Data) => {
+    setIsValidating(true);
+    try {
+      const check = await checkContactMutation.mutateAsync({
+        email: formData.email,
+        phone: `${formData.countryCode}${formData.phone}`,
+      });
+
+      if (!check.available) {
+        const errRes = check as { available: false; field?: string; message?: string };
+        setError("email", {
+          type: "manual",
+          message: errRes.message || "This email is already registered.",
+        });
+        setIsValidating(false);
+        return;
+      }
+
+      update(formData);
+      onNext();
+    } catch (err) {
+      // If network error, still allow progressing or notify
+      update(formData);
+      onNext();
+    } finally {
+      setIsValidating(false);
+    }
   };
 
   return (
@@ -106,32 +143,41 @@ export default function PersonalStep({
             id="phone"
             value={phone}
             countryCode={countryCode}
-            onCountryChange={(code) => setValue("countryCode", code, { shouldValidate: true })}
+            onCountryChange={handlePhoneCountryChange}
             error={errors.phone?.message}
             onChange={(e) => setValue("phone", e.target.value, { shouldValidate: true })}
           />
           <Select
             label="Country"
             id="country"
-            options={COUNTRIES}
+            options={COUNTRY_OPTIONS}
             value={country}
             error={errors.country?.message}
-            onChange={(val) => setValue("country", val, { shouldValidate: true })}
+            onChange={handleCountryChange}
           />
         </div>
       </div>
 
       <Button
         type="submit"
-        disabled={isSubmitted && !isValid}
+        disabled={(isSubmitted && !isValid) || isValidating}
         className="mt-5 group"
       >
         <span className="flex items-center justify-center gap-2">
-          Next Step
-          <ArrowRight
-            size={16}
-            className="transition-transform duration-300 group-hover:translate-x-1"
-          />
+          {isValidating ? (
+            <>
+              <Loader2 size={16} className="animate-spin" />
+              Verifying...
+            </>
+          ) : (
+            <>
+              Next Step
+              <ArrowRight
+                size={16}
+                className="transition-transform duration-300 group-hover:translate-x-1"
+              />
+            </>
+          )}
         </span>
       </Button>
     </form>

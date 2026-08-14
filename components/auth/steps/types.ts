@@ -6,6 +6,7 @@ export interface RegisterFormData {
   countryCode: string;
   country: string;
   companyName: string;
+  workspaceDisplayName: string;
   workspaceName: string;
   industry: string;
   teamSize: string;
@@ -19,8 +20,9 @@ export const initialRegisterData: RegisterFormData = {
   email: "",
   phone: "",
   countryCode: "+91",
-  country: "",
+  country: "IN",
   companyName: "",
+  workspaceDisplayName: "",
   workspaceName: "",
   industry: "",
   teamSize: "",

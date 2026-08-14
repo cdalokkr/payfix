@@ -4,15 +4,14 @@ import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
-interface InputProps
-  extends Omit<React.ComponentProps<"input">, "placeholder"> {
+interface InputProps extends React.ComponentProps<"input"> {
   label: string;
   error?: string;
   icon?: React.ReactNode;
 }
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, icon, className, id, ...props }, ref) => {
+  ({ label, error, icon, className, id, placeholder, ...props }, ref) => {
     const [focused, setFocused] = React.useState(false);
     const inputId = id ?? label.toLowerCase().replace(/\s+/g, "-");
 
@@ -63,7 +62,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
               setFocused(false);
               props.onBlur?.(e);
             }}
-            placeholder={label}
+            placeholder={placeholder || label}
             className={cn(
               "w-full rounded-[12px] bg-transparent h-[38px] px-2.5 text-[14px] text-slate-900 placeholder-slate-400/60 focus:outline-none dark:text-slate-100 dark:placeholder-slate-600",
               icon && "pl-8.5",

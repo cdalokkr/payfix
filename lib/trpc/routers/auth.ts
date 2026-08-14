@@ -575,6 +575,84 @@ export const authRouter = router({
       }
     }),
 
+  checkContactAvailability: publicProcedure
+    .input(z.object({
+      email: z.string().email(),
+      phone: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        const { masterDb } = await import('@/lib/db/master-connection');
+        const { tenants } = await import('@/lib/db/master-schema');
+        const { sql } = await import('drizzle-orm');
+
+        const cleanEmail = input.email.toLowerCase().trim();
+        const existingTenant = await masterDb.query.tenants.findFirst({
+          where: sql`LOWER(${tenants.admin_email}) = ${cleanEmail}`,
+        });
+
+        if (existingTenant) {
+          return {
+            available: false,
+            field: 'email' as const,
+            message: 'This email is already registered. Please sign in or use a different email address.',
+          };
+        }
+
+        return { available: true, field: undefined, message: undefined };
+      } catch (err) {
+        console.error('[checkContactAvailability] error:', err);
+        return { available: true, field: undefined, message: undefined };
+      }
+    }),
+
+  checkWorkspaceAvailability: publicProcedure
+    .input(z.object({
+      slug: z.string().min(2),
+      companyName: z.string().min(2).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        const { masterDb } = await import('@/lib/db/master-connection');
+        const { tenants } = await import('@/lib/db/master-schema');
+        const { sql } = await import('drizzle-orm');
+        const { resolveTenant } = await import('@/lib/tenant/resolver');
+
+        const cleanSlug = input.slug.toLowerCase().trim().replace(/[^a-z0-9-]/g, '');
+        
+        // 1. Check slug
+        const resolved = await resolveTenant(cleanSlug);
+        if (resolved) {
+          return {
+            available: false,
+            field: 'slug' as const,
+            message: `Workspace slug "${cleanSlug}" is already taken. Please choose another slug.`,
+          };
+        }
+
+        // 2. Check company name duplication
+        if (input.companyName) {
+          const cleanName = input.companyName.toLowerCase().trim();
+          const existingCompany = await masterDb.query.tenants.findFirst({
+            where: sql`LOWER(TRIM(${tenants.company_name})) = ${cleanName}`,
+          });
+
+          if (existingCompany) {
+            return {
+              available: false,
+              field: 'companyName' as const,
+              message: `A company named "${input.companyName}" is already registered. Please sign in or use a different name.`,
+            };
+          }
+        }
+
+        return { available: true, field: undefined, message: undefined };
+      } catch (err) {
+        console.error('[checkWorkspaceAvailability] error:', err);
+        return { available: true, field: undefined, message: undefined };
+      }
+    }),
+
   registerTenant: publicProcedure
     .input(z.object({
       companyName: z.string().min(2).max(100),

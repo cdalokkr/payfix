@@ -7,7 +7,7 @@ import {
   Building2, Users, Search, Edit2, Loader2, Trash2, Mail, Phone, Clock,
   Calendar, Power, Check, ChevronDown, Eye, ShieldCheck,
   CreditCard, DollarSign, UserCheck, Lock, Key, Activity, Plus, Gift, X,
-  CheckCircle2, XCircle, AlertCircle, MoreHorizontal
+  CheckCircle2, XCircle, AlertCircle, MoreHorizontal, Briefcase
 } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -17,6 +17,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { AppButton } from "@/components/ui/button-system";
 import { FormInput } from "@/components/ui/form-input";
+import PhoneInput from "@/components/auth/ui/phone-input";
 import CreateUserButton, { AsyncState } from "@/components/ui/create-user-button";
 import { CancelButton } from "@/components/ui/action-button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -25,10 +26,11 @@ import ModalDialog from "@/components/ui/modal-dialog";
 // Zod schema for Add Tenant Single Form Layout
 const addTenantFullSchema = z.object({
   companyName: z.string().trim().min(2, "Company name must be at least 2 characters"),
+  workspaceName: z.string().trim().min(2, "Workspace name must be at least 2 characters"),
   slug: z.string().trim().min(2, "Workspace slug must be at least 2 characters").regex(/^[a-z0-9-]+$/i, "Slug can only contain letters, numbers, and hyphens"),
   adminName: z.string().trim().min(2, "Contact name must be at least 2 characters"),
   adminEmail: z.string().trim().email("Please enter a valid email address"),
-  adminPhone: z.string().trim().regex(/^(\+\d{1,3}[- ]?)?\d{10}$/, "Phone number must be a valid 10-digit number (e.g. 9876543210 or +919876543210)"),
+  adminPhone: z.string().trim().min(8, "Phone number must be at least 8 digits"),
 });
 
 // Zod schemas for card validations
@@ -69,15 +71,18 @@ export default function TenantsPage() {
 
   // New tenant single form states & validation errors
   const [newCompanyName, setNewCompanyName] = useState("");
+  const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [newSlug, setNewSlug] = useState("");
   const [newAdminName, setNewAdminName] = useState("");
   const [newAdminEmail, setNewAdminEmail] = useState("");
   const [newAdminPhone, setNewAdminPhone] = useState("");
+  const [newAdminCountryCode, setNewAdminCountryCode] = useState("+91");
   const [newAddTenantPlanId, setNewAddTenantPlanId] = useState<string>("");
   const [newAddTenantExpiryDate, setNewAddTenantExpiryDate] = useState<Date | undefined>(undefined);
   const [addTenantAsyncState, setAddTenantAsyncState] = useState<AsyncState>('idle');
   const [addTenantErrors, setAddTenantErrors] = useState<{
     companyName?: string;
+    workspaceName?: string;
     slug?: string;
     adminName?: string;
     adminEmail?: string;
@@ -87,10 +92,12 @@ export default function TenantsPage() {
   const handleResetAddTenantModal = (open: boolean) => {
     setIsAddTenantModalOpen(open);
     setNewCompanyName("");
+    setNewWorkspaceName("");
     setNewSlug("");
     setNewAdminName("");
     setNewAdminEmail("");
     setNewAdminPhone("");
+    setNewAdminCountryCode("+91");
     setNewAddTenantPlanId("");
     setNewAddTenantExpiryDate(undefined);
     setAddTenantErrors({});
@@ -223,6 +230,7 @@ export default function TenantsPage() {
     setAddTenantErrors({});
     const validation = addTenantFullSchema.safeParse({
       companyName: newCompanyName,
+      workspaceName: newWorkspaceName || newCompanyName,
       slug: newSlug,
       adminName: newAdminName,
       adminEmail: newAdminEmail,
@@ -240,14 +248,20 @@ export default function TenantsPage() {
 
     setAddTenantAsyncState('loading');
     try {
+      // 14-day default trial period assigned internally
+      const trialExpiryDate = new Date();
+      trialExpiryDate.setDate(trialExpiryDate.getDate() + 14);
+
+      const fullPhone = newAdminPhone.startsWith('+') ? newAdminPhone : `${newAdminCountryCode}${newAdminPhone}`;
+
       await createTenantMutation.mutateAsync({
-        companyName: newCompanyName,
+        companyName: newWorkspaceName || newCompanyName,
         slug: newSlug,
         adminName: newAdminName || newCompanyName + " Admin",
         adminEmail: newAdminEmail,
-        adminPhone: newAdminPhone,
-        planId: newAddTenantPlanId || null,
-        licenseExpiresAt: newAddTenantExpiryDate ? newAddTenantExpiryDate.toISOString() : null,
+        adminPhone: fullPhone,
+        planId: null, // Assigned default trial plan internally
+        licenseExpiresAt: trialExpiryDate.toISOString(),
       });
       toast.success("Tenant workspace provisioned successfully!");
       setAddTenantAsyncState('success');
@@ -1090,118 +1104,133 @@ export default function TenantsPage() {
           </div>
         }
       >
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_240px] gap-4 sm:gap-5 items-start text-left">
-          {/* Column 1: Workspace & Organization Details */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 pb-1.5 border-b border-slate-100 dark:border-slate-800 text-[11px] font-bold uppercase tracking-wider text-[#635BFF]">
-              <Building2 className="w-3.5 h-3.5" />
-              <span>1. Workspace Details</span>
-            </div>
-            <FormInput
-              label="Company Name *"
-              icon={<Building2 className="w-4 h-4 text-[#635BFF]" />}
-              value={newCompanyName}
-              onChange={(e) => {
-                setNewCompanyName(e.target.value);
-                setNewSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''));
-                if (addTenantErrors.companyName) setAddTenantErrors(prev => ({ ...prev, companyName: undefined }));
-              }}
-              placeholder="e.g. Acme Corporation"
-              error={addTenantErrors.companyName}
-            />
-
-            <FormInput
-              label="Workspace Slug Key *"
-              icon={<ShieldCheck className="w-4 h-4 text-[#635BFF]" />}
-              value={newSlug}
-              onChange={(e) => {
-                setNewSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''));
-                if (addTenantErrors.slug) setAddTenantErrors(prev => ({ ...prev, slug: undefined }));
-              }}
-              placeholder="e.g. acme"
-              error={addTenantErrors.slug}
-            />
-          </div>
-
-          {/* Column 2: Primary Admin Account Credentials */}
-          <div className="space-y-3">
+        <div className="space-y-4 text-left">
+          {/* Section 1: Primary Admin Contact (Contact Name 4/12 + Email 5/12 + PhoneInput 3/12) */}
+          <div className="space-y-2.5">
             <div className="flex items-center gap-2 pb-1.5 border-b border-slate-100 dark:border-slate-800 text-[11px] font-bold uppercase tracking-wider text-[#635BFF]">
               <UserCheck className="w-3.5 h-3.5" />
-              <span>2. Primary Admin Account</span>
+              <span>1. Primary Admin Contact</span>
             </div>
-            <FormInput
-              label="Contact Name *"
-              icon={<UserCheck className="w-4 h-4 text-[#635BFF]" />}
-              value={newAdminName}
-              onChange={(e) => {
-                setNewAdminName(e.target.value);
-                if (addTenantErrors.adminName) setAddTenantErrors(prev => ({ ...prev, adminName: undefined }));
-              }}
-              placeholder="e.g. Alok Kumar"
-              error={addTenantErrors.adminName}
-            />
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 items-start">
+              {/* Contact Name (4/12 width) */}
+              <div className="md:col-span-4">
+                <FormInput
+                  label="Contact Name *"
+                  icon={<UserCheck className="w-4 h-4 text-[#635BFF]" />}
+                  value={newAdminName}
+                  onChange={(e) => {
+                    setNewAdminName(e.target.value);
+                    if (addTenantErrors.adminName) setAddTenantErrors(prev => ({ ...prev, adminName: undefined }));
+                  }}
+                  placeholder="e.g. Alok Kumar"
+                  error={addTenantErrors.adminName}
+                />
+              </div>
 
-            <FormInput
-              label="Admin Email Address *"
-              type="email"
-              icon={<Mail className="w-4 h-4 text-[#635BFF]" />}
-              value={newAdminEmail}
-              onChange={(e) => {
-                setNewAdminEmail(e.target.value);
-                if (addTenantErrors.adminEmail) setAddTenantErrors(prev => ({ ...prev, adminEmail: undefined }));
-              }}
-              placeholder="e.g. admin@acmecorp.com"
-              error={addTenantErrors.adminEmail}
-            />
+              {/* Admin Email Address (5/12 width - increased) */}
+              <div className="md:col-span-5">
+                <FormInput
+                  label="Admin Email Address *"
+                  type="email"
+                  icon={<Mail className="w-4 h-4 text-[#635BFF]" />}
+                  value={newAdminEmail}
+                  onChange={(e) => {
+                    setNewAdminEmail(e.target.value);
+                    if (addTenantErrors.adminEmail) setAddTenantErrors(prev => ({ ...prev, adminEmail: undefined }));
+                  }}
+                  placeholder="e.g. admin@acmecorp.com"
+                  error={addTenantErrors.adminEmail}
+                />
+              </div>
 
-            <FormInput
-              label="Admin Phone Number *"
-              icon={<Phone className="w-4 h-4 text-[#635BFF]" />}
-              value={newAdminPhone}
-              onChange={(e) => {
-                setNewAdminPhone(e.target.value);
-                if (addTenantErrors.adminPhone) setAddTenantErrors(prev => ({ ...prev, adminPhone: undefined }));
-              }}
-              placeholder="e.g. 9876543210"
-              error={addTenantErrors.adminPhone}
-            />
+              {/* Admin Phone with Country Code (3/12 width - reduced, matches slug width below) */}
+              <div className="md:col-span-3">
+                <PhoneInput
+                  label="Phone Number *"
+                  id="addTenantPhoneInput"
+                  value={newAdminPhone}
+                  countryCode={newAdminCountryCode}
+                  onCountryChange={(code) => setNewAdminCountryCode(code)}
+                  error={addTenantErrors.adminPhone}
+                  onChange={(e) => {
+                    setNewAdminPhone(e.target.value);
+                    if (addTenantErrors.adminPhone) setAddTenantErrors(prev => ({ ...prev, adminPhone: undefined }));
+                  }}
+                />
+              </div>
+            </div>
           </div>
 
-          {/* Column 3: Subscription & License Setup (Narrower Width: 240px) */}
-          <div className="space-y-3 bg-slate-50/60 dark:bg-[#0B131A]/40 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80">
+          {/* Section 2: Workspace Details (Company Name full width, Workspace Name 9/12, Workspace Slug 3/12) */}
+          <div className="space-y-2.5">
             <div className="flex items-center gap-2 pb-1.5 border-b border-slate-100 dark:border-slate-800 text-[11px] font-bold uppercase tracking-wider text-[#635BFF]">
-              <Gift className="w-3.5 h-3.5" />
-              <span>3. Subscription & License</span>
+              <Building2 className="w-3.5 h-3.5" />
+              <span>2. Workspace Details</span>
             </div>
-            <div className="flex flex-col gap-2 text-left">
-              <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <Gift className="w-4 h-4 text-[#635BFF]" /> Initial Plan
-              </label>
-              <Combobox
-                options={[
-                  { value: "", label: "Free Plan ($0.00/mo)", icon: <Gift className="w-3.5 h-3.5 text-[#635BFF]" /> },
-                  ...(plansList?.map((p: any) => ({
-                    value: p.id,
-                    label: `${p.displayName} (₹${p.priceMonthly}/mo)`,
-                    icon: <Gift className="w-3.5 h-3.5 text-[#635BFF]" />
-                  })) || [])
-                ]}
-                value={newAddTenantPlanId}
-                onSelect={(val: string) => setNewAddTenantPlanId(val)}
-                placeholder="Select initial plan..."
-                searchPlaceholder="Search plans..."
+            
+            {/* Row 1: Company Name (Full Width) */}
+            <div>
+              <FormInput
+                label="Company Name *"
+                icon={<Building2 className="w-4 h-4 text-[#635BFF]" />}
+                value={newCompanyName}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setNewCompanyName(val);
+                  const simplified = val.replace(/\b(PVT|LTD|PRIVATE|LIMITED|LLP|INC|CORP|LLC)\b/gi, "").trim();
+                  if (!newWorkspaceName || newWorkspaceName === newCompanyName) {
+                    setNewWorkspaceName(simplified || val);
+                  }
+                  const autoSlug = (simplified || val).toLowerCase().replace(/[^a-z0-9]/g, '');
+                  if (!newSlug || newSlug === newCompanyName.toLowerCase().replace(/[^a-z0-9]/g, '')) {
+                    setNewSlug(autoSlug);
+                  }
+                  if (addTenantErrors.companyName) setAddTenantErrors(prev => ({ ...prev, companyName: undefined }));
+                }}
+                placeholder="e.g. KANISHKAM ENTERPRISES PRIVATE LIMITED"
+                error={addTenantErrors.companyName}
               />
+              <span className="block text-[10px] text-slate-400 dark:text-slate-500 mt-1 pl-0.5">
+                Official registered legal entity name
+              </span>
             </div>
 
-            <div className="flex flex-col gap-2 text-left">
-              <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <Clock className="w-4 h-4 text-[#635BFF]" /> Expiry Date
-              </label>
-              <DatePicker
-                date={newAddTenantExpiryDate}
-                setDate={setNewAddTenantExpiryDate}
-                placeholder="Select expiration date"
-              />
+            {/* Row 2: Workspace Name (9/12 wider) + Workspace Slug (3/12 matching phone number width above!) */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 items-start">
+              <div className="md:col-span-9">
+                <FormInput
+                  label="Workspace Name *"
+                  icon={<Briefcase className="w-4 h-4 text-[#635BFF]" />}
+                  value={newWorkspaceName}
+                  onChange={(e) => {
+                    setNewWorkspaceName(e.target.value);
+                    if (addTenantErrors.workspaceName) setAddTenantErrors(prev => ({ ...prev, workspaceName: undefined }));
+                  }}
+                  placeholder="e.g. Kanishkam Enterprises"
+                  error={addTenantErrors.workspaceName}
+                />
+                <span className="block text-[10px] text-slate-400 dark:text-slate-500 mt-1 pl-0.5">
+                  Display name inside workspace & reports
+                </span>
+              </div>
+
+              <div className="md:col-span-3">
+                <FormInput
+                  label="Workspace Slug *"
+                  icon={<ShieldCheck className="w-4 h-4 text-[#635BFF]" />}
+                  value={newSlug}
+                  onChange={(e) => {
+                    const sanitized = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+                    setNewSlug(sanitized);
+                    if (addTenantErrors.slug) setAddTenantErrors(prev => ({ ...prev, slug: undefined }));
+                  }}
+                  placeholder="e.g. kanishkam"
+                  error={addTenantErrors.slug}
+                />
+                <span className="block text-[10px] text-slate-400 dark:text-slate-500 mt-1 pl-0.5 truncate">
+                  URL: <code className="font-semibold text-brand-primary">{newSlug || "slug"}.payfix.com</code>
+                </span>
+              </div>
             </div>
           </div>
         </div>
