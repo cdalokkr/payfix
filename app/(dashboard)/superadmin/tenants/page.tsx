@@ -57,6 +57,24 @@ export default function TenantsPage() {
   // Status & Plan Filter States
   const [statusFilter, setStatusFilter] = useState("all");
   const [planFilter, setPlanFilter] = useState("all");
+  const [baseDomain, setBaseDomain] = useState("payfix.com");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const host = window.location.hostname;
+      if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".localhost")) {
+        const port = window.location.port ? `:${window.location.port}` : "";
+        setBaseDomain(`localhost${port}`);
+      } else {
+        const parts = host.split(".");
+        if (parts.length >= 2) {
+          setBaseDomain(parts.slice(-2).join("."));
+        } else {
+          setBaseDomain(host);
+        }
+      }
+    }
+  }, []);
 
   // Modals & Popovers state
   const [isActionsOpen, setIsActionsOpen] = useState(false);
@@ -1083,12 +1101,11 @@ export default function TenantsPage() {
         open={isAddTenantModalOpen}
         onOpenChange={(val) => handleResetAddTenantModal(val)}
         title="Add New Tenant Workspace"
-        description="Provision a new tenant organization workspace with administrator credentials and initial subscription plan setup."
         icon={<Building2 className="w-5 h-5 text-[#635BFF]" />}
         showSaveButton={false}
         maxWidth="md:max-w-[840px]"
         footer={
-          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end w-full">
+          <div className="flex items-center justify-end w-full">
             <CreateUserButton
               mode="create"
               variant="primary"
@@ -1104,7 +1121,7 @@ export default function TenantsPage() {
           </div>
         }
       >
-        <div className="space-y-4 text-left">
+        <div className="space-y-6 text-left">
           {/* Section 1: Primary Admin Contact (Contact Name 4/12 + Email 5/12 + PhoneInput 3/12) */}
           <div className="space-y-2.5">
             <div className="flex items-center gap-2 pb-1.5 border-b border-slate-100 dark:border-slate-800 text-[11px] font-bold uppercase tracking-wider text-[#635BFF]">
@@ -1116,7 +1133,6 @@ export default function TenantsPage() {
               <div className="md:col-span-4">
                 <FormInput
                   label="Contact Name *"
-                  icon={<UserCheck className="w-4 h-4 text-[#635BFF]" />}
                   value={newAdminName}
                   onChange={(e) => {
                     setNewAdminName(e.target.value);
@@ -1132,7 +1148,6 @@ export default function TenantsPage() {
                 <FormInput
                   label="Admin Email Address *"
                   type="email"
-                  icon={<Mail className="w-4 h-4 text-[#635BFF]" />}
                   value={newAdminEmail}
                   onChange={(e) => {
                     setNewAdminEmail(e.target.value);
@@ -1162,7 +1177,7 @@ export default function TenantsPage() {
           </div>
 
           {/* Section 2: Workspace Details (Company Name full width, Workspace Name 9/12, Workspace Slug 3/12) */}
-          <div className="space-y-2.5">
+          <div className="space-y-2.5 pt-1">
             <div className="flex items-center gap-2 pb-1.5 border-b border-slate-100 dark:border-slate-800 text-[11px] font-bold uppercase tracking-wider text-[#635BFF]">
               <Building2 className="w-3.5 h-3.5" />
               <span>2. Workspace Details</span>
@@ -1172,7 +1187,6 @@ export default function TenantsPage() {
             <div>
               <FormInput
                 label="Company Name *"
-                icon={<Building2 className="w-4 h-4 text-[#635BFF]" />}
                 value={newCompanyName}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -1200,7 +1214,6 @@ export default function TenantsPage() {
               <div className="md:col-span-9">
                 <FormInput
                   label="Workspace Name *"
-                  icon={<Briefcase className="w-4 h-4 text-[#635BFF]" />}
                   value={newWorkspaceName}
                   onChange={(e) => {
                     setNewWorkspaceName(e.target.value);
@@ -1210,14 +1223,13 @@ export default function TenantsPage() {
                   error={addTenantErrors.workspaceName}
                 />
                 <span className="block text-[10px] text-slate-400 dark:text-slate-500 mt-1 pl-0.5">
-                  Display name inside workspace & reports
+                  Display name inside workspace
                 </span>
               </div>
 
               <div className="md:col-span-3">
                 <FormInput
                   label="Workspace Slug *"
-                  icon={<ShieldCheck className="w-4 h-4 text-[#635BFF]" />}
                   value={newSlug}
                   onChange={(e) => {
                     const sanitized = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
@@ -1228,7 +1240,7 @@ export default function TenantsPage() {
                   error={addTenantErrors.slug}
                 />
                 <span className="block text-[10px] text-slate-400 dark:text-slate-500 mt-1 pl-0.5 truncate">
-                  URL: <code className="font-semibold text-brand-primary">{newSlug || "slug"}.payfix.com</code>
+                  URL: <code className="font-semibold text-brand-primary">{newSlug || "slug"}.{baseDomain}</code>
                 </span>
               </div>
             </div>
@@ -1358,14 +1370,14 @@ export default function TenantsPage() {
         open={isAdminModalOpen}
         onOpenChange={setIsAdminModalOpen}
         title="Edit Admin Information"
-        description={`Update administrator contact information for ${selectedTenant?.companyName || 'tenant'}.`}
         icon={<Users className="w-5 h-5 text-[#635BFF]" />}
+        buttonMode="edit"
+        buttonVariant="secondary"
         asyncState={adminAsyncState}
         onSave={handleSaveAdminInfo}
       >
         <FormInput
           label="Contact Name"
-          icon={<UserCheck className="w-4 h-4 text-[#635BFF]" />}
           value={adminNameInput}
           onChange={(e) => {
             setAdminNameInput(e.target.value);
@@ -1377,7 +1389,6 @@ export default function TenantsPage() {
 
         <FormInput
           label="Email Address"
-          icon={<Mail className="w-4 h-4 text-[#635BFF]" />}
           type="email"
           value={adminEmailInput}
           onChange={(e) => {
@@ -1390,7 +1401,6 @@ export default function TenantsPage() {
 
         <FormInput
           label="Phone Number"
-          icon={<Phone className="w-4 h-4 text-[#635BFF]" />}
           value={adminPhoneInput}
           onChange={(e) => {
             setAdminPhoneInput(e.target.value);
@@ -1406,23 +1416,23 @@ export default function TenantsPage() {
         open={isSubModalOpen}
         onOpenChange={setIsSubModalOpen}
         title="Edit Subscription & Plan Setup"
-        description={`Select plan assignments and customized employee/moderator limits for ${selectedTenant?.companyName || 'tenant'}.`}
         icon={<CreditCard className="w-5 h-5 text-[#635BFF]" />}
         maxWidth="sm:max-w-[480px]"
+        buttonMode="edit"
+        buttonVariant="secondary"
         asyncState={subAsyncState}
         onSave={handleSaveSubDetails}
       >
-        <div className="flex flex-col gap-2 text-left mb-3">
-          <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-            <Gift className="w-4 h-4 text-[#635BFF]" /> Subscription Plan
+        <div className="flex flex-col text-left mb-3">
+          <label className="block text-[13px] font-medium mb-1.5 text-slate-600 dark:text-slate-400">
+            Subscription Plan
           </label>
           <Combobox
             options={[
-              { value: "", label: "Free Plan ($0.00/mo)", icon: <Gift className="w-3.5 h-3.5 text-[#635BFF]" /> },
+              { value: "", label: "Free Plan ($0.00/mo)" },
               ...(plansList?.map((p: any) => ({
                 value: p.id,
-                label: `${p.displayName} (₹${p.priceMonthly}/mo — Max ${p.maxEmployees} Employees, ${p.maxModerators} Moderators)`,
-                icon: <Gift className="w-3.5 h-3.5 text-[#635BFF]" />
+                label: `${p.displayName} (₹${p.priceMonthly}/mo — Max ${p.maxEmployees} Employees, ${p.maxModerators} Moderators)`
               })) || [])
             ]}
             value={selectedPlanId}
@@ -1452,9 +1462,9 @@ export default function TenantsPage() {
             className="w-full max-w-[130px]"
           />
 
-          <div className="flex flex-col gap-2 text-left w-full">
-            <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 whitespace-nowrap">
-              <Clock className="w-4 h-4 text-[#635BFF]" /> Expiry Date
+          <div className="flex flex-col text-left w-full">
+            <label className="block text-[13px] font-medium mb-1.5 text-slate-600 dark:text-slate-400 whitespace-nowrap">
+              Expiry Date
             </label>
             <div className="w-full">
               <DatePicker date={expiryDate} setDate={setExpiryDate} />
@@ -1468,16 +1478,15 @@ export default function TenantsPage() {
         open={isSecurityModalOpen}
         onOpenChange={setIsSecurityModalOpen}
         title="Reset Admin Password"
-        description={`Reset login credentials for ${selectedTenant?.adminEmail || 'admin'}.`}
         icon={<Key className="w-5 h-5 text-[#635BFF]" />}
         buttonMode="reset"
+        buttonVariant="primary"
         asyncState={securityAsyncState}
         onSave={handleSaveSecurity}
       >
         <FormInput
           label="New Password"
           type="password"
-          icon={<Lock className="w-4 h-4 text-[#635BFF]" />}
           value={newSecPassword}
           onChange={(e) => {
             setNewSecPassword(e.target.value);
@@ -1490,7 +1499,6 @@ export default function TenantsPage() {
         <FormInput
           label="Confirm Password"
           type="password"
-          icon={<ShieldCheck className="w-4 h-4 text-[#635BFF]" />}
           value={confirmSecPassword}
           onChange={(e) => {
             setConfirmSecPassword(e.target.value);

@@ -264,9 +264,9 @@ export function AsyncButton({
 
   const colorMap: Record<AsyncState, string> = {
     idle: `${base} ${hover}`,
-    loading: "!bg-gray-600 !hover:bg-gray-700 !cursor-wait !bg-none",
-    success: "!bg-green-600 !bg-none !cursor-wait !text-white !opacity-100 animate-pulse",
-    error: "!bg-red-600 !hover:bg-red-700 !animate-pulse !bg-none",
+    loading: "!bg-[#6D7684] !hover:bg-[#6D7684] !cursor-wait !bg-none !text-white font-semibold",
+    success: "!bg-[#18AE50] !bg-none !cursor-wait !text-white !opacity-100 shadow-md font-semibold",
+    error: "!bg-red-600 !hover:bg-red-700 !animate-pulse !bg-none !text-white font-semibold",
   };
 
   // 📏 Size map with backward compatibility

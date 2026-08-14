@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -12,33 +12,77 @@ export interface FormInputProps extends React.InputHTMLAttributes<HTMLInputEleme
 }
 
 export const FormInput = React.forwardRef<HTMLInputElement, FormInputProps>(
-  ({ label, icon, error, containerClassName, className, id, ...props }, ref) => {
+  ({ label, icon, error, containerClassName, className, id, placeholder, onFocus, onBlur, ...props }, ref) => {
+    const [focused, setFocused] = useState(false);
     const inputId = id || (label ? label.toLowerCase().replace(/\s+/g, "-") : undefined);
 
     return (
-      <div className={cn("flex flex-col gap-2 text-left w-full", containerClassName)}>
+      <div className={cn("w-full text-left", containerClassName)}>
         {label && (
           <label
             htmlFor={inputId}
-            className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5"
+            className={cn(
+              "block text-[13px] font-medium mb-1.5 transition-colors duration-200",
+              focused
+                ? "text-brand-primary dark:text-[#635BFF]"
+                : "text-slate-600 dark:text-slate-400"
+            )}
           >
-            {icon && <span className="shrink-0 flex items-center">{icon}</span>}
             {label}
           </label>
         )}
-        <input
-          id={inputId}
-          ref={ref}
+        <div
           className={cn(
-            "w-full h-[38px] px-3 bg-white dark:bg-[#0B131A] border border-slate-200 dark:border-slate-700 rounded-[12px] text-xs font-normal text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition-all focus:ring-[3px] focus:ring-indigo-500/10 focus:border-[#635BFF]",
-            error && "border-rose-400 dark:border-rose-500 focus:border-rose-500 focus:ring-rose-500/10",
-            className
+            "relative flex items-center rounded-[12px] transition-all duration-300 border bg-white dark:bg-[#0B131A]",
+            focused
+              ? "border-brand-primary dark:border-[#635BFF] ring-[3px] ring-brand-primary/10 dark:ring-[#635BFF]/10"
+              : error
+              ? "border-red-400 dark:border-rose-500 ring-[3px] ring-red-400/10"
+              : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
           )}
-          {...props}
-        />
+        >
+          {icon && (
+            <span
+              className={cn(
+                "absolute left-2.5 pointer-events-none transition-colors duration-200 shrink-0",
+                focused
+                  ? "text-brand-primary dark:text-[#635BFF]"
+                  : "text-slate-500 dark:text-slate-400"
+              )}
+              aria-hidden
+            >
+              {icon}
+            </span>
+          )}
+          <input
+            ref={ref}
+            id={inputId}
+            onFocus={(e) => {
+              setFocused(true);
+              onFocus?.(e);
+            }}
+            onBlur={(e) => {
+              setFocused(false);
+              onBlur?.(e);
+            }}
+            placeholder={placeholder || label}
+            className={cn(
+              "w-full rounded-[12px] bg-transparent h-[38px] px-2.5 text-[14px] text-slate-900 placeholder-slate-400/60 focus:outline-none dark:text-slate-100 dark:placeholder-slate-600",
+              icon ? "pl-8.5" : "px-3",
+              className
+            )}
+            aria-invalid={!!error}
+            aria-describedby={error ? `${inputId}-error` : undefined}
+            {...props}
+          />
+        </div>
         {error && (
-          <span className="text-xs font-semibold text-rose-500 dark:text-rose-400 flex items-center gap-1 mt-0.5">
-            <AlertCircle className="w-3.5 h-3.5 text-rose-500 dark:text-rose-400 shrink-0" />
+          <span
+            id={`${inputId}-error`}
+            role="alert"
+            className="text-[12px] font-medium text-red-500 dark:text-rose-400 flex items-center gap-1 mt-1 pl-0.5"
+          >
+            <AlertCircle className="w-3.5 h-3.5 text-red-500 dark:text-rose-400 shrink-0" />
             {error}
           </span>
         )}
@@ -48,3 +92,4 @@ export const FormInput = React.forwardRef<HTMLInputElement, FormInputProps>(
 );
 
 FormInput.displayName = "FormInput";
+

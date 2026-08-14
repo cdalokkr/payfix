@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import CreateUserButton, { AsyncState } from "@/components/ui/create-user-button";
 import ModalDialog from "@/components/ui/modal-dialog";
+import { FormInput } from "@/components/ui/form-input";
 
 export default function PlansPage() {
   const utils = trpc.useUtils();
@@ -267,71 +268,56 @@ export default function PlansPage() {
         open={isPlanModalOpen}
         onOpenChange={setIsPlanModalOpen}
         title={editingPlan ? "Edit Plan Details" : "Create New Subscription Plan"}
-        description="Set resource caps and pricing model for this plan tier."
         icon={<Shield className="w-5 h-5 text-[#635BFF]" />}
         saveText={editingPlan ? "Save Plan" : "Create Plan"}
         buttonMode={editingPlan ? "edit" : "create"}
+        buttonVariant={editingPlan ? "secondary" : "primary"}
         asyncState={planAsyncState}
         onSave={handleSavePlan}
       >
-        <div className="flex flex-col gap-1">
-          <label className="text-[13px] font-medium text-slate-600 dark:text-slate-400">Display Name</label>
-          <input
-            type="text"
-            placeholder="e.g. Silver Plan"
-            value={planForm.displayName}
-            onChange={(e) => setPlanForm({ ...planForm, displayName: e.target.value })}
-            className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-gray-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 shadow-xs"
-            required
-          />
-        </div>
+        <FormInput
+          label="Display Name"
+          placeholder="e.g. Silver Plan"
+          value={planForm.displayName}
+          onChange={(e) => setPlanForm({ ...planForm, displayName: e.target.value })}
+          required
+        />
 
         {!editingPlan && (
-          <div className="flex flex-col gap-1">
-            <label className="text-[13px] font-medium text-slate-600 dark:text-slate-400">Plan Key Name (Immutable)</label>
-            <input
-              type="text"
-              placeholder="e.g. silver"
-              value={planForm.name}
-              onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })}
-              className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-gray-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 font-mono shadow-xs"
-              required
-            />
-          </div>
+          <FormInput
+            label="Plan Key Name (Immutable)"
+            placeholder="e.g. silver"
+            value={planForm.name}
+            onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })}
+            required
+          />
         )}
 
-        <div className="flex flex-col gap-1">
-          <label className="text-[13px] font-medium text-slate-600 dark:text-slate-400">Monthly Price (INR/USD)</label>
-          <input
-            type="text"
-            placeholder="29.99"
-            value={planForm.priceMonthly}
-            onChange={(e) => setPlanForm({ ...planForm, priceMonthly: e.target.value })}
-            className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-gray-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 shadow-xs"
-            required
-          />
-        </div>
+        <FormInput
+          label="Monthly Price (INR/USD)"
+          type="text"
+          placeholder="29.99"
+          value={planForm.priceMonthly}
+          onChange={(e) => setPlanForm({ ...planForm, priceMonthly: e.target.value })}
+          required
+        />
 
-        <div className="flex flex-col gap-1">
-          <label className="text-[13px] font-medium text-slate-600 dark:text-slate-400">Max Allowed Employees</label>
-          <input
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          <FormInput
+            label="Max Allowed Employees"
             type="number"
             placeholder="15"
-            value={planForm.maxEmployees}
+            value={planForm.maxEmployees.toString()}
             onChange={(e) => setPlanForm({ ...planForm, maxEmployees: parseInt(e.target.value) || 0 })}
-            className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-gray-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 shadow-xs"
             required
           />
-        </div>
 
-        <div className="flex flex-col gap-1">
-          <label className="text-[13px] font-medium text-slate-600 dark:text-slate-400">Max Allowed Moderators</label>
-          <input
+          <FormInput
+            label="Max Allowed Moderators"
             type="number"
             placeholder="2"
-            value={planForm.maxModerators}
+            value={planForm.maxModerators.toString()}
             onChange={(e) => setPlanForm({ ...planForm, maxModerators: parseInt(e.target.value) || 0 })}
-            className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-gray-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 transition-all duration-200 shadow-xs"
             required
           />
         </div>

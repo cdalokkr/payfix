@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -71,6 +71,25 @@ export default function CompanyStep({
   const industry = watch("industry");
   const teamSize = watch("teamSize");
 
+  const [baseDomain, setBaseDomain] = useState("payfix.com");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const host = window.location.hostname;
+      if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".localhost")) {
+        const port = window.location.port ? `:${window.location.port}` : "";
+        setBaseDomain(`localhost${port}`);
+      } else {
+        const parts = host.split(".");
+        if (parts.length >= 2) {
+          setBaseDomain(parts.slice(-2).join("."));
+        } else {
+          setBaseDomain(host);
+        }
+      }
+    }
+  }, []);
+
   const onSubmit = async (formData: Step2Data) => {
     setIsValidating(true);
     try {
@@ -110,10 +129,10 @@ export default function CompanyStep({
     <form onSubmit={handleSubmit(onSubmit)}>
       <div className="text-center mb-6">
         <h2 className="text-[20px] sm:text-[22px] font-bold tracking-[-0.02em] text-slate-900 dark:text-white">
-          Workspace Information
+          Configure Workspace Information
         </h2>
         <p className="hidden sm:block text-[13px] sm:text-[14px] text-slate-500 dark:text-slate-400 mt-1.5">
-          Configure your registered organization and custom workspace URL
+          Your registered organization and custom workspace URL
         </p>
       </div>
 
@@ -172,7 +191,7 @@ export default function CompanyStep({
               }}
             />
             <span className="block text-[10px] text-slate-400 dark:text-slate-500 mt-1 pl-0.5">
-              Display name inside your workspace & reports
+              Display name inside workspace
             </span>
           </div>
 
@@ -192,7 +211,7 @@ export default function CompanyStep({
               }}
             />
             <span className="block text-[10px] text-slate-400 dark:text-slate-500 mt-1 pl-0.5">
-              Access URL: <code className="font-semibold text-brand-primary">{workspaceSlug || "slug"}.payfix.com</code>
+              Access URL: <code className="font-semibold text-brand-primary">{workspaceSlug || "slug"}.{baseDomain}</code>
             </span>
           </div>
         </div>

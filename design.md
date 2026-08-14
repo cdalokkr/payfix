@@ -1,37 +1,66 @@
 # PayFix Platform Design & UI Component Standards
 
-## 1. Unified Primary Non-Async Button Component (`<AppButton variant="primary">`)
-All non-async primary buttons across the entire PayFix platform (e.g. "Add Tenant" CTA, "Create Plan" CTA, Card 1 & Card 2 "Edit" buttons) MUST use the central reusable `<AppButton variant="primary">` component (`@/components/ui/button-system`).
+## 1. Unified Form Input & Label System (Matching Signup Form UX)
+All form inputs, modal dialog fields, and settings controls across the entire PayFix platform MUST adhere to the exact typography, sizing, spacing, and interaction model established by the Signup Form and `<FormInput>` (`@/components/ui/form-input`):
 
-### Unified Primary Button Standards:
-- **Component**: `<AppButton variant="primary">`
-- **Background Color**: Solid Indigo (`bg-[#635BFF] hover:bg-[#5249ea] text-white shadow-xs hover:shadow-md border border-transparent`)
-- **Typography & Font Size**: `text-xs sm:text-sm font-semibold`
-- **Dimensions & Radius**: Height `h-9` (`h-[38px]`), horizontal padding `px-4`, rounded corners `rounded-xl` (`rounded-[12px]`)
-- **Icon Alignment**: `flex items-center justify-center gap-1.5`
-- **Result**: Guarantees 100% identical visual appearance, font size, font weight, background color, hover effect, and padding across all non-async primary buttons in the project.
+### Form Input Specifications:
+- **Typography & Font**: Standard platform font (`font-sans` / Inter / system font).
+- **Form Label**:
+  - **Font Size & Weight**: `text-[13px] font-medium mb-1.5`
+  - **Color**: `text-slate-600 dark:text-slate-400`
+  - **Focus Transition**: Smooth transition to `text-brand-primary` (`text-[#635BFF]`) when the corresponding input is focused.
+  - **Spacing between Label and Input**: Margin bottom `mb-1.5` (6px).
+- **Input Control**:
+  - **Dimensions**: Height `h-[38px]`, horizontal padding `px-2.5` (or `pl-8.5` when an icon is present).
+  - **Font Size & Color**: `text-[14px] font-normal text-slate-900 dark:text-slate-100 placeholder-slate-400/60 dark:placeholder-slate-600`.
+  - **Corner Radius**: `rounded-[12px]`
+  - **Background & Border**: `bg-white dark:bg-[#0B131A] border border-slate-200 dark:border-slate-800`.
+  - **Hover State**: `hover:border-slate-300 dark:hover:border-slate-700`.
+  - **Focus State**: `border-brand-primary dark:border-[#635BFF] ring-[3px] ring-brand-primary/10 dark:ring-[#635BFF]/10 outline-none`.
+  - **Error State**: `border-red-400 dark:border-rose-500 ring-[3px] ring-red-400/10`.
+- **Validation Error Text**:
+  - `text-[12px] font-medium text-red-500 dark:text-rose-400 flex items-center gap-1 mt-1 pl-0.5`.
+- **Row Spacing**:
+  - Standard spacing between consecutive input rows: `space-y-3.5` or `gap-3.5` (14px).
 
-## 2. Universal Stateful Async Button System (`<CreateUserButton>` / `<LoginButton>`)
-All stateful async buttons throughout the PayFix platform (Login page, modal dialog save buttons, user creation, password resets, and delete buttons) MUST use the central stateful async engine supporting 3 visual variant modes:
+---
 
-### Variant Modes & Usage Rules:
-1. **Primary Mode (`mode="create"` / `variant="primary"`)**:
-   - **Usage**: Auth flows (Login Page Sign In button), new record creation ("Add Tenant", "Create Plan", "Create User").
-   - **Idle State**: Solid Indigo theme (`bg-[#635BFF]` hover `bg-[#5249ea] text-white shadow-xs hover:shadow-md font-semibold`). Hover matches Login page Sign In button.
-   - **Processing / Loading State**: Solid Indigo background (`bg-[#635BFF] text-white cursor-wait font-semibold`) with animated spinner & text (`"Authenticating..."` / `"Creating..."`).
-   - **Success State**: Emerald Green background (`bg-[#02A88E]` / `bg-emerald-600 text-white shadow-md font-semibold`) with checkmark icon & success text (`"Access granted!"` / `"Creation Successful!!"`).
+## 2. Universal Reusable Modal Async Button System (`<ModalAsyncButton>` / `<CreateUserButton>`)
+All stateful action buttons in modal dialogs, login flows, and entity management MUST use the central reusable `<ModalAsyncButton>` (`@/components/ui/create-user-button`), featuring 3 standardized modes with exact state transitions:
 
-2. **Secondary Mode (`mode="edit"` / `variant="secondary"`)**:
-   - **Usage**: Editing / updating existing records ("Edit Admin Info", "Edit Subscription", "Edit Plan").
-   - **Idle State**: Light Plum/Purple background (`bg-[#7C007C]/10 dark:bg-[#7C007C]/20 text-[#7C007C] dark:text-[#F080F0] border border-[#7C007C]/30`), **Hover Background**: Solid Plum/Purple (`hover:bg-[#7C007C] hover:text-white transition-colors duration-200 cursor-pointer font-semibold`).
-   - **Processing / Loading State**: Solid Plum/Purple background (`bg-[#7C007C] text-white cursor-wait font-semibold`) with animated spinner & text (`"Updating..."` / `"Saving..."`).
-   - **Success State**: Emerald Green background (`bg-[#02A88E]` / `bg-emerald-600 text-white shadow-md font-semibold`) with checkmark icon & success text (`"Update Successful!!"`).
+### Dimensions & UX:
+- Height `h-[38px]`, horizontal padding `px-4` to `px-6`, rounded corners `rounded-[12px]`, typography `text-[14px] font-semibold`.
 
-3. **Danger Mode (`mode="delete"` / `variant="danger"`)**:
-   - **Usage**: Delete Tenant / Destructive operations.
-   - **Idle State**: Red-Orange background (`bg-orange-600 hover:bg-red-700 text-white shadow-xs hover:shadow-md transition-colors duration-200 cursor-pointer font-semibold`).
-   - **Processing / Loading State**: Dark Red background (`bg-red-700 text-white cursor-wait font-semibold`) with animated spinner & text (`"Deleting..."`).
-   - **Success State**: Light Red-Orange / Coral Red background (`bg-rose-500 dark:bg-rose-600 text-white shadow-md font-semibold`) with icon & success text (`"Deletion Successful!!"`).
+### Variant Modes & Visual States:
+
+- **Validating / Processing State (All Modes & Login)**: `#6D7684` (`bg-[#6D7684] text-white cursor-wait font-semibold`) with spinning loader icon (`<Loader2 className="w-4 h-4 animate-spin mr-2" />`).
+- **Success State (All Modes & Login)**: `#18AE50` (`bg-[#18AE50] text-white font-semibold shadow-md`) with animated tick in circle icon (`<CheckCircle className="w-4 h-4 mr-2" />`) (or cross icon in delete/danger mode).
+
+1. **Primary Mode (`variant="primary"` / `mode="create"`)**:
+   - **Usage**: Inserting / creating new records ("Provision Tenant", "Create Plan", "Create User", "Add Member", Login "Sign In").
+   - **Idle State**: Solid Indigo (`bg-[#635BFF] text-white shadow-xs font-semibold`).
+   - **Idle Hover State**: Darker Indigo (`hover:bg-[#5249ea] shadow-md transition-colors duration-200 cursor-pointer`).
+   - **Validating / Loading State**: Neutral Slate (`bg-[#6D7684] text-white cursor-wait font-semibold`) with spinning loader icon and loading text.
+   - **Success State**: Vivid Emerald Green (`bg-[#18AE50] text-white shadow-md font-semibold`) with animated tick in circle icon and success text.
+   - **Error State**: Red (`bg-red-600 hover:bg-red-700 text-white font-semibold`) with alert icon.
+
+2. **Secondary Mode (`variant="secondary"` / `mode="edit"`)**:
+   - **Usage**: Editing / updating / saving existing records ("Save Changes", "Update Info", "Edit Subscription", "Update Plan").
+   - **Idle State**: Purple (`bg-[#7C007C] text-white shadow-xs font-semibold`).
+   - **Idle Hover State**: Darker Purple (`hover:bg-[#600060] shadow-md transition-colors duration-200 cursor-pointer`).
+   - **Validating / Loading State**: Neutral Slate (`bg-[#6D7684] text-white cursor-wait font-semibold`) with spinning loader icon and text.
+   - **Success State**: Exact same Vivid Emerald Green as Login Sign In button (`bg-[#18AE50] text-white shadow-md font-semibold`) with animated tick in circle icon and text (`"Update Successful!!"`).
+   - **Error State**: Red (`bg-red-600 hover:bg-red-700 text-white font-semibold`) with alert icon.
+
+3. **Danger Mode (`variant="danger"` / `mode="delete"`)**:
+   - **Usage**: Deleting records / destructive actions ("Delete Tenant", "Remove Record", "Revoke Access").
+   - **Idle State**: Red-Orange (`bg-[#EA580C] text-white shadow-xs font-semibold`).
+   - **Idle Hover State**: Darker Red-Orange (`hover:bg-[#C2410C] shadow-md transition-colors duration-200 cursor-pointer`).
+   - **Validating / Loading State**: Neutral Slate (`bg-[#6D7684] text-white cursor-wait font-semibold`) with spinning loader icon and text.
+   - **Success State**: Vivid Emerald Green (`bg-[#18AE50] text-white shadow-md font-semibold`) with cross/error icon (`<X className="w-4 h-4 mr-2" />`) and text (`"Deletion Successful!!"`).
+   - **Error State**: Dark Red (`bg-red-700 hover:bg-red-800 text-white font-semibold`) with alert icon.
+
+---
 
 ## 3. Standardized Modal Dialog Component (`<ModalDialog>`)
 All modal dialog popups throughout the PayFix application must use the central reusable `<ModalDialog>` component (`@/components/ui/modal-dialog`).
@@ -42,40 +71,42 @@ All modal dialog popups throughout the PayFix application must use the central r
    - The background page must remain 100% sharp, clear, and visible when the modal dialog is active.
 
 2. **Top-Aligned Viewport Positioning**:
-   - Modals are positioned top-aligned right below the top platform header (`fixed top-10 sm:top-14 left-[50%] translate-x-[-50%] max-h-[85vh] overflow-y-auto`).
+   - Modals are positioned top-aligned right below the top platform header (`fixed top-10 sm:top-14 left-[50%] translate-x-[-50%] max-h-[85vh] overflow-y-auto flex flex-col`).
 
-3. **Form Input Label & Control Styling Standard**:
-   - ALL input labels across the platform (including `FormInput`, `Subscription Plan`, `Expiry Date`, toolbar filters, and form step fields) MUST use **`text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5`** (14px font-semibold).
-   - ALL input controls MUST use `text-xs font-normal text-slate-900 dark:text-slate-100` (12px font-normal).
+3. **Light Gray Sticky Compact Header & No Subheadings**:
+   - Headers MUST NOT have subheadings or descriptions.
+   - Header height is reduced and compact (`px-5 py-2.5`).
+   - Header background color: **Lighter Gray** (`bg-slate-50/95 dark:bg-[#121B22]/95 backdrop-blur-md border-b border-slate-100 dark:border-slate-800/80`).
+   - When the modal body scrolls vertically, the header remains **sticky** at the top.
 
-4. **Field-Level Zod Validation & Inline Error Standard**:
-   - Inputs validate against Zod schemas (e.g. phone numbers must be 10 digits with optional country code).
-   - Validation errors display inline below the input control (`text-xs font-semibold text-rose-500 dark:text-rose-400 flex items-center gap-1 mt-0.5`).
+4. **Header Top-Right Close (X) Button with Red-Orange Hover**:
+   - Close (X) button is placed at the top-right corner of the modal header.
+   - On hover: background turns **Red-Orange** (`hover:bg-[#EA580C]`) and icon turns white (`text-white`).
 
-5. **Modal Reset on Open/Close**:
-   - Closing and re-opening a modal dialog resets all input fields, steps, and error states to blank/empty.
+5. **Reduced Content Top and Bottom Padding**:
+   - Padding before content starts is compact: `py-2.5 px-5 space-y-3`.
 
-6. **Windows-Style Close (X) Hover Effect**:
-   - On hover: background turns red-orange (`hover:bg-[#E81123]`) and icon turns white (`text-white`).
+6. **Input Box Controls Prefix Icons**:
+   - Modal input controls MUST NOT use prefix icons inside input boxes; keep clean text-only inputs for high readability.
 
-7. **Async Save Button with 2-Second Success State**:
-   - The modal footer features a full-width async Save button (`CreateUserButton`).
+7. **Sticky Footer with Right-Aligned Natural-Width Action Button**:
+   - The modal footer is pinned and sticky at the bottom (`sticky bottom-0 z-20 px-5 py-2.5 bg-slate-50/95 dark:bg-[#121B22]/95 backdrop-blur-md border-t border-slate-100 dark:border-slate-800/80`).
+   - Action buttons in modal footers must be **natural/idle width (`w-full sm:w-auto px-6`)** and **right-aligned (`flex justify-end`)**, not full-width.
+
+8. **Section Spacing in Complex Modals**:
+   - Multi-section modals (e.g. Add Tenant) use larger spacing (`space-y-6`) between major sections compared to row spacing (`gap-3.5` / `space-y-3.5`).
+
+9. **Modal Reset on Open/Close**:
+   - Closing and re-opening a modal dialog resets all input fields, validation errors, and async states.
+
+---
 
 ## 4. Date Formatting Standard (`dd/MM/yyyy`)
-All dates, license expiration dates, and registered dates across tenant cards, date pickers, and modals MUST be formatted as **`dd/MM/yyyy`** (e.g. `13/08/2026`).
+All dates, license expiration dates, and registered dates across tenant cards, date pickers, and modals MUST be formatted as **`dd/MM/yyyy`** (e.g. `14/08/2026`).
 
-## 5. 3-Column Responsive Layout for Tenant Provisioning (`md:max-w-[840px]`)
-Add Tenant modals use a wide 3-column horizontal SaaS layout:
-- **Column 1**: 🏢 1. Workspace Details (Company Name, Workspace Slug)
-- **Column 2**: 👤 2. Primary Admin Account (Contact Name, Admin Email, 10-digit Phone)
-- **Column 3 (Narrower 240px Width)**: 💳 3. Subscription & License (Initial Subscription Plan, Expiration Date)
-Container width is set to `md:max-w-[840px]`. Layout uses `grid grid-cols-1 md:grid-cols-[1fr_1fr_240px] gap-4 sm:gap-5`. Features single-click Zod inline validation over all fields and a stateful **"Provision Tenant Workspace"** button.
+---
 
-## 6. Card Bottom Right-Aligned Idle Primary Edit Button Standard
-Card headers in tenant details MUST feature:
-- **Card Header**: Distinct full-width bottom border (`-mx-4 px-4 pb-3 mb-3 border-b border-slate-100 dark:border-slate-800`).
-- **Data Rows**: All key-value data rows use a left-aligned grid structure (`grid grid-cols-[120px_1fr] items-center gap-2 text-left`). Labels use `font-semibold text-slate-700 dark:text-slate-300` and values use `font-normal text-slate-600 dark:text-slate-400`.
-- **Card Action Footer**: The Edit button is placed at the **bottom right of the card** using `<AppButton variant="primary">` (`flex justify-end pt-3 border-t mt-3`), rendering text **"Edit"** with icon (`<Edit2 className="w-3.5 h-3.5 text-white" /> Edit`).
-
-## 7. Single-Row Overrides & Compact Expiration Date Layout
-In subscription edit modals, `Employees Overrides`, `Moderators Override`, and `License Expiration Date` MUST be rendered in a single horizontal row with compact input field widths (`max-w-[130px]`) and tight modal dialog container widths (`maxWidth="sm:max-w-[480px]"`).
+## 5. Non-Async Action Buttons (`<AppButton variant="primary">`)
+All non-async primary buttons across the platform (e.g. "Add Tenant" trigger CTA, "Create Plan" trigger CTA, Card "Edit" triggers) MUST use `<AppButton variant="primary">` (`@/components/ui/button-system`):
+- Background: Solid Indigo `bg-[#635BFF] hover:bg-[#5249ea] text-white shadow-xs hover:shadow-md`
+- Height: `h-[38px]`, `rounded-[12px]`, `text-[14px] font-semibold`.

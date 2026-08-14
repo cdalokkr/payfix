@@ -266,10 +266,22 @@ Always wrap server or transaction errors inside a smooth Framer Motion container
 
 All page implementations across SuperAdmin (`/superadmin/*`) and Tenants (`/admin/*`, `/moderator/*`) must adhere to standard UI components defined in `design.md`:
 
-1. **Standard Reusable Modal Dialog (`<ModalDialog>`)**:
-   - Component: `@/components/ui/modal-dialog`
-   - Features: No backdrop blur screen (`overlayClassName="bg-transparent pointer-events-none"`), non-dismissible outside clicks/escape key, Windows close button hover effect (`hover:bg-[#E81123] hover:text-white`), built-in full-width `<CreateUserButton>` with 2-second success state display (`asyncState="success"`) before auto-closing.
+1. **Standard Form Input System (`<FormInput>`)**:
+   - Component: `@/components/ui/form-input`
+   - Features: Standard label `text-[13px] font-medium mb-1.5`, input height `h-[38px] rounded-[12px] text-[14px]`, focus transition `border-brand-primary ring-[3px] ring-brand-primary/10`, error text `text-[12px] text-red-500`, and row spacing `gap-3.5` / `space-y-3.5`.
 
-3. **Standard Dropdown Combobox (`<Combobox>`)**:
+2. **Standard Reusable Modal Dialog (`<ModalDialog>`)**:
+   - Component: `@/components/ui/modal-dialog`
+   - Features: Lighter gray sticky compact header (`bg-slate-50/95 dark:bg-[#121B22]/95 sticky top-0 z-20 px-5 py-2.5`), header top-right close (X) button with red-orange hover (`hover:bg-[#EA580C] hover:text-white`), compact body padding (`py-2.5 px-5 space-y-3`), clean text-only inputs without prefix icons, and sticky footer with right-aligned natural-width button (`w-full sm:w-auto px-6 flex justify-end`).
+
+3. **Universal Reusable Modal Async Button (`<ModalAsyncButton>` / `<CreateUserButton>`)**:
+   - Component: `@/components/ui/create-user-button`
+   - **Validating / Processing State (All Modes & Login)**: Neutral Slate `bg-[#6D7684]` with processing spinner.
+   - **Success State (All Modes & Login)**: Vivid Emerald Green `bg-[#18AE50]` with animated CheckCircle / X icon.
+   - **Primary Mode (`variant="primary"` / `mode="create"`)**: Indigo `bg-[#635BFF]` (hover `bg-[#5249ea]`).
+   - **Secondary Mode (`variant="secondary"` / `mode="edit"`)**: Purple `bg-[#7C007C]` (hover darker Purple `bg-[#600060]`).
+   - **Danger Mode (`variant="danger"` / `mode="delete"`)**: Red-Orange `bg-[#EA580C]` (hover darker Red-Orange `bg-[#C2410C]`).
+
+4. **Standard Dropdown Combobox (`<Combobox>`)**:
    - Component: `@/components/ui/combobox`
    - Usage: All select dropdowns, filter controls, and form select fields must use `<Combobox>` for unified dropdown popovers, searchability, and theme styling.

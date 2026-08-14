@@ -1,32 +1,32 @@
 "use client";
 
 import React from 'react';
-import { Loader2, CheckCircle, AlertCircle, UserPlus, Edit, Save, Trash2, Key, X, Search } from 'lucide-react';
+import { Loader2, CheckCircle, AlertCircle, UserPlus, Save, Trash2, Key, X, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type AsyncState = 'idle' | 'loading' | 'success' | 'error';
 
 export type ButtonMode = 'create' | 'edit' | 'delete' | 'reset' | 'search';
 
-// Size configurations matching the ActionButton component
+// Size configurations matching standard dialog buttons
 const sizeConfigs = {
   sm: {
     button: 'h-8 text-xs px-3',
-    icon: 'w-3 h-3'
+    icon: 'w-3.5 h-3.5'
   },
   md: {
-    button: 'h-9 text-sm px-4',
+    button: 'h-[38px] text-[14px] px-4',
     icon: 'w-4 h-4'
   },
   lg: {
-    button: 'h-10 text-sm px-6',
-    icon: 'w-5 h-5'
+    button: 'h-10 text-[14px] px-6',
+    icon: 'w-4.5 h-4.5'
   }
 };
 
 export type AsyncVariant = 'primary' | 'secondary' | 'danger';
 
-interface CreateUserButtonProps extends Omit<React.ComponentProps<'button'>, 'onClick'> {
+export interface ModalAsyncButtonProps extends Omit<React.ComponentProps<'button'>, 'onClick'> {
   /** The async operation to perform when clicked */
   onClick?: () => Promise<void> | void;
   /** Loading text to display */
@@ -49,7 +49,7 @@ interface CreateUserButtonProps extends Omit<React.ComponentProps<'button'>, 'on
   icon?: React.ComponentType<{ className?: string }>;
 }
 
-export default function CreateUserButton({
+export function ModalAsyncButton({
   onClick,
   loadingText,
   successText,
@@ -58,12 +58,12 @@ export default function CreateUserButton({
   disabled,
   children,
   className,
-  size = 'lg',
+  size = 'md',
   mode = 'create',
   variant,
   icon: CustomIcon,
   ...props
-}: CreateUserButtonProps) {
+}: ModalAsyncButtonProps) {
   const handleClick = async () => {
     if (asyncState === 'loading' || asyncState === 'success' || !onClick) return;
     await onClick();
@@ -72,38 +72,40 @@ export default function CreateUserButton({
   const sizeConfig = sizeConfigs[size];
   const effectiveVariant = variant || (mode === 'delete' ? 'danger' : mode === 'edit' ? 'secondary' : 'primary');
 
-  // Default texts and styling based on effectiveVariant and mode
+  // Exact 3-Mode styling rules per platform design spec
   const defaultTexts = effectiveVariant === 'secondary' ? {
-    loadingText: "Updating...",
+    // Secondary Mode: Edit / Update existing record (Purple -> Darker Purple hover -> Green success)
+    loadingText: "Saving Changes...",
     successText: "Update Successful!!",
     errorText: "Error (x) Updation failed",
     idleText: children || "Save Changes",
     idleIcon: Save,
-    idleBgClass: "bg-[#7C007C]/10 dark:bg-[#7C007C]/20 text-[#7C007C] dark:text-[#F080F0] border border-[#7C007C]/30 hover:bg-[#7C007C] hover:text-white transition-colors duration-200 cursor-pointer font-semibold",
-    successBgClass: "bg-[#02A88E] dark:bg-[#0BDBB9] text-white dark:text-[#0A1118] cursor-not-allowed opacity-90 animate-pulse shadow-md font-semibold",
-    errorBgClass: "bg-red-600 hover:bg-red-700 text-white font-semibold",
-    loadingBgClass: "bg-[#7C007C] text-white cursor-wait font-semibold"
+    idleBgClass: "bg-[#7C007C] hover:bg-[#600060] text-white shadow-xs hover:shadow-md transition-colors duration-200 cursor-pointer font-semibold",
+    loadingBgClass: "bg-[#6D7684] text-white cursor-wait font-semibold",
+    successBgClass: "bg-[#18AE50] text-white cursor-not-allowed opacity-95 animate-pulse shadow-md font-semibold",
+    errorBgClass: "bg-red-600 hover:bg-red-700 text-white font-semibold"
   } : effectiveVariant === 'danger' ? {
+    // Danger Mode: Delete / Destructive operations (Red-Orange -> Darker Red-Orange hover -> Green/Rose success with X)
     loadingText: "Deleting...",
     successText: "Deletion Successful!!",
     errorText: "Error (x) Deletion failed",
     idleText: children || "Delete",
     idleIcon: Trash2,
-    idleBgClass: "bg-orange-600 hover:bg-red-700 text-white shadow-xs hover:shadow-md transition-colors duration-200 cursor-pointer font-semibold",
-    successBgClass: "bg-rose-500 dark:bg-rose-600 text-white cursor-not-allowed opacity-90 animate-pulse shadow-md font-semibold",
-    errorBgClass: "bg-red-600 hover:bg-red-700 text-white font-semibold",
-    loadingBgClass: "bg-red-700 text-white cursor-wait font-semibold"
+    idleBgClass: "bg-[#EA580C] hover:bg-[#C2410C] text-white shadow-xs hover:shadow-md transition-colors duration-200 cursor-pointer font-semibold",
+    loadingBgClass: "bg-[#6D7684] text-white cursor-wait font-semibold",
+    successBgClass: "bg-[#18AE50] text-white cursor-not-allowed opacity-95 animate-pulse shadow-md font-semibold",
+    errorBgClass: "bg-red-700 hover:bg-red-800 text-white font-semibold"
   } : {
-    // Primary Variant (Matching Login Page Sign In Button: Solid Indigo #635BFF -> hover #5249ea)
+    // Primary Mode: Insert / Create new record (Indigo #635BFF -> #5249ea hover -> Green #18AE50 success)
     loadingText: mode === 'reset' ? "Resetting..." : mode === 'search' ? "Searching..." : "Creating...",
     successText: mode === 'reset' ? "Password Reset !!" : mode === 'search' ? "Record Found !!" : "Creation Successful!!",
     errorText: "Error (x) Operation failed",
     idleText: children || (mode === 'reset' ? "Reset Password" : mode === 'search' ? "Search" : "Create"),
     idleIcon: mode === 'reset' ? Key : mode === 'search' ? Search : UserPlus,
     idleBgClass: "bg-[#635BFF] hover:bg-[#5249ea] text-white shadow-xs hover:shadow-md transition-colors duration-200 cursor-pointer font-semibold",
-    successBgClass: "bg-[#02A88E] dark:bg-[#0BDBB9] text-white dark:text-[#0A1118] cursor-not-allowed opacity-90 animate-pulse shadow-md font-semibold",
-    errorBgClass: "bg-red-600 hover:bg-red-700 text-white font-semibold",
-    loadingBgClass: "bg-[#635BFF] text-white cursor-wait font-semibold"
+    loadingBgClass: "bg-[#6D7684] text-white cursor-wait font-semibold",
+    successBgClass: "bg-[#18AE50] text-white cursor-not-allowed opacity-95 animate-pulse shadow-md font-semibold",
+    errorBgClass: "bg-red-600 hover:bg-red-700 text-white font-semibold"
   };
 
   const getButtonContent = () => {
@@ -115,8 +117,8 @@ export default function CreateUserButton({
           className: defaultTexts.loadingBgClass
         };
       case 'success':
-        // For delete mode, show error icon with success text
-        if (mode === 'delete') {
+        // For delete / danger mode, show cross icon with success text
+        if (effectiveVariant === 'danger' || mode === 'delete') {
           return {
             text: successText || defaultTexts.successText,
             icon: <X className={cn(sizeConfig.icon, "mr-2")} />,
@@ -129,7 +131,6 @@ export default function CreateUserButton({
           className: defaultTexts.successBgClass
         };
       case 'error':
-        // If errorText is specifically provided as a prop, use it as priority
         return {
           text: errorText || defaultTexts.errorText,
           icon: <AlertCircle className={cn(sizeConfig.icon, "mr-2")} />,
@@ -154,8 +155,7 @@ export default function CreateUserButton({
       onClick={handleClick}
       disabled={isDisabled}
       className={cn(
-        "inline-flex items-center justify-center font-medium text-white transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 shadow-xs disabled:opacity-80 disabled:cursor-not-allowed shrink-0 cursor-pointer",
-        "rounded-xl",
+        "inline-flex items-center justify-center font-medium text-white transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 shadow-xs disabled:opacity-80 disabled:cursor-not-allowed shrink-0 cursor-pointer rounded-[12px]",
         sizeConfig.button,
         buttonContent.className,
         className
@@ -167,3 +167,7 @@ export default function CreateUserButton({
     </button>
   );
 }
+
+// Re-export alias for 100% backward compatibility
+export const CreateUserButton = ModalAsyncButton;
+export default ModalAsyncButton;
