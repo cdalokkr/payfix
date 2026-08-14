@@ -6,6 +6,7 @@ import '@/app/globals.css'
 import { MobileHeader } from './mobile-header'
 import { MobileBottomNav } from './mobile-bottom-nav'
 import { PermissionGuard } from '@/features/mobile/PermissionGuard'
+import { OfflineBanner } from '@/components/ui/offline-banner'
 
 export default async function MobileLayout({
     children,
@@ -50,6 +51,9 @@ export default async function MobileLayout({
             <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
                 {/* Sticky Header */}
                 <MobileHeader profile={profile} />
+
+                {/* Offline Network Resilience Banner */}
+                <OfflineBanner message="Offline Mode: Punches will sync automatically when reconnected." />
 
                 {/* Main Content with padding for header and bottom nav */}
                 <main className="max-w-md mx-auto px-4 pt-20 pb-24 min-h-screen">

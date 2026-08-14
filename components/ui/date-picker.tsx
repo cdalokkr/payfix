@@ -41,7 +41,7 @@ export function DatePicker({
           )}
         >
           <span className="truncate">
-            {date ? format(date, "PPP") : placeholder}
+            {date ? format(date, "dd/MM/yyyy") : placeholder}
           </span>
           <CalendarIcon className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
         </button>

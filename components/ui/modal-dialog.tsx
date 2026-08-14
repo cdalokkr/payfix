@@ -33,6 +33,7 @@ export interface ModalDialogProps {
   errorText?: string;
   asyncState?: AsyncState;
   buttonMode?: ButtonMode;
+  buttonVariant?: 'primary' | 'secondary' | 'danger';
   onSave?: () => Promise<void> | void;
   showSaveButton?: boolean;
   isSaving?: boolean;
@@ -64,6 +65,7 @@ export default function ModalDialog({
   errorText,
   asyncState = 'idle',
   buttonMode = 'edit',
+  buttonVariant,
   onSave,
   showSaveButton = true,
   isSaving = false,
@@ -72,6 +74,7 @@ export default function ModalDialog({
   className,
 }: ModalDialogProps) {
   const currentAsyncState: AsyncState = isSaving ? 'loading' : asyncState;
+  const effectiveVariant = buttonVariant || (buttonMode === 'create' ? 'primary' : buttonMode === 'delete' ? 'danger' : 'secondary');
 
   return (
     <Dialog 
@@ -115,6 +118,7 @@ export default function ModalDialog({
           <DialogFooter className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end">
             <CreateUserButton
               mode={buttonMode}
+              variant={effectiveVariant}
               size="md"
               className="w-full"
               asyncState={currentAsyncState}

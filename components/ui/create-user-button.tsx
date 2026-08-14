@@ -24,6 +24,8 @@ const sizeConfigs = {
   }
 };
 
+export type AsyncVariant = 'primary' | 'secondary' | 'danger';
+
 interface CreateUserButtonProps extends Omit<React.ComponentProps<'button'>, 'onClick'> {
   /** The async operation to perform when clicked */
   onClick?: () => Promise<void> | void;
@@ -39,8 +41,10 @@ interface CreateUserButtonProps extends Omit<React.ComponentProps<'button'>, 'on
   children?: React.ReactNode;
   /** Button size variant */
   size?: 'sm' | 'md' | 'lg';
-  /** Button mode: create or edit */
+  /** Button mode: create, edit, delete, reset, search */
   mode?: ButtonMode;
+  /** Button visual variant mode: primary, secondary, danger */
+  variant?: AsyncVariant;
   /** Optional custom icon component to override the default idle icon */
   icon?: React.ComponentType<{ className?: string }>;
 }
@@ -56,6 +60,7 @@ export default function CreateUserButton({
   className,
   size = 'lg',
   mode = 'create',
+  variant,
   icon: CustomIcon,
   ...props
 }: CreateUserButtonProps) {
@@ -65,58 +70,40 @@ export default function CreateUserButton({
   };
 
   const sizeConfig = sizeConfigs[size];
+  const effectiveVariant = variant || (mode === 'delete' ? 'danger' : mode === 'edit' ? 'secondary' : 'primary');
 
-  // Default texts and styling based on mode
-  const defaultTexts = mode === 'create' ? {
-    loadingText: "Creating user ...",
-    successText: "User Created !! Successfull",
-    errorText: "Error (x) User Creation failed",
-    idleText: children || "Create User",
-    idleIcon: UserPlus,
-    idleBgClass: "bg-blue-600 hover:bg-blue-700 shadow-lg hover:shadow-blue-500/30 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]",
-    successBgClass: "bg-green-600 cursor-not-allowed opacity-90 animate-pulse",
-    errorBgClass: "bg-red-600 hover:bg-red-700",
-    loadingBgClass: "bg-gray-600 cursor-wait"
-  } : mode === 'delete' ? {
-    loadingText: "Deleting...",
-    successText: "User Deleted!!",
-    errorText: "Error (x) Deletion failed",
-    idleText: children || "Delete User",
-    idleIcon: Trash2,
-    idleBgClass: "bg-destructive hover:bg-destructive/90",
-    successBgClass: "bg-red-600 cursor-not-allowed opacity-90 animate-pulse",
-    errorBgClass: "bg-red-600 hover:bg-red-700",
-    loadingBgClass: "bg-gray-600 cursor-wait"
-  } : mode === 'reset' ? {
-    loadingText: "Resetting...",
-    successText: "Password Reset !!",
-    errorText: "Error (x) Reset failed",
-    idleText: children || "Reset Password",
-    idleIcon: Key,
-    idleBgClass: "bg-amber-600 hover:bg-amber-700 shadow-lg hover:shadow-amber-500/30 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]",
-    successBgClass: "bg-green-600 cursor-not-allowed opacity-90 animate-pulse",
-    errorBgClass: "bg-red-600 hover:bg-red-700",
-    loadingBgClass: "bg-gray-600 cursor-wait"
-  } : mode === 'search' ? {
-    loadingText: "Searching...",
-    successText: "Record Found !!",
-    errorText: "No Record Found",
-    idleText: children || "Search",
-    idleIcon: Search,
-    idleBgClass: "bg-blue-600 hover:bg-blue-700 shadow-lg hover:shadow-blue-500/30 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]",
-    successBgClass: "bg-green-600 cursor-not-allowed opacity-90 animate-pulse",
-    errorBgClass: "bg-red-600 cursor-not-allowed opacity-90 animate-pulse",
-    loadingBgClass: "bg-gray-600 cursor-wait"
-  } : {
+  // Default texts and styling based on effectiveVariant and mode
+  const defaultTexts = effectiveVariant === 'secondary' ? {
     loadingText: "Updating...",
     successText: "Update Successful!!",
     errorText: "Error (x) Updation failed",
-    idleText: children || "Update User",
+    idleText: children || "Save Changes",
     idleIcon: Save,
-    idleBgClass: "bg-purple-600 hover:bg-purple-700 shadow-lg hover:shadow-purple-500/30 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]",
-    successBgClass: "bg-[#02A88E] dark:bg-[#0BDBB9] text-black dark:text-[#0A1118] cursor-not-allowed opacity-90 animate-pulse shadow-md",
-    errorBgClass: "bg-red-600 hover:bg-red-700",
-    loadingBgClass: "bg-gray-600 cursor-wait"
+    idleBgClass: "bg-[#7C007C]/10 dark:bg-[#7C007C]/20 text-[#7C007C] dark:text-[#F080F0] border border-[#7C007C]/30 hover:bg-[#7C007C] hover:text-white transition-colors duration-200 cursor-pointer font-semibold",
+    successBgClass: "bg-[#02A88E] dark:bg-[#0BDBB9] text-white dark:text-[#0A1118] cursor-not-allowed opacity-90 animate-pulse shadow-md font-semibold",
+    errorBgClass: "bg-red-600 hover:bg-red-700 text-white font-semibold",
+    loadingBgClass: "bg-[#7C007C] text-white cursor-wait font-semibold"
+  } : effectiveVariant === 'danger' ? {
+    loadingText: "Deleting...",
+    successText: "Deletion Successful!!",
+    errorText: "Error (x) Deletion failed",
+    idleText: children || "Delete",
+    idleIcon: Trash2,
+    idleBgClass: "bg-orange-600 hover:bg-red-700 text-white shadow-xs hover:shadow-md transition-colors duration-200 cursor-pointer font-semibold",
+    successBgClass: "bg-rose-500 dark:bg-rose-600 text-white cursor-not-allowed opacity-90 animate-pulse shadow-md font-semibold",
+    errorBgClass: "bg-red-600 hover:bg-red-700 text-white font-semibold",
+    loadingBgClass: "bg-red-700 text-white cursor-wait font-semibold"
+  } : {
+    // Primary Variant (Matching Login Page Sign In Button: Solid Indigo #635BFF -> hover #5249ea)
+    loadingText: mode === 'reset' ? "Resetting..." : mode === 'search' ? "Searching..." : "Creating...",
+    successText: mode === 'reset' ? "Password Reset !!" : mode === 'search' ? "Record Found !!" : "Creation Successful!!",
+    errorText: "Error (x) Operation failed",
+    idleText: children || (mode === 'reset' ? "Reset Password" : mode === 'search' ? "Search" : "Create"),
+    idleIcon: mode === 'reset' ? Key : mode === 'search' ? Search : UserPlus,
+    idleBgClass: "bg-[#635BFF] hover:bg-[#5249ea] text-white shadow-xs hover:shadow-md transition-colors duration-200 cursor-pointer font-semibold",
+    successBgClass: "bg-[#02A88E] dark:bg-[#0BDBB9] text-white dark:text-[#0A1118] cursor-not-allowed opacity-90 animate-pulse shadow-md font-semibold",
+    errorBgClass: "bg-red-600 hover:bg-red-700 text-white font-semibold",
+    loadingBgClass: "bg-[#635BFF] text-white cursor-wait font-semibold"
   };
 
   const getButtonContent = () => {
@@ -167,8 +154,8 @@ export default function CreateUserButton({
       onClick={handleClick}
       disabled={isDisabled}
       className={cn(
-        "inline-flex items-center justify-center font-medium text-white transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 shadow-sm disabled:opacity-80 disabled:cursor-not-allowed",
-        "rounded-md w-full",
+        "inline-flex items-center justify-center font-medium text-white transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 shadow-xs disabled:opacity-80 disabled:cursor-not-allowed shrink-0 cursor-pointer",
+        "rounded-xl",
         sizeConfig.button,
         buttonContent.className,
         className

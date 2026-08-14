@@ -270,6 +270,6 @@ All page implementations across SuperAdmin (`/superadmin/*`) and Tenants (`/admi
    - Component: `@/components/ui/modal-dialog`
    - Features: No backdrop blur screen (`overlayClassName="bg-transparent pointer-events-none"`), non-dismissible outside clicks/escape key, Windows close button hover effect (`hover:bg-[#E81123] hover:text-white`), built-in full-width `<CreateUserButton>` with 2-second success state display (`asyncState="success"`) before auto-closing.
 
-2. **Standard Primary Action Button**:
-   - Component: `@/components/ui/create-user-button`
-   - Usage: All creation/action triggers (e.g. "Add Tenant", "Create Plan", "Add User") must use `<CreateUserButton>` for unified aesthetic and stateful multi-mode async handling.
+3. **Standard Dropdown Combobox (`<Combobox>`)**:
+   - Component: `@/components/ui/combobox`
+   - Usage: All select dropdowns, filter controls, and form select fields must use `<Combobox>` for unified dropdown popovers, searchability, and theme styling.

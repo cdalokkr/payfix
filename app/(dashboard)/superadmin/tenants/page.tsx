@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { format } from "date-fns";
 import { trpc } from "@/lib/trpc/client";
 import { 
   Building2, Users, Search, Edit2, Loader2, Trash2, Mail, Phone, Clock,
   Calendar, Power, Check, ChevronDown, Eye, ShieldCheck,
   CreditCard, DollarSign, UserCheck, Lock, Key, Activity, Plus, Gift, X,
-  CheckCircle2, XCircle, AlertCircle
+  CheckCircle2, XCircle, AlertCircle, MoreHorizontal
 } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -21,11 +22,20 @@ import { CancelButton } from "@/components/ui/action-button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import ModalDialog from "@/components/ui/modal-dialog";
 
+// Zod schema for Add Tenant Single Form Layout
+const addTenantFullSchema = z.object({
+  companyName: z.string().trim().min(2, "Company name must be at least 2 characters"),
+  slug: z.string().trim().min(2, "Workspace slug must be at least 2 characters").regex(/^[a-z0-9-]+$/i, "Slug can only contain letters, numbers, and hyphens"),
+  adminName: z.string().trim().min(2, "Contact name must be at least 2 characters"),
+  adminEmail: z.string().trim().email("Please enter a valid email address"),
+  adminPhone: z.string().trim().regex(/^(\+\d{1,3}[- ]?)?\d{10}$/, "Phone number must be a valid 10-digit number (e.g. 9876543210 or +919876543210)"),
+});
+
 // Zod schemas for card validations
 const adminInfoSchema = z.object({
   adminName: z.string().trim().min(2, "Contact name must be at least 2 characters"),
   adminEmail: z.string().trim().email("Please enter a valid email address"),
-  adminPhone: z.string().trim().min(10, "Phone number must be at least 10 digits"),
+  adminPhone: z.string().trim().regex(/^(\+\d{1,3}[- ]?)?\d{10}$/, "Phone number must be a valid 10-digit number (e.g. 9876543210 or +919876543210)"),
 });
 
 const securitySchema = z.object({
@@ -57,10 +67,35 @@ export default function TenantsPage() {
   const [isSubModalOpen, setIsSubModalOpen] = useState(false);
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
 
-  // New tenant form states
+  // New tenant single form states & validation errors
   const [newCompanyName, setNewCompanyName] = useState("");
   const [newSlug, setNewSlug] = useState("");
+  const [newAdminName, setNewAdminName] = useState("");
   const [newAdminEmail, setNewAdminEmail] = useState("");
+  const [newAdminPhone, setNewAdminPhone] = useState("");
+  const [newAddTenantPlanId, setNewAddTenantPlanId] = useState<string>("");
+  const [newAddTenantExpiryDate, setNewAddTenantExpiryDate] = useState<Date | undefined>(undefined);
+  const [addTenantAsyncState, setAddTenantAsyncState] = useState<AsyncState>('idle');
+  const [addTenantErrors, setAddTenantErrors] = useState<{
+    companyName?: string;
+    slug?: string;
+    adminName?: string;
+    adminEmail?: string;
+    adminPhone?: string;
+  }>({});
+
+  const handleResetAddTenantModal = (open: boolean) => {
+    setIsAddTenantModalOpen(open);
+    setNewCompanyName("");
+    setNewSlug("");
+    setNewAdminName("");
+    setNewAdminEmail("");
+    setNewAdminPhone("");
+    setNewAddTenantPlanId("");
+    setNewAddTenantExpiryDate(undefined);
+    setAddTenantErrors({});
+    setAddTenantAsyncState('idle');
+  };
 
   // Plan editing states
   const [selectedPlanId, setSelectedPlanId] = useState<string>("");
@@ -99,6 +134,15 @@ export default function TenantsPage() {
   const paidPlansList = plansList?.filter((p: any) => p.name !== 'free' && p.displayName?.toLowerCase() !== 'free plan') || [];
 
   // Mutations
+  const createTenantMutation = trpc.superadmin.createTenant.useMutation({
+    onSuccess: () => {
+      utils.superadmin.listTenants.invalidate();
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to provision tenant workspace");
+    }
+  });
+
   const updateStatusMutation = trpc.superadmin.updateTenantStatus.useMutation({
     onSuccess: () => {
       toast.success("Tenant status updated successfully!");
@@ -175,17 +219,44 @@ export default function TenantsPage() {
     }
   };
 
-  const handleAddTenantSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCompanyName || !newSlug || !newAdminEmail) {
-      toast.error("Please fill in all required fields.");
+  const handleAddTenantSubmit = async () => {
+    setAddTenantErrors({});
+    const validation = addTenantFullSchema.safeParse({
+      companyName: newCompanyName,
+      slug: newSlug,
+      adminName: newAdminName,
+      adminEmail: newAdminEmail,
+      adminPhone: newAdminPhone,
+    });
+
+    if (!validation.success) {
+      const errs: { [key: string]: string } = {};
+      validation.error.issues.forEach((issue) => {
+        if (issue.path[0]) errs[issue.path[0].toString()] = issue.message;
+      });
+      setAddTenantErrors(errs);
       return;
     }
-    toast.success(`Tenant "${newCompanyName}" registration request submitted!`);
-    setIsAddTenantModalOpen(false);
-    setNewCompanyName("");
-    setNewSlug("");
-    setNewAdminEmail("");
+
+    setAddTenantAsyncState('loading');
+    try {
+      await createTenantMutation.mutateAsync({
+        companyName: newCompanyName,
+        slug: newSlug,
+        adminName: newAdminName || newCompanyName + " Admin",
+        adminEmail: newAdminEmail,
+        adminPhone: newAdminPhone,
+        planId: newAddTenantPlanId || null,
+        licenseExpiresAt: newAddTenantExpiryDate ? newAddTenantExpiryDate.toISOString() : null,
+      });
+      toast.success("Tenant workspace provisioned successfully!");
+      setAddTenantAsyncState('success');
+      await new Promise(r => setTimeout(r, 2000));
+      handleResetAddTenantModal(false);
+    } catch (err) {
+      setAddTenantAsyncState('error');
+      setTimeout(() => setAddTenantAsyncState('idle'), 3000);
+    }
   };
 
   // Filter Tenants for List
@@ -344,17 +415,9 @@ export default function TenantsPage() {
   const suspendedTenantsCount = tenantsList?.filter((t: any) => t.status === "suspended").length || 2;
   const freeTenantsCount = tenantsList?.filter((t: any) => !t.plan || t.plan.id === freeDbPlanId || t.plan.name === 'free').length || 5;
 
-  const formattedExpiry = selectedTenant ? new Date(selectedTenant.licenseExpiresAt).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric"
-  }) : "";
+  const formattedExpiry = selectedTenant ? format(new Date(selectedTenant.licenseExpiresAt), "dd/MM/yyyy") : "";
 
-  const formattedCreated = selectedTenant ? new Date(selectedTenant.createdAt || selectedTenant.trialStart).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric"
-  }) : "";
+  const formattedCreated = selectedTenant ? format(new Date(selectedTenant.createdAt || selectedTenant.trialStart), "dd/MM/yyyy") : "";
 
   // Relative time helper
   const getRelativeTime = (dateStr: string | null) => {
@@ -510,7 +573,7 @@ export default function TenantsPage() {
 
           <AppButton
             variant="primary"
-            leftIcon={<Plus className="w-4 h-4 stroke-[2.5]" />}
+            leftIcon={<Plus className="w-4 h-4 text-white" />}
             onClick={() => setIsAddTenantModalOpen(true)}
             className="shrink-0 self-start sm:self-center"
           >
@@ -522,7 +585,7 @@ export default function TenantsPage() {
         <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3.5">
           {/* 1. Search Box (Takes more width space) */}
           <div className="flex-1 flex flex-col gap-1 text-left min-w-[180px]">
-            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Search</label>
+            <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">Search</label>
             <div className="relative">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 stroke-[1.8]" />
               <input
@@ -537,7 +600,7 @@ export default function TenantsPage() {
 
           {/* 2. Select Tenant Dropdown (Takes more width space) */}
           <div className="flex-1 flex flex-col gap-1 text-left min-w-[200px]">
-            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Select Tenant</label>
+            <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">Select Tenant</label>
             <Combobox
               options={[
                 ...filteredTenants.map((t: any) => ({
@@ -559,7 +622,7 @@ export default function TenantsPage() {
 
           {/* 3. Status Filter (Reduced Width) */}
           <div className="w-full sm:w-[150px] flex flex-col gap-1 text-left shrink-0">
-            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Status</label>
+            <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">Status</label>
             <Combobox
               options={[
                 { value: "all", label: "All Status", icon: <Activity className="w-3.5 h-3.5 text-slate-400" /> },
@@ -576,7 +639,7 @@ export default function TenantsPage() {
 
           {/* 4. Plan Filter (Reduced Width) */}
           <div className="w-full sm:w-[150px] flex flex-col gap-1 text-left shrink-0">
-            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Plan</label>
+            <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">Plan</label>
             <Combobox
               options={[
                 { value: "all", label: "All Plans" },
@@ -670,71 +733,97 @@ export default function TenantsPage() {
               </div>
             </div>
 
-            {/* Actions Dropdown */}
-            <Popover open={isActionsOpen} onOpenChange={setIsActionsOpen}>
-              <PopoverTrigger asChild>
+            {/* Actions Split Button Group (Left: Action Button | Right: ... Three-Dots Dropdown Trigger) */}
+            <div className="flex items-center self-start md:self-center shrink-0">
+              <div className="inline-flex rounded-[12px] border border-indigo-200/90 dark:border-indigo-800/80 bg-white dark:bg-[#0B131A] shadow-2xs overflow-hidden">
+                {/* Left side: Action Label Button */}
                 <button
                   type="button"
-                  className="h-[36px] px-3.5 border border-indigo-200/90 dark:border-indigo-800/80 rounded-[12px] bg-white dark:bg-[#0B131A] text-[#635BFF] dark:text-indigo-400 hover:bg-indigo-50/60 dark:hover:bg-indigo-950/40 font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all duration-150 shadow-2xs self-start md:self-center shrink-0"
+                  onClick={() => setIsActionsOpen(!isActionsOpen)}
+                  className="h-[36px] px-3.5 text-xs font-semibold text-[#635BFF] dark:text-indigo-400 hover:bg-indigo-50/70 dark:hover:bg-indigo-950/50 transition-colors flex items-center gap-1.5 cursor-pointer border-r border-indigo-200/80 dark:border-indigo-800/80"
                 >
-                  <span className="text-[12.5px]">⋮ Actions</span>
-                  <ChevronDown className="w-3.5 h-3.5 stroke-[2]" />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent align="end" sideOffset={6} className="w-56 p-1.5 bg-white dark:bg-[#121B22] border border-slate-200 dark:border-slate-800 rounded-[14px] shadow-xl space-y-1 z-50 text-left">
-                <button
-                  type="button"
-                  onClick={() => handleToggleStatus(selectedTenant.id, selectedTenant.status)}
-                  disabled={updateStatusMutation.isPending}
-                  className="w-full px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 hover:text-amber-600 dark:hover:text-amber-400 rounded-lg flex items-center gap-2.5 transition-colors cursor-pointer"
-                >
-                  {selectedTenant.status === "suspended" ? (
-                    <>
-                      <Check className="w-4 h-4 text-emerald-600 stroke-[2]" />
-                      Activate Workspace
-                    </>
-                  ) : (
-                    <>
-                      <Power className="w-4 h-4 text-amber-600 stroke-[2]" />
-                      Suspend Workspace
-                    </>
-                  )}
+                  <span>Action</span>
                 </button>
 
-                {['suspended', 'cancelled'].includes(selectedTenant.status) && selectedTenant.slug !== 'primary' && (
-                  <button
-                    type="button"
-                    onClick={() => { setIsActionsOpen(false); setDeletingTenant(selectedTenant); setDeleteConfirmSlug(""); }}
-                    className="w-full px-3 py-2 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg flex items-center gap-2.5 transition-colors cursor-pointer border-t border-slate-100 dark:border-slate-800"
-                  >
-                    <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400 stroke-[1.8]" />
-                    Delete Workspace
-                  </button>
-                )}
-              </PopoverContent>
-            </Popover>
+                {/* Right side: Three-dot (...) Dropdown Trigger */}
+                <Popover open={isActionsOpen} onOpenChange={setIsActionsOpen}>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className="h-[36px] px-2.5 text-xs font-extrabold text-[#635BFF] dark:text-indigo-400 hover:bg-indigo-50/70 dark:hover:bg-indigo-950/50 transition-colors flex items-center justify-center cursor-pointer"
+                      title="More Actions"
+                    >
+                      <MoreHorizontal className="w-4 h-4 stroke-[2.5]" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" sideOffset={6} className="w-56 p-1.5 bg-white dark:bg-[#121B22] border border-slate-200 dark:border-slate-800 rounded-[14px] shadow-xl space-y-1 z-50 text-left">
+                    {/* Option 1: Reset Admin Password */}
+                    <button
+                      type="button"
+                      onClick={() => { setIsActionsOpen(false); setIsSecurityModalOpen(true); }}
+                      className="w-full px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:text-[#635BFF] dark:hover:text-indigo-400 rounded-lg flex items-center gap-2.5 transition-colors cursor-pointer"
+                    >
+                      <Key className="w-4 h-4 text-[#635BFF] stroke-[2]" />
+                      Reset Admin Password
+                    </button>
+
+                    {/* Option 2: Toggle Workspace Status (Suspend / Activate) */}
+                    <button
+                      type="button"
+                      onClick={() => { setIsActionsOpen(false); handleToggleStatus(selectedTenant.id, selectedTenant.status); }}
+                      disabled={updateStatusMutation.isPending}
+                      className="w-full px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 hover:text-amber-600 dark:hover:text-amber-400 rounded-lg flex items-center gap-2.5 transition-colors cursor-pointer"
+                    >
+                      {selectedTenant.status === "suspended" ? (
+                        <>
+                          <Check className="w-4 h-4 text-emerald-600 stroke-[2]" />
+                          Activate Workspace
+                        </>
+                      ) : (
+                        <>
+                          <Power className="w-4 h-4 text-amber-600 stroke-[2]" />
+                          Suspend Workspace
+                        </>
+                      )}
+                    </button>
+
+                    {/* Option 3: Delete Workspace (if suspended/cancelled) */}
+                    {['suspended', 'cancelled'].includes(selectedTenant.status) && selectedTenant.slug !== 'primary' && (
+                      <button
+                        type="button"
+                        onClick={() => { setIsActionsOpen(false); setDeletingTenant(selectedTenant); setDeleteConfirmSlug(""); }}
+                        className="w-full px-3 py-2 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg flex items-center gap-2.5 transition-colors cursor-pointer border-t border-slate-100 dark:border-slate-800"
+                      >
+                        <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400 stroke-[1.8]" />
+                        Delete Workspace
+                      </button>
+                    )}
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
           </div>
 
-          {/* 5. Middle Section: Admin Information, Subscription Details & Card Security */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 items-stretch">
+          {/* 5. Middle Section: Admin Information & Subscription Details (2 Cards Grid) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-stretch">
             {/* Card 1: Admin Information */}
             <div className="bg-white dark:bg-[#0B131A]/60 border border-slate-200/80 dark:border-slate-800/80 rounded-xl p-4 text-left flex flex-col justify-between">
               <div>
-                {/* Card Header */}
-                <div className="flex items-center gap-2 mb-3">
+                {/* Distinct Card Header extending left-to-right border */}
+                <div className="flex items-center gap-2 -mx-4 px-4 pb-3 mb-3 border-b border-slate-100 dark:border-slate-800">
                   <Users className="w-5 h-5 text-[#635BFF]" />
-                  <span className="text-sm font-medium text-slate-900 dark:text-slate-100">Admin Information</span>
+                  <span className="text-sm font-bold text-slate-900 dark:text-slate-100">Admin Information</span>
                 </div>
 
-                {/* View Mode: Clean side-by-side list */}
-                <div className="space-y-2">
+                {/* View Mode: Left-aligned grid data list (Labels: font-semibold, Values: font-normal) */}
+                <div className="space-y-2.5 text-left">
                   {/* Contact Name */}
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="grid grid-cols-[120px_1fr] items-center gap-2">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <UserCheck className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                      <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Contact Name</span>
+                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">Contact Name</span>
                     </div>
-                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate text-right">
+                    <span className="text-xs font-normal text-slate-600 dark:text-slate-400 text-left truncate">
                       {selectedTenant.adminName || "—"}
                     </span>
                   </div>
@@ -742,12 +831,12 @@ export default function TenantsPage() {
                   <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
                   {/* Email */}
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="grid grid-cols-[120px_1fr] items-center gap-2">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <Mail className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                      <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Email</span>
+                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">Email</span>
                     </div>
-                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate text-right">
+                    <span className="text-xs font-normal text-slate-600 dark:text-slate-400 text-left truncate">
                       {selectedTenant.adminEmail}
                     </span>
                   </div>
@@ -755,12 +844,12 @@ export default function TenantsPage() {
                   <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
                   {/* Phone */}
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="grid grid-cols-[120px_1fr] items-center gap-2">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <Phone className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                      <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Phone</span>
+                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">Phone</span>
                     </div>
-                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 text-right">
+                    <span className="text-xs font-normal text-slate-600 dark:text-slate-400 text-left truncate">
                       {selectedTenant.adminPhone || "—"}
                     </span>
                   </div>
@@ -768,27 +857,26 @@ export default function TenantsPage() {
                   <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
                   {/* Registration Date */}
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="grid grid-cols-[120px_1fr] items-center gap-2">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <Clock className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                      <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Registered</span>
+                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">Registered</span>
                     </div>
-                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 text-right">
+                    <span className="text-xs font-normal text-slate-600 dark:text-slate-400 text-left truncate">
                       {formattedCreated}
                     </span>
                   </div>
                 </div>
               </div>
 
-              {/* Bottom Action Area */}
-              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 mt-3">
+              {/* Bottom Action Area: Right-aligned Idle Primary Edit Button */}
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 mt-3 flex justify-end">
                 <AppButton
                   variant="primary"
-                  fullWidth
-                  leftIcon={<Edit2 className="w-4 h-4 text-white" />}
+                  leftIcon={<Edit2 className="w-3.5 h-3.5 text-white" />}
                   onClick={() => setIsAdminModalOpen(true)}
                 >
-                  Edit Admin Info
+                  Edit
                 </AppButton>
               </div>
             </div>
@@ -796,21 +884,21 @@ export default function TenantsPage() {
             {/* Card 2: Subscription Details */}
             <div className="bg-white dark:bg-[#0B131A]/60 border border-slate-200/80 dark:border-slate-800/80 rounded-xl p-4 text-left flex flex-col justify-between">
               <div>
-                {/* Card Header */}
-                <div className="flex items-center gap-2 mb-3">
+                {/* Distinct Card Header extending left-to-right border */}
+                <div className="flex items-center gap-2 -mx-4 px-4 pb-3 mb-3 border-b border-slate-100 dark:border-slate-800">
                   <CreditCard className="w-5 h-5 text-[#635BFF]" />
-                  <span className="text-sm font-medium text-slate-900 dark:text-slate-100">Subscription Details</span>
+                  <span className="text-sm font-bold text-slate-900 dark:text-slate-100">Subscription Details</span>
                 </div>
 
-                {/* View Mode: Clean side-by-side list */}
-                <div className="space-y-2">
+                {/* View Mode: Left-aligned grid data list (Labels: font-semibold, Values: font-normal) */}
+                <div className="space-y-2.5 text-left">
                   {/* Current Plan */}
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="grid grid-cols-[120px_1fr] items-center gap-2">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <Gift className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                      <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Current Plan</span>
+                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">Current Plan</span>
                     </div>
-                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 text-right">
+                    <span className="text-xs font-normal text-slate-600 dark:text-slate-400 text-left truncate">
                       {selectedTenant.plan?.displayName || "Free Plan"}
                     </span>
                   </div>
@@ -818,23 +906,23 @@ export default function TenantsPage() {
                   <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
                   {/* Billing Cycle */}
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="grid grid-cols-[120px_1fr] items-center gap-2">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <Calendar className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                      <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Billing Cycle</span>
+                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">Billing Cycle</span>
                     </div>
-                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 text-right">Monthly</span>
+                    <span className="text-xs font-normal text-slate-600 dark:text-slate-400 text-left truncate">Monthly</span>
                   </div>
 
                   <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
                   {/* Amount */}
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="grid grid-cols-[120px_1fr] items-center gap-2">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <DollarSign className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                      <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Amount</span>
+                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">Amount</span>
                     </div>
-                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 text-right">
+                    <span className="text-xs font-normal text-slate-600 dark:text-slate-400 text-left truncate">
                       {selectedTenant.plan?.priceMonthly ? `₹${selectedTenant.plan.priceMonthly} / month` : '₹0 / month'}
                     </span>
                   </div>
@@ -842,84 +930,26 @@ export default function TenantsPage() {
                   <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
                   {/* Expiry Date */}
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="grid grid-cols-[120px_1fr] items-center gap-2">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <Clock className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                      <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Expiry Date</span>
+                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">Expiry Date</span>
                     </div>
-                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 text-right">
+                    <span className="text-xs font-normal text-slate-600 dark:text-slate-400 text-left truncate">
                       {formattedExpiry}
                     </span>
                   </div>
                 </div>
               </div>
 
-              {/* Bottom Action Area */}
-              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 mt-3">
+              {/* Bottom Action Area: Right-aligned Idle Primary Edit Button */}
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 mt-3 flex justify-end">
                 <AppButton
                   variant="primary"
-                  fullWidth
-                  leftIcon={<Edit2 className="w-4 h-4 text-white" />}
+                  leftIcon={<Edit2 className="w-3.5 h-3.5 text-white" />}
                   onClick={() => setIsSubModalOpen(true)}
                 >
-                  Edit Subscription
-                </AppButton>
-              </div>
-            </div>
-
-            {/* Card 3: Card Security */}
-            <div className="bg-white dark:bg-[#0B131A]/60 border border-slate-200/80 dark:border-slate-800/80 rounded-xl p-4 text-left flex flex-col justify-between">
-              <div>
-                {/* Card Header */}
-                <div className="flex items-center gap-2 mb-3">
-                  <Key className="w-5 h-5 text-[#635BFF]" />
-                  <span className="text-sm font-medium text-slate-900 dark:text-slate-100">Card Security</span>
-                </div>
-
-                {/* View Mode: Masked side-by-side list */}
-                <div className="space-y-2">
-                  {/* New Password */}
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <Lock className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                      <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Password</span>
-                    </div>
-                    <span className="text-xs font-mono text-slate-400 dark:text-slate-500 text-right">••••••••</span>
-                  </div>
-
-                  <div className="h-px bg-slate-100 dark:bg-slate-800" />
-
-                  {/* Encryption Status */}
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                      <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Encryption</span>
-                    </div>
-                    <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 text-right">Active (AES-256)</span>
-                  </div>
-
-                  <div className="h-px bg-slate-100 dark:bg-slate-800" />
-
-                  {/* Auth System */}
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <ShieldCheck className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                      <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Auth Engine</span>
-                    </div>
-                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 text-right">Supabase Auth</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Bottom Action Area */}
-              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 mt-3">
-                <AppButton
-                  variant="primary"
-                  fullWidth
-                  leftIcon={<Edit2 className="w-4 h-4 text-white" />}
-                  onClick={() => setIsSecurityModalOpen(true)}
-                >
-                  Reset Password
+                  Edit
                 </AppButton>
               </div>
             </div>
@@ -1034,176 +1064,148 @@ export default function TenantsPage() {
         </div>
       )}
 
-      {/* + Add Tenant Modal Dialog */}
-      {isAddTenantModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 dark:bg-black/70 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-[#121B22] border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150 text-left space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <div className="flex items-center space-x-2">
-                <Building2 className="w-5 h-5 text-[#635BFF] stroke-[1.8]" />
-                <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Add New Tenant Workspace</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsAddTenantModalOpen(false)}
-                className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4 stroke-[2]" />
-              </button>
+      {/* Add New Tenant Workspace Modal Dialog (3-Column Layout: Workspace | Admin | Subscription) */}
+      <ModalDialog
+        open={isAddTenantModalOpen}
+        onOpenChange={(val) => handleResetAddTenantModal(val)}
+        title="Add New Tenant Workspace"
+        description="Provision a new tenant organization workspace with administrator credentials and initial subscription plan setup."
+        icon={<Building2 className="w-5 h-5 text-[#635BFF]" />}
+        showSaveButton={false}
+        maxWidth="md:max-w-[840px]"
+        footer={
+          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end w-full">
+            <CreateUserButton
+              mode="create"
+              variant="primary"
+              size="md"
+              className="w-full sm:w-auto px-8"
+              asyncState={addTenantAsyncState}
+              loadingText="Provisioning Tenant..."
+              successText="Tenant Provisioned!!"
+              onClick={handleAddTenantSubmit}
+            >
+              Provision Tenant Workspace
+            </CreateUserButton>
+          </div>
+        }
+      >
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_240px] gap-4 sm:gap-5 items-start text-left">
+          {/* Column 1: Workspace & Organization Details */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 pb-1.5 border-b border-slate-100 dark:border-slate-800 text-[11px] font-bold uppercase tracking-wider text-[#635BFF]">
+              <Building2 className="w-3.5 h-3.5" />
+              <span>1. Workspace Details</span>
+            </div>
+            <FormInput
+              label="Company Name *"
+              icon={<Building2 className="w-4 h-4 text-[#635BFF]" />}
+              value={newCompanyName}
+              onChange={(e) => {
+                setNewCompanyName(e.target.value);
+                setNewSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''));
+                if (addTenantErrors.companyName) setAddTenantErrors(prev => ({ ...prev, companyName: undefined }));
+              }}
+              placeholder="e.g. Acme Corporation"
+              error={addTenantErrors.companyName}
+            />
+
+            <FormInput
+              label="Workspace Slug Key *"
+              icon={<ShieldCheck className="w-4 h-4 text-[#635BFF]" />}
+              value={newSlug}
+              onChange={(e) => {
+                setNewSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''));
+                if (addTenantErrors.slug) setAddTenantErrors(prev => ({ ...prev, slug: undefined }));
+              }}
+              placeholder="e.g. acme"
+              error={addTenantErrors.slug}
+            />
+          </div>
+
+          {/* Column 2: Primary Admin Account Credentials */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 pb-1.5 border-b border-slate-100 dark:border-slate-800 text-[11px] font-bold uppercase tracking-wider text-[#635BFF]">
+              <UserCheck className="w-3.5 h-3.5" />
+              <span>2. Primary Admin Account</span>
+            </div>
+            <FormInput
+              label="Contact Name *"
+              icon={<UserCheck className="w-4 h-4 text-[#635BFF]" />}
+              value={newAdminName}
+              onChange={(e) => {
+                setNewAdminName(e.target.value);
+                if (addTenantErrors.adminName) setAddTenantErrors(prev => ({ ...prev, adminName: undefined }));
+              }}
+              placeholder="e.g. Alok Kumar"
+              error={addTenantErrors.adminName}
+            />
+
+            <FormInput
+              label="Admin Email Address *"
+              type="email"
+              icon={<Mail className="w-4 h-4 text-[#635BFF]" />}
+              value={newAdminEmail}
+              onChange={(e) => {
+                setNewAdminEmail(e.target.value);
+                if (addTenantErrors.adminEmail) setAddTenantErrors(prev => ({ ...prev, adminEmail: undefined }));
+              }}
+              placeholder="e.g. admin@acmecorp.com"
+              error={addTenantErrors.adminEmail}
+            />
+
+            <FormInput
+              label="Admin Phone Number *"
+              icon={<Phone className="w-4 h-4 text-[#635BFF]" />}
+              value={newAdminPhone}
+              onChange={(e) => {
+                setNewAdminPhone(e.target.value);
+                if (addTenantErrors.adminPhone) setAddTenantErrors(prev => ({ ...prev, adminPhone: undefined }));
+              }}
+              placeholder="e.g. 9876543210"
+              error={addTenantErrors.adminPhone}
+            />
+          </div>
+
+          {/* Column 3: Subscription & License Setup (Narrower Width: 240px) */}
+          <div className="space-y-3 bg-slate-50/60 dark:bg-[#0B131A]/40 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80">
+            <div className="flex items-center gap-2 pb-1.5 border-b border-slate-100 dark:border-slate-800 text-[11px] font-bold uppercase tracking-wider text-[#635BFF]">
+              <Gift className="w-3.5 h-3.5" />
+              <span>3. Subscription & License</span>
+            </div>
+            <div className="flex flex-col gap-2 text-left">
+              <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <Gift className="w-4 h-4 text-[#635BFF]" /> Initial Plan
+              </label>
+              <Combobox
+                options={[
+                  { value: "", label: "Free Plan ($0.00/mo)", icon: <Gift className="w-3.5 h-3.5 text-[#635BFF]" /> },
+                  ...(plansList?.map((p: any) => ({
+                    value: p.id,
+                    label: `${p.displayName} (₹${p.priceMonthly}/mo)`,
+                    icon: <Gift className="w-3.5 h-3.5 text-[#635BFF]" />
+                  })) || [])
+                ]}
+                value={newAddTenantPlanId}
+                onSelect={(val: string) => setNewAddTenantPlanId(val)}
+                placeholder="Select initial plan..."
+                searchPlaceholder="Search plans..."
+              />
             </div>
 
-            <form onSubmit={handleAddTenantSubmit} className="space-y-4">
-              <div className="space-y-3">
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Company Name *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Acme Corp"
-                    value={newCompanyName}
-                    onChange={(e) => {
-                      setNewCompanyName(e.target.value);
-                      if (!newSlug) setNewSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''));
-                    }}
-                    className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-slate-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-[#635BFF]/10 focus:border-[#635BFF] transition-all shadow-2xs"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Workspace Slug *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. acmecorp"
-                    value={newSlug}
-                    onChange={(e) => setNewSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''))}
-                    className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-slate-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-[#635BFF]/10 focus:border-[#635BFF] transition-all shadow-2xs font-mono"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Admin Email Address *</label>
-                  <input
-                    type="email"
-                    required
-                    placeholder="admin@acmecorp.com"
-                    value={newAdminEmail}
-                    onChange={(e) => setNewAdminEmail(e.target.value)}
-                    className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-slate-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-[#635BFF]/10 focus:border-[#635BFF] transition-all shadow-2xs"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-                <CancelButton
-                  size="md"
-                  onClick={() => setIsAddTenantModalOpen(false)}
-                >
-                  Cancel
-                </CancelButton>
-                <CreateUserButton
-                  type="submit"
-                  mode="edit"
-                  size="md"
-                >
-                  Provision Tenant
-                </CreateUserButton>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Subscription & Limits Modal */}
-      {isEditModalOpen && selectedTenant && (
-        <div className="fixed inset-0 bg-slate-900/50 dark:bg-black/70 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-[#121B22] border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150 text-left space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <div className="flex items-center space-x-2">
-                <Edit2 className="w-5 h-5 text-[#635BFF] stroke-[1.8]" />
-                <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Edit Subscription & Overrides</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsEditModalOpen(false)}
-                className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4 stroke-[2]" />
-              </button>
+            <div className="flex flex-col gap-2 text-left">
+              <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <Clock className="w-4 h-4 text-[#635BFF]" /> Expiry Date
+              </label>
+              <DatePicker
+                date={newAddTenantExpiryDate}
+                setDate={setNewAddTenantExpiryDate}
+                placeholder="Select expiration date"
+              />
             </div>
-
-            <form onSubmit={handleSaveTenantPlan} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Assigned Plan */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Assigned Subscription Plan</label>
-                  <Combobox
-                    options={[
-                      { value: "", label: "Free Plan ($0.00/mo)" },
-                      ...paidPlansList.map((p: any) => ({ value: p.id, label: `${p.displayName} ($${p.priceMonthly}/mo)` }))
-                    ]}
-                    value={selectedPlanId}
-                    onSelect={(val: string) => setSelectedPlanId(val)}
-                    placeholder="Select plan..."
-                    searchPlaceholder="Search plans..."
-                  />
-                </div>
-
-                {/* License Expiration */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">License Expiration Date</label>
-                  <DatePicker
-                    date={expiryDate}
-                    setDate={setExpiryDate}
-                    placeholder="Select expiration date"
-                  />
-                </div>
-
-                {/* Max Employees Override */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Custom Max Employees</label>
-                  <input
-                    type="number"
-                    placeholder="Use plan default"
-                    value={empOverride}
-                    onChange={(e) => setEmpOverride(e.target.value)}
-                    className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-slate-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-[#635BFF]/10 focus:border-[#635BFF] transition-all shadow-2xs"
-                  />
-                </div>
-
-                {/* Max Moderators Override */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Custom Max Moderators</label>
-                  <input
-                    type="number"
-                    placeholder="Use plan default"
-                    value={modOverride}
-                    onChange={(e) => setModOverride(e.target.value)}
-                    className="w-full h-[38px] bg-white dark:bg-[#0B131A] border border-slate-200/90 dark:border-slate-700/80 rounded-[12px] px-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-[3px] focus:ring-[#635BFF]/10 focus:border-[#635BFF] transition-all shadow-2xs"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-                <CancelButton
-                  size="md"
-                  onClick={() => setIsEditModalOpen(false)}
-                >
-                  Cancel
-                </CancelButton>
-                <CreateUserButton
-                  type="submit"
-                  mode="edit"
-                  size="md"
-                  asyncState={updatePlanMutation.isPending ? 'loading' : 'idle'}
-                >
-                  Save Subscription
-                </CreateUserButton>
-              </div>
-            </form>
           </div>
         </div>
-      )}
+      </ModalDialog>
 
       {/* Invoice Viewer Modal */}
       {selectedInvoice && (
@@ -1241,7 +1243,6 @@ export default function TenantsPage() {
                 <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">{selectedInvoice.amount}</span>
               </div>
               <div className="flex justify-between">
-                <span className="font-semibold text-slate-500 dark:text-slate-400">Payment Status:</span>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60">
                   {selectedInvoice.status}
                 </span>
@@ -1378,50 +1379,57 @@ export default function TenantsPage() {
         title="Edit Subscription & Plan Setup"
         description={`Select plan assignments and customized employee/moderator limits for ${selectedTenant?.companyName || 'tenant'}.`}
         icon={<CreditCard className="w-5 h-5 text-[#635BFF]" />}
-        maxWidth="sm:max-w-[520px]"
+        maxWidth="sm:max-w-[480px]"
         asyncState={subAsyncState}
         onSave={handleSaveSubDetails}
       >
-        <div className="flex flex-col gap-1 text-left">
-          <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+        <div className="flex flex-col gap-2 text-left mb-3">
+          <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
             <Gift className="w-4 h-4 text-[#635BFF]" /> Subscription Plan
           </label>
-          <select
+          <Combobox
+            options={[
+              { value: "", label: "Free Plan ($0.00/mo)", icon: <Gift className="w-3.5 h-3.5 text-[#635BFF]" /> },
+              ...(plansList?.map((p: any) => ({
+                value: p.id,
+                label: `${p.displayName} (₹${p.priceMonthly}/mo — Max ${p.maxEmployees} Employees, ${p.maxModerators} Moderators)`,
+                icon: <Gift className="w-3.5 h-3.5 text-[#635BFF]" />
+              })) || [])
+            ]}
             value={selectedPlanId}
-            onChange={(e) => setSelectedPlanId(e.target.value)}
-            className="w-full h-11 px-3 bg-white dark:bg-[#0B131A] border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-[#635BFF]"
-          >
-            <option value="">Free Plan ($0.00/mo)</option>
-            {plansList?.map((p: any) => (
-              <option key={p.id} value={p.id}>
-                {p.displayName} (₹{p.priceMonthly}/mo — Max {p.maxEmployees} Employees, {p.maxModerators} Moderators)
-              </option>
-            ))}
-          </select>
+            onSelect={(val: string) => setSelectedPlanId(val)}
+            placeholder="Select Subscription Plan..."
+            searchPlaceholder="Search plans..."
+          />
         </div>
 
-        <FormInput
-          label="Custom Max Employees Override"
-          type="number"
-          value={empOverride}
-          onChange={(e) => setEmpOverride(e.target.value)}
-          placeholder="Leave blank to use plan default limit"
-        />
+        {/* Single Row Layout for Overrides and Expiration Date with Compact Input Widths */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+          <FormInput
+            label="Employees Overrides"
+            type="number"
+            value={empOverride}
+            onChange={(e) => setEmpOverride(e.target.value)}
+            placeholder="Default"
+            className="w-full max-w-[130px]"
+          />
 
-        <FormInput
-          label="Custom Max Moderators Override"
-          type="number"
-          value={modOverride}
-          onChange={(e) => setModOverride(e.target.value)}
-          placeholder="Leave blank to use plan default limit"
-        />
+          <FormInput
+            label="Moderators Override"
+            type="number"
+            value={modOverride}
+            onChange={(e) => setModOverride(e.target.value)}
+            placeholder="Default"
+            className="w-full max-w-[130px]"
+          />
 
-        <div className="flex flex-col gap-1 text-left">
-          <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-            <Clock className="w-4 h-4 text-[#635BFF]" /> License Expiry Date
-          </label>
-          <div className="w-full">
-            <DatePicker date={expiryDate} setDate={setExpiryDate} />
+          <div className="flex flex-col gap-2 text-left w-full">
+            <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 whitespace-nowrap">
+              <Clock className="w-4 h-4 text-[#635BFF]" /> Expiry Date
+            </label>
+            <div className="w-full">
+              <DatePicker date={expiryDate} setDate={setExpiryDate} />
+            </div>
           </div>
         </div>
       </ModalDialog>

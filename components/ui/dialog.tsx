@@ -35,12 +35,16 @@ function DialogOverlay({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
   const isCleanOverlay = className?.includes('bg-transparent') || className?.includes('hidden') || className?.includes('opacity-0')
+  
+  if (isCleanOverlay) {
+    return <div className="fixed inset-0 z-50 bg-transparent backdrop-none pointer-events-none" />
+  }
+
   return (
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50",
-        isCleanOverlay ? "bg-transparent pointer-events-none" : "bg-black/60 backdrop-blur-xs",
+        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/60 backdrop-blur-xs",
         className
       )}
       {...props}
@@ -64,7 +68,7 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-2xl border p-6 shadow-xl duration-200 sm:max-w-lg",
+          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-10 sm:top-14 left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] max-h-[85vh] overflow-y-auto gap-4 rounded-2xl border p-6 shadow-xl duration-200 sm:max-w-lg",
           className
         )}
         {...props}

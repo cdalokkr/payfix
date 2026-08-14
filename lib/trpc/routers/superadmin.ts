@@ -496,4 +496,64 @@ export const superadminRouter = router({
         });
       }
     }),
+
+  // 10. Provision a new tenant workspace with schema & default admin
+  createTenant: superAdminProcedure
+    .input(z.object({
+      companyName: z.string().min(2),
+      slug: z.string().min(2),
+      adminName: z.string().min(2),
+      adminEmail: z.string().email(),
+      adminPhone: z.string().optional(),
+      planId: z.string().uuid().optional().nullable(),
+      licenseExpiresAt: z.string().optional().nullable(),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        const safeSlug = input.slug.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+        const existing = await masterDb.query.tenants.findFirst({
+          where: eq(tenants.slug, safeSlug),
+        });
+
+        if (existing) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: `Workspace slug "${safeSlug}" is already in use.`,
+          });
+        }
+
+        const { provisionTenant } = await import('@/lib/tenant/provisioning');
+        const result = await provisionTenant(
+          safeSlug,
+          input.companyName,
+          input.adminEmail,
+          14,
+          undefined,
+          {
+            firstName: input.adminName,
+            phone: input.adminPhone || undefined,
+          }
+        );
+
+        if (input.planId) {
+          await masterDb
+            .update(tenants)
+            .set({
+              plan_id: input.planId,
+              license_expires_at: input.licenseExpiresAt ? new Date(input.licenseExpiresAt) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+            })
+            .where(eq(tenants.id, result.tenantId));
+        }
+
+        return { success: true, tenantId: result.tenantId };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        console.error('[SUPERADMIN] createTenant error:', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to provision tenant workspace',
+        });
+      }
+    }),
 });

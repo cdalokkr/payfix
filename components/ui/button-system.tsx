@@ -58,7 +58,7 @@ export const AppButton = React.forwardRef<HTMLButtonElement, AppButtonProps>(
         ref={ref}
         disabled={disabled || isLoading}
         className={cn(
-          "h-[38px] px-4 font-semibold text-sm rounded-[12px] flex items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none",
+          "h-[38px] px-4 font-semibold text-xs sm:text-sm rounded-[12px] flex items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none",
           fullWidth && "w-full",
           variantStyles[variant],
           className
