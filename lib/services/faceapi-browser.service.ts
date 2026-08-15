@@ -278,7 +278,7 @@ export const FaceApiBrowserService = {
                 const scale = 320 / squareSize;
                 // Mirror horizontally matching live video (-scale-x-100)
                 ctx.scale(-scale, scale);
-                ctx.drawImage(input, -centerX, -centerY);
+                ctx.drawImage(processInput, -centerX, -centerY);
                 ctx.restore();
             }
 

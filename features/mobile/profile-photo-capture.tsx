@@ -252,18 +252,20 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         setStatus('uploading')
 
         try {
-            addLog('Starting 160x160 face crop & upload...')
+            addLog('Starting canonical face crop & upload...')
 
-            // 1. Convert captured photo to 160x160 padded square face crop
+            // 1. Convert captured photo to canonical 20% padded face crop
             let uploadDataUrl = capturedImage;
+            let preExtracted512: number[] | null = null;
+
             try {
-                const img = new Image();
-                img.crossOrigin = 'anonymous';
-                await new Promise((res) => { img.onload = res; img.src = capturedImage; });
-                const cropResult = await FaceApiBrowserService.extractAlignedSquareFaceCrop(img);
-                if (cropResult?.croppedDataUrl) {
-                    uploadDataUrl = cropResult.croppedDataUrl;
-                    addLog('✅ Face cropped to 160x160 square avatar');
+                const extracted = await FaceVerificationService.extractAligned512dDescriptor(capturedImage);
+                if (extracted?.cropDataUrl) {
+                    uploadDataUrl = extracted.cropDataUrl;
+                    if (extracted.embedding && extracted.embedding.length === 512) {
+                        preExtracted512 = extracted.embedding;
+                    }
+                    addLog('✅ Face cropped to canonical 20% padded avatar');
                 }
             } catch (cropErr) {
                 console.warn('[ProfileUpload] Crop fallback to full image:', cropErr);
@@ -306,7 +308,14 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
             addLog(`URL: ${result.path?.slice(0, 40)}...`)
 
             // Extract and save 512-d ArcFace face embedding for attendance matching (Kiosk & PWA)
-            if (capturedImage) {
+            if (preExtracted512 && preExtracted512.length === 512) {
+                try {
+                    await saveFaceEmbedding.mutateAsync({ embedding: preExtracted512 })
+                    addLog('✅ ArcFace 512-d vector saved to DB for Kiosk & PWA matching.')
+                } catch (faceErr) {
+                    addLog('⚠️ Face vector saving warning: ' + String(faceErr))
+                }
+            } else if (capturedImage) {
                 try {
                     addLog('Extracting 512-d ArcFace vector with canonical 20% padded alignment...')
                     const extracted = await FaceVerificationService.extractAligned512dDescriptor(capturedImage)
