@@ -173,10 +173,19 @@ export const superadminRouter = router({
       }
     }),
 
-  // 4. List all subscription plans
+  // 4. List all subscription plans with tenant subscription counts
   listPlans: superAdminProcedure.query(async () => {
     try {
       const plans = await masterDb.select().from(tenantPlans);
+      const allTenants = await masterDb.select({ planId: tenants.plan_id }).from(tenants);
+      
+      const tenantCountMap = new Map<string, number>();
+      for (const t of allTenants) {
+        if (t.planId) {
+          tenantCountMap.set(t.planId, (tenantCountMap.get(t.planId) || 0) + 1);
+        }
+      }
+
       return plans.map(p => ({
         id: p.id,
         name: p.name,
@@ -184,8 +193,10 @@ export const superadminRouter = router({
         priceMonthly: p.price_monthly,
         maxEmployees: p.max_employees,
         maxModerators: p.max_moderators,
+        maxStorageGb: p.max_storage_gb,
         isActive: p.is_active,
-        features: p.features
+        features: (p.features as Record<string, any>) || {},
+        tenantCount: tenantCountMap.get(p.id) || 0,
       }));
     } catch (error) {
       console.error('[SUPERADMIN] listPlans error:', error);
@@ -204,6 +215,7 @@ export const superadminRouter = router({
       priceMonthly: z.string(),
       maxEmployees: z.number().int().min(1),
       maxModerators: z.number().int().min(1),
+      maxStorageGb: z.number().int().min(1).default(1),
       features: z.record(z.string(), z.any()).default({}),
     }))
     .mutation(async ({ input }) => {
@@ -216,6 +228,7 @@ export const superadminRouter = router({
             price_monthly: input.priceMonthly,
             max_employees: input.maxEmployees,
             max_moderators: input.maxModerators,
+            max_storage_gb: input.maxStorageGb,
             features: input.features,
             is_active: true
           })
@@ -231,7 +244,7 @@ export const superadminRouter = router({
       }
     }),
 
-  // 6. Update subscription plan limits
+  // 6. Update subscription plan limits & multi-currency pricing
   updatePlan: superAdminProcedure
     .input(z.object({
       id: z.string().uuid(),
@@ -239,19 +252,31 @@ export const superadminRouter = router({
       priceMonthly: z.string(),
       maxEmployees: z.number().int().min(1),
       maxModerators: z.number().int().min(1),
+      maxStorageGb: z.number().int().min(1).optional(),
+      features: z.record(z.string(), z.any()).optional(),
       isActive: z.boolean(),
     }))
     .mutation(async ({ input }) => {
       try {
+        const updateData: any = {
+          display_name: input.displayName,
+          price_monthly: input.priceMonthly,
+          max_employees: input.maxEmployees,
+          max_moderators: input.maxModerators,
+          is_active: input.isActive,
+        };
+
+        if (input.maxStorageGb !== undefined) {
+          updateData.max_storage_gb = input.maxStorageGb;
+        }
+
+        if (input.features !== undefined) {
+          updateData.features = input.features;
+        }
+
         await masterDb
           .update(tenantPlans)
-          .set({
-            display_name: input.displayName,
-            price_monthly: input.priceMonthly,
-            max_employees: input.maxEmployees,
-            max_moderators: input.maxModerators,
-            is_active: input.isActive,
-          })
+          .set(updateData)
           .where(eq(tenantPlans.id, input.id));
 
         return { success: true };
@@ -260,6 +285,48 @@ export const superadminRouter = router({
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to update subscription plan',
+        });
+      }
+    }),
+
+  // 6b. Dedicated Tenant Subscription Renewal & Extension
+  renewTenantSubscription: superAdminProcedure
+    .input(z.object({
+      tenantId: z.string().uuid(),
+      planId: z.string().uuid().nullable().optional(),
+      licenseExpiresAt: z.string().datetime(),
+      maxEmployeesOverride: z.number().int().nullable().optional(),
+      maxModeratorsOverride: z.number().int().nullable().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        const updatePayload: any = {
+          license_expires_at: new Date(input.licenseExpiresAt),
+          status: 'active', // Automatically ensures tenant is active upon renewal
+          updated_at: new Date(),
+        };
+
+        if (input.planId !== undefined) {
+          updatePayload.plan_id = input.planId;
+        }
+        if (input.maxEmployeesOverride !== undefined) {
+          updatePayload.max_employees_override = input.maxEmployeesOverride;
+        }
+        if (input.maxModeratorsOverride !== undefined) {
+          updatePayload.max_moderators_override = input.maxModeratorsOverride;
+        }
+
+        await masterDb
+          .update(tenants)
+          .set(updatePayload)
+          .where(eq(tenants.id, input.tenantId));
+
+        return { success: true };
+      } catch (error) {
+        console.error('[SUPERADMIN] renewTenantSubscription error:', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to renew tenant subscription',
         });
       }
     }),

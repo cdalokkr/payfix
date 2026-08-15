@@ -7,7 +7,7 @@ import {
   Building2, Users, Search, Edit2, Loader2, Trash2, Mail, Phone, Clock,
   Calendar, Power, Check, ChevronDown, Eye, ShieldCheck,
   CreditCard, DollarSign, UserCheck, Lock, Key, Activity, Plus, Gift, X,
-  CheckCircle2, XCircle, AlertCircle, MoreHorizontal, Briefcase
+  CheckCircle2, XCircle, AlertCircle, MoreHorizontal, Briefcase, RefreshCw, ArrowUpDown
 } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -17,6 +17,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { AppButton } from "@/components/ui/button-system";
 import { FormInput } from "@/components/ui/form-input";
+import { FormPasswordInput, getPasswordStrength } from "@/components/ui/form-password-input";
 import PhoneInput from "@/components/auth/ui/phone-input";
 import CreateUserButton, { AsyncState } from "@/components/ui/create-user-button";
 import { CancelButton } from "@/components/ui/action-button";
@@ -41,7 +42,11 @@ const adminInfoSchema = z.object({
 });
 
 const securitySchema = z.object({
-  newPassword: z.string().min(6, "Password must be at least 6 characters"),
+  newPassword: z.string().min(8, "Password must be at least 8 characters")
+    .regex(/[A-Z]/, "Must contain at least 1 uppercase letter")
+    .regex(/[a-z]/, "Must contain at least 1 lowercase letter")
+    .regex(/[0-9]/, "Must contain at least 1 number")
+    .regex(/[^A-Za-z0-9]/, "Must contain at least 1 special character"),
   confirmPassword: z.string().min(1, "Please confirm your password"),
 }).refine((data) => data.newPassword === data.confirmPassword, {
   message: "Passwords do not match",
@@ -54,9 +59,10 @@ export default function TenantsPage() {
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"payments" | "logs">("payments");
 
-  // Status & Plan Filter States
+  // Status, Plan & Sort Filter States
   const [statusFilter, setStatusFilter] = useState("all");
   const [planFilter, setPlanFilter] = useState("all");
+  const [sortOrder, setSortOrder] = useState<"name-asc" | "name-desc" | "newest" | "expiry">("name-asc");
   const [baseDomain, setBaseDomain] = useState("payfix.com");
 
   useEffect(() => {
@@ -86,6 +92,15 @@ export default function TenantsPage() {
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [isSubModalOpen, setIsSubModalOpen] = useState(false);
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
+  const [isRenewModalOpen, setIsRenewModalOpen] = useState(false);
+
+  // Renewal form states
+  const [renewPlanId, setRenewPlanId] = useState<string>("");
+  const [renewExpiryDate, setRenewExpiryDate] = useState<Date | undefined>(undefined);
+  const [renewEmpOverride, setRenewEmpOverride] = useState("");
+  const [renewModOverride, setRenewModOverride] = useState("");
+  const [renewPeriod, setRenewPeriod] = useState<string>("1m");
+  const [renewAsyncState, setRenewAsyncState] = useState<AsyncState>('idle');
 
   // New tenant single form states & validation errors
   const [newCompanyName, setNewCompanyName] = useState("");
@@ -185,6 +200,15 @@ export default function TenantsPage() {
     },
     onError: (err: any) => {
       toast.error(err.message || "Failed to update tenant plan");
+    }
+  });
+
+  const renewTenantSubscriptionMutation = trpc.superadmin.renewTenantSubscription.useMutation({
+    onSuccess: () => {
+      utils.superadmin.listTenants.invalidate();
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to renew subscription");
     }
   });
 
@@ -291,8 +315,8 @@ export default function TenantsPage() {
     }
   };
 
-  // Filter Tenants for List
-  const filteredTenants = tenantsList?.filter((t: any) => {
+  // Filter & Sort Tenants for List (Ascending A-Z by default)
+  const filteredTenants = (tenantsList?.filter((t: any) => {
     const matchesSearch = 
       t.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       t.slug.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -304,7 +328,111 @@ export default function TenantsPage() {
       || (t.plan?.id === planFilter || t.plan?.displayName === planFilter || t.plan?.name === planFilter);
 
     return matchesSearch && matchesStatus && matchesPlan;
-  }) || [];
+  }) || []).sort((a: any, b: any) => {
+    if (sortOrder === "name-asc") {
+      return a.companyName.localeCompare(b.companyName);
+    }
+    if (sortOrder === "name-desc") {
+      return b.companyName.localeCompare(a.companyName);
+    }
+    if (sortOrder === "expiry") {
+      const dateA = a.licenseExpiresAt ? new Date(a.licenseExpiresAt).getTime() : 0;
+      const dateB = b.licenseExpiresAt ? new Date(b.licenseExpiresAt).getTime() : 0;
+      return dateA - dateB;
+    }
+    if (sortOrder === "newest") {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return dateB - dateA;
+    }
+    return a.companyName.localeCompare(b.companyName);
+  });
+
+  // Selected tenant from dropdown/list
+  const selectedTenant = selectedTenantId ? (tenantsList?.find((t: any) => t.id === selectedTenantId) || null) : null;
+
+  const handleOpenRenewModal = (tenant: any) => {
+    const currentExpiry = tenant.licenseExpiresAt ? new Date(tenant.licenseExpiresAt) : new Date();
+    const baseDate = currentExpiry > new Date() ? currentExpiry : new Date();
+    const nextDate = new Date(baseDate);
+    nextDate.setDate(nextDate.getDate() + 30);
+
+    setRenewPlanId(tenant.plan?.id || "");
+    setRenewExpiryDate(nextDate);
+    setRenewPeriod("1m");
+    setRenewEmpOverride(tenant.maxEmployeesOverride ? tenant.maxEmployeesOverride.toString() : "");
+    setRenewModOverride(tenant.maxModeratorsOverride ? tenant.maxModeratorsOverride.toString() : "");
+    setRenewAsyncState('idle');
+    setIsRenewModalOpen(true);
+  };
+
+  const handleRenewalPeriodChange = (val: string) => {
+    setRenewPeriod(val);
+    if (!selectedTenant) return;
+    const currentExp = selectedTenant.licenseExpiresAt ? new Date(selectedTenant.licenseExpiresAt) : new Date();
+    const baseDate = currentExp > new Date() ? currentExp : new Date();
+    const nextDate = new Date(baseDate);
+
+    if (val === "1m") {
+      nextDate.setDate(nextDate.getDate() + 30);
+      setRenewExpiryDate(nextDate);
+    } else if (val === "3m") {
+      nextDate.setDate(nextDate.getDate() + 90);
+      setRenewExpiryDate(nextDate);
+    } else if (val === "6m") {
+      nextDate.setDate(nextDate.getDate() + 180);
+      setRenewExpiryDate(nextDate);
+    } else if (val === "1y") {
+      nextDate.setDate(nextDate.getDate() + 365);
+      setRenewExpiryDate(nextDate);
+    }
+  };
+
+  // Dynamic Total Amount Calculation for Plan Renewal Modal
+  const selectedRenewPlan = plansList?.find((p: any) => p.id === renewPlanId);
+  const renewPlanMonthlyPrice = selectedRenewPlan?.priceMonthly ? parseFloat(selectedRenewPlan.priceMonthly) : 0;
+  const currentTenantExp = selectedTenant?.licenseExpiresAt ? new Date(selectedTenant.licenseExpiresAt) : new Date();
+  const baseRenewalDate = currentTenantExp > new Date() ? currentTenantExp : new Date();
+  const renewDaysDiff = renewExpiryDate 
+    ? Math.max(1, Math.round((renewExpiryDate.getTime() - baseRenewalDate.getTime()) / (1000 * 60 * 60 * 24)))
+    : 30;
+
+  let renewalTotalAmount = 0;
+  if (renewPeriod === "1m") renewalTotalAmount = renewPlanMonthlyPrice * 1;
+  else if (renewPeriod === "3m") renewalTotalAmount = renewPlanMonthlyPrice * 3;
+  else if (renewPeriod === "6m") renewalTotalAmount = renewPlanMonthlyPrice * 6;
+  else if (renewPeriod === "1y") renewalTotalAmount = renewPlanMonthlyPrice * 12;
+  else {
+    renewalTotalAmount = Math.round((renewPlanMonthlyPrice / 30) * renewDaysDiff);
+  }
+
+  const handleRenewSubscription = async () => {
+    if (!selectedTenant || !renewExpiryDate) {
+      toast.error("Please select a valid expiry date");
+      return;
+    }
+
+    setRenewAsyncState('loading');
+    try {
+      const targetPlanId = renewPlanId === "" ? (freeDbPlanId || null) : renewPlanId;
+      await renewTenantSubscriptionMutation.mutateAsync({
+        tenantId: selectedTenant.id,
+        planId: targetPlanId,
+        licenseExpiresAt: renewExpiryDate.toISOString(),
+        maxEmployeesOverride: renewEmpOverride.trim() !== "" ? parseInt(renewEmpOverride) : null,
+        maxModeratorsOverride: renewModOverride.trim() !== "" ? parseInt(renewModOverride) : null,
+      });
+
+      toast.success("Tenant plan renewed & license extended successfully!");
+      setRenewAsyncState('success');
+      await new Promise(r => setTimeout(r, 2000));
+      setIsRenewModalOpen(false);
+      setRenewAsyncState('idle');
+    } catch (err) {
+      setRenewAsyncState('error');
+      setTimeout(() => setRenewAsyncState('idle'), 3000);
+    }
+  };
 
   const handleSaveAdminInfo = async () => {
     if (!selectedTenant) return;
@@ -415,9 +543,6 @@ export default function TenantsPage() {
       setIsSecuritySaving(false);
     }
   };
-
-  // No default tenant selected initially (User directive)
-  const selectedTenant = selectedTenantId ? (tenantsList?.find((t: any) => t.id === selectedTenantId) || null) : null;
 
   // Sync form states whenever selectedTenant changes
   useEffect(() => {
@@ -693,20 +818,17 @@ export default function TenantsPage() {
         </div>
       ) : !selectedTenant ? (
         <div className="border border-dashed border-slate-200 dark:border-slate-800 rounded-[16px] p-12 bg-white dark:bg-[#121B22] flex flex-col items-center justify-center text-center shadow-xs min-h-[320px]">
-          <Building2 className="h-12 w-12 text-[#635BFF] dark:text-[#0BDBB9] mb-3 stroke-[1.5]" />
-          <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 mb-1">No Workspace Selected</h3>
-          <p className="text-slate-500 dark:text-slate-400 text-xs max-w-sm">
-            Select a tenant workspace from the directory controls above to view admin info, subscription details, invoices, and audit logs.
+          <Building2 className="w-12 h-12 text-slate-300 dark:text-slate-600 mb-3" />
+          <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300">No workspace selected</h3>
+          <p className="text-xs text-slate-400 dark:text-slate-500 max-w-xs mt-1">
+            Choose a workspace from the search or dropdown above to view its details.
           </p>
         </div>
       ) : (
-        /* 4. Unified Outer Card wrapping all selected tenant details */
-        <div className="bg-white dark:bg-[#121B22] border border-slate-200/90 dark:border-slate-800/80 rounded-[16px] p-3.5 sm:p-5 shadow-xs space-y-5 text-left">
-          
-          {/* Tenant Overview Header Bar */}
-          <div className="border-b border-slate-100 dark:border-slate-800 pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="space-y-6">
+          {/* TOP TENANT BANNER */}
+          <div className="bg-white dark:bg-[#121B22] border border-slate-200/90 dark:border-slate-800/80 rounded-[16px] p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-start sm:items-center space-x-4">
-              {/* Tenant Avatar */}
               <div className="w-12 h-12 sm:w-13 sm:h-13 bg-[#635BFF] rounded-2xl flex items-center justify-center text-white font-black text-xl sm:text-2xl shadow-md shadow-indigo-200 dark:shadow-indigo-950 shrink-0">
                 {selectedTenant.companyName.charAt(0).toUpperCase()}
               </div>
@@ -717,13 +839,14 @@ export default function TenantsPage() {
                   <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight leading-none">
                     {selectedTenant.companyName}
                   </h2>
-                  <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold tracking-wide uppercase flex items-center gap-1 ${
+                  <span className={cn(
+                    "px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold tracking-wide uppercase flex items-center gap-1",
                     selectedTenant.status === "active" || selectedTenant.status === "trial" 
                       ? "bg-emerald-100/80 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60" 
                       : selectedTenant.status === "suspended" 
                       ? "bg-red-100/80 dark:bg-red-950/60 text-red-700 dark:text-red-400 border border-red-200/60 dark:border-red-800/60" 
                       : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
-                  }`}>
+                  )}>
                     {selectedTenant.status === "suspended" ? (
                       <XCircle className="w-3 h-3 text-red-600 dark:text-red-400 stroke-[2.5]" />
                     ) : selectedTenant.status === "cancelled" ? (
@@ -737,7 +860,7 @@ export default function TenantsPage() {
 
                 {/* Tenant URL */}
                 <p className="text-xs font-semibold text-[#635BFF] hover:underline cursor-pointer">
-                  {selectedTenant.customDomain || `${selectedTenant.slug}.payfix.com`}
+                  {selectedTenant.customDomain || `${selectedTenant.slug}.${baseDomain}`}
                 </p>
 
                 {/* Metadata Line */}
@@ -765,10 +888,9 @@ export default function TenantsPage() {
               </div>
             </div>
 
-            {/* Actions Split Button Group (Left: Action Button | Right: ... Three-Dots Dropdown Trigger) */}
+            {/* Actions Split Button Group (Action label + Three-dot menu) */}
             <div className="flex items-center self-start md:self-center shrink-0">
               <div className="inline-flex rounded-[12px] border border-indigo-200/90 dark:border-indigo-800/80 bg-white dark:bg-[#0B131A] shadow-2xs overflow-hidden">
-                {/* Left side: Action Label Button */}
                 <button
                   type="button"
                   onClick={() => setIsActionsOpen(!isActionsOpen)}
@@ -777,7 +899,6 @@ export default function TenantsPage() {
                   <span>Action</span>
                 </button>
 
-                {/* Right side: Three-dot (...) Dropdown Trigger */}
                 <Popover open={isActionsOpen} onOpenChange={setIsActionsOpen}>
                   <PopoverTrigger asChild>
                     <button
@@ -826,7 +947,7 @@ export default function TenantsPage() {
                         onClick={() => { setIsActionsOpen(false); setDeletingTenant(selectedTenant); setDeleteConfirmSlug(""); }}
                         className="w-full px-3 py-2 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg flex items-center gap-2.5 transition-colors cursor-pointer border-t border-slate-100 dark:border-slate-800"
                       >
-                        <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400 stroke-[1.8]" />
+                        <Trash2 className="w-4 h-4 text-red-600 stroke-[1.8]" />
                         Delete Workspace
                       </button>
                     )}
@@ -836,33 +957,29 @@ export default function TenantsPage() {
             </div>
           </div>
 
-          {/* 5. Middle Section: Admin Information & Subscription Details (2 Cards Grid) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-stretch">
-            {/* Card 1: Admin Information */}
+          {/* MIDDLE 2 DETAILED CARDS: 1. Admin Info + 2. Subscription Details */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Card 1: Admin Info */}
             <div className="bg-white dark:bg-[#0B131A]/60 border border-slate-200/80 dark:border-slate-800/80 rounded-xl p-4 text-left flex flex-col justify-between">
               <div>
-                {/* Distinct Card Header extending left-to-right border */}
                 <div className="flex items-center gap-2 -mx-4 px-4 pb-3 mb-3 border-b border-slate-100 dark:border-slate-800">
                   <Users className="w-5 h-5 text-[#635BFF]" />
-                  <span className="text-sm font-bold text-slate-900 dark:text-slate-100">Admin Information</span>
+                  <span className="text-sm font-bold text-slate-900 dark:text-slate-100">Primary Admin Information</span>
                 </div>
 
-                {/* View Mode: Left-aligned grid data list (Labels: font-semibold, Values: font-normal) */}
                 <div className="space-y-2.5 text-left">
-                  {/* Contact Name */}
                   <div className="grid grid-cols-[120px_1fr] items-center gap-2">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <UserCheck className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
                       <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">Contact Name</span>
                     </div>
                     <span className="text-xs font-normal text-slate-600 dark:text-slate-400 text-left truncate">
-                      {selectedTenant.adminName || "—"}
+                      {selectedTenant.adminName || selectedTenant.companyName + " Admin"}
                     </span>
                   </div>
 
                   <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
-                  {/* Email */}
                   <div className="grid grid-cols-[120px_1fr] items-center gap-2">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <Mail className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
@@ -875,7 +992,6 @@ export default function TenantsPage() {
 
                   <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
-                  {/* Phone */}
                   <div className="grid grid-cols-[120px_1fr] items-center gap-2">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <Phone className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
@@ -888,7 +1004,6 @@ export default function TenantsPage() {
 
                   <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
-                  {/* Registration Date */}
                   <div className="grid grid-cols-[120px_1fr] items-center gap-2">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <Clock className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
@@ -901,7 +1016,6 @@ export default function TenantsPage() {
                 </div>
               </div>
 
-              {/* Bottom Action Area: Right-aligned Idle Primary Edit Button */}
               <div className="pt-3 border-t border-slate-100 dark:border-slate-800 mt-3 flex justify-end">
                 <AppButton
                   variant="primary"
@@ -916,28 +1030,24 @@ export default function TenantsPage() {
             {/* Card 2: Subscription Details */}
             <div className="bg-white dark:bg-[#0B131A]/60 border border-slate-200/80 dark:border-slate-800/80 rounded-xl p-4 text-left flex flex-col justify-between">
               <div>
-                {/* Distinct Card Header extending left-to-right border */}
                 <div className="flex items-center gap-2 -mx-4 px-4 pb-3 mb-3 border-b border-slate-100 dark:border-slate-800">
                   <CreditCard className="w-5 h-5 text-[#635BFF]" />
                   <span className="text-sm font-bold text-slate-900 dark:text-slate-100">Subscription Details</span>
                 </div>
 
-                {/* View Mode: Left-aligned grid data list (Labels: font-semibold, Values: font-normal) */}
                 <div className="space-y-2.5 text-left">
-                  {/* Current Plan */}
                   <div className="grid grid-cols-[120px_1fr] items-center gap-2">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <Gift className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
-                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">Current Plan</span>
+                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">Plan</span>
                     </div>
-                    <span className="text-xs font-normal text-slate-600 dark:text-slate-400 text-left truncate">
-                      {selectedTenant.plan?.displayName || "Free Plan"}
+                    <span className="text-xs font-bold text-[#635BFF] dark:text-[#0BDBB9] text-left truncate">
+                      {selectedTenant.plan?.displayName || 'Free Plan'}
                     </span>
                   </div>
 
                   <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
-                  {/* Billing Cycle */}
                   <div className="grid grid-cols-[120px_1fr] items-center gap-2">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <Calendar className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
@@ -948,7 +1058,6 @@ export default function TenantsPage() {
 
                   <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
-                  {/* Amount */}
                   <div className="grid grid-cols-[120px_1fr] items-center gap-2">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <DollarSign className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
@@ -961,7 +1070,6 @@ export default function TenantsPage() {
 
                   <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
-                  {/* Expiry Date */}
                   <div className="grid grid-cols-[120px_1fr] items-center gap-2">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <Clock className="w-3.5 h-3.5 text-[#635BFF] shrink-0" />
@@ -974,8 +1082,15 @@ export default function TenantsPage() {
                 </div>
               </div>
 
-              {/* Bottom Action Area: Right-aligned Idle Primary Edit Button */}
-              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 mt-3 flex justify-end">
+              {/* Bottom Action Area: Renew Plan + Edit Buttons */}
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 mt-3 flex items-center justify-end gap-2.5">
+                <AppButton
+                  variant="success"
+                  leftIcon={<RefreshCw className="w-3.5 h-3.5 text-white" />}
+                  onClick={() => handleOpenRenewModal(selectedTenant)}
+                >
+                  Renew Plan
+                </AppButton>
                 <AppButton
                   variant="primary"
                   leftIcon={<Edit2 className="w-3.5 h-3.5 text-white" />}
@@ -989,7 +1104,6 @@ export default function TenantsPage() {
 
           {/* DEDICATED INNER CARD: Wrapping Tabs and their details inside a card */}
           <div className="bg-white dark:bg-[#0B131A]/60 border border-slate-200/90 dark:border-slate-800/80 rounded-[14px] p-4 shadow-2xs space-y-4 text-left">
-            {/* Tabs Header with Underline for Active Tab */}
             <div className="flex border-b border-slate-100 dark:border-slate-800 overflow-x-auto no-scrollbar -mx-2 px-2">
               <button
                 type="button"
@@ -1017,7 +1131,6 @@ export default function TenantsPage() {
               </button>
             </div>
 
-            {/* Tab 1: Invoice & Payments Details */}
             {activeTab === "payments" && (
               <div className="space-y-3 animate-in fade-in duration-200 text-left">
                 <div className="overflow-x-auto border border-slate-100 dark:border-slate-800 rounded-xl bg-white dark:bg-[#121B22] shadow-2xs">
@@ -1048,8 +1161,7 @@ export default function TenantsPage() {
                               onClick={() => setSelectedInvoice(inv)}
                               className="px-2.5 py-1 text-[11px] font-semibold border border-slate-200 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-300 hover:text-[#635BFF] dark:hover:text-[#0BDBB9] hover:border-indigo-300 dark:hover:border-[#0BDBB9]/40 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/40 inline-flex items-center gap-1 transition-all cursor-pointer"
                             >
-                              <Eye className="w-3 h-3 stroke-[1.8]" />
-                              View Invoice
+                              View PDF
                             </button>
                           </td>
                         </tr>
@@ -1060,7 +1172,6 @@ export default function TenantsPage() {
               </div>
             )}
 
-            {/* Tab 2: Connecting Node Audit Logs */}
             {activeTab === "logs" && (
               <div className="space-y-4 animate-in fade-in duration-200 text-left">
                 <div className="relative border-l-2 border-indigo-150 dark:border-indigo-900/60 ml-4 pl-6 space-y-5 py-2">
@@ -1068,7 +1179,6 @@ export default function TenantsPage() {
                     const IconComp = log.icon;
                     return (
                       <div key={idx} className="relative">
-                        {/* Connecting Node Dot */}
                         <span className="absolute -left-[31px] top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#635BFF] dark:bg-[#0BDBB9] text-white dark:text-[#0A1118] ring-4 ring-white dark:ring-[#121B22] shadow-xs">
                           <span className="h-1.5 w-1.5 rounded-full bg-white dark:bg-[#0A1118]" />
                         </span>
@@ -1473,7 +1583,7 @@ export default function TenantsPage() {
         </div>
       </ModalDialog>
 
-      {/* Dedicated Modal Dialog 3: Reset Admin Password */}
+      {/* Dedicated Modal Dialog 3: Reset Admin Password with Real-time Strength & Rules Checklist */}
       <ModalDialog
         open={isSecurityModalOpen}
         onOpenChange={setIsSecurityModalOpen}
@@ -1484,21 +1594,20 @@ export default function TenantsPage() {
         asyncState={securityAsyncState}
         onSave={handleSaveSecurity}
       >
-        <FormInput
+        <FormPasswordInput
           label="New Password"
-          type="password"
+          showStrength={true}
           value={newSecPassword}
           onChange={(e) => {
             setNewSecPassword(e.target.value);
             if (securityErrors.newPassword) setSecurityErrors((prev) => ({ ...prev, newPassword: undefined }));
           }}
-          placeholder="Enter new password (min 6 characters)"
+          placeholder="Enter new password (min 8 characters)"
           error={securityErrors.newPassword}
         />
 
-        <FormInput
+        <FormPasswordInput
           label="Confirm Password"
-          type="password"
           value={confirmSecPassword}
           onChange={(e) => {
             setConfirmSecPassword(e.target.value);
@@ -1507,6 +1616,126 @@ export default function TenantsPage() {
           placeholder="Re-enter password to confirm"
           error={securityErrors.confirmPassword}
         />
+      </ModalDialog>
+
+      {/* Dedicated Modal Dialog 4: Renew Tenant Subscription & Extend License */}
+      <ModalDialog
+        open={isRenewModalOpen}
+        onOpenChange={setIsRenewModalOpen}
+        title="Renew Subscription & Extend License"
+        icon={<RefreshCw className="w-5 h-5 text-[#635BFF]" />}
+        maxWidth="sm:max-w-[540px]"
+        buttonMode="edit"
+        buttonVariant="secondary"
+        saveText="Renew & Extend License"
+        asyncState={renewAsyncState}
+        onSave={handleRenewSubscription}
+      >
+        {selectedTenant && (
+          <div className="space-y-3.5 text-left">
+            {/* Tenant Overview Card */}
+            <div className="p-3 bg-slate-50 dark:bg-[#121B22] border border-slate-200 dark:border-slate-800 rounded-xl space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Workspace</span>
+                <span className="text-xs font-bold text-slate-900 dark:text-slate-100">{selectedTenant.companyName}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Current Expiry</span>
+                <span className="text-xs font-mono font-bold text-brand-primary">
+                  {selectedTenant.licenseExpiresAt ? format(new Date(selectedTenant.licenseExpiresAt), "dd/MM/yyyy") : "N/A"}
+                </span>
+              </div>
+            </div>
+
+            {/* Row 1: Subscription Tier & Renewal Period (Single Row) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[13px] font-medium mb-1.5 text-slate-600 dark:text-slate-400">
+                  Subscription Tier
+                </label>
+                <Combobox
+                  options={[
+                    { value: "", label: "Free Plan ($0.00/mo)" },
+                    ...(plansList?.map((p: any) => ({
+                      value: p.id,
+                      label: `${p.displayName} (₹${p.priceMonthly}/mo)`
+                    })) || [])
+                  ]}
+                  value={renewPlanId}
+                  onSelect={(val) => setRenewPlanId(val)}
+                  placeholder="Select Plan..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-[13px] font-medium mb-1.5 text-slate-600 dark:text-slate-400">
+                  Renewal Period
+                </label>
+                <Combobox
+                  options={[
+                    { value: "1m", label: "+1 Month" },
+                    { value: "3m", label: "+3 Month" },
+                    { value: "6m", label: "+6 Month" },
+                    { value: "1y", label: "+1 Year" },
+                    { value: "custom", label: "Custom" },
+                  ]}
+                  value={renewPeriod}
+                  onSelect={(val) => handleRenewalPeriodChange(val)}
+                  placeholder="Select Period..."
+                />
+              </div>
+            </div>
+
+            {/* Row 2: Custom Expiry Date & New Extended Expiry (Single Row) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+              <div>
+                <label className="block text-[13px] font-medium mb-1.5 text-slate-600 dark:text-slate-400">
+                  Custom Expiry Date
+                </label>
+                <div className="w-full">
+                  <DatePicker
+                    date={renewExpiryDate}
+                    minDate={baseRenewalDate}
+                    setDate={(date) => {
+                      if (date) {
+                        setRenewExpiryDate(date);
+                        setRenewPeriod("custom");
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col text-left">
+                <label className="block text-[13px] font-medium mb-1.5 text-slate-600 dark:text-slate-400">
+                  New Extended Expiry
+                </label>
+                <div className="h-[38px] px-3 bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-900/60 rounded-[12px] flex items-center justify-between text-xs">
+                  <span className="font-semibold text-emerald-800 dark:text-emerald-300">Expires:</span>
+                  <span className="font-bold font-mono text-emerald-700 dark:text-emerald-400">
+                    {renewExpiryDate ? format(renewExpiryDate, "dd/MM/yyyy") : "Not set"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Row 3: Dynamic Total Amount Calculation */}
+            <div className="p-3 bg-slate-50 dark:bg-[#0B131A] border border-slate-200/80 dark:border-slate-800 rounded-xl flex items-center justify-between text-xs">
+              <div className="space-y-0.5">
+                <span className="text-slate-600 dark:text-slate-300 font-semibold">Total Renewal Amount</span>
+                <div className="text-[11px] text-slate-400">
+                  {selectedRenewPlan?.displayName || "Free Plan"} • {renewPeriod === "custom" ? `${renewDaysDiff} Days Extension` : renewPeriod === "1m" ? "+1 Month (+30 Days)" : renewPeriod === "3m" ? "+3 Months (+90 Days)" : renewPeriod === "6m" ? "+6 Months (+180 Days)" : "+1 Year (+365 Days)"}
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-base font-extrabold text-[#635BFF] dark:text-[#0BDBB9]">
+                  ₹{renewalTotalAmount.toLocaleString()}
+                </span>
+                <span className="block text-[10px] text-slate-400">Total Payable</span>
+              </div>
+            </div>
+          </div>
+        )}
       </ModalDialog>
     </div>
   );

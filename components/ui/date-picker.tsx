@@ -17,6 +17,11 @@ interface DatePickerProps {
   placeholder?: string
   className?: string
   disabled?: boolean
+  fromDate?: Date
+  minDate?: Date
+  toDate?: Date
+  maxDate?: Date
+  yearsAhead?: number
 }
 
 export function DatePicker({
@@ -25,8 +30,18 @@ export function DatePicker({
   placeholder = "Pick a date",
   className,
   disabled = false,
+  fromDate,
+  minDate,
+  toDate,
+  maxDate,
+  yearsAhead = 15,
 }: DatePickerProps) {
   const [open, setOpen] = React.useState(false)
+  const effectiveMinDate = minDate || fromDate
+  const now = new Date()
+  const startYear = effectiveMinDate ? effectiveMinDate.getFullYear() : now.getFullYear() - 5
+  const endYear = (maxDate || toDate)?.getFullYear() || (now.getFullYear() + yearsAhead)
+  const effectiveToDate = toDate || maxDate || new Date(endYear, 11, 31)
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -50,11 +65,22 @@ export function DatePicker({
         <Calendar
           mode="single"
           selected={date}
-          defaultMonth={date}
+          defaultMonth={date || effectiveMinDate || new Date()}
+          fromDate={effectiveMinDate}
+          toDate={effectiveToDate}
+          startMonth={new Date(startYear, 0, 1)}
+          endMonth={new Date(endYear, 11, 31)}
+          disabled={effectiveMinDate ? (d) => {
+            const minBoundary = new Date(effectiveMinDate);
+            minBoundary.setHours(0, 0, 0, 0);
+            return d < minBoundary;
+          } : undefined}
           captionLayout="dropdown"
           onSelect={(d) => {
-            setDate(d)
-            setOpen(false)
+            if (d) {
+              setDate(d)
+              setOpen(false)
+            }
           }}
           initialFocus
         />
