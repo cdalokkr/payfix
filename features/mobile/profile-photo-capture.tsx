@@ -260,12 +260,12 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
 
             try {
                 const extracted = await FaceVerificationService.extractAligned512dDescriptor(capturedImage);
-                if (extracted?.cropDataUrl) {
-                    uploadDataUrl = extracted.cropDataUrl;
+                if (extracted?.hdAvatarDataUrl || extracted?.cropDataUrl) {
+                    uploadDataUrl = extracted.hdAvatarDataUrl || extracted.cropDataUrl;
                     if (extracted.embedding && extracted.embedding.length === 512) {
                         preExtracted512 = extracted.embedding;
                     }
-                    addLog('✅ Face cropped to canonical 20% padded avatar');
+                    addLog('✅ Face cropped to 480x480 HD canonical avatar');
                 }
             } catch (cropErr) {
                 console.warn('[ProfileUpload] Crop fallback to full image:', cropErr);

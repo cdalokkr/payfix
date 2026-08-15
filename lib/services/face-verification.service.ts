@@ -114,7 +114,7 @@ export const FaceVerificationService = {
      */
     async extractAligned512dDescriptor(
         input: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement | string
-    ): Promise<{ embedding: number[]; cropDataUrl: string; isLive: boolean } | null> {
+    ): Promise<{ embedding: number[]; cropDataUrl: string; hdAvatarDataUrl?: string; isLive: boolean } | null> {
         let processElement: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement;
 
         if (typeof input === 'string') {
@@ -131,7 +131,7 @@ export const FaceVerificationService = {
         }
 
         try {
-            // 1. MediaPipe 3D Landmark & Canonical 20% Padded 112x112 Warping
+            // 1. MediaPipe 3D Landmark & Canonical 20% Padded 112x112 Warping + 480x480 HD Avatar
             const aligned = await MediaPipeMeshService.processFaceFrame(processElement);
             if (aligned) {
                 const embedding = await ArcFaceOnnxService.extract512dEmbedding(aligned.canvas112);
@@ -139,6 +139,7 @@ export const FaceVerificationService = {
                     return {
                         embedding: Array.from(embedding),
                         cropDataUrl: aligned.dataUrl112,
+                        hdAvatarDataUrl: aligned.hdAvatarDataUrl || aligned.dataUrl112,
                         isLive: aligned.isLive,
                     };
                 }
@@ -150,6 +151,7 @@ export const FaceVerificationService = {
                 return {
                     embedding: Array.from(legacyCrop.descriptor),
                     cropDataUrl: legacyCrop.croppedDataUrl,
+                    hdAvatarDataUrl: legacyCrop.croppedDataUrl,
                     isLive: true,
                 };
             }

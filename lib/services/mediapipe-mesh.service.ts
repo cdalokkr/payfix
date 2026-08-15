@@ -22,6 +22,8 @@ const CANONICAL_5_POINTS = [
 export interface AlignedFaceCropResult {
     canvas112: HTMLCanvasElement;
     dataUrl112: string;
+    hdAvatarCanvas?: HTMLCanvasElement;
+    hdAvatarDataUrl?: string;
     landmarks: any[];
     faceScore: number;
     isLive: boolean;
@@ -205,7 +207,7 @@ export const MediaPipeMeshService = {
             const dy = pts5[1].y - pts5[0].y;
             const angle = Math.atan2(dy, dx); // radians
 
-            // 4. Create 112x112 ArcFace standard canvas
+            // 4a. Create 112x112 ArcFace standard canvas (for AI neural pass)
             const canvas112 = document.createElement('canvas');
             canvas112.width = 112;
             canvas112.height = 112;
@@ -213,19 +215,34 @@ export const MediaPipeMeshService = {
 
             if (ctx112) {
                 ctx112.save();
-                // Move to center of 112x112 canvas
                 ctx112.translate(56, 56);
-                // Rotate to make eye line horizontal
                 ctx112.rotate(-angle);
-                // Scale factor to map padded face box to 112x112
                 const scale = 112 / (paddedSquareSize || 1);
                 ctx112.scale(scale, scale);
-                // Draw face centered
                 ctx112.drawImage(videoOrCanvas, -faceCenterX, -faceCenterY);
                 ctx112.restore();
             }
 
+            // 4b. Create 480x480 High-Definition Avatar Canvas (for crisp UI display & Supabase storage)
+            const canvasHD = document.createElement('canvas');
+            canvasHD.width = 480;
+            canvasHD.height = 480;
+            const ctxHD = canvasHD.getContext('2d', { willReadFrequently: true });
+
+            if (ctxHD) {
+                ctxHD.imageSmoothingEnabled = true;
+                ctxHD.imageSmoothingQuality = 'high';
+                ctxHD.save();
+                ctxHD.translate(240, 240);
+                ctxHD.rotate(-angle);
+                const scaleHD = 480 / (paddedSquareSize || 1);
+                ctxHD.scale(scaleHD, scaleHD);
+                ctxHD.drawImage(videoOrCanvas, -faceCenterX, -faceCenterY);
+                ctxHD.restore();
+            }
+
             const dataUrl112 = canvas112.toDataURL('image/jpeg', 0.92);
+            const hdAvatarDataUrl = canvasHD.toDataURL('image/jpeg', 0.94);
 
             // 5. Liveness & Quality checks
             const ear = this.computeEAR(rawLandmarks);
@@ -238,6 +255,8 @@ export const MediaPipeMeshService = {
             return {
                 canvas112,
                 dataUrl112,
+                hdAvatarCanvas: canvasHD,
+                hdAvatarDataUrl,
                 landmarks: rawLandmarks,
                 faceScore: 0.96,
                 isLive,
