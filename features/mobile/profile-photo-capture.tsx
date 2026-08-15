@@ -307,46 +307,37 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
             addLog('Upload complete!')
             addLog(`URL: ${result.path?.slice(0, 40)}...`)
 
-            // Extract and save 512-d ArcFace face embedding for attendance matching (Kiosk & PWA)
-            if (preExtracted512 && preExtracted512.length === 512) {
-                try {
-                    await saveFaceEmbedding.mutateAsync({ embedding: preExtracted512 })
-                    addLog('✅ ArcFace 512-d vector saved to DB for Kiosk & PWA matching.')
-                } catch (faceErr) {
-                    addLog('⚠️ Face vector saving warning: ' + String(faceErr))
-                }
-            } else if (capturedImage) {
-                try {
-                    addLog('Extracting 512-d ArcFace vector with canonical 20% padded alignment...')
-                    const extracted = await FaceVerificationService.extractAligned512dDescriptor(capturedImage)
-                    if (extracted && extracted.embedding && extracted.embedding.length === 512) {
-                        await saveFaceEmbedding.mutateAsync({ embedding: extracted.embedding })
-                        addLog('✅ ArcFace 512-d vector saved to DB for Kiosk & PWA matching.')
-                    } else {
-                        // Legacy fallback 128-d
-                        await FaceApiBrowserService.loadModels()
-                        const descriptor = await FaceApiBrowserService.extractDescriptorFromDataUrl(capturedImage)
-                        if (descriptor && descriptor.length === 128) {
-                            const embedding = FaceApiBrowserService.descriptorToArray(descriptor)
-                            await saveFaceEmbedding.mutateAsync({ embedding })
-                            addLog('✅ Face vector saved to DB.')
-                        }
-                    }
-                } catch (faceErr) {
-                    addLog('⚠️ Face vector extraction warning: ' + String(faceErr))
-                }
-            }
-
-            // Handle differently based on first-time vs update
+            // Handle differently based on first-time upload vs update approval request
             if (isFirstTimeUpload) {
-                // First-time: Direct update
+                // First-time: Direct update profile and save active face embedding immediately
+                if (preExtracted512 && preExtracted512.length === 512) {
+                    try {
+                        await saveFaceEmbedding.mutateAsync({ embedding: preExtracted512 })
+                        addLog('✅ ArcFace 512-d vector saved to DB for Kiosk & PWA matching.')
+                    } catch (faceErr) {
+                        addLog('⚠️ Face vector saving warning: ' + String(faceErr))
+                    }
+                } else if (capturedImage) {
+                    try {
+                        addLog('Extracting 512-d ArcFace vector with canonical 20% padded alignment...')
+                        const extracted = await FaceVerificationService.extractAligned512dDescriptor(capturedImage)
+                        if (extracted && extracted.embedding && extracted.embedding.length === 512) {
+                            await saveFaceEmbedding.mutateAsync({ embedding: extracted.embedding })
+                            addLog('✅ ArcFace 512-d vector saved to DB for Kiosk & PWA matching.')
+                        }
+                    } catch (faceErr) {
+                        addLog('⚠️ Face vector extraction warning: ' + String(faceErr))
+                    }
+                }
+
                 setStatus('success')
                 toast.success('Profile photo updated successfully!')
             } else {
-                // Subsequent update: Create pending request
-                addLog('Creating approval request...')
+                // Subsequent update: Create pending request WITHOUT touching active profile photo or vector!
+                addLog('Submitting for admin approval (vector deferred until approval)...')
                 await createPhotoRequest.mutateAsync({
-                    pendingPhotoUrl: result.path
+                    pendingPhotoUrl: result.path,
+                    pendingFaceEmbedding: (preExtracted512 && preExtracted512.length === 512) ? preExtracted512 : undefined
                 })
                 setStatus('submitted')
                 toast.success('Photo submitted for admin approval!')

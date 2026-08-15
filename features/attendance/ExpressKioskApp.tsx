@@ -1203,7 +1203,7 @@ export function ExpressKioskApp() {
                     if (!open && !isScanning) closeVerificationModal();
                 }}
             >
-                <DialogContent className="max-w-lg w-[95vw] md:w-[480px] bg-slate-950 border-slate-800 text-slate-100 p-0 overflow-hidden shadow-2xl rounded-3xl backdrop-blur-2xl [&>button]:hidden">
+                <DialogContent className="max-w-md w-[95vw] bg-slate-950 border-slate-800 text-slate-100 p-0 overflow-hidden shadow-2xl rounded-3xl backdrop-blur-2xl [&>button]:hidden">
                     <BiometricCameraModal
                         isOpen={isVerificationModalOpen}
                         onClose={() => {

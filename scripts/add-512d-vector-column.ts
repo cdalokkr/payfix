@@ -33,6 +33,10 @@ async function add512dVectorColumn() {
                 await centralDb.execute(sql`
                     ALTER TABLE IF EXISTS ${sql.raw(t.tenant_schema)}.profiles 
                     ADD COLUMN IF NOT EXISTS face_embedding_512 vector(512);
+
+                    ALTER TABLE IF EXISTS ${sql.raw(t.tenant_schema)}.profile_photo_requests
+                    ADD COLUMN IF NOT EXISTS pending_face_embedding_512 vector(512),
+                    ADD COLUMN IF NOT EXISTS pending_face_embedding vector(128);
                 `);
 
                 // Create HNSW Cosine Index for 512-d embeddings
@@ -45,7 +49,7 @@ async function add512dVectorColumn() {
                     WITH (m = 16, ef_construction = 64);
                 `);
 
-                console.log(`   ✅ ${t.tenant_schema}.profiles.face_embedding_512 added with HNSW Index.`);
+                console.log(`   ✅ ${t.tenant_schema}.profiles & profile_photo_requests updated with 512-d vectors.`);
             } catch (err: any) {
                 console.warn(`   ⚠️ Warning for ${t.tenant_schema}:`, err.message || err);
             }

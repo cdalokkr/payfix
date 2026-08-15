@@ -24,7 +24,12 @@ export class ProfileService {
                     "created_at" timestamp with time zone DEFAULT now()
                 );
 
+                ALTER TABLE IF EXISTS "profile_photo_requests"
+                    ADD COLUMN IF NOT EXISTS "pending_face_embedding_512" vector(512),
+                    ADD COLUMN IF NOT EXISTS "pending_face_embedding" vector(128);
+
                 ALTER TABLE IF EXISTS "profiles"
+                    ADD COLUMN IF NOT EXISTS "face_embedding_512" vector(512),
                     ADD COLUMN IF NOT EXISTS "face_quality_score" real,
                     ADD COLUMN IF NOT EXISTS "face_enrolled_at" timestamp with time zone,
                     ADD COLUMN IF NOT EXISTS "face_photo_url" text;
@@ -197,10 +202,12 @@ export class ProfileService {
      */
     static async createPhotoUpdateRequest({
         profileId,
-        pendingPhotoUrl
+        pendingPhotoUrl,
+        pendingFaceEmbedding
     }: {
         profileId: string
         pendingPhotoUrl: string
+        pendingFaceEmbedding?: number[]
     }) {
         await ProfileService.ensurePhotoRequestsSchema()
         const existingPending = await db.query.profilePhotoRequests.findFirst({
@@ -214,11 +221,20 @@ export class ProfileService {
             throwAppError('ALREADY_EXISTS', 'You already have a pending photo update request. Please wait for admin approval.')
         }
 
-        const [request] = await db.insert(profilePhotoRequests).values({
+        const insertValues: any = {
             profile_id: profileId,
             pending_photo_url: pendingPhotoUrl,
             status: 'pending'
-        }).returning()
+        }
+        if (pendingFaceEmbedding && Array.isArray(pendingFaceEmbedding)) {
+            if (pendingFaceEmbedding.length === 512) {
+                insertValues.pending_face_embedding_512 = pendingFaceEmbedding
+            } else if (pendingFaceEmbedding.length === 128) {
+                insertValues.pending_face_embedding = pendingFaceEmbedding
+            }
+        }
+
+        const [request] = await db.insert(profilePhotoRequests).values(insertValues).returning()
 
         await db.insert(activities).values({
             user_id: profileId,
@@ -333,8 +349,13 @@ export class ProfileService {
                 updated_at: new Date()
             }
 
-            if (faceEmbedding && Array.isArray(faceEmbedding) && faceEmbedding.length === 128) {
-                updatePayload.face_embedding = faceEmbedding
+            const embeddingToApply = faceEmbedding || (request as any).pending_face_embedding_512 || (request as any).pending_face_embedding
+            if (embeddingToApply && Array.isArray(embeddingToApply)) {
+                if (embeddingToApply.length === 512) {
+                    updatePayload.face_embedding_512 = embeddingToApply
+                } else if (embeddingToApply.length === 128) {
+                    updatePayload.face_embedding = embeddingToApply
+                }
                 updatePayload.face_quality_score = faceQualityScore || 1.0
                 updatePayload.face_enrolled_at = new Date()
             }
