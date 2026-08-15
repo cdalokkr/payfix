@@ -243,26 +243,39 @@ export const profileRouter = router({
     }),
 
   /**
-   * Save a browser-extracted 128-d face descriptor (from face-api.js) to the
-   * profiles.face_embedding column. Tenant-isolated via the db proxy.
+   * Save browser-extracted face descriptors (128-d or 512-d ArcFace) to the
+   * profiles table. Tenant-isolated via the db proxy.
    */
   saveFaceEmbedding: protectedProcedure
     .input(z.object({
-      embedding: z.array(z.number()).length(128, 'Face embedding must be exactly 128 dimensions'),
+      embedding: z.array(z.number()).refine((arr) => arr.length === 128 || arr.length === 512, {
+        message: 'Face embedding must be 128 or 512 dimensions',
+      }),
+      embedding512: z.array(z.number()).length(512).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       try {
+        const updateData: any = {};
+        if (input.embedding.length === 512) {
+          updateData.face_embedding_512 = input.embedding;
+        } else if (input.embedding.length === 128) {
+          updateData.face_embedding = input.embedding;
+        }
+        if (input.embedding512 && input.embedding512.length === 512) {
+          updateData.face_embedding_512 = input.embedding512;
+        }
+
         await ctx.db
           .update(profiles)
-          .set({ face_embedding: input.embedding })
-          .where(eq(profiles.id, ctx.profile.id))
+          .set(updateData)
+          .where(eq(profiles.id, ctx.profile.id));
 
-        return { success: true, message: 'Face embedding saved successfully.' }
+        return { success: true, message: 'Face embedding saved successfully.' };
       } catch (err: any) {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: err.message || 'Failed to save face embedding'
-        })
+          message: err.message || 'Failed to save face embedding',
+        });
       }
     }),
-})
+});

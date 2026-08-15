@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import { trpc } from "@/lib/trpc/client"
 import { FaceApiBrowserService } from "@/lib/services/faceapi-browser.service"
+import { FaceVerificationService } from "@/lib/services/face-verification.service"
 import { BiometricCameraModal } from "@/components/biometrics/BiometricCameraModal"
 
 
@@ -304,16 +305,23 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
             addLog('Upload complete!')
             addLog(`URL: ${result.path?.slice(0, 40)}...`)
 
-            // Extract and save 128-d face embedding for attendance matching (Kiosk & PWA)
+            // Extract and save 512-d ArcFace face embedding for attendance matching (Kiosk & PWA)
             if (capturedImage) {
                 try {
-                    addLog('Extracting 128-d face vector for attendance matching...')
-                    await FaceApiBrowserService.loadModels()
-                    const descriptor = await FaceApiBrowserService.extractDescriptorFromDataUrl(capturedImage)
-                    if (descriptor && descriptor.length === 128) {
-                        const embedding = FaceApiBrowserService.descriptorToArray(descriptor)
-                        await saveFaceEmbedding.mutateAsync({ embedding })
-                        addLog('✅ Face vector saved to DB for Kiosk & PWA matching.')
+                    addLog('Extracting 512-d ArcFace vector with canonical 20% padded alignment...')
+                    const extracted = await FaceVerificationService.extractAligned512dDescriptor(capturedImage)
+                    if (extracted && extracted.embedding && extracted.embedding.length === 512) {
+                        await saveFaceEmbedding.mutateAsync({ embedding: extracted.embedding })
+                        addLog('✅ ArcFace 512-d vector saved to DB for Kiosk & PWA matching.')
+                    } else {
+                        // Legacy fallback 128-d
+                        await FaceApiBrowserService.loadModels()
+                        const descriptor = await FaceApiBrowserService.extractDescriptorFromDataUrl(capturedImage)
+                        if (descriptor && descriptor.length === 128) {
+                            const embedding = FaceApiBrowserService.descriptorToArray(descriptor)
+                            await saveFaceEmbedding.mutateAsync({ embedding })
+                            addLog('✅ Face vector saved to DB.')
+                        }
                     }
                 } catch (faceErr) {
                     addLog('⚠️ Face vector extraction warning: ' + String(faceErr))

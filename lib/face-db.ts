@@ -189,7 +189,7 @@ export async function saveEmployeeFacesBulk(
 
 
 /**
- * Pull 128-d embeddings from Supabase → parse stringified vector format → L2-normalize → IndexedDB
+ * Pull 512-d / 128-d embeddings from Supabase → parse stringified vector format → L2-normalize → IndexedDB
  */
 export async function syncFacesFromSupabase(tenantId: string, supabaseClient?: any) {
   if (!supabaseClient || typeof window === 'undefined') return { count: 0 };
@@ -197,9 +197,8 @@ export async function syncFacesFromSupabase(tenantId: string, supabaseClient?: a
   try {
     const { data, error } = await supabaseClient
       .from('profiles')
-      .select('id, full_name, mobile_no, avatar_url, face_embedding')
-      .eq('tenant_id', tenantId)
-      .not('face_embedding', 'is', null);
+      .select('id, full_name, mobile_no, avatar_url, face_embedding, face_embedding_512')
+      .eq('tenant_id', tenantId);
 
     if (error) {
       console.warn('[FaceDB] Supabase face sync warning:', error.message);
@@ -211,18 +210,24 @@ export async function syncFacesFromSupabase(tenantId: string, supabaseClient?: a
     const mappedEmployees: EmployeeFace[] = [];
 
     for (const row of data) {
-      let embedding = row.face_embedding as number[] | string | null;
+      // Prioritize 512-d vector, fallback to 128-d
+      let rawVector = row.face_embedding_512 || row.face_embedding;
+      if (!rawVector) continue;
 
-      if (typeof embedding === 'string') {
+      let embedding: number[] | null = null;
+
+      if (typeof rawVector === 'string') {
         try {
-          embedding = JSON.parse(embedding.replace(/^\[/, '[').replace(/\]$/, ']'));
+          embedding = JSON.parse(rawVector.replace(/^\[/, '[').replace(/\]$/, ']'));
         } catch (e) {
           console.warn('[FaceDB] Failed to parse stringified vector for:', row.id);
           continue;
         }
+      } else if (Array.isArray(rawVector)) {
+        embedding = rawVector;
       }
 
-      if (!Array.isArray(embedding) || embedding.length !== 128) continue;
+      if (!embedding || (embedding.length !== 512 && embedding.length !== 128)) continue;
 
       mappedEmployees.push({
         id: row.id,
@@ -292,7 +297,7 @@ export function cosineSimilarity(a: number[], b: number[]): number {
 
 export async function matchFaceOffline(
   queryEmbedding: number[],
-  threshold: number = 0.42
+  threshold: number = 0.68
 ): Promise<MatchResult> {
   const db = await getDB();
   if (!db) {

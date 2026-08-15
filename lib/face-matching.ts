@@ -6,9 +6,9 @@ export const EMBEDDING_SIZE = 128;
 export type ThresholdProfile = 'strict' | 'balanced' | 'tolerant';
 
 const THRESHOLDS: Record<ThresholdProfile, number> = {
-  strict: 0.55,
-  balanced: 0.45,
-  tolerant: 0.38,
+  strict: 0.75,
+  balanced: 0.68,
+  tolerant: 0.65,
 };
 
 export interface EmployeeFace {
@@ -131,7 +131,7 @@ export function matchFace(
   const {
     faceScore,
     profile = 'balanced',
-    minGap = 0.06,
+    minGap = 0.08,
   } = options;
 
   const threshold =

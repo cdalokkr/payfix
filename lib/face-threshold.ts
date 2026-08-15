@@ -75,9 +75,9 @@ export function isGoodQualityFace(
  * Dynamic Adaptive Threshold based on face detection confidence
  */
 export function getAdaptiveThreshold(faceScore: number): number {
-    if (faceScore >= 0.85) return 0.45;
-    if (faceScore >= 0.70) return 0.42;
-    return 0.38; // Soft threshold for lower quality / lighting
+    if (faceScore >= 0.85) return 0.70;
+    if (faceScore >= 0.70) return 0.68;
+    return 0.65; // High-security threshold for lower lighting
 }
 
 /**
@@ -125,19 +125,18 @@ export function matchFaceFast(
         }
     }
 
-    const minThreshold = threshold ?? 0.42;
+    const minThreshold = threshold ?? (query.length === 512 ? 0.65 : 0.68);
 
-    // 3. Top-2 Gap Check (Only apply for borderline scores < 0.55 to prevent false ambiguous rejects on strong matches)
-    if (employees.length > 1 && bestScore >= minThreshold && bestScore < 0.55 && (bestScore - secondBestScore < top2GapThreshold)) {
+    // 3. Top-2 Gap Check (Apply for borderline scores < 0.78 to prevent false ambiguous rejects on extreme high matches)
+    if (employees.length > 1 && bestScore >= minThreshold && bestScore < 0.78 && (bestScore - secondBestScore < top2GapThreshold)) {
         return {
             isMatch: false,
             employee: null,
             similarity: bestScore,
             secondBestScore,
-            message: 'Ambiguous face match. Please align face clearly.'
+            message: 'Ambiguous face match. Multiple candidates close. Please align face directly.'
         };
     }
-
 
     if (bestEmployee && bestScore >= minThreshold) {
         return {
@@ -154,6 +153,6 @@ export function matchFaceFast(
         employee: null,
         similarity: bestScore > 0 ? bestScore : 0,
         secondBestScore,
-        message: 'No matching employee found'
+        message: `No matching employee found (${(bestScore * 100).toFixed(0)}% similarity, required >= ${(minThreshold * 100).toFixed(0)}%)`
     };
 }

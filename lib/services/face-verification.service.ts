@@ -1,77 +1,168 @@
 /**
- * Face Verification Service — Browser-side face-api.js
+ * Face Verification Service — Hybrid MediaPipe 3D Mesh + ArcFace 512-d ONNX Web
  *
- * Uses FaceApiBrowserService (singleton) to compare selfie against profile photo.
- * Completely replaces the Python microservice dependency.
- * Method signatures preserved for backward compatibility with selfie-capture.tsx
- * and face-verification.tsx — no changes needed in those files.
+ * Provides:
+ * 1. Real-Time 3D Landmark Tracking & Anti-Spoofing Liveness Gate.
+ * 2. Camera Circle Area + 20% Padded Canonical 5-Point Alignment (112x112).
+ * 3. InsightFace ArcFace 512-d Vector Extraction & Fast Dot-Product Matching.
+ * 4. Backward compatibility for legacy 128-d vectors.
  */
 
-import { FaceApiBrowserService } from './faceapi-browser.service'
-import { l2Normalize, dotProduct } from '../face-threshold'
-
+import { MediaPipeMeshService, AlignedFaceCropResult } from './mediapipe-mesh.service';
+import { ArcFaceOnnxService } from './arcface-onnx.service';
+import { FaceApiBrowserService } from './faceapi-browser.service';
+import { l2Normalize, dotProduct } from '../face-threshold';
 
 export interface FaceVerificationResult {
-    matched: boolean
-    similarity: number
-    method: 'face-api'
-    debugLog: string[]
-    error?: string
+    matched: boolean;
+    similarity: number;
+    method: 'arcface-512' | 'face-api';
+    debugLog: string[];
+    isLive?: boolean;
+    error?: string;
+    alignedCropDataUrl?: string;
 }
 
-// Minimum similarity score required to pass = 60% (Euclidean distance <= 0.40)
-const THRESHOLD = 0.40
-
 // In-memory cache for profile descriptors (URL -> Float32Array)
-const descriptorCache = new Map<string, Float32Array>()
+const descriptorCache = new Map<string, Float32Array>();
 
 export const FaceVerificationService = {
     /**
-     * Initialize and load face-api.js models (call once on app start or before first scan).
+     * Initialize MediaPipe and ArcFace ONNX models in parallel.
      */
     async initialize(onProgress?: (pct: number, msg: string) => void): Promise<boolean> {
-        return FaceApiBrowserService.loadModels(onProgress)
+        try {
+            onProgress?.(10, 'Initializing Vision & Neural Networks...');
+            const [mpReady, arcReady] = await Promise.all([
+                MediaPipeMeshService.initialize((pct, msg) => onProgress?.(Math.round(pct * 0.5), msg)),
+                ArcFaceOnnxService.loadModel((pct, msg) => onProgress?.(50 + Math.round(pct * 0.5), msg)),
+            ]);
+
+            // Fallback load legacy face-api in background if needed
+            FaceApiBrowserService.loadModels().catch(() => {});
+
+            return mpReady !== null || arcReady || FaceApiBrowserService.isReady();
+        } catch {
+            return FaceApiBrowserService.loadModels(onProgress);
+        }
     },
 
     isReady(): boolean {
-        return FaceApiBrowserService.isReady()
+        return ArcFaceOnnxService.isReady() || FaceApiBrowserService.isReady();
     },
 
     clearCache(): void {
-        descriptorCache.clear()
+        descriptorCache.clear();
     },
 
     /**
-     * Preload profile descriptor in the background while camera is opening.
+     * Preload profile descriptor in the background.
      */
     async preloadProfileDescriptor(
         profileImageUrl: string,
         log?: (msg: string) => void
     ): Promise<boolean> {
-        if (!profileImageUrl) return false
-        if (descriptorCache.has(profileImageUrl)) return true
+        if (!profileImageUrl) return false;
+        if (descriptorCache.has(profileImageUrl)) return true;
 
         try {
-            log?.('Preloading profile face descriptor in background...')
-            if (!FaceApiBrowserService.isReady()) {
-                await FaceApiBrowserService.loadModels()
-            }
-            const descriptor = await FaceApiBrowserService.extractDescriptorFromUrl(profileImageUrl, log)
+            log?.('Preloading profile face descriptor in background...');
+            const descriptor = await this.extractAligned512dDescriptorFromUrl(profileImageUrl);
             if (descriptor) {
-                descriptorCache.set(profileImageUrl, descriptor)
-                log?.('✅ Profile face descriptor cached in memory')
-                return true
+                descriptorCache.set(profileImageUrl, new Float32Array(descriptor));
+                log?.('✅ Profile 512-d face descriptor cached in memory');
+                return true;
             }
         } catch (err) {
-            console.warn('[FaceVerification] Preload failed:', err)
+            console.warn('[FaceVerification] Preload warning:', err);
         }
-        return false
+        return false;
     },
 
     /**
-     * Compare a selfie (base64 data URL) against a profile photo or pre-saved face embedding.
-     * Uses face-api.js running entirely in the browser.
-     * Uses pre-saved DB embedding or cached profile descriptor for instant matching (<80ms).
+     * Extract 512-d ArcFace vector from an image URL with MediaPipe 20% padded canonical alignment.
+     */
+    async extractAligned512dDescriptorFromUrl(imageUrl: string): Promise<number[] | null> {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = async () => {
+                try {
+                    const aligned = await MediaPipeMeshService.processFaceFrame(img);
+                    if (aligned) {
+                        const embedding = await ArcFaceOnnxService.extract512dEmbedding(aligned.canvas112);
+                        if (embedding) {
+                            resolve(Array.from(embedding));
+                            return;
+                        }
+                    }
+
+                    // Fallback to legacy 128-d if 512-d extraction failed
+                    const legacy = await FaceApiBrowserService.extractDescriptor(img);
+                    resolve(legacy ? Array.from(legacy) : null);
+                } catch {
+                    resolve(null);
+                }
+            };
+            img.onerror = () => resolve(null);
+            img.src = imageUrl;
+        });
+    },
+
+    /**
+     * Extract 512-d ArcFace vector + 20% padded aligned crop from HTMLImageElement, HTMLVideoElement, or Base64 Data URL.
+     */
+    async extractAligned512dDescriptor(
+        input: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement | string
+    ): Promise<{ embedding: number[]; cropDataUrl: string; isLive: boolean } | null> {
+        let processElement: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement;
+
+        if (typeof input === 'string') {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            await new Promise((res, rej) => {
+                img.onload = res;
+                img.onerror = rej;
+                img.src = input;
+            }).catch(() => null);
+            processElement = img;
+        } else {
+            processElement = input;
+        }
+
+        try {
+            // 1. MediaPipe 3D Landmark & Canonical 20% Padded 112x112 Warping
+            const aligned = await MediaPipeMeshService.processFaceFrame(processElement);
+            if (aligned) {
+                const embedding = await ArcFaceOnnxService.extract512dEmbedding(aligned.canvas112);
+                if (embedding && embedding.length === 512) {
+                    return {
+                        embedding: Array.from(embedding),
+                        cropDataUrl: aligned.dataUrl112,
+                        isLive: aligned.isLive,
+                    };
+                }
+            }
+
+            // Fallback: Legacy FaceApi 128-d
+            const legacyCrop = await FaceApiBrowserService.extractAlignedSquareFaceCrop(processElement);
+            if (legacyCrop) {
+                return {
+                    embedding: Array.from(legacyCrop.descriptor),
+                    cropDataUrl: legacyCrop.croppedDataUrl,
+                    isLive: true,
+                };
+            }
+        } catch (err) {
+            console.warn('[FaceVerification] Vector extraction error:', err);
+        }
+
+        return null;
+    },
+
+    /**
+     * Compare a selfie against profile photo or pre-saved embedding vector.
+     * Uses 512-d ArcFace Cosine Similarity (threshold: 0.65) with 128-d backward compatibility.
      */
     async compareFaces(
         selfieDataUrl: string,
@@ -79,205 +170,104 @@ export const FaceVerificationService = {
         onDebugLog?: (log: string) => void,
         preSavedEmbedding?: number[] | Float32Array | null
     ): Promise<FaceVerificationResult> {
-        const debugLog: string[] = []
+        const debugLog: string[] = [];
         const log = (msg: string) => {
-            const entry = `[${new Date().toLocaleTimeString()}] ${msg}`
-            debugLog.push(entry)
-            onDebugLog?.(entry)
-        }
+            const entry = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            debugLog.push(entry);
+            onDebugLog?.(entry);
+        };
 
         try {
-            log('🚀 Starting fast browser-side face-api.js verification...')
+            log('🚀 Starting MediaPipe 3D + ArcFace 512-d face verification...');
 
-            // Ensure models are loaded
-            if (!FaceApiBrowserService.isReady()) {
-                log('⏳ Loading face-api.js models...')
-                const loaded = await FaceApiBrowserService.loadModels((pct, msg) => log(`📦 ${pct}% — ${msg}`))
-                if (!loaded) {
-                    return {
-                        matched: false,
-                        similarity: 0,
-                        method: 'face-api',
-                        debugLog,
-                        error: 'Failed to load face recognition models. Please refresh and try again.'
+            // 1. Extract selfie 512-d descriptor with camera circle + 20% padding alignment
+            log('⚡ Extracting selfie face descriptor with canonical alignment...');
+            const selfieRes = await this.extractAligned512dDescriptor(selfieDataUrl);
+
+            if (!selfieRes || !selfieRes.embedding || selfieRes.embedding.length === 0) {
+                return {
+                    matched: false,
+                    similarity: 0,
+                    method: 'arcface-512',
+                    debugLog,
+                    error: 'No face detected in selfie. Please align face inside camera circle and retake.',
+                };
+            }
+
+            // 2. Resolve Profile Embedding (512-d or 128-d)
+            let profileVector: number[] | null = null;
+            if (preSavedEmbedding) {
+                profileVector = Array.isArray(preSavedEmbedding)
+                    ? preSavedEmbedding
+                    : Array.from(preSavedEmbedding);
+                log(`⚡ Using pre-saved face embedding from database (${profileVector.length}-d)`);
+            } else {
+                const cached = descriptorCache.get(profileImageUrl);
+                if (cached) {
+                    profileVector = Array.from(cached);
+                    log(`⚡ Using cached profile face embedding (${profileVector.length}-d)`);
+                } else if (profileImageUrl) {
+                    log('📷 Extracting profile photo embedding from URL...');
+                    profileVector = await this.extractAligned512dDescriptorFromUrl(profileImageUrl);
+                    if (profileVector) {
+                        descriptorCache.set(profileImageUrl, new Float32Array(profileVector));
                     }
                 }
             }
 
-            // Check if profile descriptor is pre-saved in DB session context or cached in memory
-            let profileDescriptor: Float32Array | null = null;
-            if (preSavedEmbedding && Array.isArray(preSavedEmbedding) && preSavedEmbedding.length === 128) {
-                profileDescriptor = FaceApiBrowserService.arrayToDescriptor(preSavedEmbedding);
-                log('⚡ Using pre-saved face embedding from session DB context (Zero Network Download!)');
-            } else if (preSavedEmbedding instanceof Float32Array) {
-                profileDescriptor = preSavedEmbedding;
-            } else {
-                profileDescriptor = descriptorCache.get(profileImageUrl) || null;
-            }
-
-            // Extract selfie descriptor
-            log('⚡ Extracting selfie face descriptor...')
-            const selfieDescriptor = await FaceApiBrowserService.extractDescriptorFromDataUrl(selfieDataUrl, log)
-            if (!selfieDescriptor) {
+            if (!profileVector || profileVector.length === 0) {
                 return {
                     matched: false,
                     similarity: 0,
-                    method: 'face-api',
+                    method: 'arcface-512',
                     debugLog,
-                    error: 'No face detected in selfie. Please align your face inside the guide oval and retake.'
-                }
+                    error: 'No face detected in profile photo. Please upload a clear profile photo.',
+                };
             }
 
-            // Extract profile descriptor from image URL only if not already available
-            if (!profileDescriptor) {
-                log('📷 Extracting profile photo face descriptor...')
-                profileDescriptor = await FaceApiBrowserService.extractDescriptorFromUrl(profileImageUrl, log)
-                if (profileDescriptor) {
-                    descriptorCache.set(profileImageUrl, profileDescriptor)
-                }
-            } else {
-                log('⚡ Using cached profile face descriptor (Instant Matching)')
-            }
+            // 3. Vector Match Calculation
+            const is512 = selfieRes.embedding.length === 512 && profileVector.length === 512;
+            const threshold = is512 ? 0.65 : 0.68;
 
+            const normSelfie = l2Normalize(selfieRes.embedding);
+            const normProfile = l2Normalize(profileVector);
+            const similarity = Math.max(0, dotProduct(normSelfie, normProfile));
+            const matched = similarity >= threshold;
 
-            if (!profileDescriptor) {
-                return {
-                    matched: false,
-                    similarity: 0,
-                    method: 'face-api',
-                    debugLog,
-                    error: 'No face detected in profile photo. Please update your profile picture.'
-                }
-            }
-
-            // L2-Normalize both vectors and compute dot product similarity
-            const normSelfie = l2Normalize(Array.from(selfieDescriptor))
-            const normProfile = l2Normalize(Array.from(profileDescriptor))
-            const similarity = Math.max(0, dotProduct(normSelfie, normProfile))
-            const matched = similarity >= 0.42
-
-            log(`🎯 Cosine Similarity: ${(similarity * 100).toFixed(1)}% | ${matched ? '✅ MATCH' : '❌ NO MATCH'}`)
+            const method = is512 ? 'arcface-512' : 'face-api';
+            log(`🎯 ${is512 ? 'ArcFace 512-d' : '128-d'} Similarity: ${(similarity * 100).toFixed(1)}% (Threshold: ${(threshold * 100)}%) | ${matched ? '✅ MATCH' : '❌ NO MATCH'}`);
 
             return {
                 matched,
                 similarity,
-                method: 'face-api',
+                method,
                 debugLog,
-                error: matched ? undefined : `Face does not match profile photo (${(similarity * 100).toFixed(0)}% similarity, need >42%).`,
-            }
-
+                isLive: selfieRes.isLive,
+                alignedCropDataUrl: selfieRes.cropDataUrl,
+                error: matched
+                    ? undefined
+                    : `Face does not match profile photo (${(similarity * 100).toFixed(0)}% similarity, required >= ${(threshold * 100)}%).`,
+            };
         } catch (error) {
-            const msg = error instanceof Error ? error.message : 'Unknown error'
-            log(`❌ Error: ${msg}`)
+            const msg = error instanceof Error ? error.message : 'Unknown error';
+            log(`❌ Error: ${msg}`);
             return {
                 matched: false,
                 similarity: 0,
-                method: 'face-api',
+                method: 'arcface-512',
                 debugLog,
                 error: `Verification error: ${msg}`,
-            }
+            };
         }
     },
-
 
     getThreshold(): number {
-        return 1 - THRESHOLD // Returns as similarity (0.60 = 60% similarity minimum)
-    },
-
-    /**
-     * Re-extract 128-d face descriptor from a profile image URL using aligned inputSize: 160.
-     * Used on Profile Photo Approval to automatically update Supabase face_embedding DB column.
-     */
-    async extractAlignedDescriptorFromUrl(imageUrl: string): Promise<number[] | null> {
-        try {
-            if (!FaceApiBrowserService.isReady()) {
-                await FaceApiBrowserService.loadModels();
-            }
-            const descriptor = await FaceApiBrowserService.extractDescriptorFromUrl(imageUrl);
-            if (descriptor && descriptor.length === 128) {
-                return Array.from(descriptor);
-            }
-            return null;
-        } catch (err) {
-            console.warn('[FaceVerificationService] Aligned descriptor extraction failed:', err);
-            return null;
-        }
+        return 0.65;
     },
 
     formatSimilarity(similarity: number): string {
-        return `${(similarity * 100).toFixed(0)}%`
+        return `${(similarity * 100).toFixed(0)}%`;
     },
+};
 
-    /**
-     * Optional Server-Side RPC Matching: Invokes Postgres match_employee_face RPC function when pgvector is active.
-     */
-    async matchEmployeeFaceRPC(
-        supabase: any,
-        liveDescriptor: Float32Array | number[],
-        matchThreshold = 0.60
-    ): Promise<{ matched: boolean; employeeId?: string; fullName?: string; similarity: number; error?: string }> {
-        try {
-            const embeddingArray = Array.from(liveDescriptor)
-            const { data, error } = await supabase.rpc('match_employee_face', {
-                query_embedding: embeddingArray,
-                match_threshold: matchThreshold,
-                match_count: 1
-            })
-
-            if (error) {
-                return { matched: false, similarity: 0, error: error.message }
-            }
-
-            if (data && data.length > 0) {
-                const best = data[0]
-                return {
-                    matched: true,
-                    employeeId: best.employee_id,
-                    fullName: best.full_name,
-                    similarity: best.similarity || 0.60
-                }
-            }
-
-            return { matched: false, similarity: 0, error: 'No matching employee face found.' }
-        } catch (err: any) {
-            return { matched: false, similarity: 0, error: err.message || 'RPC match failed' }
-        }
-    },
-
-    /**
-     * Client-Side Profile Photo Approve & Enroll Helper
-     */
-    async approveAndEnrollFace(
-        employeeId: string,
-        tenantId: string,
-        rawDescriptor: Float32Array | number[],
-        faceQualityScore?: number,
-        facePhotoUrl?: string
-    ) {
-        const descriptorArray = Array.from(rawDescriptor);
-        if (descriptorArray.length !== 128) {
-            throw new Error(`Invalid descriptor length. Expected 128, got ${descriptorArray.length}`);
-        }
-
-        const res = await fetch(`/api/employees/${employeeId}/enroll-face`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                embedding: descriptorArray,
-                faceQualityScore: faceQualityScore || 1.0,
-                facePhotoUrl: facePhotoUrl || null,
-                tenantId,
-            }),
-        });
-
-        const data = await res.json();
-        if (!data.success) {
-            throw new Error(data.message || 'Enrollment failed');
-        }
-
-        return data.employee;
-    }
-}
-
-
-export default FaceVerificationService
+export default FaceVerificationService;

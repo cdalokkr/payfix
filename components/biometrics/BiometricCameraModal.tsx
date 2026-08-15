@@ -186,18 +186,17 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
         />
 
         {/* 2. Biometric Oval Reticle with Outside Dimmed Backdrop Overlay */}
-
         {!hasError && (
-          <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-between p-6">
-            {/* Circular Face Guide Reticle (5% Larger w-[81%]) with 9999px Dimmed Backdrop Mask */}
-            <div className={`relative mt-8 w-[81%] aspect-square rounded-full border-2 border-dashed transition-all duration-300 flex items-center justify-center ${
+          <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-between p-4 sm:p-5">
+            {/* Enlarged Circular Face Guide Reticle (w-[94%] sm:w-[92%]) with 9999px Dimmed Backdrop Mask */}
+            <div className={`relative my-auto w-[94%] sm:w-[92%] max-w-[360px] aspect-square rounded-full border-2 border-dashed transition-all duration-300 flex items-center justify-center ${
               timerSeconds !== undefined && timerSeconds <= 3
-                ? 'border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.8)] animate-pulse'
-                : 'border-sky-400/80 shadow-[0_0_0_9999px_rgba(2,6,23,0.65)]'
+                ? 'border-red-500 shadow-[0_0_25px_rgba(239,68,68,0.85)] animate-pulse'
+                : 'border-sky-400/90 shadow-[0_0_0_9999px_rgba(2,6,23,0.70)]'
             }`}>
               {/* 10-Second Dynamic Circular Countdown Progress Ring around face circle */}
               {timerSeconds !== undefined && (
-                <svg className="absolute -inset-3 w-[calc(100%+24px)] h-[calc(100%+24px)] transform -rotate-90 pointer-events-none z-30">
+                <svg className="absolute -inset-3.5 w-[calc(100%+28px)] h-[calc(100%+28px)] transform -rotate-90 pointer-events-none z-30">
                   <circle
                     cx="50%"
                     cy="50%"
@@ -238,12 +237,9 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                 </svg>
               )}
 
-              <div className="absolute -top-1 left-1/2 h-3 w-8 -translate-x-1/2 rounded-full bg-sky-400/90 shadow-[0_0_10px_rgba(56,189,248,0.8)]" />
-              <div className="absolute -bottom-1 left-1/2 h-3 w-8 -translate-x-1/2 rounded-full bg-sky-400/90 shadow-[0_0_10px_rgba(56,189,248,0.8)]" />
+              <div className="absolute -top-1 left-1/2 h-3.5 w-10 -translate-x-1/2 rounded-full bg-sky-400/90 shadow-[0_0_12px_rgba(56,189,248,0.9)]" />
+              <div className="absolute -bottom-1 left-1/2 h-3.5 w-10 -translate-x-1/2 rounded-full bg-sky-400/90 shadow-[0_0_12px_rgba(56,189,248,0.9)]" />
             </div>
-
-
-
 
             {/* Status Badge & Processing Indicator Overlay (Positioned below face area without blurring selfie) */}
             {(statusText || isProcessing) && (

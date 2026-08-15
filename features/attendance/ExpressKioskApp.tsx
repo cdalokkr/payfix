@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FaceApiBrowserService } from '@/lib/services/faceapi-browser.service';
+import { FaceVerificationService } from '@/lib/services/face-verification.service';
 import { KioskIndexedDBService } from '@/lib/services/kiosk-idb.service';
 import { saveEmployeeFaces, getSyncInfo as getIdbSyncInfo, getAllEmployeeFaces, EmployeeFace } from '@/lib/face-db';
 import { l2Normalize, matchFaceFast, isGoodQualityFace, getAdaptiveThreshold } from '@/lib/face-threshold';
@@ -673,11 +674,19 @@ export function ExpressKioskApp() {
                     }
                 }
 
-                // Extract aligned 160x160 square face crop & 128-d descriptor
-                const alignedResult = await FaceApiBrowserService.extractAlignedSquareFaceCrop(video);
-                const liveDescriptor = alignedResult?.descriptor || await FaceApiBrowserService.extractDescriptor(video);
-                if (alignedResult?.croppedDataUrl) {
-                    setCapturedFreezeUrl(alignedResult.croppedDataUrl);
+                // Extract 512-d ArcFace vector + MediaPipe 20% padded canonical crop (or fallback to 128-d)
+                const extracted512 = await FaceVerificationService.extractAligned512dDescriptor(video);
+                let liveDescriptor: Float32Array | null = extracted512?.embedding ? new Float32Array(extracted512.embedding) : null;
+                if (extracted512?.cropDataUrl) {
+                    setCapturedFreezeUrl(extracted512.cropDataUrl);
+                }
+
+                if (!liveDescriptor) {
+                    const alignedResult = await FaceApiBrowserService.extractAlignedSquareFaceCrop(video);
+                    liveDescriptor = alignedResult?.descriptor || await FaceApiBrowserService.extractDescriptor(video);
+                    if (alignedResult?.croppedDataUrl && !extracted512?.cropDataUrl) {
+                        setCapturedFreezeUrl(alignedResult.croppedDataUrl);
+                    }
                 }
 
                 if (!liveDescriptor) {
@@ -698,14 +707,14 @@ export function ExpressKioskApp() {
                     return;
                 }
 
-                // 3. Fast L2-Normalized Dot-Product Matching + Adaptive Threshold + Top-2 Gap Check (<0.1ms)
+                // 3. Fast L2-Normalized Dot-Product Matching + Adaptive Threshold (0.68) + Top-2 Gap Check (0.08)
                 const candidateList: EmployeeFace[] = enrolledEmployees.map(emp => ({
                     id: emp.id,
                     fullName: emp.name,
                     embedding: l2Normalize(emp.faceEmbedding!)
                 }));
 
-                const matchRes = matchFaceFast(liveDescriptor, candidateList, 0.40, 0.04);
+                const matchRes = matchFaceFast(liveDescriptor, candidateList, 0.68, 0.08);
 
                 const matchedEmployee = matchRes.isMatch && matchRes.employee
                     ? enrolledEmployees.find(e => e.id === matchRes.employee!.id) || null
@@ -1194,7 +1203,7 @@ export function ExpressKioskApp() {
                     if (!open && !isScanning) closeVerificationModal();
                 }}
             >
-                <DialogContent className="max-w-md w-[95vw] bg-slate-950 border-slate-800 text-slate-100 p-0 overflow-hidden shadow-2xl rounded-3xl backdrop-blur-2xl [&>button]:hidden">
+                <DialogContent className="max-w-lg w-[95vw] md:w-[480px] bg-slate-950 border-slate-800 text-slate-100 p-0 overflow-hidden shadow-2xl rounded-3xl backdrop-blur-2xl [&>button]:hidden">
                     <BiometricCameraModal
                         isOpen={isVerificationModalOpen}
                         onClose={() => {

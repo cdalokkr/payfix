@@ -44,6 +44,25 @@ export const vector128 = customType<{ data: number[] }>({
     },
 });
 
+export const vector512 = customType<{ data: number[] }>({
+    dataType() {
+        return 'vector(512)';
+    },
+    toDriver(value: number[]): string {
+        return JSON.stringify(value);
+    },
+    fromDriver(value: unknown): number[] {
+        if (typeof value === 'string') {
+            try {
+                return JSON.parse(value);
+            } catch (e) {
+                return [];
+            }
+        }
+        return value as number[];
+    },
+});
+
 // Profiles
 export const profiles = pgTable('profiles', {
     id: uuid('id').primaryKey(),
@@ -63,6 +82,7 @@ export const profiles = pgTable('profiles', {
     avatar_status: text('avatar_status').default('default'), // 'default' or 'custom'
     allowed_modules: text('allowed_modules').array(),
     face_embedding: vector128('face_embedding'),
+    face_embedding_512: vector512('face_embedding_512'),
     face_quality_score: real('face_quality_score'),
     face_enrolled_at: timestamp('face_enrolled_at', { withTimezone: true }),
     face_photo_url: text('face_photo_url'),

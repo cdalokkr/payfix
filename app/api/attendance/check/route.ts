@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
       'match_employee_face',
       {
         query_embedding: normalized,
-        match_threshold: 0.42,
+        match_threshold: 0.68,
         match_count: 1,
         p_tenant_id: tenantId,
       }
