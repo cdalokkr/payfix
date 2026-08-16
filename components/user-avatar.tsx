@@ -32,17 +32,16 @@ export function UserAvatar({ src, alt, initials, className }: UserAvatarProps) {
     }
 
     return (
-        <div className={cn("relative aspect-square size-full rounded-full overflow-hidden", className)}>
-            <Image
+        <div className={cn("relative aspect-square size-full rounded-full overflow-hidden shrink-0", className)}>
+            <img
                 src={src}
                 alt={alt || "User avatar"}
-                fill
-                sizes="(max-width: 768px) 48px, 96px"
                 onError={() => {
                     console.warn(`[UserAvatar] Failed to load image: ${src}. Falling back to initials.`);
                     setHasError(true);
                 }}
-                className="object-cover"
+                className="size-full object-cover rounded-full"
+                loading="eager"
             />
         </div>
     )

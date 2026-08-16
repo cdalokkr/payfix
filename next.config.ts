@@ -144,12 +144,20 @@ const nextConfig: NextConfig = {
   images: {
     // Enable modern image formats
     formats: ['image/avif', 'image/webp'],
-    // Remote patterns for external images (add your domains as needed)
+    // Remote patterns for external images (Supabase Storage, HF Spaces, etc.)
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: '*.supabase.co',
+        hostname: '**.supabase.co',
       },
+      {
+        protocol: 'https',
+        hostname: '**.hf.space',
+      },
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
+      }
     ],
     // Optimize image loading
     minimumCacheTTL: 2592000,
