@@ -494,6 +494,43 @@ def verify_live_selfie(payload: VerifyLiveRequest):
         diagnostics=extract_res.diagnostics
     )
 
+# ─── Gradio Web UI for Interactive Testing in Hugging Face ───────────────────
+try:
+    import gradio as gr
+
+    def gradio_extract(image):
+        if image is None:
+            return "Please upload or capture an image.", None, 0.0, False
+        buffered = io.BytesIO()
+        image.save(buffered, format="JPEG")
+        b64_str = base64.b64encode(buffered.getvalue()).decode()
+        req = ExtractRequest(image_base64=b64_str, require_512=True, require_128=True, check_liveness=True)
+        res = extract_face_biometrics(req)
+        if not res.success:
+            return f"❌ {res.error_message}\nTip: {res.troubleshooting_tip}", None, 0.0, False
+        diag = res.diagnostics
+        info = f"✅ Face Detected!\n- Vector Dimensions: {res.dimensions}-d\n- Liveness Score: {res.liveness_score} (Is Live: {res.is_live})\n- Sharpness: {diag.sharpness_score}\n- Brightness: {diag.brightness_score}\n- Total Latency: {diag.timings_ms.get('total_ms', 0)}ms"
+        first_10_dims = str(res.embedding_512[:10]) + "..." if res.embedding_512 else "None"
+        return info, first_10_dims, res.liveness_score, res.is_live
+
+    with gr.Blocks(title="PayFix AI Biometric Test Console") as demo:
+        gr.Markdown("# ⚡ PayFix Biometric Face Vector & Liveness AI (v2.0)")
+        gr.Markdown("Enterprise 512-d ArcFace Extraction, Passive Anti-Spoof Liveness & REST API for PayFix HRMS")
+        with gr.Row():
+            with gr.Column():
+                input_img = gr.Image(type="pil", label="Capture / Upload Face Image")
+                btn = gr.Button("Extract 512-d Vector & Verify Liveness", variant="primary")
+            with gr.Column():
+                out_info = gr.Textbox(label="Detection & Diagnostics Summary", lines=8)
+                out_vec = gr.Textbox(label="512-d ArcFace Vector (First 10 Dims)", lines=3)
+                out_score = gr.Number(label="Liveness Confidence Score")
+                out_live = gr.Checkbox(label="Is Real Human (Live)?")
+        btn.click(gradio_extract, inputs=[input_img], outputs=[out_info, out_vec, out_score, out_live])
+
+    app = gr.mount_gradio_app(app, demo, path="/")
+except Exception as e:
+    print(f"Gradio mounting skipped: {e}")
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", os.getenv("FACE_API_PORT", "7860")))

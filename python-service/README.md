@@ -3,8 +3,9 @@ title: PayFix Face AI Service (Develop)
 emoji: ⚡
 colorFrom: indigo
 colorTo: blue
-sdk: docker
-app_port: 7860
+sdk: gradio
+sdk_version: 4.38.0
+app_file: app.py
 pinned: false
 ---
 
@@ -14,7 +15,7 @@ High-Speed 512-d ArcFace Vector Extraction & Passive Anti-Spoof Liveness API for
 
 ## Endpoints
 
-- `GET /` — Service Telemetry & Status
+- `GET /` — Interactive Gradio Testing Console
 - `GET /health` — Health Check & Memory Status
 - `POST /extract` — Extract 512-d ArcFace & 128-d Vector + Liveness Assessment
 - `POST /compare` — Compare two face embeddings (Cosine dot product)
