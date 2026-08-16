@@ -4,7 +4,6 @@ emoji: ⚡
 colorFrom: indigo
 colorTo: blue
 sdk: gradio
-sdk_version: 4.38.0
 app_file: app.py
 pinned: false
 ---
@@ -15,7 +14,7 @@ High-Speed 512-d ArcFace Vector Extraction & Passive Anti-Spoof Liveness API for
 
 ## Endpoints
 
-- `GET /` — Interactive Gradio Testing Console
+- `GET /` — Interactive Test Console
 - `GET /health` — Health Check & Memory Status
 - `POST /extract` — Extract 512-d ArcFace & 128-d Vector + Liveness Assessment
 - `POST /compare` — Compare two face embeddings (Cosine dot product)
