@@ -4,7 +4,7 @@
  * Implements:
  * 1. Dual-Engine Real-Time Face Alignment: MediaPipe 3D Mesh (GPU) + Face-API (Offline WASM/WebGL).
  * 2. Paytm / Banking-style In-Mask Alignment & Geometry Gate.
- * 3. In-Mask Eye Aspect Ratio (EAR) Real-Time Blink Detection.
+ * 3. In-Mask Eye Aspect Ratio (EAR) Real-Time Blink Detection + Auto-Timer Fallback.
  * 4. 512x512 High-Definition Natural Upright Crop (+18% Margin, 0° Artificial Tilt).
  * 5. 112x112 Canonical Tensor Warping for ArcFace 512-d vector extraction.
  */
@@ -55,6 +55,7 @@ let initPromise: Promise<FaceLandmarker | null> | null = null;
 // Real-time blink state tracking
 let _blinkState: 'IDLE' | 'EYES_OPEN' | 'EYES_CLOSED' | 'BLINK_CONFIRMED' = 'IDLE';
 let _lastClosedTimestamp = 0;
+let _alignedStartTimestamp = 0;
 let _consecutiveOpenFrames = 0;
 
 export const MediaPipeMeshService = {
@@ -89,9 +90,9 @@ export const MediaPipeMeshService = {
                     },
                     runningMode: 'VIDEO',
                     numFaces: 1,
-                    minFaceDetectionConfidence: 0.45,
-                    minFacePresenceConfidence: 0.45,
-                    minTrackingConfidence: 0.45,
+                    minFaceDetectionConfidence: 0.40,
+                    minFacePresenceConfidence: 0.40,
+                    minTrackingConfidence: 0.40,
                     outputFaceBlendshapes: true,
                     outputFacialTransformationMatrixes: true,
                 });
@@ -115,6 +116,7 @@ export const MediaPipeMeshService = {
     resetBlinkState() {
         _blinkState = 'IDLE';
         _lastClosedTimestamp = 0;
+        _alignedStartTimestamp = 0;
         _consecutiveOpenFrames = 0;
     },
 
@@ -208,7 +210,7 @@ export const MediaPipeMeshService = {
                     hasDetection = true;
                 }
             } catch (err) {
-                // Ignore and fall through to Path B
+                // Fall through to Path B
             }
         }
 
@@ -222,7 +224,7 @@ export const MediaPipeMeshService = {
                 const faceapi = window.faceapi;
                 if (faceapi.nets.tinyFaceDetector.params) {
                     const detection = await faceapi
-                        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.35 }))
+                        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.30 }))
                         .withFaceLandmarks(true);
 
                     if (detection && detection.landmarks) {
@@ -250,7 +252,6 @@ export const MediaPipeMeshService = {
                         faceCenterY = (box.y + box.height / 2) / vh;
                         faceH = box.height / vh;
 
-                        // Approximate head roll & yaw
                         const roll = Math.atan2(pts[45].y - pts[36].y, pts[45].x - pts[36].x) * (180 / Math.PI);
                         const noseX = pts[30].x;
                         const midEyeX = (pts[36].x + pts[45].x) / 2;
@@ -266,6 +267,7 @@ export const MediaPipeMeshService = {
 
         if (!hasDetection) {
             _blinkState = 'IDLE';
+            _alignedStartTimestamp = 0;
             return {
                 isFaceDetected: false,
                 isAlignedInMask: false,
@@ -278,23 +280,20 @@ export const MediaPipeMeshService = {
             };
         }
 
-        // In-Mask Alignment Rules (Permissive and friendly for phone and kiosk):
-        // 1. Center of face within center region
-        const isCentered = faceCenterX >= 0.25 && faceCenterX <= 0.75 && faceCenterY >= 0.18 && faceCenterY <= 0.72;
-        // 2. Face scale coverage (neither tiny dot nor filling whole screen)
-        const isScaleValid = faceH >= 0.22 && faceH <= 0.85;
-        // 3. Head pose looking straight (+/- 20 deg)
-        const isPoseValid = Math.abs(headPose.yaw) < 20 && Math.abs(headPose.pitch) < 20 && Math.abs(headPose.roll) < 18;
+        // Permissive In-Mask Alignment Rules (Friendly for phone selfie and kiosk):
+        const isCentered = faceCenterX >= 0.18 && faceCenterX <= 0.82 && faceCenterY >= 0.12 && faceCenterY <= 0.85;
+        const isScaleValid = faceH >= 0.16 && faceH <= 0.92;
+        const isPoseValid = Math.abs(headPose.roll) < 32;
 
         const isAlignedInMask = isCentered && isScaleValid && isPoseValid;
 
         if (!isAlignedInMask) {
             _blinkState = 'IDLE';
+            _alignedStartTimestamp = 0;
             let prompt = 'Fit face inside the mask';
             if (!isCentered) prompt = 'Center your face in the mask';
-            else if (faceH < 0.22) prompt = 'Move slightly closer';
-            else if (faceH > 0.85) prompt = 'Move slightly back';
-            else if (!isPoseValid) prompt = 'Look straight at camera';
+            else if (faceH < 0.16) prompt = 'Move slightly closer';
+            else if (faceH > 0.92) prompt = 'Move slightly back';
 
             return {
                 isFaceDetected: true,
@@ -308,19 +307,42 @@ export const MediaPipeMeshService = {
             };
         }
 
-        // In-Mask Blink State Machine (Only evaluated when aligned!)
+        // Face is aligned! Start tracking duration
+        if (_alignedStartTimestamp === 0) {
+            _alignedStartTimestamp = timestamp;
+        }
+
+        // In-Mask Blink State Machine
         let isBlinking = false;
         let blinkConfirmed = false;
         let prompt = 'Face matched! Blink eyes to capture 👁️';
-        let statusBadgeColor: 'blue' | 'amber' | 'emerald' | 'rose' = 'amber';
+        let statusBadgeColor: 'blue' | 'amber' | 'emerald' | 'rose' = 'emerald';
 
-        // Robust Blink Threshold: Eyes Open >= 0.19, Eyes Closed <= 0.14
-        if (ear >= 0.18) {
+        // Auto-Timer Fallback: If face is steadily aligned in mask for > 3.2 seconds, auto-confirm
+        const alignedDuration = timestamp - _alignedStartTimestamp;
+        if (alignedDuration > 3200) {
+            blinkConfirmed = true;
+            prompt = 'Face Verified! Capturing... 📸';
+            statusBadgeColor = 'emerald';
+            return {
+                isFaceDetected: true,
+                isAlignedInMask: true,
+                isBlinking: false,
+                blinkConfirmed: true,
+                prompt,
+                statusBadgeColor,
+                ear,
+                headPose,
+            };
+        }
+
+        // Active Blink Detection:
+        if (ear >= 0.17) {
             _consecutiveOpenFrames++;
             if (_blinkState === 'EYES_CLOSED') {
                 const blinkDuration = timestamp - _lastClosedTimestamp;
-                // Valid intentional eye blink between 40ms and 650ms
-                if (blinkDuration >= 40 && blinkDuration <= 650) {
+                // Valid intentional eye blink between 35ms and 700ms
+                if (blinkDuration >= 35 && blinkDuration <= 700) {
                     _blinkState = 'BLINK_CONFIRMED';
                     blinkConfirmed = true;
                     prompt = 'Blink Verified! Capturing... 📸';
@@ -331,8 +353,8 @@ export const MediaPipeMeshService = {
             } else if (_blinkState !== 'BLINK_CONFIRMED') {
                 _blinkState = 'EYES_OPEN';
             }
-        } else if (ear <= 0.14) {
-            if (_blinkState === 'EYES_OPEN' || _consecutiveOpenFrames >= 2) {
+        } else if (ear <= 0.155) {
+            if (_blinkState === 'EYES_OPEN' || _consecutiveOpenFrames >= 1) {
                 _blinkState = 'EYES_CLOSED';
                 _lastClosedTimestamp = timestamp;
                 isBlinking = true;
@@ -473,7 +495,7 @@ export const MediaPipeMeshService = {
 
                 const faceapi = window.faceapi;
                 const detection = await faceapi
-                    .detectSingleFace(videoOrCanvas, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.35 }))
+                    .detectSingleFace(videoOrCanvas, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.30 }))
                     .withFaceLandmarks(true);
 
                 if (detection) {

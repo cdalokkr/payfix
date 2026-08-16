@@ -375,17 +375,17 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
     }, [stopCamera, router, onSuccess])
 
 
-    const [sessionTimeout, setSessionTimeout] = useState<number>(10)
+    const [sessionTimeout, setSessionTimeout] = useState<number>(30)
 
-    // 10-Second Security Session Timeout
+    // 30-Second Security Session Timeout
     useEffect(() => {
         if (status === 'streaming' && !capturedImage) {
-            setSessionTimeout(10)
+            setSessionTimeout(30)
             const interval = setInterval(() => {
                 setSessionTimeout(prev => {
                     if (prev <= 1) {
                         clearInterval(interval)
-                        toast.error("Camera session expired (10s limit). Please re-open camera.")
+                        toast.error("Camera session expired (30s limit). Please re-open camera.")
                         stopCamera()
                         handleBack()
                         return 0
@@ -495,16 +495,7 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
             }
 
         >
-            {/* 10s Security Session Timeout Badge Overlay */}
-            {status === 'streaming' && !capturedImage && (
-                <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
 
-                    <div className="px-3.5 py-1 rounded-full bg-slate-950/90 border border-amber-500/50 text-amber-400 text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xl backdrop-blur-md">
-                        <IconClock className="w-3.5 h-3.5 animate-pulse text-amber-400" />
-                        <span>Session Timeout: {sessionTimeout}s</span>
-                    </div>
-                </div>
-            )}
 
             {/* Captured Selfie Photo Preview Overlay (Stays 100% continuous without black screen) */}
 

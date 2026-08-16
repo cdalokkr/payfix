@@ -13,6 +13,7 @@ interface BiometricCameraModalProps {
   subtitle?: string;
   icon?: React.ReactNode;
   videoRefOut?: React.RefObject<HTMLVideoElement | null>;
+  warmedStream?: MediaStream | null;
   onStreamReady?: (stream: MediaStream, videoEl: HTMLVideoElement) => void;
   onCameraError?: (error: Error) => void;
   statusText?: string;
@@ -31,6 +32,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   subtitle,
   icon,
   videoRefOut,
+  warmedStream,
   onStreamReady,
   onCameraError,
   statusText,
@@ -45,6 +47,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   const videoRef = videoRefOut || internalVideoRef;
   const streamRef = useRef<MediaStream | null>(null);
   const isMountedRef = useRef(true);
+  const [isStreamPlaying, setIsStreamPlaying] = useState(false);
 
   // Store callback refs so parent re-renders never restart stream
   const onStreamReadyRef = useRef(onStreamReady);
@@ -81,6 +84,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
+    setIsStreamPlaying(false);
     MediaPipeMeshService.resetBlinkState();
     isCapturingRef.current = false;
     isEvaluatingRef.current = false;
@@ -89,11 +93,27 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   const startCamera = useCallback(async () => {
     if (!isOpen) return;
 
+    // Fast-path: use pre-warmed stream if active
+    if (warmedStream && warmedStream.active) {
+      streamRef.current = warmedStream;
+      if (videoRef.current) {
+        const video = videoRef.current;
+        video.srcObject = warmedStream;
+        video.setAttribute('playsinline', 'true');
+        video.muted = true;
+        video.play().then(() => setIsStreamPlaying(true)).catch(() => {});
+        FaceApiBrowserService.loadModels().catch(() => {});
+        MediaPipeMeshService.initialize().catch(() => {});
+        onStreamReadyRef.current?.(warmedStream, video);
+      }
+      return;
+    }
+
     // Stream is active — DO NOT STOP stream!
     if (streamRef.current && streamRef.current.active) {
       if (videoRef.current && videoRef.current.srcObject !== streamRef.current) {
         videoRef.current.srcObject = streamRef.current;
-        videoRef.current.play().catch(() => {});
+        videoRef.current.play().then(() => setIsStreamPlaying(true)).catch(() => {});
       }
       return;
     }
@@ -136,8 +156,9 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
         video.srcObject = stream;
         video.setAttribute('playsinline', 'true');
         video.muted = true;
-        // Asynchronous play without blocking rendering
-        video.play().catch(() => {});
+        video.play().then(() => {
+          if (isMountedRef.current) setIsStreamPlaying(true);
+        }).catch(() => {});
 
         // Preload Face Models (both offline FaceApi and MediaPipe)
         FaceApiBrowserService.loadModels().catch(() => {});
@@ -156,7 +177,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
         onCameraErrorRef.current(err);
       }
     }
-  }, [isOpen, videoRef]);
+  }, [isOpen, videoRef, warmedStream]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -292,7 +313,15 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
       </div>
 
       {/* Edge-to-Edge Camera Viewport Container */}
-      <div className="relative w-full aspect-[3/4] bg-black overflow-hidden flex-1 p-0 flex items-center justify-center">
+      <div className="relative w-full aspect-[3/4] bg-slate-950 overflow-hidden flex-1 p-0 flex items-center justify-center">
+        {/* Camera Warmup / Loading Skeleton placeholder */}
+        {!isStreamPlaying && !hasError && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-950/90 text-slate-400 space-y-3">
+            <div className="h-10 w-10 animate-spin rounded-full border-3 border-sky-400/20 border-t-sky-400" />
+            <p className="text-xs font-bold text-sky-300">Starting HD Camera...</p>
+          </div>
+        )}
+
         {/* Instant HTML Video Element */}
         <video
           ref={videoRef}
@@ -309,29 +338,29 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
         {/* 2. Paytm / KYC Biometric Oval Face Mask with Outside Dimmed Backdrop Overlay */}
         {!hasError && (
-          <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-between p-5">
-            {/* Enlarged Face Mask Reticle (w-[88%] max-w-[340px]) with 9999px Dimmed Backdrop Mask */}
+          <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-between p-4">
+            {/* Clean Biometric Oval Mask Reticle (w-[86%] max-w-[320px] aspect-[1/1.22]) with 9999px Dimmed Backdrop Mask */}
             <div
-              className={`relative mt-4 w-[88%] max-w-[340px] aspect-[1/1.12] rounded-[44px] border-2 transition-all duration-300 flex items-center justify-center ${
+              className={`relative mt-3 w-[86%] max-w-[320px] aspect-[1/1.22] rounded-full border-2 transition-all duration-300 flex items-center justify-center ${
                 isBlinkConfirmed
                   ? 'border-emerald-400 shadow-[0_0_35px_rgba(52,211,153,0.95)] ring-4 ring-emerald-500/40 animate-pulse'
                   : isAligned
                   ? 'border-emerald-400/90 shadow-[0_0_25px_rgba(52,211,153,0.75)] ring-2 ring-emerald-400/40 shadow-[0_0_0_9999px_rgba(2,6,23,0.68)]'
-                  : timerSeconds !== undefined && timerSeconds <= 3
+                  : timerSeconds !== undefined && timerSeconds <= 5
                   ? 'border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.8)] animate-pulse'
                   : 'border-sky-400/80 border-dashed shadow-[0_0_0_9999px_rgba(2,6,23,0.68)]'
               }`}
             >
-              {/* Paytm / KYC Biometric Face Mask Contour & Landmark Alignment Guide SVG */}
+              {/* Paytm / KYC Biometric Face Mask Silhouette & Landmark Alignment Guide SVG */}
               <svg
                 className="absolute inset-0 w-full h-full pointer-events-none z-20"
-                viewBox="0 0 300 340"
+                viewBox="0 0 300 360"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
               >
                 {/* 1. Curved Face Silhouette Contour */}
                 <path
-                  d="M150 42 C208 42 248 78 248 142 C248 222 200 286 150 296 C100 286 52 222 52 142 C52 78 92 42 150 42 Z"
+                  d="M150 38 C210 38 252 76 252 145 C252 230 202 305 150 318 C98 305 48 230 48 145 C48 76 90 38 150 38 Z"
                   stroke={isAligned ? '#34d399' : '#38bdf8'}
                   strokeWidth="2.2"
                   strokeDasharray={isAligned ? 'none' : '6 6'}
@@ -345,7 +374,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                 />
 
                 {/* 2. Left Eye Target Guide Crosshairs */}
-                <g transform="translate(102, 138)" opacity={isAligned ? 0.95 : 0.6}>
+                <g transform="translate(102, 142)" opacity={isAligned ? 0.95 : 0.6}>
                   <circle
                     cx="0"
                     cy="0"
@@ -364,7 +393,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                 </g>
 
                 {/* 3. Right Eye Target Guide Crosshairs */}
-                <g transform="translate(198, 138)" opacity={isAligned ? 0.95 : 0.6}>
+                <g transform="translate(198, 142)" opacity={isAligned ? 0.95 : 0.6}>
                   <circle
                     cx="0"
                     cy="0"
@@ -384,7 +413,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
                 {/* 4. Nose Bridge Alignment Indicator */}
                 <path
-                  d="M150 162 L146 186 H154 L150 162"
+                  d="M150 168 L146 195 H154 L150 168"
                   stroke={isAligned ? '#34d399' : '#38bdf8'}
                   strokeWidth="1.6"
                   strokeOpacity={isAligned ? 0.7 : 0.4}
@@ -392,7 +421,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
                 {/* 5. Mouth Smile Alignment Arc */}
                 <path
-                  d="M126 222 Q150 236 174 222"
+                  d="M124 235 Q150 250 176 235"
                   stroke={isAligned ? '#34d399' : '#38bdf8'}
                   strokeWidth="2"
                   strokeLinecap="round"
@@ -401,7 +430,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
                 {/* 6. Forehead Crown Arc */}
                 <path
-                  d="M115 54 Q150 40 185 54"
+                  d="M112 50 Q150 35 188 50"
                   stroke={isAligned ? '#34d399' : '#38bdf8'}
                   strokeWidth="3"
                   strokeLinecap="round"
@@ -410,7 +439,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
                 {/* 7. Chin Rest Notch */}
                 <path
-                  d="M132 296 H168"
+                  d="M130 318 H170"
                   stroke={isAligned ? '#34d399' : '#38bdf8'}
                   strokeWidth="3"
                   strokeLinecap="round"
@@ -418,14 +447,14 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                 />
               </svg>
 
-              {/* 10-Second Dynamic Circular Countdown Progress Ring around face frame */}
+              {/* 30-Second Dynamic Circular Countdown Progress Ring around face frame */}
               {timerSeconds !== undefined && (
                 <svg className="absolute -inset-3 w-[calc(100%+24px)] h-[calc(100%+24px)] transform -rotate-90 pointer-events-none z-30">
                   <circle
                     cx="50%"
                     cy="50%"
                     r="47%"
-                    stroke={timerSeconds <= 3 ? 'rgba(239, 68, 68, 0.25)' : 'rgba(56, 189, 248, 0.2)'}
+                    stroke={timerSeconds <= 5 ? 'rgba(239, 68, 68, 0.25)' : 'rgba(56, 189, 248, 0.2)'}
                     strokeWidth="4"
                     fill="transparent"
                   />
@@ -433,18 +462,18 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                     cx="50%"
                     cy="50%"
                     r="47%"
-                    stroke={timerSeconds <= 3 ? 'url(#timerRedGradient)' : 'url(#timerGradient)'}
+                    stroke={timerSeconds <= 5 ? 'url(#timerRedGradient)' : 'url(#timerGradient)'}
                     strokeWidth="6"
                     fill="transparent"
                     strokeLinecap="round"
                     pathLength="100"
                     strokeDasharray="100"
-                    className={timerSeconds <= 3 ? 'animate-pulse' : ''}
+                    className={timerSeconds <= 5 ? 'animate-pulse' : ''}
                     style={{
-                      strokeDashoffset: `${100 - (Math.max(0, Math.min(10, timerSeconds)) / 10) * 100}`,
+                      strokeDashoffset: `${100 - (Math.max(0, Math.min(30, timerSeconds)) / 30) * 100}`,
                       transition: 'stroke-dashoffset 1s linear',
                       filter:
-                        timerSeconds <= 3
+                        timerSeconds <= 5
                           ? 'drop-shadow(0px 0px 8px rgba(239, 68, 68, 0.9))'
                           : 'drop-shadow(0px 0px 6px rgba(56, 189, 248, 0.6))',
                     }}
@@ -477,7 +506,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
             </div>
 
             {/* Real-time Paytm/KYC Status Badge & Guidance Indicator Overlay */}
-            <div className="z-30 mb-2 rounded-full bg-slate-900/95 px-4 py-2 backdrop-blur-md border border-slate-700 shadow-xl flex items-center gap-2">
+            <div className="z-30 mb-1 rounded-full bg-slate-900/95 px-4 py-2 backdrop-blur-md border border-slate-700 shadow-xl flex items-center gap-2">
               {isProcessing ? (
                 <>
                   <div className="h-4 w-4 animate-spin rounded-full border-2 border-sky-400/30 border-t-sky-400 shrink-0" />
@@ -532,7 +561,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
       {/* 3. Footer Slot Container */}
       {footerSlot && (
-        <div className="w-full bg-slate-950 p-5 border-t border-slate-900 z-30 shrink-0">
+        <div className="w-full bg-slate-950 p-4 border-t border-slate-900 z-30 shrink-0">
           {footerSlot}
         </div>
       )}

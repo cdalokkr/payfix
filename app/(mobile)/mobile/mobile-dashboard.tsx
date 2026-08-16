@@ -9,7 +9,6 @@ import { motion } from "framer-motion"
 import { useState, useEffect } from "react"
 import { trpc } from "@/lib/trpc/client"
 import { ProfilePhotoCapture } from "@/features/mobile/profile-photo-capture"
-import FaceVerificationService from "@/lib/services/faceapi-browser.service"
 
 
 
@@ -48,6 +47,9 @@ import {
 } from "lucide-react"
 import { usePwaCheck } from "@/hooks/use-pwa-check"
 import { isDefaultAvatar } from "@/lib/utils/avatar-helper"
+import { FaceVerificationService } from "@/lib/services/face-verification.service"
+import { FaceApiBrowserService } from "@/lib/services/faceapi-browser.service"
+import { MediaPipeMeshService } from "@/lib/services/mediapipe-mesh.service"
 
 function getHardwareAccelerationInfo(): { backend: string; isGpu: boolean } {
     if (typeof window === 'undefined') return { backend: 'CPU', isGpu: false };
@@ -129,7 +131,11 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
     const [isPhotoCaptureOpen, setIsPhotoCaptureOpen] = useState(false)
     const [hardwareInfo] = useState(() => getHardwareAccelerationInfo())
     useEffect(() => {
-        FaceVerificationService.loadModels()
+        // Pre-warm face recognition models & MediaPipe vision in background
+        FaceVerificationService.initialize().catch(() => {})
+        FaceApiBrowserService.loadModels().catch(() => {})
+        MediaPipeMeshService.initialize().catch(() => {})
+
         setIsDesktop(window.innerWidth >= 1024)
 
         const handleResize = () => setIsDesktop(window.innerWidth >= 1024)
