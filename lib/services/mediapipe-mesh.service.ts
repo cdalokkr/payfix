@@ -206,8 +206,8 @@ export const MediaPipeMeshService = {
         // Path A: Local Offline Face-Api (Fastest, zero CDN lag, 100% reliable)
         if (typeof window !== 'undefined') {
             try {
-                if (!FaceApiBrowserService.isReady() || !window.faceapi) {
-                    await FaceApiBrowserService.loadModels();
+                if (!FaceApiBrowserService.isDetectorReady() || !window.faceapi) {
+                    await FaceApiBrowserService.loadDetectorOnly();
                 }
 
                 if (window.faceapi) {

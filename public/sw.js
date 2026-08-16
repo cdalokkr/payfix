@@ -3,17 +3,22 @@
  * Handles caching, offline functionality, and push notifications
  */
 
-const CACHE_NAME = 'payfix-attendance-v2'
-const STATIC_CACHE = 'payfix-static-v2'
-const DYNAMIC_CACHE = 'payfix-dynamic-v2'
+const CACHE_NAME = 'payfix-attendance-v3'
+const STATIC_CACHE = 'payfix-static-v3'
+const DYNAMIC_CACHE = 'payfix-dynamic-v3'
 const OFFLINE_QUEUE_NAME = 'payfix-offline-queue'
 
-// Static assets to cache - public files only to ensure reliable sw installation
+// Static assets to cache - public files & lightweight offline face biometric models
 const STATIC_ASSETS = [
     '/offline',
     '/api/manifest',
     '/icons/icon-192x192.png',
     '/icons/icon-512x512.png',
+    '/js/face-api.min.js',
+    '/models/tiny_face_detector_model-weights_manifest.json',
+    '/models/tiny_face_detector_model-shard1',
+    '/models/face_landmark_68_model-weights_manifest.json',
+    '/models/face_landmark_68_model-shard1',
 ]
 
 // API routes that can work offline
