@@ -218,7 +218,7 @@ export function MobileHeader({ profile }: MobileHeaderProps) {
 
             {/* Seamless Profile Selfie Capture Popup Modal (Zero Page Reload / Refresh) */}
             <Dialog open={isPhotoCaptureOpen} onOpenChange={(open) => !open && setIsPhotoCaptureOpen(false)}>
-                <DialogContent className="max-w-md w-[95vw] p-0 bg-slate-950 border-slate-800 text-slate-100 overflow-hidden rounded-3xl z-[70] max-h-[92vh] overflow-y-auto">
+                <DialogContent className="max-w-md w-[95vw] p-0 bg-slate-950 border-slate-800 text-slate-100 overflow-hidden rounded-3xl z-[70] max-h-[92vh] overflow-y-auto [&>button]:hidden">
 
                     <ProfilePhotoCapture
                         profileId={profile.id}

@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { X, RefreshCw, AlertCircle } from 'lucide-react';
 import { BIOMETRIC_CAMERA_CONFIG } from '@/lib/face-pipeline';
 import { MediaPipeMeshService, InMaskLivenessStatus } from '@/lib/services/mediapipe-mesh.service';
+import { FaceApiBrowserService } from '@/lib/services/faceapi-browser.service';
 
 interface BiometricCameraModalProps {
   isOpen: boolean;
@@ -73,6 +74,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
   const [flashSuccess, setFlashSuccess] = useState(false);
   const isCapturingRef = useRef(false);
+  const isEvaluatingRef = useRef(false);
 
   const stopStream = useCallback(() => {
     if (streamRef.current) {
@@ -81,6 +83,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
     }
     MediaPipeMeshService.resetBlinkState();
     isCapturingRef.current = false;
+    isEvaluatingRef.current = false;
   }, []);
 
   const startCamera = useCallback(async () => {
@@ -98,6 +101,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
     setHasError(false);
     MediaPipeMeshService.resetBlinkState();
     isCapturingRef.current = false;
+    isEvaluatingRef.current = false;
 
     try {
       const primaryConstraints: MediaStreamConstraints = {
@@ -135,7 +139,8 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
         // Asynchronous play without blocking rendering
         video.play().catch(() => {});
 
-        // Preload MediaPipe Face Landmarker
+        // Preload Face Models (both offline FaceApi and MediaPipe)
+        FaceApiBrowserService.loadModels().catch(() => {});
         MediaPipeMeshService.initialize().catch(() => {});
 
         if (onStreamReadyRef.current) {
@@ -174,48 +179,68 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
     let animId: number;
     let lastEvalTime = 0;
 
-    const loop = (time: number) => {
-      if (videoRef.current && videoRef.current.readyState >= 2 && !isCapturingRef.current && !isProcessing) {
-        // Run tracker every ~60ms (16 FPS) for ultra-responsive low-battery liveness
-        if (time - lastEvalTime >= 60) {
+    const loop = async (time: number) => {
+      if (
+        videoRef.current &&
+        videoRef.current.readyState >= 2 &&
+        !isCapturingRef.current &&
+        !isProcessing &&
+        !isEvaluatingRef.current
+      ) {
+        // Run tracker every ~70ms (14 FPS) for fast responsive eye blink
+        if (time - lastEvalTime >= 70) {
           lastEvalTime = time;
-          const status = MediaPipeMeshService.evaluateInMaskLiveness(videoRef.current, time);
-          setLivenessStatus(status);
-
-          // Handle Blink Confirmed Auto-Capture
-          if (status.blinkConfirmed && onAutoCaptureRef.current && !isCapturingRef.current) {
-            isCapturingRef.current = true;
-            setFlashSuccess(true);
-
-            // Capture Full HD uncompressed snapshot
-            const video = videoRef.current;
-            const snapCanvas = document.createElement('canvas');
-            const vw = video.videoWidth || 720;
-            const vh = video.videoHeight || 960;
-            snapCanvas.width = vw;
-            snapCanvas.height = vh;
-            const ctx = snapCanvas.getContext('2d');
-            if (ctx) {
-              ctx.save();
-              ctx.translate(vw, 0);
-              ctx.scale(-1, 1); // Match mirrored video preview exactly
-              ctx.drawImage(video, 0, 0, vw, vh);
-              ctx.restore();
+          isEvaluatingRef.current = true;
+          try {
+            const status = await MediaPipeMeshService.evaluateInMaskLiveness(videoRef.current, time);
+            if (isMountedRef.current) {
+              setLivenessStatus(status);
             }
 
-            const capturedDataUrl = snapCanvas.toDataURL('image/jpeg', 0.94);
+            // Handle Blink Confirmed Auto-Capture
+            if (status.blinkConfirmed && onAutoCaptureRef.current && !isCapturingRef.current) {
+              isCapturingRef.current = true;
+              setFlashSuccess(true);
 
-            setTimeout(() => {
-              if (onAutoCaptureRef.current) {
-                onAutoCaptureRef.current(capturedDataUrl);
+              // Capture Full HD uncompressed snapshot
+              const video = videoRef.current;
+              const snapCanvas = document.createElement('canvas');
+              const vw = video.videoWidth || 720;
+              const vh = video.videoHeight || 960;
+              snapCanvas.width = vw;
+              snapCanvas.height = vh;
+              const ctx = snapCanvas.getContext('2d');
+              if (ctx) {
+                ctx.save();
+                ctx.translate(vw, 0);
+                ctx.scale(-1, 1); // Match mirrored video preview exactly
+                ctx.drawImage(video, 0, 0, vw, vh);
+                ctx.restore();
               }
-              setTimeout(() => setFlashSuccess(false), 500);
-            }, 100);
+
+              const capturedDataUrl = snapCanvas.toDataURL('image/jpeg', 0.94);
+
+              // Quick haptic pulse
+              if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                try { navigator.vibrate([40, 60, 40]); } catch {}
+              }
+
+              setTimeout(() => {
+                if (onAutoCaptureRef.current) {
+                  onAutoCaptureRef.current(capturedDataUrl);
+                }
+                setTimeout(() => setFlashSuccess(false), 500);
+              }, 100);
+            }
+          } catch (err) {
+            // Ignore frame evaluation errors
+          } finally {
+            isEvaluatingRef.current = false;
           }
         }
       }
 
-      if (isMountedRef.current && isOpen) {
+      if (isMountedRef.current && isOpen && !isCapturingRef.current) {
         animId = requestAnimationFrame(loop);
       }
     };
@@ -223,6 +248,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
     animId = requestAnimationFrame(loop);
     return () => {
       cancelAnimationFrame(animId);
+      isEvaluatingRef.current = false;
     };
   }, [isOpen, enableAutoBlinkCapture, isProcessing, videoRef]);
 
@@ -254,11 +280,11 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           </div>
         </div>
 
-        {/* Styled Close (X) Icon Button */}
+        {/* Single Styled Close (X) Icon Button */}
         <button
           type="button"
           onClick={onClose}
-          aria-label="Close modal"
+          aria-label="Close camera modal"
           className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-300 transition-all border border-slate-700 shadow-md cursor-pointer"
         >
           <X className="h-5 w-5" />
@@ -266,37 +292,133 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
       </div>
 
       {/* Edge-to-Edge Camera Viewport Container */}
-      <div className="relative w-full aspect-[3/4] bg-black overflow-hidden flex-1 p-0">
+      <div className="relative w-full aspect-[3/4] bg-black overflow-hidden flex-1 p-0 flex items-center justify-center">
         {/* Instant HTML Video Element */}
         <video
           ref={videoRef}
           autoPlay
           muted
           playsInline
-          className="h-full w-full object-cover transform -scale-x-100"
+          className="absolute inset-0 h-full w-full object-cover transform -scale-x-100"
         />
 
         {/* Green Flash Animation on Blink Success */}
         {flashSuccess && (
-          <div className="absolute inset-0 z-40 bg-emerald-500/30 animate-in fade-in duration-100 backdrop-blur-[2px]" />
+          <div className="absolute inset-0 z-40 bg-emerald-500/35 animate-in fade-in duration-100 backdrop-blur-[2px]" />
         )}
 
         {/* 2. Paytm / KYC Biometric Oval Face Mask with Outside Dimmed Backdrop Overlay */}
         {!hasError && (
-          <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-between p-6">
-            {/* Circular Face Mask Silhouette with Dynamic Color Ring */}
+          <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-between p-5">
+            {/* Enlarged Face Mask Reticle (w-[88%] max-w-[340px]) with 9999px Dimmed Backdrop Mask */}
             <div
-              className={`relative mt-8 w-[81%] aspect-square rounded-full border-2 transition-all duration-300 flex items-center justify-center ${
+              className={`relative mt-4 w-[88%] max-w-[340px] aspect-[1/1.12] rounded-[44px] border-2 transition-all duration-300 flex items-center justify-center ${
                 isBlinkConfirmed
                   ? 'border-emerald-400 shadow-[0_0_35px_rgba(52,211,153,0.95)] ring-4 ring-emerald-500/40 animate-pulse'
                   : isAligned
-                  ? 'border-emerald-400/90 shadow-[0_0_20px_rgba(52,211,153,0.7)] ring-2 ring-emerald-400/30 shadow-[0_0_0_9999px_rgba(2,6,23,0.65)]'
+                  ? 'border-emerald-400/90 shadow-[0_0_25px_rgba(52,211,153,0.75)] ring-2 ring-emerald-400/40 shadow-[0_0_0_9999px_rgba(2,6,23,0.68)]'
                   : timerSeconds !== undefined && timerSeconds <= 3
                   ? 'border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.8)] animate-pulse'
-                  : 'border-sky-400/80 border-dashed shadow-[0_0_0_9999px_rgba(2,6,23,0.65)]'
+                  : 'border-sky-400/80 border-dashed shadow-[0_0_0_9999px_rgba(2,6,23,0.68)]'
               }`}
             >
-              {/* 10-Second Dynamic Circular Countdown Progress Ring around face circle */}
+              {/* Paytm / KYC Biometric Face Mask Contour & Landmark Alignment Guide SVG */}
+              <svg
+                className="absolute inset-0 w-full h-full pointer-events-none z-20"
+                viewBox="0 0 300 340"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                {/* 1. Curved Face Silhouette Contour */}
+                <path
+                  d="M150 42 C208 42 248 78 248 142 C248 222 200 286 150 296 C100 286 52 222 52 142 C52 78 92 42 150 42 Z"
+                  stroke={isAligned ? '#34d399' : '#38bdf8'}
+                  strokeWidth="2.2"
+                  strokeDasharray={isAligned ? 'none' : '6 6'}
+                  strokeOpacity={isAligned ? 0.95 : 0.65}
+                  className="transition-all duration-300"
+                  style={{
+                    filter: isAligned
+                      ? 'drop-shadow(0 0 12px rgba(52, 211, 153, 0.85))'
+                      : 'drop-shadow(0 0 6px rgba(56, 189, 248, 0.45))',
+                  }}
+                />
+
+                {/* 2. Left Eye Target Guide Crosshairs */}
+                <g transform="translate(102, 138)" opacity={isAligned ? 0.95 : 0.6}>
+                  <circle
+                    cx="0"
+                    cy="0"
+                    r="15"
+                    stroke={isAligned ? '#34d399' : '#38bdf8'}
+                    strokeWidth="1.5"
+                    strokeDasharray="3 3"
+                  />
+                  <circle cx="0" cy="0" r="2.5" fill={isAligned ? '#34d399' : '#38bdf8'} />
+                  <path
+                    d="M-18 0 H18 M0 -18 V18"
+                    stroke={isAligned ? '#34d399' : '#38bdf8'}
+                    strokeWidth="1.2"
+                    strokeOpacity="0.6"
+                  />
+                </g>
+
+                {/* 3. Right Eye Target Guide Crosshairs */}
+                <g transform="translate(198, 138)" opacity={isAligned ? 0.95 : 0.6}>
+                  <circle
+                    cx="0"
+                    cy="0"
+                    r="15"
+                    stroke={isAligned ? '#34d399' : '#38bdf8'}
+                    strokeWidth="1.5"
+                    strokeDasharray="3 3"
+                  />
+                  <circle cx="0" cy="0" r="2.5" fill={isAligned ? '#34d399' : '#38bdf8'} />
+                  <path
+                    d="M-18 0 H18 M0 -18 V18"
+                    stroke={isAligned ? '#34d399' : '#38bdf8'}
+                    strokeWidth="1.2"
+                    strokeOpacity="0.6"
+                  />
+                </g>
+
+                {/* 4. Nose Bridge Alignment Indicator */}
+                <path
+                  d="M150 162 L146 186 H154 L150 162"
+                  stroke={isAligned ? '#34d399' : '#38bdf8'}
+                  strokeWidth="1.6"
+                  strokeOpacity={isAligned ? 0.7 : 0.4}
+                />
+
+                {/* 5. Mouth Smile Alignment Arc */}
+                <path
+                  d="M126 222 Q150 236 174 222"
+                  stroke={isAligned ? '#34d399' : '#38bdf8'}
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeOpacity={isAligned ? 0.8 : 0.4}
+                />
+
+                {/* 6. Forehead Crown Arc */}
+                <path
+                  d="M115 54 Q150 40 185 54"
+                  stroke={isAligned ? '#34d399' : '#38bdf8'}
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeOpacity={isAligned ? 0.9 : 0.5}
+                />
+
+                {/* 7. Chin Rest Notch */}
+                <path
+                  d="M132 296 H168"
+                  stroke={isAligned ? '#34d399' : '#38bdf8'}
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeOpacity={isAligned ? 0.9 : 0.5}
+                />
+              </svg>
+
+              {/* 10-Second Dynamic Circular Countdown Progress Ring around face frame */}
               {timerSeconds !== undefined && (
                 <svg className="absolute -inset-3 w-[calc(100%+24px)] h-[calc(100%+24px)] transform -rotate-90 pointer-events-none z-30">
                   <circle
