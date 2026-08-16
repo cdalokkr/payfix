@@ -78,7 +78,7 @@ export const BiometricCamera: React.FC<BiometricCameraProps> = ({
       } catch (firstErr) {
         // Fallback for devices that reject specific width/height constraints
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user' },
+          video: { facingMode: { exact: 'user' } },
           audio: false,
         });
       }

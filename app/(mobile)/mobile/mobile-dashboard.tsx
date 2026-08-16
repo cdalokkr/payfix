@@ -142,7 +142,7 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
             try {
                 if (navigator?.mediaDevices?.getUserMedia) {
                     const stream = await navigator.mediaDevices.getUserMedia({
-                        video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 640 } },
+                        video: { facingMode: { exact: 'user' }, width: { ideal: 480 }, height: { ideal: 640 } },
                         audio: false
                     })
                     preWarmedStreamRef.current = stream

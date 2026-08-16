@@ -69,7 +69,7 @@ export default function KioskAttendance({ tenantId }: Props) {
         // --- Camera warmup (480×640 portrait – best settings) ---
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
-            facingMode: 'user',
+            facingMode: { exact: 'user' },
             width: { ideal: 480 },
             height: { ideal: 640 },
           },

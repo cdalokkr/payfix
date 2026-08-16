@@ -219,7 +219,7 @@ export function ExpressKioskApp() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: {
-                    facingMode: 'user',
+                    facingMode: { exact: 'user' },
                     width: { ideal: 480 },
                     height: { ideal: 640 },
                     aspectRatio: { ideal: 0.75 },

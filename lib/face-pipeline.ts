@@ -15,7 +15,7 @@ export const BIOMETRIC_CAMERA_CONFIG = {
   width: 1080,
   height: 1440,
   aspectRatio: 0.75, // 3:4 portrait ratio
-  facingMode: 'user' as const,
+  facingMode: { exact: 'user' } as const,
   inputSize: 416 as const,
   scoreThreshold: 0.5,
 };

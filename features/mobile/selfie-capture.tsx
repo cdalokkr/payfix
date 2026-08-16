@@ -158,14 +158,14 @@ export function SelfieCapture({
             // Request 480x640 (3:4 portrait) for consistent face vector alignment across enrollment & kiosk
             const constraints: MediaStreamConstraints = retryCount === 0 ? {
                 video: {
-                    facingMode: 'user',
+                    facingMode: { exact: 'user' },
                     width: { ideal: 480 },
                     height: { ideal: 640 },
                     aspectRatio: { ideal: 0.75 }
                 },
                 audio: false,
             } : {
-                video: { facingMode: 'user' },
+                video: { facingMode: { exact: 'user' } },
                 audio: false
             }
 
