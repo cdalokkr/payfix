@@ -12,6 +12,8 @@ import { invalidateDashboardCache } from './admin-dashboard-optimized'
 import { broadcastServerEvent } from '@/lib/events/server-broadcaster'
 import { getLocalDateIST } from '@/lib/utils/date-utils'
 import { SmartCache } from '@/lib/cache/smart-cache'
+import { FaceServiceClient } from '@/lib/face-service-client'
+
 
 export const attendanceRouter = router({
     // --- ATTENDANCE ---
@@ -615,60 +617,36 @@ export const attendanceRouter = router({
                     })
                 }
 
-                // 2. Extract selfie embedding via Python microservice
+                // 2. Extract selfie embedding via Universal FaceServiceClient (supports REST & Gradio SSE)
                 let selfieEmbedding: number[] = []
                 let selfieEmbedding512: number[] | null = null
                 let diagnostics: any = null
                 let mockFallbackUsed = false
                 try {
-                    const response = await fetch(`${FACE_API_URL}/extract`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            image_base64: input.selfieBase64,
-                            require_512: true,
-                            require_128: true,
-                            check_liveness: true
-                        }),
-                    })
-
-                    if (!response.ok) {
-                        const errorData = await response.json().catch(() => ({}))
-                        throw new Error(errorData.detail || errorData.error_message || 'Face service communication failed')
-                    }
-
-                    const result = await response.json()
+                    const result = await FaceServiceClient.extract(input.selfieBase64)
                     diagnostics = result.diagnostics || null
 
                     if (!result.success || (!result.embedding && !result.embedding_512 && !result.embedding_128)) {
-                        const tip = result.troubleshooting_tip ? ` (${result.troubleshooting_tip})` : ''
-                        throw new TRPCError({
-                            code: 'BAD_REQUEST',
-                            message: `${result.error_message || result.error || 'No face detected in selfie'}${tip}`
-                        })
+                        if (result.error_code === 'SERVICE_UNREACHABLE' && (process.env.NODE_ENV === 'development' || process.env.FACE_API_MOCK === 'true')) {
+                            console.warn('⚠️ Python Face Service unreachable. Falling back to development mock matching.')
+                            mockFallbackUsed = true
+                        } else {
+                            const tip = result.troubleshooting_tip ? ` (${result.troubleshooting_tip})` : ''
+                            throw new TRPCError({
+                                code: 'BAD_REQUEST',
+                                message: `${result.error_message || 'No face detected in selfie'}${tip}`
+                            })
+                        }
+                    } else {
+                        selfieEmbedding512 = result.embedding_512 || (result.embedding?.length === 512 ? result.embedding : null)
+                        selfieEmbedding = result.embedding_128 || result.embedding || []
                     }
-
-                    selfieEmbedding512 = result.embedding_512 || (result.embedding?.length === 512 ? result.embedding : null)
-                    selfieEmbedding = result.embedding_128 || result.embedding || []
                 } catch (e: any) {
                     if (e instanceof TRPCError) throw e
-                    const isNetworkError = 
-                        e.message?.includes('fetch failed') || 
-                        e.code === 'ECONNREFUSED' || 
-                        e.message?.includes('ECONNREFUSED') || 
-                        e.message?.includes('fetch') ||
-                        e.message?.includes('unreachable')
-                    
-                    if (isNetworkError || process.env.FACE_API_MOCK === 'true') {
-                        console.warn('⚠️ Python Face Service unreachable or mock mode active. Falling back to development mock matching.')
-                        mockFallbackUsed = true
-                        selfieEmbedding = []
-                    } else {
-                        throw new TRPCError({
-                            code: 'BAD_REQUEST',
-                            message: e.message || 'Face extraction failed on selfie'
-                        })
-                    }
+                    throw new TRPCError({
+                        code: 'BAD_REQUEST',
+                        message: e.message || 'Face extraction failed on selfie'
+                    })
                 }
 
                 if (mockFallbackUsed) {
