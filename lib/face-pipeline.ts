@@ -10,13 +10,13 @@ import {
   EMBEDDING_SIZE,
 } from './face-matching';
 
-/** Shared camera configuration – 480x640 (3:4 portrait) */
+/** Shared camera configuration – Full HD (3:4 portrait) */
 export const BIOMETRIC_CAMERA_CONFIG = {
-  width: 480,
-  height: 640,
+  width: 1080,
+  height: 1440,
   aspectRatio: 0.75, // 3:4 portrait ratio
   facingMode: 'user' as const,
-  inputSize: 160 as const,
+  inputSize: 416 as const,
   scoreThreshold: 0.5,
 };
 

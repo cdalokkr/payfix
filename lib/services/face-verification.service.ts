@@ -131,7 +131,7 @@ export const FaceVerificationService = {
         }
 
         try {
-            // 1. MediaPipe 3D Landmark & Canonical 20% Padded 112x112 Warping + 480x480 HD Avatar
+            // 1. MediaPipe 3D Landmark & Canonical 112x112 Warping + 512x512 HD Avatar (+18% margin)
             const aligned = await MediaPipeMeshService.processFaceFrame(processElement);
             if (aligned) {
                 const embedding = await ArcFaceOnnxService.extract512dEmbedding(aligned.canvas112);
@@ -139,7 +139,7 @@ export const FaceVerificationService = {
                     return {
                         embedding: Array.from(embedding),
                         cropDataUrl: aligned.dataUrl112,
-                        hdAvatarDataUrl: aligned.hdAvatarDataUrl || aligned.dataUrl112,
+                        hdAvatarDataUrl: aligned.dataUrl512 || aligned.hdAvatarDataUrl || aligned.dataUrl112,
                         isLive: aligned.isLive,
                     };
                 }

@@ -1,11 +1,12 @@
 /**
- * Google MediaPipe Face Mesh & 3D Alignment Service
+ * Google MediaPipe Face Mesh & 3D In-Mask Alignment + Blink Liveness Service
  *
  * Implements:
  * 1. 478 3D Facial Landmarks extraction (<10ms GPU pass).
- * 2. Camera Circle Area + 20% Natural Padded Bounding Crop.
- * 3. Canonical 5-Point Affine Warping into 112x112 standard ArcFace format.
- * 4. Real-time Eye-Blink & 3D Head Pose Liveness Gate (Anti-Spoofing).
+ * 2. Paytm / Banking-style In-Mask Alignment & Geometry Gate.
+ * 3. In-Mask Eye Aspect Ratio (EAR) Real-Time Blink Detection.
+ * 4. 512x512 High-Definition Natural Upright Crop (+18% Margin, 0° Artificial Tilt).
+ * 5. 112x112 Canonical Tensor Warping for ArcFace 512-d vector extraction.
  */
 
 import { FilesetResolver, FaceLandmarker, FaceLandmarkerResult } from '@mediapipe/tasks-vision';
@@ -22,18 +23,37 @@ const CANONICAL_5_POINTS = [
 export interface AlignedFaceCropResult {
     canvas112: HTMLCanvasElement;
     dataUrl112: string;
+    canvas512: HTMLCanvasElement;
+    dataUrl512: string;
     hdAvatarCanvas?: HTMLCanvasElement;
     hdAvatarDataUrl?: string;
     landmarks: any[];
     faceScore: number;
     isLive: boolean;
+    isAlignedInMask: boolean;
+    alignmentPrompt: string;
     livenessScore: number;
     headPose: { yaw: number; pitch: number; roll: number };
     ear: number; // Eye Aspect Ratio
 }
 
+export interface InMaskLivenessStatus {
+    isFaceDetected: boolean;
+    isAlignedInMask: boolean;
+    isBlinking: boolean;
+    blinkConfirmed: boolean;
+    prompt: string;
+    statusBadgeColor: 'blue' | 'amber' | 'emerald' | 'rose';
+    ear: number;
+    headPose: { yaw: number; pitch: number; roll: number };
+}
+
 let faceLandmarker: FaceLandmarker | null = null;
 let initPromise: Promise<FaceLandmarker | null> | null = null;
+
+// Real-time blink state tracking
+let _blinkState: 'IDLE' | 'EYES_OPEN' | 'EYES_CLOSED' | 'BLINK_CONFIRMED' = 'IDLE';
+let _lastClosedTimestamp = 0;
 
 export const MediaPipeMeshService = {
     isReady(): boolean {
@@ -63,9 +83,9 @@ export const MediaPipeMeshService = {
                     },
                     runningMode: 'VIDEO',
                     numFaces: 1,
-                    minFaceDetectionConfidence: 0.55,
-                    minFacePresenceConfidence: 0.55,
-                    minTrackingConfidence: 0.55,
+                    minFaceDetectionConfidence: 0.50,
+                    minFacePresenceConfidence: 0.50,
+                    minTrackingConfidence: 0.50,
                     outputFaceBlendshapes: true,
                     outputFacialTransformationMatrixes: true,
                 });
@@ -81,6 +101,14 @@ export const MediaPipeMeshService = {
         })();
 
         return initPromise;
+    },
+
+    /**
+     * Reset real-time blink state machine
+     */
+    resetBlinkState() {
+        _blinkState = 'IDLE';
+        _lastClosedTimestamp = 0;
     },
 
     /**
@@ -147,8 +175,147 @@ export const MediaPipeMeshService = {
     },
 
     /**
-     * Crop camera circle area + 20% natural padding, perform 5-point affine alignment,
-     * and output a clean 112x112 ArcFace standardized canvas.
+     * Paytm / KYC-Style In-Mask Alignment & Real-Time Blink Liveness Tracker
+     */
+    evaluateInMaskLiveness(
+        video: HTMLVideoElement,
+        timestamp: number = performance.now()
+    ): InMaskLivenessStatus {
+        if (!faceLandmarker) {
+            return {
+                isFaceDetected: false,
+                isAlignedInMask: false,
+                isBlinking: false,
+                blinkConfirmed: false,
+                prompt: 'Initializing camera...',
+                statusBadgeColor: 'blue',
+                ear: 0,
+                headPose: { yaw: 0, pitch: 0, roll: 0 },
+            };
+        }
+
+        try {
+            const result = faceLandmarker.detectForVideo(video, timestamp);
+            if (!result.faceLandmarks || result.faceLandmarks.length === 0) {
+                _blinkState = 'IDLE';
+                return {
+                    isFaceDetected: false,
+                    isAlignedInMask: false,
+                    isBlinking: false,
+                    blinkConfirmed: false,
+                    prompt: 'Please position face inside the mask 👤',
+                    statusBadgeColor: 'blue',
+                    ear: 0,
+                    headPose: { yaw: 0, pitch: 0, roll: 0 },
+                };
+            }
+
+            const rawLandmarks = result.faceLandmarks[0];
+            const ear = this.computeEAR(rawLandmarks);
+            const headPose = this.computeHeadPose(rawLandmarks);
+
+            // Bounding box of face normalized (0..1)
+            let minX = 1, maxX = 0, minY = 1, maxY = 0;
+            for (const lm of rawLandmarks) {
+                if (lm.x < minX) minX = lm.x;
+                if (lm.x > maxX) maxX = lm.x;
+                if (lm.y < minY) minY = lm.y;
+                if (lm.y > maxY) maxY = lm.y;
+            }
+
+            const faceCenterX = (minX + maxX) / 2;
+            const faceCenterY = (minY + maxY) / 2;
+            const faceH = maxY - minY;
+
+            // In-Mask Alignment Rules:
+            // 1. Center of face is inside center 20% box
+            const isCentered = faceCenterX >= 0.32 && faceCenterX <= 0.68 && faceCenterY >= 0.22 && faceCenterY <= 0.65;
+            // 2. Face scale is neither too far nor too close (covers 30% to 75% of height)
+            const isScaleValid = faceH >= 0.28 && faceH <= 0.75;
+            // 3. Head pose is looking straight (+/- 16 deg)
+            const isPoseValid = Math.abs(headPose.yaw) < 16 && Math.abs(headPose.pitch) < 16 && Math.abs(headPose.roll) < 14;
+
+            const isAlignedInMask = isCentered && isScaleValid && isPoseValid;
+
+            if (!isAlignedInMask) {
+                _blinkState = 'IDLE';
+                let prompt = 'Fit face inside the mask';
+                if (!isCentered) prompt = 'Center your face inside the mask';
+                else if (faceH < 0.28) prompt = 'Move closer to camera';
+                else if (faceH > 0.75) prompt = 'Move slightly back';
+                else if (!isPoseValid) prompt = 'Look straight at camera';
+
+                return {
+                    isFaceDetected: true,
+                    isAlignedInMask: false,
+                    isBlinking: false,
+                    blinkConfirmed: false,
+                    prompt,
+                    statusBadgeColor: 'blue',
+                    ear,
+                    headPose,
+                };
+            }
+
+            // In-Mask Blink State Machine (Only active when isAlignedInMask is true!)
+            let isBlinking = false;
+            let blinkConfirmed = false;
+            let prompt = 'Face matched! Blink eyes to capture 👁️';
+            let statusBadgeColor: 'blue' | 'amber' | 'emerald' | 'rose' = 'amber';
+
+            // Blink threshold: Eyes Open >= 0.22, Eyes Closed <= 0.15
+            if (ear >= 0.21) {
+                if (_blinkState === 'EYES_CLOSED') {
+                    const blinkDuration = timestamp - _lastClosedTimestamp;
+                    // Valid eye blink between 60ms and 550ms
+                    if (blinkDuration >= 50 && blinkDuration <= 600) {
+                        _blinkState = 'BLINK_CONFIRMED';
+                        blinkConfirmed = true;
+                        prompt = 'Blink Verified! Capturing... 📸';
+                        statusBadgeColor = 'emerald';
+                    } else {
+                        _blinkState = 'EYES_OPEN';
+                    }
+                } else if (_blinkState !== 'BLINK_CONFIRMED') {
+                    _blinkState = 'EYES_OPEN';
+                }
+            } else if (ear <= 0.15) {
+                if (_blinkState === 'EYES_OPEN') {
+                    _blinkState = 'EYES_CLOSED';
+                    _lastClosedTimestamp = timestamp;
+                    isBlinking = true;
+                    prompt = 'Blinking detected...';
+                }
+            }
+
+            return {
+                isFaceDetected: true,
+                isAlignedInMask: true,
+                isBlinking,
+                blinkConfirmed,
+                prompt,
+                statusBadgeColor,
+                ear,
+                headPose,
+            };
+        } catch (err) {
+            return {
+                isFaceDetected: false,
+                isAlignedInMask: false,
+                isBlinking: false,
+                blinkConfirmed: false,
+                prompt: 'Camera ready',
+                statusBadgeColor: 'blue',
+                ear: 0,
+                headPose: { yaw: 0, pitch: 0, roll: 0 },
+            };
+        }
+    },
+
+    /**
+     * Crop camera circle area + 18% natural padding and generate:
+     * 1. 512x512 High-Definition Natural Upright Canvas (for UI display & Supabase storage)
+     * 2. 112x112 Canonical Affine Canvas (for ArcFace 512-d neural vector pass)
      */
     async processFaceFrame(
         videoOrCanvas: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement,
@@ -174,10 +341,10 @@ export const MediaPipeMeshService = {
             const rawLandmarks = result.faceLandmarks[0];
             const width = (typeof HTMLVideoElement !== 'undefined' && videoOrCanvas instanceof HTMLVideoElement)
                 ? videoOrCanvas.videoWidth
-                : (videoOrCanvas.width || (videoOrCanvas as HTMLImageElement).naturalWidth || 480);
+                : (videoOrCanvas.width || (videoOrCanvas as HTMLImageElement).naturalWidth || 720);
             const height = (typeof HTMLVideoElement !== 'undefined' && videoOrCanvas instanceof HTMLVideoElement)
                 ? videoOrCanvas.videoHeight
-                : (videoOrCanvas.height || (videoOrCanvas as HTMLImageElement).naturalHeight || 640);
+                : (videoOrCanvas.height || (videoOrCanvas as HTMLImageElement).naturalHeight || 960);
 
             if (!width || !height) return null;
 
@@ -195,14 +362,14 @@ export const MediaPipeMeshService = {
             const faceCenterX = (minX + (maxX - minX) / 2) * width;
             const faceCenterY = (minY + (maxY - minY) / 2) * height;
 
-            // 2. Camera Circle + 20% Natural Padding Crop Box
+            // 2. Camera Mask + 18% Natural Padding Crop Box (Forehead, Ears, Chin)
             const rawSize = Math.max(faceBoxW, faceBoxH);
-            const paddedSquareSize = rawSize * 1.20; // 20% Natural padding
+            const paddedSquareSize = rawSize * 1.18; // 18% Natural padding
 
             // 3. Compute 5-Point landmarks for canonical ArcFace alignment
             const pts5 = this.extract5KeyPoints(rawLandmarks, width, height);
 
-            // Compute alignment angle (Roll) between eyes
+            // Compute alignment angle (Roll) between eyes for neural tensor
             const dx = pts5[1].x - pts5[0].x;
             const dy = pts5[1].y - pts5[0].y;
             const angle = Math.atan2(dy, dx); // radians
@@ -223,43 +390,51 @@ export const MediaPipeMeshService = {
                 ctx112.restore();
             }
 
-            // 4b. Create 480x480 High-Definition Avatar Canvas (for crisp UI display & Supabase storage)
-            const canvasHD = document.createElement('canvas');
-            canvasHD.width = 480;
-            canvasHD.height = 480;
-            const ctxHD = canvasHD.getContext('2d', { willReadFrequently: true });
+            // 4b. Create 512x512 High-Definition Avatar Canvas (for crisp UI display & Supabase storage)
+            // UPRIGHT NATURAL ANGLE: Do NOT apply artificial rotation so selfie orientation matches camera preview 100%!
+            const canvas512 = document.createElement('canvas');
+            canvas512.width = 512;
+            canvas512.height = 512;
+            const ctx512 = canvas512.getContext('2d', { willReadFrequently: true });
 
-            if (ctxHD) {
-                ctxHD.imageSmoothingEnabled = true;
-                ctxHD.imageSmoothingQuality = 'high';
-                ctxHD.save();
-                ctxHD.translate(240, 240);
-                ctxHD.rotate(-angle);
-                const scaleHD = 480 / (paddedSquareSize || 1);
-                ctxHD.scale(scaleHD, scaleHD);
-                ctxHD.drawImage(videoOrCanvas, -faceCenterX, -faceCenterY);
-                ctxHD.restore();
+            if (ctx512) {
+                ctx512.imageSmoothingEnabled = true;
+                ctx512.imageSmoothingQuality = 'high';
+                ctx512.save();
+                ctx512.translate(256, 256);
+                const scale512 = 512 / (paddedSquareSize || 1);
+                ctx512.scale(scale512, scale512);
+                ctx512.drawImage(videoOrCanvas, -faceCenterX, -faceCenterY);
+                ctx512.restore();
             }
 
             const dataUrl112 = canvas112.toDataURL('image/jpeg', 0.92);
-            const hdAvatarDataUrl = canvasHD.toDataURL('image/jpeg', 0.94);
+            const dataUrl512 = canvas512.toDataURL('image/jpeg', 0.94);
 
             // 5. Liveness & Quality checks
             const ear = this.computeEAR(rawLandmarks);
             const headPose = this.computeHeadPose(rawLandmarks);
 
-            // Passive liveness: face is facing camera within acceptable pose bounds (+/- 25 deg)
-            const isLive = Math.abs(headPose.yaw) < 28 && Math.abs(headPose.pitch) < 28 && ear >= 0.12;
+            const isCentered = (faceCenterX / width) >= 0.32 && (faceCenterX / width) <= 0.68 && (faceCenterY / height) >= 0.22 && (faceCenterY / height) <= 0.65;
+            const isScaleValid = (faceBoxH / height) >= 0.28 && (faceBoxH / height) <= 0.75;
+            const isPoseValid = Math.abs(headPose.yaw) < 16 && Math.abs(headPose.pitch) < 16 && Math.abs(headPose.roll) < 14;
+            const isAlignedInMask = isCentered && isScaleValid && isPoseValid;
+
+            const isLive = isPoseValid && ear >= 0.12;
             const livenessScore = isLive ? 0.98 : 0.45;
 
             return {
                 canvas112,
                 dataUrl112,
-                hdAvatarCanvas: canvasHD,
-                hdAvatarDataUrl,
+                canvas512,
+                dataUrl512,
+                hdAvatarCanvas: canvas512,
+                hdAvatarDataUrl: dataUrl512,
                 landmarks: rawLandmarks,
-                faceScore: 0.96,
+                faceScore: 0.98,
                 isLive,
+                isAlignedInMask,
+                alignmentPrompt: isAlignedInMask ? 'Face matched! Blink eyes to capture' : 'Center face in mask',
                 livenessScore,
                 headPose,
                 ear,

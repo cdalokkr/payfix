@@ -617,7 +617,7 @@ export function ExpressKioskApp() {
     };
 
     // Instant Face Verification Scan & Overlay Flow (Continuous Staff Scanning)
-    const handleFaceScan = useCallback(async () => {
+    const handleFaceScan = useCallback(async (overrideSnapshotUrl?: string) => {
         if (isScanning || !modelsReady || !pairingCode) return;
 
         const scanStartTime = performance.now();
@@ -632,12 +632,7 @@ export function ExpressKioskApp() {
             return;
         }
 
-        if (employees.length === 0) {
-            toast.error('No employee profiles cached. Please check connection.');
-            return;
-        }
-
-        const enrolledEmployees = employees.filter(e => e.faceEmbedding !== null && e.faceEmbedding.length === 128);
+        const enrolledEmployees = employees.filter(e => e.faceEmbedding !== null && (e.faceEmbedding.length === 512 || e.faceEmbedding.length === 128));
 
         if (enrolledEmployees.length === 0) {
             playErrorChimeSound();
@@ -645,8 +640,8 @@ export function ExpressKioskApp() {
             return;
         }
 
-        // 1. Immediately capture freeze-frame selfie snapshot on click (<5ms)
-        const freezeUrl = captureSnapshot();
+        // 1. Immediately capture freeze-frame selfie snapshot (<5ms)
+        const freezeUrl = overrideSnapshotUrl || captureSnapshot();
         if (freezeUrl) setCapturedFreezeUrl(freezeUrl);
 
         setIsScanning(true);
@@ -1212,12 +1207,19 @@ export function ExpressKioskApp() {
                         title="Face Verification Scanner"
                         icon={<ScanFace className="h-5 w-5 text-sky-400" />}
                         videoRefOut={videoRef}
-                        statusText={isScanning && !verificationResult ? "Extracting 160×160 vector & matching..." : undefined}
+                        statusText={isScanning && !verificationResult ? "512×512 HD biometrics matching..." : undefined}
                         isProcessing={isScanning && !verificationResult}
+                        enableAutoBlinkCapture={!isScanning && isVerificationModalOpen}
+                        onAutoCapture={(dataUrl) => {
+                            if (!isScanning) {
+                                toast.success('Blink verified! Matching employee face 👁️');
+                                handleFaceScan(dataUrl);
+                            }
+                        }}
                         footerSlot={
                             <div className="w-full flex items-center justify-center">
                                 <Button
-                                    onClick={handleFaceScan}
+                                    onClick={() => handleFaceScan()}
                                     disabled={isScanning || !cameraActive || !modelsReady}
                                     className="w-full h-14 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-base shadow-xl shadow-emerald-600/25 cursor-pointer"
                                 >

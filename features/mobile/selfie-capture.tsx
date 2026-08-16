@@ -251,72 +251,14 @@ export function SelfieCapture({
         }
     }, [zoom, status])
 
-    // Capture photo
-    const capturePhoto = useCallback(() => {
-        if (!videoRef.current || !canvasRef.current || status !== 'streaming') return
-
-        const video = videoRef.current
-        const canvas = canvasRef.current
-        const ctx = canvas.getContext('2d')
-        if (!ctx) return
-
-        // 320×320: optimized for fast server-side processing on mobile
-        canvas.width = 320
-        canvas.height = 320
-
-        const vw = video.videoWidth
-        const vh = video.videoHeight
-        const size = Math.min(vw, vh)
-        const sx = (vw - size) / 2
-        const sy = (vh - size) / 2
-
-        ctx.save()
-        ctx.translate(canvas.width, 0)
-        ctx.scale(-1, 1)
-        ctx.drawImage(video, sx, sy, size, size, 0, 0, canvas.width, canvas.height)
-        ctx.restore()
-
-        const now = new Date()
-        const timestamp = format(now, "dd MMM yyyy, hh:mm:ss a")
-
-        // Draw modern timestamp pill (scaled to 320px canvas)
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
-        const pillWidth = 200
-        const pillHeight = 28
-        const pillX = (canvas.width - pillWidth) / 2
-        const pillY = canvas.height - 42
-
-        // Rounded rect for pill
-        ctx.beginPath()
-        ctx.roundRect(pillX, pillY, pillWidth, pillHeight, 14)
-        ctx.fill()
-
-        ctx.fillStyle = '#ffffff'
-        ctx.font = 'bold 12px Inter, system-ui'
-        ctx.textAlign = 'center'
-        ctx.fillText(timestamp, canvas.width / 2, pillY + 19)
-
-        // Compress image to quality 0.7 for tiny payload size
-        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.7)
-        setCapturedImage(imageDataUrl)
-        setCapturedAt(now)
-        setStatus('captured')
-        stopCamera()
-    }, [stopCamera, status])
-
-    const retakePhoto = useCallback(() => {
-        setCapturedImage(null)
-        setCapturedAt(null)
-        startCamera()
-    }, [startCamera])
-
-    const [verificationDuration, setVerificationDuration] = useState<string>('')
-
-    const handleProceed = useCallback(async () => {
-        if (!capturedImage || !capturedAt) return
+    // Core verification routine on 512x512 HD snapshot
+    const executeVerify = useCallback(async (imageToVerify: string) => {
+        if (!imageToVerify) return
 
         const startTime = performance.now()
-        // Start verification
+        setCapturedImage(imageToVerify)
+        setCapturedAt(new Date())
+        stopCamera()
         setStatus('verifying')
 
         // Check if offline
@@ -328,15 +270,9 @@ export function SelfieCapture({
             setStatus('verified')
             setApiStatus('pending')
             try {
-                await onSubmitAttendance(capturedImage)
+                await onSubmitAttendance(imageToVerify)
                 setApiStatus('success')
-                // Optimistically succeed after a tiny visual delay
-                setTimeout(() => {
-                    if (isMounted.current) {
-                        onVerified({ matched: true, similarity: 1.0 })
-                    }
-                }, 500)
-            } catch (error) {
+            } catch (error: any) {
                 setApiStatus('error')
                 setApiError('Failed to record attendance locally')
             }
@@ -352,7 +288,7 @@ export function SelfieCapture({
         try {
             // Hard timeout — 45s allows for model loading + inference on slow mobile devices
             const result = await Promise.race([
-                FaceVerificationService.compareFaces(capturedImage, profileImageUrl, undefined, faceEmbedding),
+                FaceVerificationService.compareFaces(imageToVerify, profileImageUrl, undefined, faceEmbedding),
                 new Promise<never>((_, reject) =>
                     setTimeout(() => reject(new Error('TIMEOUT')), 45000)
                 ),
@@ -370,13 +306,12 @@ export function SelfieCapture({
                 return
             }
 
-
             // Verification passed — now submit attendance
             setStatus('verified')
             setApiStatus('pending')
 
             try {
-                await onSubmitAttendance(capturedImage)
+                await onSubmitAttendance(imageToVerify)
                 setApiStatus('success')
             } catch (error: any) {
                 setApiStatus('error')
@@ -389,7 +324,6 @@ export function SelfieCapture({
             setStatus('verify_failed')
             const errMsg: string = error?.message || ''
 
-            // Attendance submission server errors — show actual message, not generic "Verification failed"
             const isAttendanceError = (
                 errMsg.includes('ALREADY_CLOCKED_IN') ||
                 errMsg.includes('NO_CLOCK_IN_FOUND') ||
@@ -410,7 +344,59 @@ export function SelfieCapture({
                 setErrorMessage('Face verification failed. Please retake your selfie.')
             }
         }
-    }, [capturedImage, capturedAt, profileImageUrl, onSubmitAttendance, onVerified])
+    }, [profileImageUrl, faceEmbedding, onSubmitAttendance, stopCamera])
+
+    // Manual capture fallback
+    const capturePhoto = useCallback(() => {
+        if (!videoRef.current || !canvasRef.current || status !== 'streaming') return
+
+        const video = videoRef.current
+        const canvas = canvasRef.current
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return
+
+        // 512×512 HD face snapshot
+        canvas.width = 512
+        canvas.height = 512
+
+        const vw = video.videoWidth || 720
+        const vh = video.videoHeight || 960
+        const size = Math.min(vw, vh)
+        const sx = (vw - size) / 2
+        const sy = (vh - size) / 2
+
+        ctx.save()
+        ctx.translate(canvas.width, 0)
+        ctx.scale(-1, 1)
+        ctx.drawImage(video, sx, sy, size, size, 0, 0, canvas.width, canvas.height)
+        ctx.restore()
+
+        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.94)
+        executeVerify(imageDataUrl)
+    }, [status, executeVerify])
+
+    // Auto-capture on verified in-mask eye blink
+    const handleAutoCapture = useCallback((dataUrl: string) => {
+        if (status !== 'streaming') return
+        toast.success('Blink verified! Verifying face biometrics 👁️')
+        executeVerify(dataUrl)
+    }, [status, executeVerify])
+
+    const retakePhoto = useCallback(() => {
+        setCapturedImage(null)
+        setCapturedAt(null)
+        startCamera()
+    }, [startCamera])
+
+    const [verificationDuration, setVerificationDuration] = useState<string>('')
+
+    const handleProceed = useCallback(async () => {
+        if (status === 'streaming') {
+            capturePhoto()
+        } else if (capturedImage) {
+            executeVerify(capturedImage)
+        }
+    }, [status, capturePhoto, capturedImage, executeVerify])
 
     const handleComplete = useCallback(() => {
         if (apiStatus === 'success') {
@@ -501,9 +487,11 @@ export function SelfieCapture({
                     icon={<IconScanFace className="w-5 h-5 text-sky-400" />}
                     videoRefOut={videoRef}
                     onStreamReady={() => setStatus('streaming')}
-                    statusText={status === 'streaming' ? 'Align face within circle target' : undefined}
-                    isProcessing={false}
+                    statusText={status === 'streaming' ? undefined : undefined}
+                    isProcessing={status === 'verifying'}
                     timerSeconds={status === 'streaming' && !capturedImage ? sessionTimeout : undefined}
+                    enableAutoBlinkCapture={status === 'streaming'}
+                    onAutoCapture={handleAutoCapture}
                     footerSlot={
 
                         <div className="space-y-3">
@@ -560,7 +548,7 @@ export function SelfieCapture({
                                 <IconRefresh className="w-5 h-5 text-sky-400 animate-spin shrink-0" />
                                 <div className="text-left">
                                     <p className="text-xs font-bold text-white">Verifying Face...</p>
-                                    <p className="text-[10px] text-sky-300 font-mono">Extracting 160×160 128-d vector</p>
+                                    <p className="text-[10px] text-sky-300 font-mono">512×512 HD biometrics verification</p>
                                 </div>
                             </div>
                         </div>

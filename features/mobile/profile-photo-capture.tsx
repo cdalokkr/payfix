@@ -209,7 +209,16 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         }
     }, [stopCamera])
 
-    // Capture photo matching live stream orientation 100%
+    // Auto-capture triggered on verified in-mask eye blink
+    const handleAutoCapture = useCallback((dataUrl: string) => {
+        if (statusRef.current !== 'streaming') return
+        setCapturedImage(dataUrl)
+        setStatus('captured')
+        stopCamera()
+        toast.success('Blink detected! Photo captured 📸')
+    }, [stopCamera])
+
+    // Capture photo matching live stream orientation 100% (Full HD uncompressed)
     const capturePhoto = useCallback(async () => {
         if (!videoRef.current || !canvasRef.current || status !== 'streaming') return
 
@@ -218,9 +227,9 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         const ctx = canvas.getContext('2d')
         if (!ctx) return
 
-        // 1. Capture exact live frame matching camera viewport aspect ratio (480x640)
-        const vw = video.videoWidth || 480
-        const vh = video.videoHeight || 640
+        // 1. Capture exact Full HD live frame matching camera viewport aspect ratio (720x960 / 1080x1440)
+        const vw = video.videoWidth || 720
+        const vh = video.videoHeight || 960
         canvas.width = vw
         canvas.height = vh
 
@@ -230,7 +239,7 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         ctx.drawImage(video, 0, 0, vw, vh)
         ctx.restore()
 
-        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.90)
+        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.94)
         setCapturedImage(imageDataUrl)
         setStatus('captured')
         stopCamera()
@@ -243,7 +252,7 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         startCamera()
     }, [startCamera])
 
-    // Upload photo via server API (crops to 160x160 square face avatar ~20KB before saving)
+    // Upload photo via server API (crops to 512x512 HD face avatar ~45KB before saving)
     const handleUpload = useCallback(async () => {
         if (!capturedImage) return
 
@@ -252,9 +261,9 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         setStatus('uploading')
 
         try {
-            addLog('Starting canonical face crop & upload...')
+            addLog('Starting 512x512 HD face crop & upload...')
 
-            // 1. Convert captured photo to canonical 20% padded face crop
+            // 1. Convert captured photo to 512x512 HD upright face crop (+18% natural margin)
             let uploadDataUrl = capturedImage;
             let preExtracted512: number[] | null = null;
 
@@ -265,7 +274,7 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                     if (extracted.embedding && extracted.embedding.length === 512) {
                         preExtracted512 = extracted.embedding;
                     }
-                    addLog('✅ Face cropped to 480x480 HD canonical avatar');
+                    addLog('✅ Face cropped to 512x512 HD upright avatar (+18% margin)');
                 }
             } catch (cropErr) {
                 console.warn('[ProfileUpload] Crop fallback to full image:', cropErr);
@@ -405,8 +414,10 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
             icon={<IconUser className="w-5 h-5 text-sky-400" />}
             videoRefOut={videoRef}
             onStreamReady={() => setStatus('streaming')}
-            statusText={status === 'captured' ? 'Photo captured! Review below' : 'Position face inside the circle'}
+            statusText={status === 'captured' ? 'Photo captured! Review below' : undefined}
             timerSeconds={status === 'streaming' && !capturedImage ? sessionTimeout : undefined}
+            enableAutoBlinkCapture={status === 'streaming'}
+            onAutoCapture={handleAutoCapture}
             footerSlot={
 
 
