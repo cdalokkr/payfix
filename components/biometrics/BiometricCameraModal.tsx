@@ -160,7 +160,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           if (isMountedRef.current) setIsStreamPlaying(true);
         }).catch(() => {});
 
-        // Preload Face Models (both offline FaceApi and MediaPipe)
+        // Preload Face Models
         FaceApiBrowserService.loadModels().catch(() => {});
         MediaPipeMeshService.initialize().catch(() => {});
 
@@ -208,8 +208,8 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
         !isProcessing &&
         !isEvaluatingRef.current
       ) {
-        // Run tracker every ~70ms (14 FPS) for fast responsive eye blink
-        if (time - lastEvalTime >= 70) {
+        // Run tracker every ~60ms (~16 FPS) for ultra-responsive blink capture
+        if (time - lastEvalTime >= 60) {
           lastEvalTime = time;
           isEvaluatingRef.current = true;
           try {
@@ -254,7 +254,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
               }, 100);
             }
           } catch (err) {
-            // Ignore frame evaluation errors
+            // Ignore frame errors
           } finally {
             isEvaluatingRef.current = false;
           }
@@ -275,9 +275,11 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Compute Reticle Theme Color
   const isAligned = livenessStatus.isAlignedInMask;
   const isBlinkConfirmed = livenessStatus.blinkConfirmed || flashSuccess;
+
+  // Single Canonical Oval Mask Path (Used for Backdrop Mask, Contour Border & 30s Countdown Stroke)
+  const OVAL_PATH = "M150 20 C222 20 270 65 270 172 C270 278 222 352 150 352 C78 352 30 278 30 172 C30 65 78 20 150 20 Z";
 
   return (
     <div className="relative w-full h-full min-h-[580px] bg-slate-950 flex flex-col overflow-hidden rounded-3xl p-0 border border-slate-800 shadow-2xl">
@@ -314,14 +316,6 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
       {/* Edge-to-Edge Camera Viewport Container */}
       <div className="relative w-full aspect-[3/4] bg-slate-950 overflow-hidden flex-1 p-0 flex items-center justify-center">
-        {/* Camera Warmup / Loading Skeleton placeholder */}
-        {!isStreamPlaying && !hasError && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-950/90 text-slate-400 space-y-3">
-            <div className="h-10 w-10 animate-spin rounded-full border-3 border-sky-400/20 border-t-sky-400" />
-            <p className="text-xs font-bold text-sky-300">Starting HD Camera...</p>
-          </div>
-        )}
-
         {/* Instant HTML Video Element */}
         <video
           ref={videoRef}
@@ -336,138 +330,58 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           <div className="absolute inset-0 z-40 bg-emerald-500/35 animate-in fade-in duration-100 backdrop-blur-[2px]" />
         )}
 
-        {/* 2. Paytm / KYC Biometric Oval Face Mask with Outside Dimmed Backdrop Overlay */}
+        {/* 2. Unified Single Oval Face Mask & Backdrop Overlay */}
         {!hasError && (
           <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-between p-4">
-            {/* Clean Biometric Oval Mask Reticle (w-[86%] max-w-[320px] aspect-[1/1.22]) with 9999px Dimmed Backdrop Mask */}
+            {/* Single Unified Oval Mask Reticle Container with 9999px Dimmed Backdrop Mask */}
             <div
-              className={`relative mt-3 w-[86%] max-w-[320px] aspect-[1/1.22] rounded-full border-2 transition-all duration-300 flex items-center justify-center ${
-                isBlinkConfirmed
-                  ? 'border-emerald-400 shadow-[0_0_35px_rgba(52,211,153,0.95)] ring-4 ring-emerald-500/40 animate-pulse'
-                  : isAligned
-                  ? 'border-emerald-400/90 shadow-[0_0_25px_rgba(52,211,153,0.75)] ring-2 ring-emerald-400/40 shadow-[0_0_0_9999px_rgba(2,6,23,0.68)]'
-                  : timerSeconds !== undefined && timerSeconds <= 5
-                  ? 'border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.8)] animate-pulse'
-                  : 'border-sky-400/80 border-dashed shadow-[0_0_0_9999px_rgba(2,6,23,0.68)]'
-              }`}
+              className={`relative mt-3 w-[84%] max-w-[310px] aspect-[1/1.24] rounded-full transition-all duration-300 flex items-center justify-center shadow-[0_0_0_9999px_rgba(2,6,23,0.70)]`}
             >
-              {/* Paytm / KYC Biometric Face Mask Silhouette & Landmark Alignment Guide SVG */}
+              {/* Paytm / KYC Biometric Single Oval Face Mask SVG */}
               <svg
                 className="absolute inset-0 w-full h-full pointer-events-none z-20"
-                viewBox="0 0 300 360"
+                viewBox="0 0 300 372"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
               >
-                {/* 1. Curved Face Silhouette Contour */}
+                <defs>
+                  <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#38bdf8" />
+                    <stop offset="50%" stopColor="#34d399" />
+                    <stop offset="100%" stopColor="#f59e0b" />
+                  </linearGradient>
+                  <linearGradient id="timerRedGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#f87171" />
+                    <stop offset="50%" stopColor="#ef4444" />
+                    <stop offset="100%" stopColor="#dc2626" />
+                  </linearGradient>
+                </defs>
+
+                {/* 1. Base Oval Mask Outline */}
                 <path
-                  d="M150 38 C210 38 252 76 252 145 C252 230 202 305 150 318 C98 305 48 230 48 145 C48 76 90 38 150 38 Z"
+                  d={OVAL_PATH}
                   stroke={isAligned ? '#34d399' : '#38bdf8'}
-                  strokeWidth="2.2"
-                  strokeDasharray={isAligned ? 'none' : '6 6'}
+                  strokeWidth={isAligned ? '3' : '2.2'}
+                  strokeDasharray={isAligned ? 'none' : '7 7'}
                   strokeOpacity={isAligned ? 0.95 : 0.65}
                   className="transition-all duration-300"
                   style={{
                     filter: isAligned
-                      ? 'drop-shadow(0 0 12px rgba(52, 211, 153, 0.85))'
+                      ? 'drop-shadow(0 0 14px rgba(52, 211, 153, 0.9))'
                       : 'drop-shadow(0 0 6px rgba(56, 189, 248, 0.45))',
                   }}
                 />
 
-                {/* 2. Left Eye Target Guide Crosshairs */}
-                <g transform="translate(102, 142)" opacity={isAligned ? 0.95 : 0.6}>
-                  <circle
-                    cx="0"
-                    cy="0"
-                    r="15"
-                    stroke={isAligned ? '#34d399' : '#38bdf8'}
-                    strokeWidth="1.5"
-                    strokeDasharray="3 3"
-                  />
-                  <circle cx="0" cy="0" r="2.5" fill={isAligned ? '#34d399' : '#38bdf8'} />
+                {/* 2. 30-Second Countdown Progress Stroke directly along the SAME Oval Path */}
+                {timerSeconds !== undefined && (
                   <path
-                    d="M-18 0 H18 M0 -18 V18"
-                    stroke={isAligned ? '#34d399' : '#38bdf8'}
-                    strokeWidth="1.2"
-                    strokeOpacity="0.6"
-                  />
-                </g>
-
-                {/* 3. Right Eye Target Guide Crosshairs */}
-                <g transform="translate(198, 142)" opacity={isAligned ? 0.95 : 0.6}>
-                  <circle
-                    cx="0"
-                    cy="0"
-                    r="15"
-                    stroke={isAligned ? '#34d399' : '#38bdf8'}
-                    strokeWidth="1.5"
-                    strokeDasharray="3 3"
-                  />
-                  <circle cx="0" cy="0" r="2.5" fill={isAligned ? '#34d399' : '#38bdf8'} />
-                  <path
-                    d="M-18 0 H18 M0 -18 V18"
-                    stroke={isAligned ? '#34d399' : '#38bdf8'}
-                    strokeWidth="1.2"
-                    strokeOpacity="0.6"
-                  />
-                </g>
-
-                {/* 4. Nose Bridge Alignment Indicator */}
-                <path
-                  d="M150 168 L146 195 H154 L150 168"
-                  stroke={isAligned ? '#34d399' : '#38bdf8'}
-                  strokeWidth="1.6"
-                  strokeOpacity={isAligned ? 0.7 : 0.4}
-                />
-
-                {/* 5. Mouth Smile Alignment Arc */}
-                <path
-                  d="M124 235 Q150 250 176 235"
-                  stroke={isAligned ? '#34d399' : '#38bdf8'}
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeOpacity={isAligned ? 0.8 : 0.4}
-                />
-
-                {/* 6. Forehead Crown Arc */}
-                <path
-                  d="M112 50 Q150 35 188 50"
-                  stroke={isAligned ? '#34d399' : '#38bdf8'}
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeOpacity={isAligned ? 0.9 : 0.5}
-                />
-
-                {/* 7. Chin Rest Notch */}
-                <path
-                  d="M130 318 H170"
-                  stroke={isAligned ? '#34d399' : '#38bdf8'}
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeOpacity={isAligned ? 0.9 : 0.5}
-                />
-              </svg>
-
-              {/* 30-Second Dynamic Circular Countdown Progress Ring around face frame */}
-              {timerSeconds !== undefined && (
-                <svg className="absolute -inset-3 w-[calc(100%+24px)] h-[calc(100%+24px)] transform -rotate-90 pointer-events-none z-30">
-                  <circle
-                    cx="50%"
-                    cy="50%"
-                    r="47%"
-                    stroke={timerSeconds <= 5 ? 'rgba(239, 68, 68, 0.25)' : 'rgba(56, 189, 248, 0.2)'}
-                    strokeWidth="4"
-                    fill="transparent"
-                  />
-                  <circle
-                    cx="50%"
-                    cy="50%"
-                    r="47%"
+                    d={OVAL_PATH}
                     stroke={timerSeconds <= 5 ? 'url(#timerRedGradient)' : 'url(#timerGradient)'}
-                    strokeWidth="6"
-                    fill="transparent"
+                    strokeWidth="4.5"
                     strokeLinecap="round"
                     pathLength="100"
                     strokeDasharray="100"
+                    fill="none"
                     className={timerSeconds <= 5 ? 'animate-pulse' : ''}
                     style={{
                       strokeDashoffset: `${100 - (Math.max(0, Math.min(30, timerSeconds)) / 30) * 100}`,
@@ -478,40 +392,109 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                           : 'drop-shadow(0px 0px 6px rgba(56, 189, 248, 0.6))',
                     }}
                   />
-                  <defs>
-                    <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#38bdf8" />
-                      <stop offset="50%" stopColor="#34d399" />
-                      <stop offset="100%" stopColor="#f59e0b" />
-                    </linearGradient>
-                    <linearGradient id="timerRedGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#f87171" />
-                      <stop offset="50%" stopColor="#ef4444" />
-                      <stop offset="100%" stopColor="#dc2626" />
-                    </linearGradient>
-                  </defs>
-                </svg>
-              )}
+                )}
 
+                {/* 3. Left Eye Target Guide Crosshairs */}
+                <g transform="translate(102, 144)" opacity={isAligned ? 0.95 : 0.6}>
+                  <circle
+                    cx="0"
+                    cy="0"
+                    r="15"
+                    stroke={isAligned ? '#34d399' : '#38bdf8'}
+                    strokeWidth="1.5"
+                    strokeDasharray="3 3"
+                  />
+                  <circle cx="0" cy="0" r="2.5" fill={isAligned ? '#34d399' : '#38bdf8'} />
+                  <path
+                    d="M-18 0 H18 M0 -18 V18"
+                    stroke={isAligned ? '#34d399' : '#38bdf8'}
+                    strokeWidth="1.2"
+                    strokeOpacity="0.6"
+                  />
+                </g>
+
+                {/* 4. Right Eye Target Guide Crosshairs */}
+                <g transform="translate(198, 144)" opacity={isAligned ? 0.95 : 0.6}>
+                  <circle
+                    cx="0"
+                    cy="0"
+                    r="15"
+                    stroke={isAligned ? '#34d399' : '#38bdf8'}
+                    strokeWidth="1.5"
+                    strokeDasharray="3 3"
+                  />
+                  <circle cx="0" cy="0" r="2.5" fill={isAligned ? '#34d399' : '#38bdf8'} />
+                  <path
+                    d="M-18 0 H18 M0 -18 V18"
+                    stroke={isAligned ? '#34d399' : '#38bdf8'}
+                    strokeWidth="1.2"
+                    strokeOpacity="0.6"
+                  />
+                </g>
+
+                {/* 5. Nose Bridge Alignment Indicator */}
+                <path
+                  d="M150 170 L146 198 H154 L150 170"
+                  stroke={isAligned ? '#34d399' : '#38bdf8'}
+                  strokeWidth="1.6"
+                  strokeOpacity={isAligned ? 0.7 : 0.4}
+                />
+
+                {/* 6. Mouth Smile Alignment Arc */}
+                <path
+                  d="M124 240 Q150 256 176 240"
+                  stroke={isAligned ? '#34d399' : '#38bdf8'}
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeOpacity={isAligned ? 0.8 : 0.4}
+                />
+
+                {/* 7. Forehead Crown Arc */}
+                <path
+                  d="M112 50 Q150 34 188 50"
+                  stroke={isAligned ? '#34d399' : '#38bdf8'}
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeOpacity={isAligned ? 0.9 : 0.5}
+                />
+
+                {/* 8. Chin Rest Notch */}
+                <path
+                  d="M130 352 H170"
+                  stroke={isAligned ? '#34d399' : '#38bdf8'}
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeOpacity={isAligned ? 0.9 : 0.5}
+                />
+              </svg>
+
+              {/* Top & Bottom Accent Alignment Markers */}
               <div
-                className={`absolute -top-1 left-1/2 h-3 w-8 -translate-x-1/2 rounded-full transition-colors ${
+                className={`absolute -top-1 left-1/2 h-3 w-8 -translate-x-1/2 rounded-full transition-colors z-30 ${
                   isAligned ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.9)]' : 'bg-sky-400/90 shadow-[0_0_10px_rgba(56,189,248,0.8)]'
                 }`}
               />
               <div
-                className={`absolute -bottom-1 left-1/2 h-3 w-8 -translate-x-1/2 rounded-full transition-colors ${
+                className={`absolute -bottom-1 left-1/2 h-3 w-8 -translate-x-1/2 rounded-full transition-colors z-30 ${
                   isAligned ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.9)]' : 'bg-sky-400/90 shadow-[0_0_10px_rgba(56,189,248,0.8)]'
                 }`}
               />
             </div>
 
-            {/* Real-time Paytm/KYC Status Badge & Guidance Indicator Overlay */}
+            {/* 3. Real-time Status Badge & Dynamic Flow Guidance Indicator Overlay */}
             <div className="z-30 mb-1 rounded-full bg-slate-900/95 px-4 py-2 backdrop-blur-md border border-slate-700 shadow-xl flex items-center gap-2">
               {isProcessing ? (
                 <>
                   <div className="h-4 w-4 animate-spin rounded-full border-2 border-sky-400/30 border-t-sky-400 shrink-0" />
                   <p className="text-xs font-bold text-sky-300">
                     {statusText || 'Verifying face biometrics...'}
+                  </p>
+                </>
+              ) : !isStreamPlaying ? (
+                <>
+                  <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-sky-400/30 border-t-sky-400 shrink-0" />
+                  <p className="text-xs font-bold text-sky-300">
+                    Starting HD Camera...
                   </p>
                 </>
               ) : isBlinkConfirmed ? (
@@ -525,14 +508,14 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                 <>
                   <span className="text-sm">👁️</span>
                   <p className="text-xs font-black text-emerald-300 animate-pulse">
-                    {statusText || 'Face fitted! Please Blink Eyes'}
+                    {statusText || 'Blink your eyes to capture'}
                   </p>
                 </>
               ) : (
                 <>
                   <div className="h-2.5 w-2.5 rounded-full bg-sky-400 shrink-0" />
                   <p className="text-xs font-bold text-sky-300">
-                    {statusText || livenessStatus.prompt || 'Fit face inside the mask'}
+                    {statusText || livenessStatus.prompt || 'Position face in mask'}
                   </p>
                 </>
               )}
@@ -559,7 +542,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
         {children}
       </div>
 
-      {/* 3. Footer Slot Container */}
+      {/* 4. Footer Slot Container */}
       {footerSlot && (
         <div className="w-full bg-slate-950 p-4 border-t border-slate-900 z-30 shrink-0">
           {footerSlot}
