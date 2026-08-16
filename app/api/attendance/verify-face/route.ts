@@ -7,41 +7,40 @@ import { FaceServiceClient } from '@/lib/face-service-client'
 
 export async function POST(request: NextRequest) {
     try {
-        const supabase = await createServerSupabaseClient()
-        const { data: { user }, error: authErr } = await supabase.auth.getUser()
-
-        if (authErr || !user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
-
         const body = await request.json()
-        const { selfieBase64 } = body
+        const { selfieBase64, profileEmbedding } = body
 
         if (!selfieBase64) {
             return NextResponse.json({ error: 'No selfie image provided' }, { status: 400 })
         }
 
-        // 1. Fetch user's enrolled profile embeddings
-        const profile = await db.query.profiles.findFirst({
-            where: eq(profiles.id, user.id),
-            columns: {
-                id: true,
-                face_embedding_512: true,
-                face_embedding: true,
-                avatar_url: true,
-            }
-        })
+        let stored512: number[] | null = null
+        let stored128: number[] | null = null
 
-        if (!profile) {
-            return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
+        if (profileEmbedding && Array.isArray(profileEmbedding)) {
+            if (profileEmbedding.length === 512) stored512 = profileEmbedding
+            else if (profileEmbedding.length === 128) stored128 = profileEmbedding
         }
 
-        const stored512 = profile.face_embedding_512 as number[] | null
-        const stored128 = profile.face_embedding as number[] | null
+        // Fallback to database profile lookup if not provided in request body
+        if (!stored512 && !stored128) {
+            const supabase = await createServerSupabaseClient()
+            const { data: { user } } = await supabase.auth.getUser()
+            if (user) {
+                const profile = await db.query.profiles.findFirst({
+                    where: eq(profiles.id, user.id),
+                    columns: { face_embedding_512: true, face_embedding: true }
+                })
+                if (profile) {
+                    stored512 = profile.face_embedding_512 as number[] | null
+                    stored128 = profile.face_embedding as number[] | null
+                }
+            }
+        }
 
         if (!stored512 && !stored128) {
             return NextResponse.json({
-                error: 'No profile face registered. Please register profile photo first.'
+                error: 'No enrolled face profile found. Please register your profile photo first.'
             }, { status: 400 })
         }
 

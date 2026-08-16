@@ -188,8 +188,11 @@ export const FaceVerificationService = {
                 const apiResp = await fetch('/api/attendance/verify-face', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ selfieBase64: selfieDataUrl }),
-                    signal: AbortSignal.timeout(8000)
+                    body: JSON.stringify({
+                        selfieBase64: selfieDataUrl,
+                        profileEmbedding: preSavedEmbedding ? Array.from(preSavedEmbedding) : undefined
+                    }),
+                    signal: AbortSignal.timeout(10000)
                 });
                 if (apiResp.ok) {
                     const apiData = await apiResp.json();
