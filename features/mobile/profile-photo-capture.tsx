@@ -268,7 +268,11 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
             let preExtracted512: number[] | null = null;
 
             try {
-                const extracted = await FaceVerificationService.extractAligned512dDescriptor(capturedImage);
+                // Strict 1.2s timeout guard: Never stall mobile upload if client WASM model is downloading
+                const extractPromise = FaceVerificationService.extractAligned512dDescriptor(capturedImage);
+                const timeoutPromise = new Promise<null>((res) => setTimeout(() => res(null), 1200));
+                const extracted = await Promise.race([extractPromise, timeoutPromise]);
+
                 if (extracted?.hdAvatarDataUrl || extracted?.cropDataUrl) {
                     uploadDataUrl = extracted.hdAvatarDataUrl || extracted.cropDataUrl;
                     if (extracted.embedding && extracted.embedding.length === 512) {
@@ -300,7 +304,6 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
                 formData.append('isPending', 'true')
             }
 
-
             const response = await fetch('/api/upload-avatar', {
                 method: 'POST',
                 body: formData,
@@ -318,7 +321,7 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
 
             // Handle differently based on first-time upload vs update approval request
             if (isFirstTimeUpload) {
-                // First-time: Direct update profile and save active face embedding immediately
+                // First-time: Save active face embedding immediately if pre-extracted
                 if (preExtracted512 && preExtracted512.length === 512) {
                     try {
                         await saveFaceEmbedding.mutateAsync({ embedding: preExtracted512 })
@@ -326,24 +329,13 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
                     } catch (faceErr) {
                         addLog('⚠️ Face vector saving warning: ' + String(faceErr))
                     }
-                } else if (capturedImage) {
-                    try {
-                        addLog('Extracting 512-d ArcFace vector with canonical 20% padded alignment...')
-                        const extracted = await FaceVerificationService.extractAligned512dDescriptor(capturedImage)
-                        if (extracted && extracted.embedding && extracted.embedding.length === 512) {
-                            await saveFaceEmbedding.mutateAsync({ embedding: extracted.embedding })
-                            addLog('✅ ArcFace 512-d vector saved to DB for Kiosk & PWA matching.')
-                        }
-                    } catch (faceErr) {
-                        addLog('⚠️ Face vector extraction warning: ' + String(faceErr))
-                    }
                 }
 
                 setStatus('success')
                 toast.success('Profile photo updated successfully!')
             } else {
                 // Subsequent update: Create pending request WITHOUT touching active profile photo or vector!
-                addLog('Submitting for admin approval (vector deferred until approval)...')
+                addLog('Submitting for admin approval...')
                 await createPhotoRequest.mutateAsync({
                     pendingPhotoUrl: result.path,
                     pendingFaceEmbedding: (preExtracted512 && preExtracted512.length === 512) ? preExtracted512 : undefined
@@ -506,7 +498,7 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
                             <div className="p-6 bg-slate-900/90 border border-white/15 rounded-3xl space-y-3 shadow-2xl flex flex-col items-center max-w-xs animate-in zoom-in-95">
                                 <IconRefresh className="w-10 h-10 text-sky-400 animate-spin" />
                                 <p className="text-sm font-bold text-white">Submitting Profile Photo...</p>
-                                <p className="text-xs text-slate-300">Extracting 160×160 face vector</p>
+                                <p className="text-xs text-slate-300">Generating 512-d ArcFace vector</p>
                             </div>
                         </div>
                     )}
