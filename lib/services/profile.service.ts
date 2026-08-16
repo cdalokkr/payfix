@@ -353,16 +353,42 @@ export class ProfileService {
 
             let embeddingToApply = faceEmbedding || (request as any).pending_face_embedding_512 || (request as any).pending_face_embedding
 
-            // Automatic 512-d ArcFace vector extraction via ZeroGPU AI Service if not supplied by client
-            if ((!embeddingToApply || embeddingToApply.length !== 512) && request.pending_photo_url) {
+            // Automatic 512-d ArcFace vector extraction + 15% Face Crop via ZeroGPU AI Service
+            if (request.pending_photo_url) {
                 try {
                     const imgResp = await fetch(request.pending_photo_url)
                     if (imgResp.ok) {
                         const buffer = await imgResp.arrayBuffer()
                         const b64 = Buffer.from(buffer).toString('base64')
                         const extractRes = await FaceServiceClient.extract(b64)
-                        if (extractRes.success && (extractRes.embedding_512 || extractRes.embedding)) {
-                            embeddingToApply = extractRes.embedding_512 || extractRes.embedding
+                        if (extractRes.success) {
+                            if (extractRes.embedding_512 || extractRes.embedding) {
+                                embeddingToApply = extractRes.embedding_512 || extractRes.embedding
+                            }
+                            // If 512x512 face crop generated, save it to storage as the final profile avatar
+                            if (extractRes.cropped_face_base64 && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+                                try {
+                                    const { createClient } = await import('@supabase/supabase-js')
+                                    const adminClient = createClient(
+                                        process.env.NEXT_PUBLIC_SUPABASE_URL,
+                                        process.env.SUPABASE_SERVICE_ROLE_KEY,
+                                        { auth: { persistSession: false } }
+                                    )
+                                    const cropClean = extractRes.cropped_face_base64.replace(/^data:image\/\w+;base64,/, '')
+                                    const cropBuffer = Buffer.from(cropClean, 'base64')
+                                    const croppedFileName = `avatar-crop-${request.profile_id}-${Date.now()}.jpg`
+                                    const { error: upErr } = await adminClient.storage
+                                        .from('avatars')
+                                        .upload(croppedFileName, cropBuffer, { contentType: 'image/jpeg', upsert: true })
+                                    if (!upErr) {
+                                        const { data: { publicUrl } } = adminClient.storage.from('avatars').getPublicUrl(croppedFileName)
+                                        updatePayload.avatar_url = publicUrl
+                                        updatePayload.face_photo_url = publicUrl
+                                    }
+                                } catch (storageErr) {
+                                    console.warn('[ProfileService] Cropped avatar storage upload warning:', storageErr)
+                                }
+                            }
                         }
                     }
                 } catch (extErr) {
