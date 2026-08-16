@@ -599,13 +599,13 @@ export const attendanceRouter = router({
             selfieBase64: z.string(),
         }))
         .mutation(async ({ ctx, input }) => {
-            const FACE_API_URL = process.env.FACE_API_URL || 'http://localhost:8000'
+            const FACE_API_URL = process.env.DEV_FACE_API_URL || process.env.FACE_API_URL || 'http://localhost:8000'
 
             try {
-                // 1. Fetch user profile
+                // 1. Fetch user profile with both 512-d and 128-d embeddings
                 const profile = await ctx.db.query.profiles.findFirst({
                     where: eq(profiles.id, ctx.profile.id),
-                    columns: { id: true, face_embedding: true, avatar_url: true }
+                    columns: { id: true, face_embedding: true, face_embedding_512: true, avatar_url: true }
                 })
 
                 if (!profile) {
@@ -616,26 +616,42 @@ export const attendanceRouter = router({
                 }
 
                 // 2. Extract selfie embedding via Python microservice
-                let selfieEmbedding: number[]
+                let selfieEmbedding: number[] = []
+                let selfieEmbedding512: number[] | null = null
+                let diagnostics: any = null
                 let mockFallbackUsed = false
                 try {
                     const response = await fetch(`${FACE_API_URL}/extract`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ image_base64: input.selfieBase64 }),
+                        body: JSON.stringify({
+                            image_base64: input.selfieBase64,
+                            require_512: true,
+                            require_128: true,
+                            check_liveness: true
+                        }),
                     })
 
                     if (!response.ok) {
                         const errorData = await response.json().catch(() => ({}))
-                        throw new Error(errorData.detail || 'Failed to communicate with face service')
+                        throw new Error(errorData.detail || errorData.error_message || 'Face service communication failed')
                     }
 
                     const result = await response.json()
-                    if (!result.success || !result.embedding) {
-                        throw new Error(result.error || 'No face detected in selfie')
+                    diagnostics = result.diagnostics || null
+
+                    if (!result.success || (!result.embedding && !result.embedding_512 && !result.embedding_128)) {
+                        const tip = result.troubleshooting_tip ? ` (${result.troubleshooting_tip})` : ''
+                        throw new TRPCError({
+                            code: 'BAD_REQUEST',
+                            message: `${result.error_message || result.error || 'No face detected in selfie'}${tip}`
+                        })
                     }
-                    selfieEmbedding = result.embedding
+
+                    selfieEmbedding512 = result.embedding_512 || (result.embedding?.length === 512 ? result.embedding : null)
+                    selfieEmbedding = result.embedding_128 || result.embedding || []
                 } catch (e: any) {
+                    if (e instanceof TRPCError) throw e
                     const isNetworkError = 
                         e.message?.includes('fetch failed') || 
                         e.code === 'ECONNREFUSED' || 
@@ -660,86 +676,70 @@ export const attendanceRouter = router({
                         matched: true,
                         similarity: 0.95,
                         distance: 0.05,
+                        is_live: true,
+                        diagnostics: { mock: true },
                         error: undefined
                     }
                 }
 
-                // 3. Get profile face embedding (from DB or extract from avatar_url)
-                let profileEmbedding = profile.face_embedding as number[] | null
+                // 3. Get stored profile face embedding (prefer 512-d ArcFace, fallback to 128-d)
+                const stored512 = (profile as any).face_embedding_512 as number[] | null
+                const stored128 = profile.face_embedding as number[] | null
 
-                if (!profileEmbedding || profileEmbedding.length === 0) {
-                    if (!profile.avatar_url) {
-                        throw new TRPCError({
-                            code: 'BAD_REQUEST',
-                            message: 'No profile photo registered. Please upload a profile photo first.'
-                        })
+                let matched = false
+                let similarity = 0
+                let distance = 0
+
+                if (stored512 && stored512.length === 512 && selfieEmbedding512 && selfieEmbedding512.length === 512) {
+                    // Cosine similarity for 512-d unit vectors
+                    let dot = 0
+                    for (let i = 0; i < 512; i++) {
+                        dot += stored512[i] * selfieEmbedding512[i]
                     }
-
-                    // Extract embedding from avatar_url
+                    similarity = Math.max(0, Math.min(1, dot))
+                    distance = 1 - similarity
+                    matched = similarity >= 0.65
+                } else if (stored128 && stored128.length === 128 && selfieEmbedding.length === 128) {
+                    // Euclidean distance for 128-d vectors
+                    let sum = 0
+                    for (let i = 0; i < 128; i++) {
+                        const diff = selfieEmbedding[i] - stored128[i]
+                        sum += diff * diff
+                    }
+                    distance = Math.sqrt(sum)
+                    similarity = Math.max(0, 1 - distance)
+                    matched = distance < 0.50
+                } else if (!stored512 && !stored128) {
+                    throw new TRPCError({
+                        code: 'BAD_REQUEST',
+                        message: 'No profile photo registered. Please upload a profile photo first.'
+                    })
+                } else {
+                    // Vector format fallback comparison via /compare
                     try {
-                        const imgResponse = await fetch(profile.avatar_url)
-                        if (!imgResponse.ok) {
-                            throw new Error('Failed to fetch profile image')
-                        }
-                        const buffer = await imgResponse.arrayBuffer()
-                        const base64 = Buffer.from(buffer).toString('base64')
-                        const contentType = imgResponse.headers.get('content-type') || 'image/jpeg'
-                        const base64DataUrl = `data:${contentType};base64,${base64}`
-
-                        const response = await fetch(`${FACE_API_URL}/extract`, {
+                        const cmpResp = await fetch(`${FACE_API_URL}/compare`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ image_base64: base64DataUrl }),
+                            body: JSON.stringify({
+                                embedding1: selfieEmbedding512 || selfieEmbedding,
+                                embedding2: stored512 || stored128
+                            })
                         })
-
-                        if (!response.ok) {
-                            throw new Error('Failed to extract face vector from profile photo')
+                        if (cmpResp.ok) {
+                            const cmpData = await cmpResp.json()
+                            matched = cmpData.matched
+                            similarity = cmpData.similarity
+                            distance = cmpData.distance
                         }
-
-                        const result = await response.json()
-                        if (!result.success || !result.embedding) {
-                            throw new Error(result.error || 'No face detected in profile photo')
-                        }
-
-                        profileEmbedding = result.embedding
-                        
-                        // Save vector back to DB for future speedups
-                        await ctx.db.update(profiles)
-                            .set({ face_embedding: profileEmbedding })
-                            .where(eq(profiles.id, ctx.profile.id))
-
-                    } catch (e: any) {
-                        throw new TRPCError({
-                            code: 'INTERNAL_SERVER_ERROR',
-                            message: `Could not process profile photo: ${e.message}`
-                        })
-                    }
+                    } catch {}
                 }
-
-                if (!profileEmbedding) {
-                    throw new TRPCError({
-                        code: 'INTERNAL_SERVER_ERROR',
-                        message: 'Profile face embedding could not be loaded'
-                    })
-                }
-
-                // 4. Calculate Euclidean Distance
-                let sum = 0
-                for (let i = 0; i < selfieEmbedding.length; i++) {
-                    const diff = selfieEmbedding[i] - profileEmbedding[i]
-                    sum += diff * diff
-                }
-                const distance = Math.sqrt(sum)
-                
-                // Euclidean distance threshold: distance < 0.5 = same person
-                const threshold = 0.5
-                const similarity = Math.max(0, 1 - distance)
-                const matched = distance < threshold
 
                 return {
                     matched,
-                    similarity,
-                    distance,
+                    similarity: Math.round(similarity * 1000) / 1000,
+                    distance: Math.round(distance * 1000) / 1000,
+                    is_live: diagnostics?.is_live ?? true,
+                    diagnostics,
                     error: matched ? undefined : `Face does not match profile photo (${(similarity * 100).toFixed(0)}% similarity).`
                 }
 
