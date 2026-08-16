@@ -142,12 +142,12 @@ export function DashboardLayout({
 
   // Use cached profile as initial data and always fetch fresh data in background
   const { data: profile, isLoading: profileLoading, isError: profileError } = trpc.profile.get.useQuery(undefined, {
-    staleTime: 5 * 60 * 1000, // 5 minutes - prevent unnecessary refetches during navigation
-    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
-    refetchOnMount: false, // Use cached data if available, don't refetch on every mount
-    refetchOnWindowFocus: false, // Don't refetch when window regains focus
-    enabled: !isLoggingOut, // Prevent fetching when logging out to avoid 401 errors
-    retry: 2, // Limit retries to prevent infinite loading
+    staleTime: 30 * 1000, // 30 seconds
+    gcTime: 10 * 60 * 1000,
+    refetchOnMount: true, // Always refresh profile on mount
+    refetchOnWindowFocus: false,
+    enabled: !isLoggingOut,
+    retry: 2,
     retryDelay: 1000,
   })
 

@@ -3,6 +3,7 @@
 // ============================================
 import { z } from 'zod'
 import { router, protectedProcedure } from '../server'
+import { db } from '@/lib/db'
 import { profiles, activities, designations, profilePhotoRequests } from '@/lib/db/schema'
 import { eq, and, desc, count } from 'drizzle-orm'
 import { profileUpdateSchema } from '@/lib/validations/auth'
@@ -12,7 +13,16 @@ import { ProfileService } from '@/lib/services/profile.service'
 import { TRPCError } from '@trpc/server'
 
 export const profileRouter = router({
-  get: protectedProcedure.query(({ ctx }) => {
+  get: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      const fresh = await db.query.profiles.findFirst({
+        where: eq(profiles.id, ctx.profile.id),
+        with: { designation: true }
+      })
+      if (fresh) return fresh as any as import('@/types').Profile
+    } catch (e) {
+      console.warn('[ProfileRouter] Fresh profile fetch fallback to ctx:', e)
+    }
     return ctx.profile as any as import('@/types').Profile
   }),
 
