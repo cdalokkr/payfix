@@ -6,7 +6,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { format } from "date-fns"
 import Link from "next/link"
 import { motion } from "framer-motion"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { trpc } from "@/lib/trpc/client"
 import { ProfilePhotoCapture } from "@/features/mobile/profile-photo-capture"
 
@@ -129,18 +129,42 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
     const { isPwa, isMobile, isReady } = usePwaCheck(isPwaServer)
     const [isDesktop, setIsDesktop] = useState(false)
     const [isPhotoCaptureOpen, setIsPhotoCaptureOpen] = useState(false)
+    const [preWarmedStream, setPreWarmedStream] = useState<MediaStream | null>(null)
+    const preWarmedStreamRef = useRef<MediaStream | null>(null)
     const [hardwareInfo] = useState(() => getHardwareAccelerationInfo())
     useEffect(() => {
         // Pre-warm face recognition models & MediaPipe vision in background
         FaceVerificationService.initialize().catch(() => {})
-        FaceApiBrowserService.loadModels().catch(() => {})
+        FaceApiBrowserService.loadDetectorOnly().catch(() => {})
         MediaPipeMeshService.initialize().catch(() => {})
+
+        const preWarmTimer = setTimeout(async () => {
+            try {
+                if (navigator?.mediaDevices?.getUserMedia) {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 640 } },
+                        audio: false
+                    })
+                    preWarmedStreamRef.current = stream
+                    setPreWarmedStream(stream)
+                }
+            } catch {
+                // Silently ignore camera pre-warm errors
+            }
+        }, 2000)
 
         setIsDesktop(window.innerWidth >= 1024)
 
         const handleResize = () => setIsDesktop(window.innerWidth >= 1024)
         window.addEventListener('resize', handleResize)
-        return () => window.removeEventListener('resize', handleResize)
+        return () => {
+            clearTimeout(preWarmTimer)
+            if (preWarmedStreamRef.current) {
+                preWarmedStreamRef.current.getTracks().forEach(track => track.stop())
+                preWarmedStreamRef.current = null
+            }
+            window.removeEventListener('resize', handleResize)
+        }
     }, [])
 
 
@@ -711,7 +735,19 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
             )}
 
             {/* Seamless Profile Selfie Capture Popup Modal (Zero Page Reload / Refresh) */}
-            <Dialog open={isPhotoCaptureOpen} onOpenChange={(open) => !open && setIsPhotoCaptureOpen(false)}>
+            <Dialog
+                open={isPhotoCaptureOpen}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setIsPhotoCaptureOpen(false)
+                        if (preWarmedStreamRef.current) {
+                            preWarmedStreamRef.current.getTracks().forEach(track => track.stop())
+                            preWarmedStreamRef.current = null
+                            setPreWarmedStream(null)
+                        }
+                    }
+                }}
+            >
                 <DialogContent className="max-w-md w-[95vw] p-0 bg-slate-950 border-slate-800 text-slate-100 overflow-hidden rounded-3xl z-[70] max-h-[92vh] overflow-y-auto [&>button]:hidden">
 
                     <ProfilePhotoCapture
@@ -723,9 +759,14 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
                             avatarUrl: profile.avatar_url,
                             avatarStatus: profile.avatar_status
                         }}
-
+                        preWarmedStream={preWarmedStream}
                         onSuccess={() => {
                             setIsPhotoCaptureOpen(false)
+                            if (preWarmedStreamRef.current) {
+                                preWarmedStreamRef.current.getTracks().forEach(track => track.stop())
+                                preWarmedStreamRef.current = null
+                                setPreWarmedStream(null)
+                            }
                             utils.profile.invalidate()
                             utils.attendance.invalidate()
                         }}

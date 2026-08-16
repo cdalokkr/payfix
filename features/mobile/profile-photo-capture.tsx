@@ -41,10 +41,11 @@ interface ProfileData {
 interface ProfilePhotoCaptureProps {
     profileId: string
     profileData: ProfileData
+    preWarmedStream?: MediaStream | null
     onSuccess?: () => void
 }
 
-export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: ProfilePhotoCaptureProps) {
+export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, onSuccess }: ProfilePhotoCaptureProps) {
     const router = useRouter()
     const supabase = createClient()
     const updateProfilePicture = trpc.profile.updateProfilePicture.useMutation()
@@ -404,6 +405,7 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
             title="Profile Photo Setup"
             icon={<IconUser className="w-5 h-5 text-sky-400" />}
             videoRefOut={videoRef}
+            warmedStream={preWarmedStream}
             onStreamReady={() => setStatus('streaming')}
             statusText={status === 'captured' ? 'Photo captured! Review below' : undefined}
             timerSeconds={!capturedImage && status !== 'captured' ? sessionTimeout : undefined}

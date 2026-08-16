@@ -200,11 +200,9 @@ export const MediaPipeMeshService = {
         const scanEl = getScanCanvas(video) || video;
 
         // Path A: Local Offline Face-Api (Fastest, zero CDN lag)
-        if (typeof window !== 'undefined') {
+        // Models are pre-loaded on dashboard mount — never block the RAF loop here
+        if (typeof window !== 'undefined' && FaceApiBrowserService.isDetectorReady() && window.faceapi) {
             try {
-                if (!FaceApiBrowserService.isDetectorReady() || !window.faceapi) {
-                    await FaceApiBrowserService.loadDetectorOnly();
-                }
 
                 if (window.faceapi) {
                     const faceapi = window.faceapi;

@@ -58,6 +58,7 @@ export async function GET(req: NextRequest) {
                         avatar_url: profiles.avatar_url,
                         biometric_device_user_id: employeeSettings.biometric_device_user_id,
                         face_embedding: profiles.face_embedding,
+                        face_embedding_512: profiles.face_embedding_512,
                         face_vector: employeeSettings.face_vector,
                     })
                     .from(profiles)
@@ -72,6 +73,7 @@ export async function GET(req: NextRequest) {
                         avatar_url: profiles.avatar_url,
                         biometric_device_user_id: employeeSettings.biometric_device_user_id,
                         face_embedding: sql`NULL`.as('face_embedding'),
+                        face_embedding_512: sql`NULL`.as('face_embedding_512'),
                         face_vector: employeeSettings.face_vector,
                     })
                     .from(profiles)
@@ -79,20 +81,24 @@ export async function GET(req: NextRequest) {
                     .where(eq(profiles.status, 'active'));
             }
 
-            return activeEmployees.map(emp => {
-                let faceVector: number[] | null = parseVector(emp.face_embedding);
-                if (!faceVector) {
-                    faceVector = parseVector(emp.face_vector);
-                }
+            return activeEmployees.map(row => {
+                const faceEmbedding512 = parseVector(row.face_embedding_512);
+                const faceEmbedding128 = parseVector(row.face_embedding) || parseVector(row.face_vector);
+                const faceVector = faceEmbedding512 || faceEmbedding128;
 
                 return {
-                    id: emp.id,
-                    name: emp.full_name || emp.email,
-                    avatarUrl: emp.avatar_url || null,
-                    biometricUserId: emp.biometric_device_user_id || null,
+                    id: row.id,
+                    name: row.full_name || row.email,
+                    avatarUrl: row.avatar_url || null,
+                    biometricUserId: row.biometric_device_user_id || null,
+                    embedding: parseVector(row.face_embedding_512 || row.face_embedding) || faceVector,
                     faceVector,
                     faceEmbedding: faceVector,
-                    hasEnrolledFace: faceVector !== null && faceVector.length === 128,
+                    faceEmbedding512,
+                    faceEmbedding128,
+                    face_embedding_512: faceEmbedding512,
+                    face_embedding: faceEmbedding128,
+                    hasEnrolledFace: faceVector !== null && (faceVector.length === 512 || faceVector.length === 128),
                 };
             });
         });

@@ -95,6 +95,9 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
     // Fast-path: use pre-warmed stream if active
     if (warmedStream && warmedStream.active) {
       streamRef.current = warmedStream;
+      isCapturingRef.current = false;
+      isEvaluatingRef.current = false;
+      MediaPipeMeshService.resetBlinkState();
       setIsStreamPlaying(true);
       if (videoRef.current) {
         const video = videoRef.current;
@@ -102,7 +105,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
         video.setAttribute('playsinline', 'true');
         video.muted = true;
         video.play().then(() => setIsStreamPlaying(true)).catch(() => {});
-        FaceApiBrowserService.loadModels().catch(() => {});
+        FaceApiBrowserService.loadDetectorOnly().catch(() => {});
         MediaPipeMeshService.initialize().catch(() => {});
         onStreamReadyRef.current?.(warmedStream, video);
       }
@@ -164,8 +167,8 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           if (isMountedRef.current) setIsStreamPlaying(true);
         });
 
-        // Preload Face Models
-        FaceApiBrowserService.loadModels().catch(() => {});
+        // Fast preload detector for instant blink detection
+        FaceApiBrowserService.loadDetectorOnly().catch(() => {});
         MediaPipeMeshService.initialize().catch(() => {});
 
         if (onStreamReadyRef.current) {
@@ -212,12 +215,21 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
         !isProcessing &&
         !isEvaluatingRef.current
       ) {
-        // Run tracker every ~60ms for ultra-responsive blink capture
-        if (time - lastEvalTime >= 60) {
+        // Run tracker every ~80ms for ultra-responsive blink capture
+        if (time - lastEvalTime >= 80) {
           lastEvalTime = time;
           isEvaluatingRef.current = true;
           try {
-            const status = await MediaPipeMeshService.evaluateInMaskLiveness(videoRef.current, time);
+            // 200ms timeout guard prevents RAF loop from stalling if model loading is slow
+            const evalPromise = MediaPipeMeshService.evaluateInMaskLiveness(videoRef.current, time);
+            const timeoutPromise = new Promise<InMaskLivenessStatus>((resolve) =>
+              setTimeout(() => resolve({
+                isFaceDetected: false, isAlignedInMask: false, isBlinking: false,
+                blinkConfirmed: false, prompt: 'Detecting face...', statusBadgeColor: 'blue',
+                ear: 0, headPose: { yaw: 0, pitch: 0, roll: 0 },
+              }), 200)
+            );
+            const status = await Promise.race([evalPromise, timeoutPromise]);
             if (isMountedRef.current) {
               setLivenessStatus(status);
               if (!isStreamPlaying) {
