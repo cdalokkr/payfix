@@ -3,8 +3,8 @@
  *
  * Implements:
  * 1. Dual-Engine Real-Time Face Alignment: Face-API (Offline GPU/WebGL) + MediaPipe 3D Mesh (GPU).
- * 2. Ultra-Fast Landmark & Eye Aspect Ratio (EAR) Extraction (<10ms).
- * 3. Robust Eye Blink Detection + 2.2s Auto-Timer Fallback (Zero Stuck User Guarantee).
+ * 2. Guaranteed Model Pre-Loading on every evaluation frame.
+ * 3. Robust Eye Blink Detection + 2.0s Auto-Timer Fallback (Zero Stuck User Guarantee).
  * 4. 512x512 High-Definition Natural Upright Crop (+18% Margin, 0° Artificial Tilt).
  * 5. 112x112 Canonical Tensor Warping for ArcFace 512-d vector extraction.
  */
@@ -166,16 +166,16 @@ export const MediaPipeMeshService = {
         let hasDetection = false;
 
         // Path A: Local Offline Face-Api (Fastest, zero CDN lag, 100% reliable)
-        if (typeof window !== 'undefined' && window.faceapi) {
+        if (typeof window !== 'undefined') {
             try {
-                if (!FaceApiBrowserService.isReady()) {
+                if (!FaceApiBrowserService.isReady() || !window.faceapi) {
                     await FaceApiBrowserService.loadModels();
                 }
 
-                const faceapi = window.faceapi;
-                if (video.videoWidth > 0 && video.readyState >= 2) {
+                if (window.faceapi && video.videoWidth > 0 && video.readyState >= 2) {
+                    const faceapi = window.faceapi;
                     const detection = await faceapi
-                        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.20 }))
+                        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.15 }))
                         .withFaceLandmarks(true);
 
                     if (detection && detection.landmarks) {
@@ -243,14 +243,14 @@ export const MediaPipeMeshService = {
         // Dynamically calibrate baseline open-eye EAR
         if (ear > 0.16) {
             _sampleCount++;
-            if (_sampleCount < 10) {
+            if (_sampleCount < 8) {
                 _baselineEAR = ear;
             } else {
-                _baselineEAR = 0.92 * _baselineEAR + 0.08 * ear;
+                _baselineEAR = 0.90 * _baselineEAR + 0.10 * ear;
             }
         }
 
-        const isEyeBlinking = ear <= Math.min(0.175, _baselineEAR * 0.80);
+        const isEyeBlinking = ear <= Math.min(0.18, _baselineEAR * 0.82);
         const isEyeOpen = ear >= Math.max(0.165, _baselineEAR * 0.85);
 
         let isBlinking = false;
@@ -258,9 +258,9 @@ export const MediaPipeMeshService = {
         let prompt = 'Blink your eyes to capture';
         let statusBadgeColor: 'blue' | 'amber' | 'emerald' | 'rose' = 'emerald';
 
-        // Auto-Timer Fallback: If face is steadily aligned in mask for > 2.2 seconds, auto-confirm
+        // Auto-Timer Fallback: If face is steadily aligned in mask for > 2.0 seconds, auto-confirm
         const alignedDuration = timestamp - _alignedStartTimestamp;
-        if (alignedDuration > 2200) {
+        if (alignedDuration > 2000) {
             blinkConfirmed = true;
             prompt = 'Blink Verified! Capturing... 📸';
             statusBadgeColor = 'emerald';
@@ -280,8 +280,8 @@ export const MediaPipeMeshService = {
         if (isEyeOpen) {
             if (_blinkState === 'EYES_CLOSED') {
                 const blinkDuration = timestamp - _lastClosedTimestamp;
-                // Valid blink between 25ms and 800ms
-                if (blinkDuration >= 25 && blinkDuration <= 800) {
+                // Valid blink between 20ms and 850ms
+                if (blinkDuration >= 20 && blinkDuration <= 850) {
                     _blinkState = 'BLINK_CONFIRMED';
                     blinkConfirmed = true;
                     prompt = 'Blink Verified! Capturing... 📸';
@@ -429,7 +429,7 @@ export const MediaPipeMeshService = {
 
                 const faceapi = window.faceapi;
                 const detection = await faceapi
-                    .detectSingleFace(videoOrCanvas, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.20 }))
+                    .detectSingleFace(videoOrCanvas, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.15 }))
                     .withFaceLandmarks(true);
 
                 if (detection) {

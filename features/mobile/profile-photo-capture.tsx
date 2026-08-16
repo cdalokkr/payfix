@@ -398,25 +398,17 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
     }, [status, capturedImage, stopCamera, handleBack])
 
 
-    useEffect(() => {
-        // Don't start camera if there's a pending request
-        if (hasPendingRequest) return
-        startCamera()
-        return () => stopCamera()
-    }, [startCamera, stopCamera, hasPendingRequest])
-
-
     return (
         <BiometricCameraModal
-            isOpen={true}
+            isOpen={!hasPendingRequest}
             onClose={handleBack}
             title="Profile Photo Setup"
             icon={<IconUser className="w-5 h-5 text-sky-400" />}
             videoRefOut={videoRef}
             onStreamReady={() => setStatus('streaming')}
             statusText={status === 'captured' ? 'Photo captured! Review below' : undefined}
-            timerSeconds={status === 'streaming' && !capturedImage ? sessionTimeout : undefined}
-            enableAutoBlinkCapture={status === 'streaming'}
+            timerSeconds={!capturedImage && status !== 'captured' ? sessionTimeout : undefined}
+            enableAutoBlinkCapture={!capturedImage && status !== 'uploading' && status !== 'submitted'}
             onAutoCapture={handleAutoCapture}
             footerSlot={
 

@@ -487,10 +487,8 @@ export function SelfieCapture({
                     icon={<IconScanFace className="w-5 h-5 text-sky-400" />}
                     videoRefOut={videoRef}
                     onStreamReady={() => setStatus('streaming')}
-                    statusText={status === 'streaming' ? undefined : undefined}
-                    isProcessing={status === 'verifying'}
-                    timerSeconds={status === 'streaming' && !capturedImage ? sessionTimeout : undefined}
-                    enableAutoBlinkCapture={status === 'streaming'}
+                    timerSeconds={!capturedImage && status !== 'verified' ? sessionTimeout : undefined}
+                    enableAutoBlinkCapture={!capturedImage && status !== 'verifying' && status !== 'verified'}
                     onAutoCapture={handleAutoCapture}
                     footerSlot={
 
