@@ -3,6 +3,8 @@ import { profiles, activities, profilePhotoRequests } from '@/lib/db/schema'
 import { eq, and, desc, count, sql } from 'drizzle-orm'
 import { throwAppError } from '@/lib/errors/app-errors'
 import { invalidateUserSession } from '@/lib/auth/optimized-context'
+import { FaceServiceClient } from '@/lib/face-service-client'
+
 
 export class ProfileService {
     /**
@@ -349,7 +351,25 @@ export class ProfileService {
                 updated_at: new Date()
             }
 
-            const embeddingToApply = faceEmbedding || (request as any).pending_face_embedding_512 || (request as any).pending_face_embedding
+            let embeddingToApply = faceEmbedding || (request as any).pending_face_embedding_512 || (request as any).pending_face_embedding
+
+            // Automatic 512-d ArcFace vector extraction via ZeroGPU AI Service if not supplied by client
+            if ((!embeddingToApply || embeddingToApply.length !== 512) && request.pending_photo_url) {
+                try {
+                    const imgResp = await fetch(request.pending_photo_url)
+                    if (imgResp.ok) {
+                        const buffer = await imgResp.arrayBuffer()
+                        const b64 = Buffer.from(buffer).toString('base64')
+                        const extractRes = await FaceServiceClient.extract(b64)
+                        if (extractRes.success && (extractRes.embedding_512 || extractRes.embedding)) {
+                            embeddingToApply = extractRes.embedding_512 || extractRes.embedding
+                        }
+                    }
+                } catch (extErr) {
+                    console.warn('[ProfileService] Auto 512-d vector extraction warning:', extErr)
+                }
+            }
+
             if (embeddingToApply && Array.isArray(embeddingToApply)) {
                 if (embeddingToApply.length === 512) {
                     updatePayload.face_embedding_512 = embeddingToApply

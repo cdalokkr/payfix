@@ -17,8 +17,12 @@ async function add512dVectorColumn() {
             await centralDb.execute(sql`
                 ALTER TABLE IF EXISTS public.profiles 
                 ADD COLUMN IF NOT EXISTS face_embedding_512 vector(512);
+
+                ALTER TABLE IF EXISTS public.profile_photo_requests 
+                ADD COLUMN IF NOT EXISTS pending_face_embedding_512 vector(512),
+                ADD COLUMN IF NOT EXISTS pending_face_embedding vector(128);
             `);
-            console.log('   ✅ public.profiles.face_embedding_512 column added.');
+            console.log('   ✅ public.profiles & public.profile_photo_requests columns added.');
         } catch (err: any) {
             console.warn('   ⚠️ Warning for public schema:', err.message || err);
         }
