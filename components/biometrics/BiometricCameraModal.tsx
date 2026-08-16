@@ -49,7 +49,6 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   const isMountedRef = useRef(true);
   const [isStreamPlaying, setIsStreamPlaying] = useState(false);
 
-  // Store callback refs so parent re-renders never restart stream
   const onStreamReadyRef = useRef(onStreamReady);
   const onCameraErrorRef = useRef(onCameraError);
   const onAutoCaptureRef = useRef(onAutoCapture);
@@ -96,6 +95,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
     // Fast-path: use pre-warmed stream if active
     if (warmedStream && warmedStream.active) {
       streamRef.current = warmedStream;
+      setIsStreamPlaying(true);
       if (videoRef.current) {
         const video = videoRef.current;
         video.srcObject = warmedStream;
@@ -111,6 +111,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
     // Stream is active — DO NOT STOP stream!
     if (streamRef.current && streamRef.current.active) {
+      setIsStreamPlaying(true);
       if (videoRef.current && videoRef.current.srcObject !== streamRef.current) {
         videoRef.current.srcObject = streamRef.current;
         videoRef.current.play().then(() => setIsStreamPlaying(true)).catch(() => {});
@@ -150,6 +151,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
       }
 
       streamRef.current = stream;
+      setIsStreamPlaying(true);
 
       if (videoRef.current) {
         const video = videoRef.current;
@@ -158,7 +160,9 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
         video.muted = true;
         video.play().then(() => {
           if (isMountedRef.current) setIsStreamPlaying(true);
-        }).catch(() => {});
+        }).catch(() => {
+          if (isMountedRef.current) setIsStreamPlaying(true);
+        });
 
         // Preload Face Models
         FaceApiBrowserService.loadModels().catch(() => {});
@@ -203,12 +207,12 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
     const loop = async (time: number) => {
       if (
         videoRef.current &&
-        videoRef.current.readyState >= 2 &&
+        videoRef.current.videoWidth > 0 &&
         !isCapturingRef.current &&
         !isProcessing &&
         !isEvaluatingRef.current
       ) {
-        // Run tracker every ~60ms (~16 FPS) for ultra-responsive blink capture
+        // Run tracker every ~60ms for ultra-responsive blink capture
         if (time - lastEvalTime >= 60) {
           lastEvalTime = time;
           isEvaluatingRef.current = true;
@@ -216,6 +220,9 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
             const status = await MediaPipeMeshService.evaluateInMaskLiveness(videoRef.current, time);
             if (isMountedRef.current) {
               setLivenessStatus(status);
+              if (!isStreamPlaying) {
+                setIsStreamPlaying(true);
+              }
             }
 
             // Handle Blink Confirmed Auto-Capture
@@ -271,15 +278,15 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
       cancelAnimationFrame(animId);
       isEvaluatingRef.current = false;
     };
-  }, [isOpen, enableAutoBlinkCapture, isProcessing, videoRef]);
+  }, [isOpen, enableAutoBlinkCapture, isProcessing, videoRef, isStreamPlaying]);
 
   if (!isOpen) return null;
 
   const isAligned = livenessStatus.isAlignedInMask;
   const isBlinkConfirmed = livenessStatus.blinkConfirmed || flashSuccess;
 
-  // Single Canonical Oval Mask Path (Used for Backdrop Mask, Contour Border & 30s Countdown Stroke)
-  const OVAL_PATH = "M150 20 C222 20 270 65 270 172 C270 278 222 352 150 352 C78 352 30 278 30 172 C30 65 78 20 150 20 Z";
+  // Single Spacious Face Oval Path (Fits full head naturally, without inner cramping!)
+  const OVAL_PATH = "M150 18 C228 18 280 65 280 172 C280 280 228 354 150 354 C72 354 20 280 20 172 C20 65 72 18 150 18 Z";
 
   return (
     <div className="relative w-full h-full min-h-[580px] bg-slate-950 flex flex-col overflow-hidden rounded-3xl p-0 border border-slate-800 shadow-2xl">
@@ -322,6 +329,10 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           autoPlay
           muted
           playsInline
+          onPlay={() => setIsStreamPlaying(true)}
+          onPlaying={() => setIsStreamPlaying(true)}
+          onLoadedData={() => setIsStreamPlaying(true)}
+          onCanPlay={() => setIsStreamPlaying(true)}
           className="absolute inset-0 h-full w-full object-cover transform -scale-x-100"
         />
 
@@ -330,12 +341,12 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           <div className="absolute inset-0 z-40 bg-emerald-500/35 animate-in fade-in duration-100 backdrop-blur-[2px]" />
         )}
 
-        {/* 2. Unified Single Oval Face Mask & Backdrop Overlay */}
+        {/* 2. Unified Single Spacious Oval Face Mask & Outside Dimmed Backdrop */}
         {!hasError && (
           <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-between p-4">
-            {/* Single Unified Oval Mask Reticle Container with 9999px Dimmed Backdrop Mask */}
+            {/* Single Spacious Oval Mask Reticle Container (w-[88%] max-w-[340px] aspect-[1/1.24]) */}
             <div
-              className={`relative mt-3 w-[84%] max-w-[310px] aspect-[1/1.24] rounded-full transition-all duration-300 flex items-center justify-center shadow-[0_0_0_9999px_rgba(2,6,23,0.70)]`}
+              className={`relative mt-2 w-[88%] max-w-[340px] aspect-[1/1.24] rounded-full transition-all duration-300 flex items-center justify-center shadow-[0_0_0_9999px_rgba(2,6,23,0.70)]`}
             >
               {/* Paytm / KYC Biometric Single Oval Face Mask SVG */}
               <svg
@@ -361,13 +372,13 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                 <path
                   d={OVAL_PATH}
                   stroke={isAligned ? '#34d399' : '#38bdf8'}
-                  strokeWidth={isAligned ? '3' : '2.2'}
+                  strokeWidth={isAligned ? '3.5' : '2.4'}
                   strokeDasharray={isAligned ? 'none' : '7 7'}
                   strokeOpacity={isAligned ? 0.95 : 0.65}
                   className="transition-all duration-300"
                   style={{
                     filter: isAligned
-                      ? 'drop-shadow(0 0 14px rgba(52, 211, 153, 0.9))'
+                      ? 'drop-shadow(0 0 14px rgba(52, 211, 153, 0.95))'
                       : 'drop-shadow(0 0 6px rgba(56, 189, 248, 0.45))',
                   }}
                 />
@@ -395,7 +406,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                 )}
 
                 {/* 3. Left Eye Target Guide Crosshairs */}
-                <g transform="translate(102, 144)" opacity={isAligned ? 0.95 : 0.6}>
+                <g transform="translate(98, 142)" opacity={isAligned ? 0.95 : 0.6}>
                   <circle
                     cx="0"
                     cy="0"
@@ -414,7 +425,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                 </g>
 
                 {/* 4. Right Eye Target Guide Crosshairs */}
-                <g transform="translate(198, 144)" opacity={isAligned ? 0.95 : 0.6}>
+                <g transform="translate(202, 142)" opacity={isAligned ? 0.95 : 0.6}>
                   <circle
                     cx="0"
                     cy="0"
@@ -440,27 +451,18 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                   strokeOpacity={isAligned ? 0.7 : 0.4}
                 />
 
-                {/* 6. Mouth Smile Alignment Arc */}
+                {/* 6. Forehead Crown Arc */}
                 <path
-                  d="M124 240 Q150 256 176 240"
-                  stroke={isAligned ? '#34d399' : '#38bdf8'}
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeOpacity={isAligned ? 0.8 : 0.4}
-                />
-
-                {/* 7. Forehead Crown Arc */}
-                <path
-                  d="M112 50 Q150 34 188 50"
+                  d="M105 48 Q150 32 195 48"
                   stroke={isAligned ? '#34d399' : '#38bdf8'}
                   strokeWidth="3"
                   strokeLinecap="round"
                   strokeOpacity={isAligned ? 0.9 : 0.5}
                 />
 
-                {/* 8. Chin Rest Notch */}
+                {/* 7. Chin Rest Notch */}
                 <path
-                  d="M130 352 H170"
+                  d="M125 354 H175"
                   stroke={isAligned ? '#34d399' : '#38bdf8'}
                   strokeWidth="3"
                   strokeLinecap="round"
