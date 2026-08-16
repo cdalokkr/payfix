@@ -211,7 +211,6 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
 
     // Auto-capture triggered on verified in-mask eye blink
     const handleAutoCapture = useCallback((dataUrl: string) => {
-        if (statusRef.current !== 'streaming') return
         setCapturedImage(dataUrl)
         setStatus('captured')
         stopCamera()

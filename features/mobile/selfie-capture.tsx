@@ -377,10 +377,9 @@ export function SelfieCapture({
 
     // Auto-capture on verified in-mask eye blink
     const handleAutoCapture = useCallback((dataUrl: string) => {
-        if (status !== 'streaming') return
         toast.success('Blink verified! Verifying face biometrics 👁️')
         executeVerify(dataUrl)
-    }, [status, executeVerify])
+    }, [executeVerify])
 
     const retakePhoto = useCallback(() => {
         setCapturedImage(null)

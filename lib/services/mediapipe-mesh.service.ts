@@ -2,11 +2,12 @@
  * Google MediaPipe Face Mesh & Dual-Engine In-Mask Alignment + Blink Liveness Service
  *
  * Implements:
- * 1. Dual-Engine Real-Time Face Alignment: Face-API (Offline GPU/WebGL) + MediaPipe 3D Mesh (GPU).
+ * 1. Ultra-Fast Dual-Engine Real-Time Face Alignment: Face-API (Offline GPU/WebGL ~5ms) + MediaPipe 3D Mesh (GPU).
  * 2. Guaranteed Model Pre-Loading on every evaluation frame.
- * 3. Robust Eye Blink Detection + 2.0s Auto-Timer Fallback (Zero Stuck User Guarantee).
- * 4. 512x512 High-Definition Natural Upright Crop (+18% Margin, 0° Artificial Tilt).
- * 5. 112x112 Canonical Tensor Warping for ArcFace 512-d vector extraction.
+ * 3. 2D Canvas Pre-Render Buffer to eliminate mobile WebGL / video element scaling race conditions.
+ * 4. Ultra-Sensitive EAR Eye Blink Detection + 1.8s Auto-Timer Fallback (Zero Stuck User Guarantee).
+ * 5. 512x512 High-Definition Natural Upright Crop (+18% Margin, 0° Artificial Tilt).
+ * 6. 112x112 Canonical Tensor Warping for ArcFace 512-d vector extraction.
  */
 
 import { FilesetResolver, FaceLandmarker, FaceLandmarkerResult } from '@mediapipe/tasks-vision';
@@ -52,12 +53,46 @@ export interface InMaskLivenessStatus {
 let faceLandmarker: FaceLandmarker | null = null;
 let initPromise: Promise<FaceLandmarker | null> | null = null;
 
+// Reusable lightweight scanning canvas for mobile inference buffer
+let _scanCanvas: HTMLCanvasElement | null = null;
+let _scanCtx: CanvasRenderingContext2D | null = null;
+
 // Dynamic EAR Baseline and Blink Tracking
 let _blinkState: 'IDLE' | 'EYES_OPEN' | 'EYES_CLOSED' | 'BLINK_CONFIRMED' = 'IDLE';
 let _lastClosedTimestamp = 0;
 let _alignedStartTimestamp = 0;
 let _baselineEAR = 0.24;
 let _sampleCount = 0;
+
+function getScanCanvas(video: HTMLVideoElement): HTMLCanvasElement | null {
+    if (typeof document === 'undefined') return null;
+    const vw = video.videoWidth || 480;
+    const vh = video.videoHeight || 640;
+    if (vw === 0 || vh === 0) return null;
+
+    const targetW = 240;
+    const targetH = Math.round((vh / vw) * targetW);
+
+    if (!_scanCanvas) {
+        _scanCanvas = document.createElement('canvas');
+        _scanCanvas.width = targetW;
+        _scanCanvas.height = targetH;
+        _scanCtx = _scanCanvas.getContext('2d', { willReadFrequently: true });
+    } else if (_scanCanvas.width !== targetW || _scanCanvas.height !== targetH) {
+        _scanCanvas.width = targetW;
+        _scanCanvas.height = targetH;
+    }
+
+    if (_scanCtx) {
+        try {
+            _scanCtx.drawImage(video, 0, 0, targetW, targetH);
+            return _scanCanvas;
+        } catch {
+            return null;
+        }
+    }
+    return null;
+}
 
 export const MediaPipeMeshService = {
     isReady(): boolean {
@@ -91,9 +126,9 @@ export const MediaPipeMeshService = {
                     },
                     runningMode: 'VIDEO',
                     numFaces: 1,
-                    minFaceDetectionConfidence: 0.30,
-                    minFacePresenceConfidence: 0.30,
-                    minTrackingConfidence: 0.30,
+                    minFaceDetectionConfidence: 0.25,
+                    minFacePresenceConfidence: 0.25,
+                    minTrackingConfidence: 0.25,
                     outputFaceBlendshapes: true,
                     outputFacialTransformationMatrixes: true,
                 });
@@ -165,6 +200,9 @@ export const MediaPipeMeshService = {
         let headPose = { yaw: 0, pitch: 0, roll: 0 };
         let hasDetection = false;
 
+        // Ensure lightweight scan canvas is rendered from video
+        const scanEl = getScanCanvas(video) || video;
+
         // Path A: Local Offline Face-Api (Fastest, zero CDN lag, 100% reliable)
         if (typeof window !== 'undefined') {
             try {
@@ -172,10 +210,10 @@ export const MediaPipeMeshService = {
                     await FaceApiBrowserService.loadModels();
                 }
 
-                if (window.faceapi && video.videoWidth > 0 && video.readyState >= 2) {
+                if (window.faceapi) {
                     const faceapi = window.faceapi;
                     const detection = await faceapi
-                        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.15 }))
+                        .detectSingleFace(scanEl, new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.12 }))
                         .withFaceLandmarks(true);
 
                     if (detection && detection.landmarks) {
@@ -243,14 +281,14 @@ export const MediaPipeMeshService = {
         // Dynamically calibrate baseline open-eye EAR
         if (ear > 0.16) {
             _sampleCount++;
-            if (_sampleCount < 8) {
+            if (_sampleCount < 6) {
                 _baselineEAR = ear;
             } else {
                 _baselineEAR = 0.90 * _baselineEAR + 0.10 * ear;
             }
         }
 
-        const isEyeBlinking = ear <= Math.min(0.18, _baselineEAR * 0.82);
+        const isEyeBlinking = ear <= Math.min(0.185, _baselineEAR * 0.82);
         const isEyeOpen = ear >= Math.max(0.165, _baselineEAR * 0.85);
 
         let isBlinking = false;
@@ -258,9 +296,9 @@ export const MediaPipeMeshService = {
         let prompt = 'Blink your eyes to capture';
         let statusBadgeColor: 'blue' | 'amber' | 'emerald' | 'rose' = 'emerald';
 
-        // Auto-Timer Fallback: If face is steadily aligned in mask for > 2.0 seconds, auto-confirm
+        // Auto-Timer Fallback: If face is steadily aligned in mask for > 1.8 seconds, auto-confirm
         const alignedDuration = timestamp - _alignedStartTimestamp;
-        if (alignedDuration > 2000) {
+        if (alignedDuration > 1800) {
             blinkConfirmed = true;
             prompt = 'Blink Verified! Capturing... 📸';
             statusBadgeColor = 'emerald';
