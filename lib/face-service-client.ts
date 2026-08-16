@@ -72,40 +72,57 @@ export class FaceServiceClient {
             // Fallback to Gradio SSE Call API
         }
 
-        // 2. Gradio ZeroGPU SSE API Call (/gradio_api/call/extract)
-        try {
-            const callResp = await fetch(`${baseUrl}/gradio_api/call/extract`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ data: [imageBase64] }),
-                signal: AbortSignal.timeout(8000)
-            })
+        // 2. Gradio ZeroGPU SSE API Call (/gradio_api/call/extract) with auto-retry
+        for (let attempt = 1; attempt <= 2; attempt++) {
+            try {
+                const callResp = await fetch(`${baseUrl}/gradio_api/call/extract`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ data: [imageBase64] }),
+                    signal: AbortSignal.timeout(9000)
+                })
 
-            if (!callResp.ok) {
-                throw new Error(`Gradio API returned status ${callResp.status}`)
-            }
+                if (!callResp.ok) {
+                    throw new Error(`Gradio API returned status ${callResp.status}`)
+                }
 
-            const callData = (await callResp.json()) as { event_id?: string }
-            if (!callData.event_id) {
-                throw new Error('Gradio event_id not received')
-            }
+                const callData = (await callResp.json()) as { event_id?: string }
+                if (!callData.event_id) {
+                    throw new Error('Gradio event_id not received')
+                }
 
-            const sseResp = await fetch(`${baseUrl}/gradio_api/call/extract/${callData.event_id}`, {
-                signal: AbortSignal.timeout(10000)
-            })
+                const sseResp = await fetch(`${baseUrl}/gradio_api/call/extract/${callData.event_id}`, {
+                    signal: AbortSignal.timeout(12000)
+                })
 
-            const sseText = await sseResp.text()
-            // Find "data: [...]" line in SSE stream
-            const dataMatch = sseText.match(/data:\s*(\[.*\])/)
-            if (dataMatch && dataMatch[1]) {
-                const parsedArr = JSON.parse(dataMatch[1]) as string[]
-                if (parsedArr && parsedArr[0]) {
-                    const parsed = JSON.parse(parsedArr[0])
-                    return parsed as FaceExtractResult
+                const sseText = await sseResp.text()
+                
+                // Parse all data lines from SSE stream
+                const lines = sseText.split('\n')
+                let lastDataLine = ''
+                for (const line of lines) {
+                    const trimmed = line.trim()
+                    if (trimmed.startsWith('data:')) {
+                        lastDataLine = trimmed.replace(/^data:\s*/, '')
+                    }
+                }
+
+                if (lastDataLine) {
+                    const parsedArr = JSON.parse(lastDataLine)
+                    if (Array.isArray(parsedArr) && parsedArr.length > 0) {
+                        const raw = parsedArr[0]
+                        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+                        if (parsed && typeof parsed.success === 'boolean') {
+                            return parsed as FaceExtractResult
+                        }
+                    }
+                }
+            } catch (err: any) {
+                console.warn(`[FaceServiceClient] Extract attempt ${attempt} failed:`, err?.message || err)
+                if (attempt === 1) {
+                    await new Promise(r => setTimeout(r, 400)) // brief backoff before retry
                 }
             }
-        } catch (err: any) {
-            console.error('[FaceServiceClient] Extract failed:', err)
         }
 
         return {
