@@ -60,6 +60,7 @@ class ExtractResponse(BaseModel):
     embedding_512: Optional[List[float]] = None
     embedding_128: Optional[List[float]] = None
     embedding: Optional[List[float]] = None
+    cropped_face_base64: Optional[str] = None
     dimensions: int = 0
     quality_score: float = 0.0
     is_live: bool = True
@@ -168,17 +169,36 @@ def l2_normalize(vector: np.ndarray) -> np.ndarray:
     norm = np.linalg.norm(vector)
     return vector if norm == 0 else vector / norm
 
-def compute_512d_embedding(image: Image.Image, face_box: Optional[Dict[str, int]] = None) -> List[float]:
+def crop_face_avatar(image: Image.Image, face_box: Optional[Dict[str, int]] = None, padding: float = 0.15) -> tuple[Image.Image, Image.Image]:
+    img_w, img_h = image.size
     if face_box:
-        x = max(0, face_box["left"])
-        y = max(0, face_box["top"])
-        w = min(image.width - x, face_box["width"])
-        h = min(image.height - y, face_box["height"])
-        face_crop = image.crop((x, y, x + w, y + h)).resize((112, 112), Image.Resampling.BILINEAR)
-    else:
-        face_crop = image.resize((112, 112), Image.Resampling.BILINEAR)
+        fx = face_box["left"]
+        fy = face_box["top"]
+        fw = face_box["width"]
+        fh = face_box["height"]
 
-    crop_np = np.array(face_crop, dtype=np.float32)
+        cx = fx + (fw / 2.0)
+        cy = fy + (fh / 2.0)
+        size = max(fw, fh) * (1.0 + 2.0 * padding)
+
+        x1 = max(0, int(cx - size / 2.0))
+        y1 = max(0, int(cy - size * 0.52))  # natural margin for forehead & hair
+        x2 = min(img_w, int(cx + size / 2.0))
+        y2 = min(img_h, int(cy + size * 0.48))  # natural margin for chin
+
+        cropped = image.crop((x1, y1, x2, y2))
+    else:
+        min_dim = min(img_w, img_h)
+        x1 = (img_w - min_dim) // 2
+        y1 = (img_h - min_dim) // 2
+        cropped = image.crop((x1, y1, x1 + min_dim, y1 + min_dim))
+
+    crop_512 = cropped.resize((512, 512), Image.Resampling.LANCZOS)
+    crop_112 = cropped.resize((112, 112), Image.Resampling.BILINEAR)
+    return crop_512, crop_112
+
+def compute_512d_embedding_from_crop(crop_112: Image.Image) -> List[float]:
+    crop_np = np.array(crop_112, dtype=np.float32)
     normalized = (crop_np - 127.5) / 128.0
 
     r_chan = normalized[:, :, 0].flatten()
@@ -255,9 +275,16 @@ def _raw_extract(payload: ExtractRequest) -> ExtractResponse:
     timings["liveness_ms"] = round((time.perf_counter() - t0) * 1000, 2)
 
     t0 = time.perf_counter()
-    embedding_512 = compute_512d_embedding(pil_image, face_box)
+    crop_512, crop_112 = crop_face_avatar(pil_image, face_box, padding=0.15)
+    embedding_512 = compute_512d_embedding_from_crop(crop_112)
     embedding_128 = embedding_512[:128]
     timings["embedding_512_ms"] = round((time.perf_counter() - t0) * 1000, 2)
+
+    # Encode 512x512 HD avatar to JPEG Base64
+    buf = io.BytesIO()
+    crop_512.save(buf, format="JPEG", quality=92)
+    cropped_b64 = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+
     timings["total_ms"] = round((time.perf_counter() - t_start) * 1000, 2)
 
     diagnostics = DiagnosticsInfo(
@@ -276,9 +303,10 @@ def _raw_extract(payload: ExtractRequest) -> ExtractResponse:
     return ExtractResponse(
         success=True, face_detected=True, face_count=1,
         embedding_512=embedding_512, embedding_128=embedding_128,
-        embedding=embedding_512, dimensions=512,
-        quality_score=quality["liveness_score"], is_live=quality["is_live"],
-        liveness_score=quality["liveness_score"], diagnostics=diagnostics
+        embedding=embedding_512, cropped_face_base64=cropped_b64,
+        dimensions=512, quality_score=quality["liveness_score"],
+        is_live=quality["is_live"], liveness_score=quality["liveness_score"],
+        diagnostics=diagnostics
     )
 
 if USING_SPACES:
@@ -327,31 +355,37 @@ def api_json_compare(embedding1_str: str, embedding2_str: str, threshold: float 
 
 def gradio_extract_ui(image):
     if image is None:
-        return "Please upload or capture an image.", None, 0.0, False
+        return "Please upload or capture an image.", None, 0.0, False, None
     buffered = io.BytesIO()
     image.save(buffered, format="JPEG")
     b64_str = base64.b64encode(buffered.getvalue()).decode()
     res = perform_extraction(ExtractRequest(image_base64=b64_str))
     if not res.success:
-        return f"❌ {res.error_message}\nTip: {res.troubleshooting_tip}", None, 0.0, False
+        return f"❌ {res.error_message}\nTip: {res.troubleshooting_tip}", None, 0.0, False, None
     diag = res.diagnostics
-    info = f"✅ Face Detected!\n- Vector Dimensions: {res.dimensions}-d\n- Liveness Score: {res.liveness_score} (Is Live: {res.is_live})\n- Sharpness: {diag.sharpness_score if diag else 'N/A'}\n- Brightness: {diag.brightness_score if diag else 'N/A'}\n- Total Latency: {diag.timings_ms.get('total_ms', 0) if diag else 0}ms"
+    info = f"✅ Face Detected!\n- Auto-Cropped: Face + 15% Padding (512x512 HD)\n- Vector Dimensions: {res.dimensions}-d\n- Liveness Score: {res.liveness_score} (Is Live: {res.is_live})\n- Sharpness: {diag.sharpness_score if diag else 'N/A'}\n- Brightness: {diag.brightness_score if diag else 'N/A'}\n- Total Latency: {diag.timings_ms.get('total_ms', 0) if diag else 0}ms"
     first_10_dims = str(res.embedding_512[:10]) + "..." if res.embedding_512 else "None"
-    return info, first_10_dims, res.liveness_score, res.is_live
+
+    crop_img = None
+    if res.cropped_face_base64:
+        crop_img = decode_base64_image(res.cropped_face_base64)
+
+    return info, first_10_dims, res.liveness_score, res.is_live, crop_img
 
 with gr.Blocks(title="PayFix AI Biometric Test Console") as demo:
     gr.Markdown("# ⚡ PayFix Biometric Face Vector & Liveness AI (v2.0)")
-    gr.Markdown("Enterprise 512-d ArcFace Extraction, Passive Anti-Spoof Liveness & REST API for PayFix HRMS")
+    gr.Markdown("Enterprise 512-d ArcFace Extraction, +15% Face Auto-Crop & REST API for PayFix HRMS")
     with gr.Row():
         with gr.Column():
             input_img = gr.Image(type="pil", label="Capture / Upload Face Image")
             btn = gr.Button("Extract 512-d Vector & Verify Liveness", variant="primary")
+            out_crop = gr.Image(type="pil", label="Auto-Cropped Face Avatar (+15% Padding)")
         with gr.Column():
             out_info = gr.Textbox(label="Detection & Diagnostics Summary", lines=8)
             out_vec = gr.Textbox(label="512-d ArcFace Vector (First 10 Dims)", lines=3)
             out_score = gr.Number(label="Liveness Confidence Score")
             out_live = gr.Checkbox(label="Is Real Human (Live)?")
-    btn.click(gradio_extract_ui, inputs=[input_img], outputs=[out_info, out_vec, out_score, out_live], api_name="ui_extract")
+    btn.click(gradio_extract_ui, inputs=[input_img], outputs=[out_info, out_vec, out_score, out_live, out_crop], api_name="ui_extract")
 
     # Headless API endpoints for PayFix Web App:
     in_b64 = gr.Textbox(visible=False)
