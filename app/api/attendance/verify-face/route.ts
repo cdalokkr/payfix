@@ -61,9 +61,10 @@ export async function POST(request: NextRequest) {
         const selfie512 = extractRes.embedding_512 || (extractRes.embedding?.length === 512 ? extractRes.embedding : null)
         const selfie128 = extractRes.embedding_128 || (extractRes.embedding?.length === 128 ? extractRes.embedding : null)
 
-        // 3. Match 512-d ArcFace vectors with Cosine Dot Product (threshold: 0.65)
+        // 3. Match 512-d ArcFace vectors with Cosine Dot Product (optimal threshold: 0.55)
         let matched = false
         let similarity = 0.0
+        const threshold = 0.55
 
         if (stored512 && stored512.length === 512 && selfie512 && selfie512.length === 512) {
             let dot = 0
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest) {
                 dot += stored512[i] * selfie512[i]
             }
             similarity = Math.max(0, Math.min(1, dot))
-            matched = similarity >= 0.65
+            matched = similarity >= threshold
         } else if (stored128 && stored128.length === 128 && selfie128 && selfie128.length === 128) {
             let sum = 0
             for (let i = 0; i < 128; i++) {
@@ -85,11 +86,14 @@ export async function POST(request: NextRequest) {
             // Compare fallback
             const cmpRes = await FaceServiceClient.compare(
                 (selfie512 || selfie128) as number[],
-                (stored512 || stored128) as number[]
+                (stored512 || stored128) as number[],
+                threshold
             )
             matched = cmpRes.matched
             similarity = cmpRes.similarity
         }
+
+        const simPct = (similarity * 100).toFixed(1)
 
         return NextResponse.json({
             matched,
@@ -98,6 +102,7 @@ export async function POST(request: NextRequest) {
             liveness_score: extractRes.liveness_score,
             face_detected: true,
             method: 'arcface-512',
+            error: matched ? undefined : `Face match score: ${simPct}% (Required: 55%). Kripya achhi roshni mein sidha chehra rakhein.`,
             diagnostics: extractRes.diagnostics
         })
     } catch (err: any) {
