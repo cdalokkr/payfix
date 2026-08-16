@@ -180,9 +180,36 @@ export const FaceVerificationService = {
         };
 
         try {
-            log('🚀 Starting MediaPipe 3D + ArcFace 512-d face verification...');
+            log('🚀 Starting ArcFace 512-d Face Verification...');
 
-            // 1. Extract selfie 512-d descriptor with camera circle + 20% padding alignment
+            // 1. High-Speed Server-Side Face API Verification (ZeroGPU ~29ms)
+            try {
+                log('⚡ Verifying via ZeroGPU Biometric Service...');
+                const apiResp = await fetch('/api/attendance/verify-face', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ selfieBase64: selfieDataUrl }),
+                    signal: AbortSignal.timeout(8000)
+                });
+                if (apiResp.ok) {
+                    const apiData = await apiResp.json();
+                    if (typeof apiData.matched === 'boolean') {
+                        log(`🎯 Server ArcFace 512-d Match: ${(apiData.similarity * 100).toFixed(1)}% | ${apiData.matched ? '✅ MATCH' : '❌ NO MATCH'}`);
+                        return {
+                            matched: apiData.matched,
+                            similarity: apiData.similarity,
+                            method: 'arcface-512',
+                            debugLog,
+                            isLive: apiData.is_live ?? true,
+                            error: apiData.matched ? undefined : (apiData.error || 'Face does not match registered profile photo')
+                        };
+                    }
+                }
+            } catch (serverErr) {
+                log('⚠️ Server verify fallback to client inference: ' + String(serverErr));
+            }
+
+            // 2. Client-side fallback if server unreachable
             log('⚡ Extracting selfie face descriptor with canonical alignment...');
             const selfieRes = await this.extractAligned512dDescriptor(selfieDataUrl);
 
