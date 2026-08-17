@@ -669,18 +669,47 @@ export function ExpressKioskApp() {
                     }
                 }
 
-                // Extract 512-d ArcFace vector + MediaPipe 20% padded canonical crop (or fallback to 128-d)
-                const extracted512 = await FaceVerificationService.extractAligned512dDescriptor(video);
-                let liveDescriptor: Float32Array | null = extracted512?.embedding ? new Float32Array(extracted512.embedding) : null;
-                if (extracted512?.cropDataUrl) {
-                    setCapturedFreezeUrl(extracted512.cropDataUrl);
+                // Extract 512-d ArcFace vector with +15% Face Crop & Liveness
+                let liveDescriptor: Float32Array | null = null;
+
+                // 1. High-Speed Server AI Microservice Extraction (ZeroGPU ~29ms)
+                try {
+                    const snapshotB64 = freezeUrl || captureSnapshot();
+                    if (snapshotB64) {
+                        const apiResp = await fetch('/api/kiosk/extract-face', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ imageBase64: snapshotB64 }),
+                            signal: AbortSignal.timeout(5000)
+                        });
+                        if (apiResp.ok) {
+                            const apiData = await apiResp.json();
+                            if (apiData.success && apiData.embedding_512 && apiData.embedding_512.length === 512) {
+                                liveDescriptor = new Float32Array(apiData.embedding_512);
+                                if (apiData.cropped_face_base64) {
+                                    setCapturedFreezeUrl(apiData.cropped_face_base64);
+                                }
+                            }
+                        }
+                    }
+                } catch (servErr) {
+                    console.warn('[Kiosk] Fast server extract fallback to local:', servErr);
                 }
 
+                // 2. Offline / Local Fallback if server unreachable
                 if (!liveDescriptor) {
-                    const alignedResult = await FaceApiBrowserService.extractAlignedSquareFaceCrop(video);
-                    liveDescriptor = alignedResult?.descriptor || await FaceApiBrowserService.extractDescriptor(video);
-                    if (alignedResult?.croppedDataUrl && !extracted512?.cropDataUrl) {
-                        setCapturedFreezeUrl(alignedResult.croppedDataUrl);
+                    const extracted512 = await FaceVerificationService.extractAligned512dDescriptor(video);
+                    if (extracted512?.embedding) {
+                        liveDescriptor = new Float32Array(extracted512.embedding);
+                        if (extracted512?.cropDataUrl) {
+                            setCapturedFreezeUrl(extracted512.cropDataUrl);
+                        }
+                    } else {
+                        const alignedResult = await FaceApiBrowserService.extractAlignedSquareFaceCrop(video);
+                        liveDescriptor = alignedResult?.descriptor || await FaceApiBrowserService.extractDescriptor(video);
+                        if (alignedResult?.croppedDataUrl) {
+                            setCapturedFreezeUrl(alignedResult.croppedDataUrl);
+                        }
                     }
                 }
 
@@ -709,7 +738,7 @@ export function ExpressKioskApp() {
                     embedding: l2Normalize(emp.faceEmbedding!)
                 }));
 
-                const matchRes = matchFaceFast(liveDescriptor, candidateList, 0.68, 0.08);
+                const matchRes = matchFaceFast(liveDescriptor, candidateList, 0.65, 0.06);
 
                 const matchedEmployee = matchRes.isMatch && matchRes.employee
                     ? enrolledEmployees.find(e => e.id === matchRes.employee!.id) || null
