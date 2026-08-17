@@ -380,18 +380,18 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                   </linearGradient>
                 </defs>
 
-                {/* 1. Base Oval Mask Outline */}
+                {/* 1. Base Oval Mask Outline - Crisp Solid Border */}
                 <path
                   d={OVAL_PATH}
-                  stroke={isAligned ? '#34d399' : '#38bdf8'}
-                  strokeWidth={isAligned ? '3.5' : '2.4'}
-                  strokeDasharray={isAligned ? 'none' : '7 7'}
-                  strokeOpacity={isAligned ? 0.95 : 0.65}
+                  stroke={isAligned ? '#10b981' : '#0ea5e9'}
+                  strokeWidth={isAligned ? '3.5' : '2.5'}
+                  strokeDasharray="none"
+                  strokeOpacity={isAligned ? 1.0 : 0.85}
                   className="transition-all duration-300"
                   style={{
                     filter: isAligned
-                      ? 'drop-shadow(0 0 14px rgba(52, 211, 153, 0.95))'
-                      : 'drop-shadow(0 0 6px rgba(56, 189, 248, 0.45))',
+                      ? 'drop-shadow(0 0 16px rgba(16, 185, 129, 0.95))'
+                      : 'drop-shadow(0 0 10px rgba(14, 165, 233, 0.75))',
                   }}
                 />
 
@@ -418,40 +418,40 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                 )}
 
                 {/* 3. Left Eye Target Guide Crosshairs */}
-                <g transform="translate(98, 142)" opacity={isAligned ? 0.95 : 0.6}>
+                <g transform="translate(98, 142)" opacity={isAligned ? 0.95 : 0.7}>
                   <circle
                     cx="0"
                     cy="0"
                     r="15"
-                    stroke={isAligned ? '#34d399' : '#38bdf8'}
-                    strokeWidth="1.5"
-                    strokeDasharray="3 3"
+                    stroke={isAligned ? '#10b981' : '#0ea5e9'}
+                    strokeWidth="1.8"
+                    strokeDasharray="none"
                   />
-                  <circle cx="0" cy="0" r="2.5" fill={isAligned ? '#34d399' : '#38bdf8'} />
+                  <circle cx="0" cy="0" r="2.5" fill={isAligned ? '#10b981' : '#0ea5e9'} />
                   <path
                     d="M-18 0 H18 M0 -18 V18"
-                    stroke={isAligned ? '#34d399' : '#38bdf8'}
-                    strokeWidth="1.2"
-                    strokeOpacity="0.6"
+                    stroke={isAligned ? '#10b981' : '#0ea5e9'}
+                    strokeWidth="1.4"
+                    strokeOpacity="0.8"
                   />
                 </g>
 
                 {/* 4. Right Eye Target Guide Crosshairs */}
-                <g transform="translate(202, 142)" opacity={isAligned ? 0.95 : 0.6}>
+                <g transform="translate(202, 142)" opacity={isAligned ? 0.95 : 0.7}>
                   <circle
                     cx="0"
                     cy="0"
                     r="15"
-                    stroke={isAligned ? '#34d399' : '#38bdf8'}
-                    strokeWidth="1.5"
-                    strokeDasharray="3 3"
+                    stroke={isAligned ? '#10b981' : '#0ea5e9'}
+                    strokeWidth="1.8"
+                    strokeDasharray="none"
                   />
-                  <circle cx="0" cy="0" r="2.5" fill={isAligned ? '#34d399' : '#38bdf8'} />
+                  <circle cx="0" cy="0" r="2.5" fill={isAligned ? '#10b981' : '#0ea5e9'} />
                   <path
                     d="M-18 0 H18 M0 -18 V18"
-                    stroke={isAligned ? '#34d399' : '#38bdf8'}
-                    strokeWidth="1.2"
-                    strokeOpacity="0.6"
+                    stroke={isAligned ? '#10b981' : '#0ea5e9'}
+                    strokeWidth="1.4"
+                    strokeOpacity="0.8"
                   />
                 </g>
 

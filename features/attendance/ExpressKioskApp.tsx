@@ -163,22 +163,25 @@ export function ExpressKioskApp() {
         return () => clearInterval(timer);
     }, []);
 
-    // Check stored pairing key on mount
-    useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const savedKey = localStorage.getItem('payfix_kiosk_pairing_code');
-            const savedDeviceInfo = localStorage.getItem('payfix_kiosk_device_info');
+    const scanAbortControllerRef = useRef<AbortController | null>(null);
 
-            if (savedKey) {
+    // Check stored pairing key on mount (from LocalStorage, IndexedDB, or 10-Year Cookies)
+    useEffect(() => {
+        let isMounted = true;
+        async function restorePairing() {
+            if (typeof window === 'undefined') return;
+            const { pairingCode: savedKey, deviceInfo: savedDeviceInfo } = await KioskIndexedDBService.loadPairingCredentials();
+
+            if (savedKey && isMounted) {
                 setPairingCode(savedKey);
                 if (savedDeviceInfo) {
-                    try { setPairedDevice(JSON.parse(savedDeviceInfo)); } catch {}
+                    setPairedDevice(savedDeviceInfo);
                 }
                 verifyPairingMutation.mutate({ pairingCode: savedKey }, {
                     onSuccess: (res) => {
                         if (res.success && 'device' in res && res.device) {
                             setPairedDevice(res.device);
-                            localStorage.setItem('payfix_kiosk_device_info', JSON.stringify(res.device));
+                            void KioskIndexedDBService.savePairingCredentials(savedKey, res.device);
                         } else {
                             toast.error('Kiosk Pairing Key is no longer active. Please pair again.');
                             handleUnpair();
@@ -187,6 +190,9 @@ export function ExpressKioskApp() {
                 });
             }
         }
+
+        restorePairing();
+        return () => { isMounted = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -209,32 +215,42 @@ export function ExpressKioskApp() {
         }
     }, []);
 
-    // Background Pre-Warm Camera Stream on Kiosk Load (Instant <5ms Modal Opening)
+    // Background Pre-Warm Camera Stream on Kiosk Load (Instant 0ms Modal Opening)
     const prewarmCamera = useCallback(async () => {
-        if (typeof window === 'undefined' || !navigator.mediaDevices) return;
+        if (typeof window === 'undefined' || !navigator.mediaDevices?.getUserMedia) return;
         if (mediaStreamRef.current && mediaStreamRef.current.active) {
             setIsCameraReady(true);
             return;
         }
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    facingMode: { exact: 'user' },
-                    width: { ideal: 480 },
-                    height: { ideal: 640 },
-                    aspectRatio: { ideal: 0.75 },
-                    frameRate: { ideal: 30 }
-                },
-                audio: false
-            });
-            mediaStreamRef.current = stream;
-
-            if (warmupVideoRef.current) {
-                warmupVideoRef.current.srcObject = stream;
-                await warmupVideoRef.current.play().catch(() => {});
+            let stream: MediaStream | null = null;
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'user',
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                    },
+                    audio: false
+                });
+            } catch {
+                // Fallback for laptops/desktops where facingMode is not user
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: false
+                });
             }
-            setIsCameraReady(true);
-            console.log('[Kiosk Camera] Warmup stream active & video element bound');
+
+            if (stream) {
+                mediaStreamRef.current = stream;
+
+                if (warmupVideoRef.current) {
+                    warmupVideoRef.current.srcObject = stream;
+                    await warmupVideoRef.current.play().catch(() => {});
+                }
+                setIsCameraReady(true);
+                console.log('[Kiosk Camera] Warmup stream active & video element bound');
+            }
         } catch (err) {
             console.warn('[Kiosk Camera] Background pre-warm notice:', err);
         }
@@ -340,8 +356,7 @@ export function ExpressKioskApp() {
                     toast.success(`Kiosk Terminal Paired Successfully! (${res.device.name})`);
                     setPairingCode(code);
                     setPairedDevice(res.device);
-                    localStorage.setItem('payfix_kiosk_pairing_code', code);
-                    localStorage.setItem('payfix_kiosk_device_info', JSON.stringify(res.device));
+                    void KioskIndexedDBService.savePairingCredentials(code, res.device);
                 } else {
                     const msg = 'message' in res ? res.message : 'Invalid or inactive Pairing Key';
                     toast.error(msg);
@@ -355,8 +370,7 @@ export function ExpressKioskApp() {
     };
 
     const handleUnpair = () => {
-        localStorage.removeItem('payfix_kiosk_pairing_code');
-        localStorage.removeItem('payfix_kiosk_device_info');
+        void KioskIndexedDBService.clearPairingCredentials();
         setPairingCode(null);
         setPairedDevice(null);
         setInputKey('');
@@ -591,6 +605,11 @@ export function ExpressKioskApp() {
 
     // Close Verification Modal Flow (Keeps camera stream active in background for instant re-opening)
     const closeVerificationModal = () => {
+        if (scanAbortControllerRef.current) {
+            scanAbortControllerRef.current.abort();
+            scanAbortControllerRef.current = null;
+        }
+        setIsScanning(false);
         setIsVerificationModalOpen(false);
         setVerificationResult(null);
         setCapturedFreezeUrl(null);
@@ -1228,15 +1247,13 @@ export function ExpressKioskApp() {
             <Dialog
                 open={isVerificationModalOpen}
                 onOpenChange={(open) => {
-                    if (!open && !isScanning) closeVerificationModal();
+                    if (!open) closeVerificationModal();
                 }}
             >
                 <DialogContent className="max-w-md w-[95vw] bg-slate-950 border-slate-800 text-slate-100 p-0 overflow-hidden shadow-2xl rounded-3xl backdrop-blur-2xl [&>button]:hidden">
                     <BiometricCameraModal
                         isOpen={isVerificationModalOpen}
-                        onClose={() => {
-                            if (!isScanning) closeVerificationModal();
-                        }}
+                        onClose={() => closeVerificationModal()}
                         title="Face Verification Scanner"
                         icon={<ScanFace className="h-5 w-5 text-sky-400" />}
                         videoRefOut={videoRef}

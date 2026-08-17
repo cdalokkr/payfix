@@ -248,38 +248,7 @@ export const MediaPipeMeshService = {
             } catch {}
         }
 
-        // Path C: Fail-Safe Real-Time Optical Eye Liveness Engine (Zero dependencies)
-        if (!hasDetection && _scanCtx && _scanCanvas) {
-            try {
-                const w = _scanCanvas.width;
-                const h = _scanCanvas.height;
-                if (w > 50 && h > 50) {
-                    // Sample central face and eye zone
-                    const eyeData = _scanCtx.getImageData(Math.round(w * 0.25), Math.round(h * 0.30), Math.round(w * 0.50), Math.round(h * 0.22));
-                    let totalLum = 0;
-                    const len = eyeData.data.length;
-                    for (let i = 0; i < len; i += 8) {
-                        totalLum += (eyeData.data[i] * 0.299 + eyeData.data[i + 1] * 0.587 + eyeData.data[i + 2] * 0.114);
-                    }
-                    const avgLum = totalLum / (len / 8);
-
-                    // Face presence detected when optical pixels are active
-                    if (avgLum > 15 && avgLum < 245) {
-                        hasDetection = true;
-                        ear = 0.24;
-
-                        if (_prevEyeLuminance > 0) {
-                            const diff = Math.abs(avgLum - _prevEyeLuminance) / _prevEyeLuminance;
-                            if (diff > 0.055) {
-                                opticalBlink = true;
-                            }
-                        }
-                        _prevEyeLuminance = 0.85 * _prevEyeLuminance + 0.15 * avgLum;
-                    }
-                }
-            } catch {}
-        }
-
+        // Strictly reject if no genuine facial landmarks detected
         if (!hasDetection) {
             _blinkState = 'IDLE';
             _alignedStartTimestamp = 0;
@@ -295,7 +264,7 @@ export const MediaPipeMeshService = {
             };
         }
 
-        // Face is in mask!
+        // Genuine Face is present in mask!
         const isAlignedInMask = true;
 
         if (_alignedStartTimestamp === 0) {
@@ -303,28 +272,28 @@ export const MediaPipeMeshService = {
         }
 
         // Dynamically calibrate baseline open-eye EAR
-        if (ear > 0.16) {
+        if (ear > 0.18) {
             _sampleCount++;
-            if (_sampleCount < 6) {
+            if (_sampleCount < 5) {
                 _baselineEAR = ear;
             } else {
-                _baselineEAR = 0.90 * _baselineEAR + 0.10 * ear;
+                _baselineEAR = 0.88 * _baselineEAR + 0.12 * ear;
             }
         }
 
-        const isEyeBlinking = opticalBlink || ear <= Math.min(0.185, _baselineEAR * 0.82);
-        const isEyeOpen = !opticalBlink && ear >= Math.max(0.165, _baselineEAR * 0.85);
+        const isEyeBlinking = ear <= Math.min(0.17, _baselineEAR * 0.78);
+        const isEyeOpen = ear >= Math.max(0.19, _baselineEAR * 0.85);
 
         let isBlinking = false;
         let blinkConfirmed = false;
-        let prompt = 'Blink your eyes to capture';
+        let prompt = 'Face Detected! Blink eyes to capture';
         let statusBadgeColor: 'blue' | 'amber' | 'emerald' | 'rose' = 'emerald';
 
-        // Auto-Timer Fallback: If face is steadily aligned in mask for > 1.8 seconds, auto-confirm
+        // Auto-Timer Fallback: If genuine face is steadily aligned in mask for > 2.0 seconds, auto-confirm
         const alignedDuration = timestamp - _alignedStartTimestamp;
-        if (alignedDuration > 1800) {
+        if (alignedDuration > 2000) {
             blinkConfirmed = true;
-            prompt = 'Blink Verified! Capturing... 📸';
+            prompt = 'Face Verified! Capturing... 📸';
             statusBadgeColor = 'emerald';
             return {
                 isFaceDetected: true,
@@ -338,16 +307,11 @@ export const MediaPipeMeshService = {
             };
         }
 
-        // Real-Time Blink State Machine:
-        if (opticalBlink) {
-            _blinkState = 'BLINK_CONFIRMED';
-            blinkConfirmed = true;
-            prompt = 'Blink Verified! Capturing... 📸';
-            statusBadgeColor = 'emerald';
-        } else if (isEyeOpen) {
+        // Real-Time Blink State Machine (Only on genuine facial eye landmarks):
+        if (isEyeOpen) {
             if (_blinkState === 'EYES_CLOSED') {
                 const blinkDuration = timestamp - _lastClosedTimestamp;
-                if (blinkDuration >= 20 && blinkDuration <= 850) {
+                if (blinkDuration >= 40 && blinkDuration <= 950) {
                     _blinkState = 'BLINK_CONFIRMED';
                     blinkConfirmed = true;
                     prompt = 'Blink Verified! Capturing... 📸';
@@ -358,13 +322,12 @@ export const MediaPipeMeshService = {
             } else if (_blinkState !== 'BLINK_CONFIRMED') {
                 _blinkState = 'EYES_OPEN';
             }
-        } else if (isEyeBlinking) {
-            if (_blinkState === 'EYES_OPEN' || _sampleCount >= 1) {
-                _blinkState = 'EYES_CLOSED';
-                _lastClosedTimestamp = timestamp;
-                isBlinking = true;
-                prompt = 'Blinking detected...';
-            }
+        } else if (isEyeBlinking && _blinkState === 'EYES_OPEN') {
+            _blinkState = 'EYES_CLOSED';
+            _lastClosedTimestamp = timestamp;
+            isBlinking = true;
+            prompt = 'Blink Detected! Open eyes...';
+            statusBadgeColor = 'amber';
         }
 
         return {

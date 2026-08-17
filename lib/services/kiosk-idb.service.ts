@@ -190,5 +190,125 @@ export const KioskIndexedDBService = {
             const store = tx.objectStore(STORE_PUNCH_QUEUE);
             store.clear();
         } catch {}
+    },
+
+    /**
+     * Save Kiosk Pairing Key and Device Info persistently to IndexedDB and long-lived cookies
+     */
+    async savePairingCredentials(pairingCode: string, deviceInfo: any): Promise<void> {
+        try {
+            const db = await openDB();
+            const tx = db.transaction(STORE_META, 'readwrite');
+            const store = tx.objectStore(STORE_META);
+            store.put({ key: 'pairing_code', value: pairingCode, updatedAt: Date.now() });
+            store.put({ key: 'device_info', value: deviceInfo, updatedAt: Date.now() });
+            await new Promise((res, rej) => {
+                tx.oncomplete = () => res(null);
+                tx.onerror = () => rej(tx.error);
+            });
+        } catch {}
+
+        try {
+            if (typeof document !== 'undefined') {
+                const exp = new Date(Date.now() + 10 * 365 * 24 * 3600 * 1000).toUTCString();
+                document.cookie = `payfix_kiosk_pairing_code=${encodeURIComponent(pairingCode)}; expires=${exp}; path=/; SameSite=Lax`;
+                if (deviceInfo) {
+                    document.cookie = `payfix_kiosk_device_info=${encodeURIComponent(JSON.stringify(deviceInfo))}; expires=${exp}; path=/; SameSite=Lax`;
+                }
+            }
+        } catch {}
+    },
+
+    /**
+     * Load Pairing Credentials from LocalStorage || IndexedDB || Cookies
+     */
+    async loadPairingCredentials(): Promise<{ pairingCode: string | null; deviceInfo: any | null }> {
+        let code: string | null = null;
+        let device: any = null;
+
+        // 1. Try LocalStorage
+        try {
+            code = localStorage.getItem('payfix_kiosk_pairing_code');
+            const rawDev = localStorage.getItem('payfix_kiosk_device_info');
+            if (rawDev) device = JSON.parse(rawDev);
+        } catch {}
+
+        // 2. Try IndexedDB if not found
+        if (!code) {
+            try {
+                const db = await openDB();
+                const tx = db.transaction(STORE_META, 'readonly');
+                const store = tx.objectStore(STORE_META);
+                const reqCode = store.get('pairing_code');
+                const reqDev = store.get('device_info');
+                await new Promise((res) => {
+                    tx.oncomplete = () => {
+                        if (reqCode.result?.value) code = reqCode.result.value;
+                        if (reqDev.result?.value) device = reqDev.result.value;
+                        res(null);
+                    };
+                    tx.onerror = () => res(null);
+                });
+            } catch {}
+        }
+
+        // 3. Try Cookies if still not found
+        if (!code && typeof document !== 'undefined') {
+            try {
+                const cookies = document.cookie.split(';');
+                for (const c of cookies) {
+                    const [k, v] = c.trim().split('=');
+                    if (k === 'payfix_kiosk_pairing_code' && v) {
+                        code = decodeURIComponent(v);
+                    }
+                    if (k === 'payfix_kiosk_device_info' && v) {
+                        device = JSON.parse(decodeURIComponent(v));
+                    }
+                }
+            } catch {}
+        }
+
+        // Auto-heal LocalStorage if recovered from IDB / Cookie
+        if (code && typeof localStorage !== 'undefined') {
+            try {
+                localStorage.setItem('payfix_kiosk_pairing_code', code);
+                if (device) localStorage.setItem('payfix_kiosk_device_info', JSON.stringify(device));
+            } catch {}
+        }
+
+        return { pairingCode: code, deviceInfo: device };
+    },
+
+    async clearPairingCredentials(): Promise<void> {
+        try {
+            localStorage.removeItem('payfix_kiosk_pairing_code');
+            localStorage.removeItem('payfix_kiosk_device_info');
+        } catch {}
+        try {
+            const db = await openDB();
+            const tx = db.transaction(STORE_META, 'readwrite');
+            const store = tx.objectStore(STORE_META);
+            store.delete('pairing_code');
+            store.delete('device_info');
+        } catch {}
+        try {
+            document.cookie = 'payfix_kiosk_pairing_code=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+            document.cookie = 'payfix_kiosk_device_info=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+        } catch {}
+    },
+
+    /**
+     * Clear all cached data from IndexedDB
+     */
+    async clearAll(): Promise<void> {
+        try {
+            const db = await openDB();
+            const tx = db.transaction([STORE_EMPLOYEES, STORE_PUNCH_QUEUE, STORE_META], 'readwrite');
+            tx.objectStore(STORE_EMPLOYEES).clear();
+            tx.objectStore(STORE_PUNCH_QUEUE).clear();
+            tx.objectStore(STORE_META).clear();
+        } catch (err) {
+            console.error('[KioskIndexedDB] Failed to clear IndexedDB:', err);
+        }
     }
 };
