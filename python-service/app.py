@@ -376,13 +376,8 @@ def _raw_extract(payload: ExtractRequest) -> ExtractResponse:
         diagnostics=diagnostics
     )
 
-if USING_SPACES:
-    @spaces.GPU
-    def perform_extraction(payload: ExtractRequest) -> ExtractResponse:
-        return _raw_extract(payload)
-else:
-    def perform_extraction(payload: ExtractRequest) -> ExtractResponse:
-        return _raw_extract(payload)
+def perform_extraction(payload: ExtractRequest) -> ExtractResponse:
+    return _raw_extract(payload)
 
 def perform_comparison(payload: CompareRequest) -> CompareResponse:
     v1 = np.array(payload.embedding1, dtype=np.float32)
