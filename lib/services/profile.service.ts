@@ -410,6 +410,37 @@ export class ProfileService {
                 .set(updatePayload)
                 .where(eq(profiles.id, request.profile_id))
 
+            // Sync to public.profiles and auth.users so Supabase PostgREST queries in mobile view reflect latest avatar immediately
+            try {
+                const { createClient } = await import('@supabase/supabase-js')
+                if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+                    const adminClient = createClient(
+                        process.env.NEXT_PUBLIC_SUPABASE_URL,
+                        process.env.SUPABASE_SERVICE_ROLE_KEY,
+                        { auth: { persistSession: false } }
+                    )
+                    await adminClient
+                        .from('profiles')
+                        .update({
+                            avatar_url: updatePayload.avatar_url,
+                            avatar_status: updatePayload.avatar_status || 'custom',
+                            face_photo_url: updatePayload.face_photo_url || updatePayload.avatar_url,
+                            face_enrolled_at: updatePayload.face_enrolled_at,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', request.profile_id)
+
+                    await adminClient.auth.admin.updateUserById(request.profile_id, {
+                        user_metadata: {
+                            avatar_url: updatePayload.avatar_url,
+                            avatar_status: updatePayload.avatar_status || 'custom',
+                            full_name: request.profile?.full_name
+                        }
+                    })
+                }
+            } catch (syncErr) {
+                console.warn('[ProfileService] public.profiles sync warning:', syncErr)
+            }
 
             await db.update(profilePhotoRequests)
                 .set({
