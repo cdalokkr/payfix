@@ -170,18 +170,34 @@ export function ExpressKioskApp() {
         let isMounted = true;
         async function restorePairing() {
             if (typeof window === 'undefined') return;
-            const { pairingCode: savedKey, deviceInfo: savedDeviceInfo } = await KioskIndexedDBService.loadPairingCredentials();
+            
+            // 1. Check URL parameters for auto-heal (?key=KSK-XXXX-YYYY or ?pairingCode=...)
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlKey = urlParams.get('key') || urlParams.get('pairingCode') || urlParams.get('kiosk_key');
 
-            if (savedKey && isMounted) {
-                setPairingCode(savedKey);
+            const { pairingCode: savedKey, deviceInfo: savedDeviceInfo } = await KioskIndexedDBService.loadPairingCredentials();
+            const activeKey = urlKey || savedKey;
+
+            if (activeKey && isMounted) {
+                setPairingCode(activeKey);
                 if (savedDeviceInfo) {
                     setPairedDevice(savedDeviceInfo);
                 }
-                verifyPairingMutation.mutate({ pairingCode: savedKey }, {
+
+                // Sync URL query param to address bar for easy bookmarking
+                try {
+                    const currentUrl = new URL(window.location.href);
+                    if (currentUrl.searchParams.get('key') !== activeKey) {
+                        currentUrl.searchParams.set('key', activeKey);
+                        window.history.replaceState({}, '', currentUrl.toString());
+                    }
+                } catch {}
+
+                verifyPairingMutation.mutate({ pairingCode: activeKey }, {
                     onSuccess: (res) => {
                         if (res.success && 'device' in res && res.device) {
                             setPairedDevice(res.device);
-                            void KioskIndexedDBService.savePairingCredentials(savedKey, res.device);
+                            void KioskIndexedDBService.savePairingCredentials(activeKey, res.device);
                         } else {
                             toast.error('Kiosk Pairing Key is no longer active. Please pair again.');
                             handleUnpair();

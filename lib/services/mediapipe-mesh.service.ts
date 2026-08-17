@@ -203,11 +203,10 @@ export const MediaPipeMeshService = {
         // Models are pre-loaded on dashboard mount — never block the RAF loop here
         if (typeof window !== 'undefined' && FaceApiBrowserService.isDetectorReady() && window.faceapi) {
             try {
-
                 if (window.faceapi) {
                     const faceapi = window.faceapi;
                     const detection = await faceapi
-                        .detectSingleFace(scanEl, new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.10 }))
+                        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.10 }))
                         .withFaceLandmarks(true);
 
                     if (detection && detection.landmarks) {
