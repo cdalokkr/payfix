@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation'
 import { isDefaultAvatar } from '@/lib/utils/avatar-helper'
 import { runWithRequestHeaders } from '@/lib/tenant/with-context'
 import { db } from '@/lib/db'
-import { attendance } from '@/lib/db/schema'
+import { attendance, profiles } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
 
 export const metadata = {
@@ -37,12 +37,10 @@ export default async function MobileAttendancePage({ searchParams }: PageProps) 
 
     // Fetch profile and tenant attendance record in proper tenant context
     const { profile, todayAttendance } = await runWithRequestHeaders(async () => {
-        const [profileRes, attRecord] = await Promise.all([
-            supabase
-                .from('profiles')
-                .select('id, full_name, avatar_url, avatar_status')
-                .eq('id', user.id)
-                .single(),
+        const [profileRecord, attRecord] = await Promise.all([
+            db.query.profiles.findFirst({
+                where: eq(profiles.id, user.id)
+            }),
             db.query.attendance.findFirst({
                 where: and(
                     eq(attendance.profile_id, user.id),
@@ -51,7 +49,7 @@ export default async function MobileAttendancePage({ searchParams }: PageProps) 
             })
         ])
         return {
-            profile: profileRes.data,
+            profile: profileRecord || null,
             todayAttendance: attRecord || null
         }
     })
