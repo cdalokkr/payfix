@@ -376,6 +376,11 @@ def _raw_extract(payload: ExtractRequest) -> ExtractResponse:
         diagnostics=diagnostics
     )
 
+if USING_SPACES:
+    @spaces.GPU(duration=5)
+    def spaces_heartbeat():
+        return True
+
 def perform_extraction(payload: ExtractRequest) -> ExtractResponse:
     return _raw_extract(payload)
 
