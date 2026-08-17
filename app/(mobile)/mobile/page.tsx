@@ -3,7 +3,7 @@ import { cookies } from 'next/headers'
 import { MobileDashboard } from './mobile-dashboard'
 import { runWithRequestHeaders } from '@/lib/tenant/with-context'
 import { db } from '@/lib/db'
-import { attendance } from '@/lib/db/schema'
+import { attendance, profiles } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
 
 export const metadata = {
@@ -33,12 +33,10 @@ export default async function MobilePage() {
     console.log('[MOBILE-PAGE] Querying data for user:', user.id, 'date:', today)
 
     const { profile, todayAttendance } = await runWithRequestHeaders(async () => {
-        const [profileRes, attRecord] = await Promise.all([
-            supabase
-                .from('profiles')
-                .select('id, full_name, avatar_url, email, sex, avatar_status, role')
-                .eq('id', user.id)
-                .single(),
+        const [profileRecord, attRecord] = await Promise.all([
+            db.query.profiles.findFirst({
+                where: eq(profiles.id, user.id)
+            }),
             db.query.attendance.findFirst({
                 where: and(
                     eq(attendance.profile_id, user.id),
@@ -47,7 +45,7 @@ export default async function MobilePage() {
             })
         ])
         return {
-            profile: profileRes.data,
+            profile: profileRecord as any,
             todayAttendance: attRecord ? {
                 id: attRecord.id,
                 check_in: attRecord.check_in ? new Date(attRecord.check_in).toISOString() : null,

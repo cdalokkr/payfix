@@ -2,35 +2,40 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { MobileProfileClient } from './mobile-profile-client'
 
+import { db } from '@/lib/db'
+import { profiles } from '@/lib/db/schema'
+import { eq } from 'drizzle-orm'
+import { runWithRequestHeaders } from '@/lib/tenant/with-context'
+
 export const metadata = {
     title: 'Profile',
 }
 
 export default async function MobileProfilePage() {
     const supabase = await createServerSupabaseClient()
-    const { data, error } = await supabase.auth.getUser()
+    const { data } = await supabase.auth.getUser()
     const user = data?.user || null
 
     if (!user) {
         redirect('/login')
     }
 
-    const { data: profile } = await supabase
-        .from('profiles')
-        .select('id, full_name, email, avatar_url, mobile_no, avatar_status, date_of_birth, designation:designations(name)')
-        .eq('id', user.id)
-        .single()
+    const profile = await runWithRequestHeaders(async () => {
+        return await db.query.profiles.findFirst({
+            where: eq(profiles.id, user.id),
+            with: {
+                designation: true
+            }
+        })
+    })
 
     if (!profile) {
         redirect('/login')
     }
 
-    // Transform the designation array to single object (Supabase returns array for relations)
     const transformedProfile = {
         ...profile,
-        designation: Array.isArray(profile.designation)
-            ? profile.designation[0] || null
-            : profile.designation
+        designation: profile.designation ? { name: profile.designation.name } : null
     }
 
     return (

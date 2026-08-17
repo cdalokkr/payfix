@@ -17,23 +17,13 @@ export default async function MobileLayout({
     const cookieStore = await cookies()
     const isPwa = cookieStore.get('pwa_standalone')?.value === 'true'
 
-    // Check authentication
-    const supabase = await createServerSupabaseClient()
-    const { data, error } = await supabase.auth.getUser()
-    const user = data?.user || null
+    // Check authentication and get profile directly from tenant private schema
+    const { createOptimizedContext } = await import('@/lib/auth/optimized-context')
+    const context = await createOptimizedContext()
+    const user = context.user
+    const profile = context.profile
 
-    if (!user) {
-        redirect('/login')
-    }
-
-    // Get profile to verify role
-    const { data: profile } = await supabase
-        .from('profiles')
-        .select('id, full_name, avatar_url, role, status, email')
-        .eq('id', user.id)
-        .single()
-
-    if (!profile) {
+    if (!user || !profile) {
         redirect('/login')
     }
 
