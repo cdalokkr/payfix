@@ -17,13 +17,27 @@ export default async function MobileLayout({
     const cookieStore = await cookies()
     const isPwa = cookieStore.get('pwa_standalone')?.value === 'true'
 
-    // Check authentication and get profile directly from tenant private schema
-    const { createOptimizedContext } = await import('@/lib/auth/optimized-context')
-    const context = await createOptimizedContext()
-    const user = context.user
-    const profile = context.profile
+    // Check authentication for current request
+    const supabase = await createServerSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
 
-    if (!user || !profile) {
+    if (!user) {
+        redirect('/login')
+    }
+
+    // Direct query to tenant private schema for the authenticated user
+    const { db } = await import('@/lib/db')
+    const { profiles } = await import('@/lib/db/schema')
+    const { eq } = await import('drizzle-orm')
+    const { runWithRequestHeaders } = await import('@/lib/tenant/with-context')
+
+    const profile = await runWithRequestHeaders(async () => {
+        return await db.query.profiles.findFirst({
+            where: eq(profiles.id, user.id)
+        })
+    })
+
+    if (!profile) {
         redirect('/login')
     }
 
