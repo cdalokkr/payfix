@@ -339,9 +339,9 @@ export function SelfieCapture({
             if (isAttendanceError) {
                 setErrorMessage(errMsg)
             } else if (errMsg === 'TIMEOUT') {
-                setErrorMessage('Verification timed out. Please try again.')
+                setErrorMessage('Verification timed out. Please check network connection.')
             } else {
-                setErrorMessage('Face verification failed. Please retake your selfie.')
+                setErrorMessage(errMsg || 'Face verification failed. Please retake your selfie.')
             }
         }
     }, [profileImageUrl, faceEmbedding, onSubmitAttendance, stopCamera])
