@@ -197,14 +197,74 @@ def crop_face_avatar(image: Image.Image, face_box: Optional[Dict[str, int]] = No
     crop_112 = cropped.resize((112, 112), Image.Resampling.BILINEAR)
     return crop_512, crop_112
 
+import urllib.request
+
+ONNX_MODEL_PATH = os.path.join(os.path.dirname(__file__), "w600k_mbf.onnx")
+ONNX_MODEL_URLS = [
+    "https://huggingface.co/WePrompt/buffalo_sc/resolve/main/w600k_mbf.onnx",
+    "https://huggingface.co/deepghs/insightface/resolve/main/buffalo_s/w600k_mbf.onnx"
+]
+
+arcface_session = None
+
+def init_arcface():
+    global arcface_session
+    if arcface_session is not None:
+        return
+    try:
+        if not os.path.exists(ONNX_MODEL_PATH) or os.path.getsize(ONNX_MODEL_PATH) < 1000000:
+            print("[ArcFace] Downloading lightweight 512-d ArcFace ONNX model (13.6 MB)...")
+            for url in ONNX_MODEL_URLS:
+                try:
+                    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                    with urllib.request.urlopen(req, timeout=30) as resp, open(ONNX_MODEL_PATH, 'wb') as out_f:
+                        out_f.write(resp.read())
+                    if os.path.exists(ONNX_MODEL_PATH) and os.path.getsize(ONNX_MODEL_PATH) > 1000000:
+                        print(f"[ArcFace] Model downloaded successfully from {url} ({os.path.getsize(ONNX_MODEL_PATH)} bytes)")
+                        break
+                except Exception as dl_err:
+                    print(f"[ArcFace] Download from {url} failed: {dl_err}")
+
+        import onnxruntime as ort
+        providers = ['CUDAExecutionProvider', 'CPUExecutionProvider'] if ort.get_device() == 'GPU' else ['CPUExecutionProvider']
+        arcface_session = ort.InferenceSession(ONNX_MODEL_PATH, providers=providers)
+        print(f"[ArcFace] ONNX session initialized with providers: {arcface_session.get_providers()}")
+    except Exception as err:
+        print(f"[ArcFace] ONNX initialization warning: {err}")
+
+# Eagerly initialize model on service startup
+try:
+    init_arcface()
+except Exception as e:
+    print(f"[ArcFace] Eager startup warning: {e}")
+
 def compute_512d_embedding_from_crop(crop_112: Image.Image) -> List[float]:
+    init_arcface()
+    if arcface_session is not None:
+        try:
+            # 1. Convert to RGB float32
+            img_np = np.array(crop_112, dtype=np.float32)
+            # 2. RGB to BGR (standard ArcFace/InsightFace input)
+            bgr_img = img_np[:, :, ::-1]
+            # 3. Standard ArcFace normalization: (x - 127.5) / 127.5
+            normalized = (bgr_img - 127.5) / 127.5
+            # 4. Transpose HWC -> CHW -> (1, 3, 112, 112)
+            blob = np.transpose(normalized, (2, 0, 1))
+            blob = np.expand_dims(blob, axis=0).astype(np.float32)
+
+            input_name = arcface_session.get_inputs()[0].name
+            outputs = arcface_session.run(None, {input_name: blob})
+            embedding = outputs[0][0]
+            return l2_normalize(embedding).tolist()
+        except Exception as e:
+            print(f"[ArcFace] Inference error, fallback: {e}")
+
+    # Fallback if ONNX runtime unavailable
     crop_np = np.array(crop_112, dtype=np.float32)
     normalized = (crop_np - 127.5) / 128.0
-
     r_chan = normalized[:, :, 0].flatten()
     g_chan = normalized[:, :, 1].flatten()
     b_chan = normalized[:, :, 2].flatten()
-
     vec = np.zeros(512, dtype=np.float32)
     step = len(r_chan) // 170
     for i in range(170):
@@ -213,7 +273,6 @@ def compute_512d_embedding_from_crop(crop_112: Image.Image) -> List[float]:
         vec[340 + i] = b_chan[i * step]
     vec[510] = float(np.mean(normalized))
     vec[511] = float(np.std(normalized))
-
     return l2_normalize(vec).tolist()
 
 def _raw_extract(payload: ExtractRequest) -> ExtractResponse:

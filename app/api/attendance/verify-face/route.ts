@@ -61,10 +61,10 @@ export async function POST(request: NextRequest) {
         const selfie512 = extractRes.embedding_512 || (extractRes.embedding?.length === 512 ? extractRes.embedding : null)
         const selfie128 = extractRes.embedding_128 || (extractRes.embedding?.length === 128 ? extractRes.embedding : null)
 
-        // 3. Match 512-d ArcFace vectors with Cosine Dot Product (optimal threshold: 0.55)
+        // 3. Match 512-d ArcFace vectors with Cosine Dot Product (optimal threshold: 0.65)
         let matched = false
         let similarity = 0.0
-        const threshold = 0.55
+        const threshold = 0.65
 
         if (stored512 && stored512.length === 512 && selfie512 && selfie512.length === 512) {
             let dot = 0
