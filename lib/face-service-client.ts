@@ -93,7 +93,7 @@ export class FaceServiceClient {
                 }
 
                 const sseResp = await fetch(`${baseUrl}/gradio_api/call/extract/${callData.event_id}`, {
-                    signal: AbortSignal.timeout(12000)
+                    signal: AbortSignal.timeout(20000)
                 })
 
                 const sseText = await sseResp.text()

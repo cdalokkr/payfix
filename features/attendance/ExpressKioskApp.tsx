@@ -612,8 +612,12 @@ export function ExpressKioskApp() {
         snap.height = video.videoHeight || 1280;
         const sctx = snap.getContext('2d');
         if (!sctx) return null;
+        sctx.save();
+        sctx.translate(snap.width, 0);
+        sctx.scale(-1, 1); // Match front camera mirror preview
         sctx.drawImage(video, 0, 0, snap.width, snap.height);
-        return snap.toDataURL('image/jpeg', 0.85);
+        sctx.restore();
+        return snap.toDataURL('image/jpeg', 0.90);
     };
 
     // Instant Face Verification Scan & Overlay Flow (Continuous Staff Scanning)
