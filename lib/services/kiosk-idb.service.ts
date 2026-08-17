@@ -81,7 +81,7 @@ export const KioskIndexedDBService = {
                 empStore.put(emp);
             }
 
-            const enrolledCount = employees.filter(e => e.faceEmbedding && e.faceEmbedding.length === 128).length;
+            const enrolledCount = employees.filter(e => e.faceEmbedding && e.faceEmbedding.length === 512).length;
 
             // Save sync metadata
             metaStore.put({

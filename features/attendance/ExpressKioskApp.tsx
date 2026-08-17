@@ -420,15 +420,18 @@ export function ExpressKioskApp() {
             if (res.ok) {
                 const data = await res.json();
                 if (data.success) {
-                    const mapped: CachedEmployee[] = data.employees.map((e: any) => ({
-                        id: e.id,
-                        name: e.name,
-                        avatarUrl: e.avatarUrl,
-                        biometricUserId: e.biometricUserId,
-                        faceEmbedding: Array.isArray(e.faceEmbedding) && (e.faceEmbedding.length === 512 || e.faceEmbedding.length === 128)
-                            ? e.faceEmbedding
-                            : (Array.isArray(e.faceEmbedding512) && e.faceEmbedding512.length === 512 ? e.faceEmbedding512 : null),
-                    }));
+                    const mapped: CachedEmployee[] = data.employees.map((e: any) => {
+                        const vec512 = (Array.isArray(e.faceEmbedding512) && e.faceEmbedding512.length === 512)
+                            ? e.faceEmbedding512
+                            : ((Array.isArray(e.faceEmbedding) && e.faceEmbedding.length === 512) ? e.faceEmbedding : null);
+                        return {
+                            id: e.id,
+                            name: e.name,
+                            avatarUrl: e.avatarUrl,
+                            biometricUserId: e.biometricUserId,
+                            faceEmbedding: vec512,
+                        };
+                    });
                     setEmployees(mapped);
                     
                     // Save to IndexedDB via 'idb' package (saveEmployeeFaces in lib/face-db.ts)
@@ -441,8 +444,8 @@ export function ExpressKioskApp() {
                         updatedAt: Date.now()
                     }));
                     
-                    saveEmployeeFaces(idbFormatted, pairingCode);
-                    KioskIndexedDBService.saveEmployees(mapped, pairingCode);
+                    await saveEmployeeFaces(idbFormatted, pairingCode);
+                    await KioskIndexedDBService.saveEmployees(mapped, pairingCode);
                     try { localStorage.setItem('payfix_kiosk_cached_employees', JSON.stringify(mapped)); } catch {}
 
                     const info = await getIdbSyncInfo();
@@ -454,18 +457,16 @@ export function ExpressKioskApp() {
                         });
                     }
 
-
                     // Pre-parse Float32Array descriptors into memory cache for instant matching
                     const newMap = new Map<string, Float32Array>();
                     mapped.forEach(e => {
-                        if (e.faceEmbedding && (e.faceEmbedding.length === 512 || e.faceEmbedding.length === 128)) {
+                        if (e.faceEmbedding && e.faceEmbedding.length === 512) {
                             newMap.set(e.id, new Float32Array(e.faceEmbedding));
                         }
                     });
                     descriptorMapRef.current = newMap;
 
-
-                    const enrolledCount = mapped.filter(e => e.faceEmbedding !== null).length;
+                    const enrolledCount = mapped.filter(e => e.faceEmbedding && e.faceEmbedding.length === 512).length;
                     setStats(prev => ({ ...prev, totalEmployees: data.total, enrolledEmployees: enrolledCount }));
                 }
             } else if (res.status === 401) {

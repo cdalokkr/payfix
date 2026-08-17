@@ -72,10 +72,10 @@ export async function saveEmployeeFaces(
   // Clear old cached employees
   await tx.store.clear();
 
-  const enrolledCount = employees.filter(e => e.embedding && e.embedding.length === 128).length;
+  const enrolledCount = employees.filter(e => e.embedding && e.embedding.length === 512).length;
 
   for (const emp of employees) {
-    const normalizedVector = emp.embedding && emp.embedding.length === 128 ? l2Normalize(emp.embedding) : emp.embedding;
+    const normalizedVector = emp.embedding && emp.embedding.length === 512 ? emp.embedding : emp.embedding;
     await tx.store.put({
       ...emp,
       embedding: normalizedVector,
@@ -93,10 +93,10 @@ export async function saveEmployeeFaces(
   });
 
   await tx.done;
-  console.log(`[idb FaceDB] Successfully saved ${employees.length} employees (${enrolledCount} enrolled vectors, L2-normalized) to IndexedDB.`);
+  console.log(`[idb FaceDB] Successfully saved ${employees.length} employees (${enrolledCount} 512-d ArcFace vectors) to IndexedDB.`);
 }
 
-/** Parse embedding from Supabase (array or string) */
+/** Parse embedding from Supabase / Postgres (array or string) */
 export function parseEmbedding(value: unknown): number[] | null {
   let emb = value;
   if (typeof emb === 'string') {
@@ -106,7 +106,7 @@ export function parseEmbedding(value: unknown): number[] | null {
       return null;
     }
   }
-  if (!Array.isArray(emb) || emb.length !== 128) return null;
+  if (!Array.isArray(emb) || (emb.length !== 512 && emb.length !== 128)) return null;
   return emb;
 }
 

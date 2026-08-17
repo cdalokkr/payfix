@@ -83,22 +83,19 @@ export async function GET(req: NextRequest) {
 
             return activeEmployees.map(row => {
                 const faceEmbedding512 = parseVector(row.face_embedding_512);
-                const faceEmbedding128 = parseVector(row.face_embedding) || parseVector(row.face_vector);
-                const faceVector = faceEmbedding512 || faceEmbedding128;
+                const faceVector = faceEmbedding512;
 
                 return {
                     id: row.id,
                     name: row.full_name || row.email,
                     avatarUrl: row.avatar_url || null,
                     biometricUserId: row.biometric_device_user_id || null,
-                    embedding: parseVector(row.face_embedding_512 || row.face_embedding) || faceVector,
-                    faceVector,
-                    faceEmbedding: faceVector,
+                    embedding: faceEmbedding512,
+                    faceVector: faceEmbedding512,
+                    faceEmbedding: faceEmbedding512,
                     faceEmbedding512,
-                    faceEmbedding128,
                     face_embedding_512: faceEmbedding512,
-                    face_embedding: faceEmbedding128,
-                    hasEnrolledFace: faceVector !== null && (faceVector.length === 512 || faceVector.length === 128),
+                    hasEnrolledFace: faceEmbedding512 !== null && faceEmbedding512.length === 512,
                 };
             });
         });
