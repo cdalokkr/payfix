@@ -64,7 +64,7 @@ interface CachedEmployee {
     name: string;
     avatarUrl?: string | null;
     biometricUserId?: string | null;
-    faceEmbedding: number[] | null; // 128-d face-api.js vector
+    faceEmbedding: number[] | null; // 512-d ArcFace or 128-d vector
 }
 
 interface QueuedPunch {
@@ -411,9 +411,9 @@ export function ExpressKioskApp() {
                         name: e.name,
                         avatarUrl: e.avatarUrl,
                         biometricUserId: e.biometricUserId,
-                        faceEmbedding: Array.isArray(e.faceEmbedding) && e.faceEmbedding.length === 128
+                        faceEmbedding: Array.isArray(e.faceEmbedding) && (e.faceEmbedding.length === 512 || e.faceEmbedding.length === 128)
                             ? e.faceEmbedding
-                            : null,
+                            : (Array.isArray(e.faceEmbedding512) && e.faceEmbedding512.length === 512 ? e.faceEmbedding512 : null),
                     }));
                     setEmployees(mapped);
                     
@@ -444,8 +444,8 @@ export function ExpressKioskApp() {
                     // Pre-parse Float32Array descriptors into memory cache for instant matching
                     const newMap = new Map<string, Float32Array>();
                     mapped.forEach(e => {
-                        if (e.faceEmbedding && e.faceEmbedding.length === 128) {
-                            newMap.set(e.id, FaceApiBrowserService.arrayToDescriptor(e.faceEmbedding));
+                        if (e.faceEmbedding && (e.faceEmbedding.length === 512 || e.faceEmbedding.length === 128)) {
+                            newMap.set(e.id, new Float32Array(e.faceEmbedding));
                         }
                     });
                     descriptorMapRef.current = newMap;
@@ -475,8 +475,8 @@ export function ExpressKioskApp() {
 
                 const newMap = new Map<string, Float32Array>();
                 mapped.forEach(e => {
-                    if (e.faceEmbedding && e.faceEmbedding.length === 128) {
-                        newMap.set(e.id, FaceApiBrowserService.arrayToDescriptor(e.faceEmbedding));
+                    if (e.faceEmbedding && (e.faceEmbedding.length === 512 || e.faceEmbedding.length === 128)) {
+                        newMap.set(e.id, new Float32Array(e.faceEmbedding));
                     }
                 });
                 descriptorMapRef.current = newMap;
