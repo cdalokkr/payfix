@@ -74,13 +74,13 @@ export class FaceServiceClient {
         }
 
         // 2. Gradio ZeroGPU SSE API Call (/gradio_api/call/extract) with auto-retry
-        for (let attempt = 1; attempt <= 2; attempt++) {
+        for (let attempt = 1; attempt <= 3; attempt++) {
             try {
                 const callResp = await fetch(`${baseUrl}/gradio_api/call/extract`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ data: [imageBase64] }),
-                    signal: AbortSignal.timeout(9000)
+                    signal: AbortSignal.timeout(12000)
                 })
 
                 if (!callResp.ok) {
@@ -93,7 +93,7 @@ export class FaceServiceClient {
                 }
 
                 const sseResp = await fetch(`${baseUrl}/gradio_api/call/extract/${callData.event_id}`, {
-                    signal: AbortSignal.timeout(20000)
+                    signal: AbortSignal.timeout(25000)
                 })
 
                 const sseText = await sseResp.text()
@@ -119,9 +119,9 @@ export class FaceServiceClient {
                     }
                 }
             } catch (err: any) {
-                console.warn(`[FaceServiceClient] Extract attempt ${attempt} failed:`, err?.message || err)
-                if (attempt === 1) {
-                    await new Promise(r => setTimeout(r, 400)) // brief backoff before retry
+                console.warn(`[FaceServiceClient] Extract attempt ${attempt}/3 failed:`, err?.message || err)
+                if (attempt < 3) {
+                    await new Promise(r => setTimeout(r, attempt * 500)) // Exponential backoff (500ms, 1000ms)
                 }
             }
         }

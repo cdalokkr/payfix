@@ -299,10 +299,18 @@ def _raw_extract(payload: ExtractRequest) -> ExtractResponse:
     try:
         if face_cascade is not None:
             gray = cv2.cvtColor(image_np, cv2.COLOR_RGB2GRAY)
-            faces = face_cascade.detectMultiScale(gray, scaleFactor=1.15, minNeighbors=4, minSize=(60, 60))
-            face_count = len(faces)
-            if face_count > 0:
-                fx, fy, fw, fh = faces[0]
+            raw_faces = face_cascade.detectMultiScale(gray, scaleFactor=1.15, minNeighbors=5, minSize=(70, 70))
+            if len(raw_faces) > 0:
+                # Sort faces by area descending
+                sorted_faces = sorted(raw_faces, key=lambda f: f[2] * f[3], reverse=True)
+                primary_face = sorted_faces[0]
+                primary_area = primary_face[2] * primary_face[3]
+
+                # Filter out small noise artifacts (must be >= 25% of primary face area)
+                significant_faces = [f for f in sorted_faces if (f[2] * f[3]) >= (0.25 * primary_area)]
+                face_count = len(significant_faces)
+
+                fx, fy, fw, fh = primary_face
                 face_box = {"top": int(fy), "left": int(fx), "bottom": int(fy + fh), "right": int(fx + fw), "width": int(fw), "height": int(fh)}
     except Exception:
         pass
