@@ -1286,12 +1286,12 @@ export function ExpressKioskApp() {
                             </div>
                         }
                     >
-                        {/* Freeze Frame Captured Selfie Overlay (Prevents background video stutter) */}
+                        {/* Freeze Frame Captured Selfie Overlay (Matches mirrored video preview exactly) */}
                         {capturedFreezeUrl && (
                             <img
                                 src={capturedFreezeUrl}
                                 alt="Captured Selfie Freeze"
-                                className="absolute inset-0 w-full h-full object-cover transform -scale-x-100 z-15"
+                                className="absolute inset-0 w-full h-full object-cover z-15"
                             />
                         )}
 

@@ -220,14 +220,14 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           lastEvalTime = time;
           isEvaluatingRef.current = true;
           try {
-            // 200ms timeout guard prevents RAF loop from stalling if model loading is slow
+            // 900ms timeout guard ensures mobile devices have ample time for face detection
             const evalPromise = MediaPipeMeshService.evaluateInMaskLiveness(videoRef.current, time);
             const timeoutPromise = new Promise<InMaskLivenessStatus>((resolve) =>
               setTimeout(() => resolve({
                 isFaceDetected: false, isAlignedInMask: false, isBlinking: false,
-                blinkConfirmed: false, prompt: 'Detecting face...', statusBadgeColor: 'blue',
+                blinkConfirmed: false, prompt: 'Position face in mask', statusBadgeColor: 'blue',
                 ear: 0, headPose: { yaw: 0, pitch: 0, roll: 0 },
-              }), 200)
+              }), 900)
             );
             const status = await Promise.race([evalPromise, timeoutPromise]);
             if (isMountedRef.current) {
@@ -297,8 +297,8 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   const isAligned = livenessStatus.isAlignedInMask;
   const isBlinkConfirmed = livenessStatus.blinkConfirmed || flashSuccess;
 
-  // Single Spacious Face Oval Path (Fits full head naturally, without inner cramping!)
-  const OVAL_PATH = "M150 18 C228 18 280 65 280 172 C280 280 228 354 150 354 C72 354 20 280 20 172 C20 65 72 18 150 18 Z";
+  // Single Spacious Face Oval Path (Wider contoured shape for comfortable natural head fit)
+  const OVAL_PATH = "M150 20 C236 20 290 70 290 178 C290 286 236 352 150 352 C64 352 10 286 10 178 C10 70 64 20 150 20 Z";
 
   return (
     <div className="relative w-full h-full min-h-[580px] bg-slate-950 flex flex-col overflow-hidden rounded-3xl p-0 border border-slate-800 shadow-2xl">
@@ -384,14 +384,14 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                 <path
                   d={OVAL_PATH}
                   stroke={isAligned ? '#10b981' : '#0ea5e9'}
-                  strokeWidth={isAligned ? '3.5' : '2.5'}
+                  strokeWidth={isAligned ? '5.0' : '4.0'}
                   strokeDasharray="none"
-                  strokeOpacity={isAligned ? 1.0 : 0.85}
+                  strokeOpacity={isAligned ? 1.0 : 0.90}
                   className="transition-all duration-300"
                   style={{
                     filter: isAligned
-                      ? 'drop-shadow(0 0 16px rgba(16, 185, 129, 0.95))'
-                      : 'drop-shadow(0 0 10px rgba(14, 165, 233, 0.75))',
+                      ? 'drop-shadow(0 0 18px rgba(16, 185, 129, 0.95))'
+                      : 'drop-shadow(0 0 12px rgba(14, 165, 233, 0.85))',
                   }}
                 />
 
