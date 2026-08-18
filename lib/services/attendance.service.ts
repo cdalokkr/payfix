@@ -6,8 +6,10 @@ import { SmartCache } from '@/lib/cache/smart-cache'
 import { getLocalDateIST, getLocalTimeIST12Hour } from '@/lib/utils/date-utils'
 import { differenceInMinutes } from 'date-fns'
 
-// ─ One-time flag per process lifetime — skips repeated CREATE TABLE IF NOT EXISTS round-trips
-let _attendanceSchemaEnsured = false
+import { tenantStorage } from '@/lib/tenant/store'
+
+// ─ One-time flag per tenant schema — skips repeated CREATE TABLE IF NOT EXISTS round-trips
+const _attendanceSchemaEnsured = new Set<string>()
 
 export class AttendanceService {
     /**
@@ -223,7 +225,8 @@ export class AttendanceService {
     }
 
     static async ensureAttendanceSchema() {
-        if (_attendanceSchemaEnsured) return // Skip if already ensured this process lifetime
+        const schemaKey = tenantStorage.getStore()?.tenantSchema || 'public'
+        if (_attendanceSchemaEnsured.has(schemaKey)) return // Skip if already ensured this process lifetime
         try {
             await db.execute(sql`
                 DO $$ 
@@ -278,7 +281,7 @@ export class AttendanceService {
                     "created_at" timestamp with time zone DEFAULT now()
                 );
             `);
-            _attendanceSchemaEnsured = true
+            _attendanceSchemaEnsured.add(schemaKey)
         } catch (e) {
             // Ignore schema check error if already up to date
         }

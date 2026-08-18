@@ -73,7 +73,7 @@ export async function runWithTenantSchema<T>(tenantSchema: string, fn: () => Pro
         tenantId: `tenant_${slug}`,
         slug,
         tenantSchema,
-        databaseUrl: process.env.DATABASE_URL || null,
+        databaseUrl: null,
         brandName: slug
     }, fn);
 }

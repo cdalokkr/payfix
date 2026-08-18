@@ -90,7 +90,11 @@ export function getTenantDb(tenantId: string, databaseUrl: string | null, schema
     }
 
     // 2. Resolve database connection pool
-    const cacheKey = databaseUrl ? tenantId : `shared_${schemaName}`;
+    const isCustomExternalDb = !!databaseUrl && databaseUrl !== process.env.DATABASE_URL;
+    const safeSchemaName = schemaName ? schemaName.replace(/[^a-zA-Z0-9_]/g, '') : null;
+
+    // Cache key: If custom external DB -> tenantId; If shared DB -> shared_${safeSchemaName}
+    const cacheKey = isCustomExternalDb ? tenantId : `shared_${safeSchemaName || 'public'}`;
     const cached = connectionPoolCache.get(cacheKey);
     
     if (cached) {
@@ -98,22 +102,21 @@ export function getTenantDb(tenantId: string, databaseUrl: string | null, schema
         return cached.db;
     }
 
-    const targetDbUrl = databaseUrl || process.env.DATABASE_URL!;
+    const targetDbUrl = isCustomExternalDb ? databaseUrl! : process.env.DATABASE_URL!;
     if (!targetDbUrl) {
         throw new Error('Database URL configuration is missing.');
     }
 
-    console.log(`[DB Router] Initializing new connection pool for: ${cacheKey}`);
+    console.log(`[DB Router] Initializing new connection pool for: ${cacheKey} (search_path: ${safeSchemaName ? `${safeSchemaName}, public` : 'public'})`);
 
     const connectionParams: Record<string, any> = {};
-    if (!databaseUrl && schemaName) {
-        const safeSchemaName = schemaName.replace(/[^a-zA-Z0-9_]/g, '');
+    if (safeSchemaName) {
         connectionParams.search_path = `${safeSchemaName}, public`;
     }
 
     const client = postgres(targetDbUrl, {
         prepare: false,
-        max: databaseUrl ? 10 : 4, // More connections for custom external DBs, fewer for shared schemas
+        max: isCustomExternalDb ? 10 : 4, // More connections for custom external DBs, fewer for shared schemas
         idle_timeout: 20,
         connect_timeout: 15,
         max_lifetime: 60 * 30, // Refresh connections every 30 minutes
