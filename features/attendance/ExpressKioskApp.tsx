@@ -21,6 +21,7 @@ import { saveEmployeeFaces, getSyncInfo as getIdbSyncInfo, getAllEmployeeFaces, 
 import { l2Normalize, matchFaceFast, isGoodQualityFace, getAdaptiveThreshold } from '@/lib/face-threshold';
 import { trpc } from '@/lib/trpc/client';
 import { BiometricCameraModal } from '@/components/biometrics/BiometricCameraModal';
+import { format } from 'date-fns';
 
 function getHardwareAccelerationInfo(): { backend: string; isGpu: boolean } {
     if (typeof window === 'undefined') return { backend: 'CPU', isGpu: false };
@@ -95,6 +96,9 @@ interface VerificationOverlayState {
     employeeName?: string;
     avatarUrl?: string | null;
     time?: string;
+    date?: string;
+    sessionNumber?: number;
+    punchAction?: 'check_in' | 'check_out';
     similarity?: string;
     duration?: string;
     error?: string;
@@ -809,6 +813,8 @@ export function ExpressKioskApp() {
                 const snapshotUrl = freezeUrl || captureSnapshot();
                 const similarity = `${(matchRes.similarity * 100).toFixed(1)}%`;
                 const duration = getDurationStr();
+                const dateFormatted = format(now, 'dd/MM/yyyy');
+                const timeFormatted = format(now, 'hh:mm a');
 
                 // Instant UI Notification & Profile Card Overlay (<100ms)
                 setVerificationResult({
@@ -816,59 +822,72 @@ export function ExpressKioskApp() {
                     matched: true,
                     employeeName: matchedEmployee.name,
                     avatarUrl: matchedEmployee.avatarUrl,
-                    time: timeStr,
+                    time: timeFormatted,
+                    date: dateFormatted,
+                    sessionNumber: 1,
+                    punchAction: 'check_in',
                     similarity,
                     duration,
                     snapshotUrl,
                 });
 
+                setLastScanResult({
+                    name: matchedEmployee.name,
+                    time: timeFormatted,
+                    type: `Verified (${similarity} Match)`,
+                });
 
-            setLastScanResult({
-                name: matchedEmployee.name,
-                time: timeStr,
-                type: `Verified (${similarity} Match)`,
-            });
+                playChimeSound();
 
-            playChimeSound();
+                // 5. ASYNC BACKGROUND PUNCH (Non-blocking DB sync while camera stays active for next staff)
+                const punchLog: QueuedPunch = {
+                    id: `punch_${Date.now()}`,
+                    profileId: matchedEmployee.id,
+                    employeeName: matchedEmployee.name,
+                    timestamp: now.toISOString(),
+                    punchType: 'auto',
+                    synced: false,
+                    latitude: terminalGps.latitude,
+                    longitude: terminalGps.longitude,
+                };
 
-            // 5. ASYNC BACKGROUND PUNCH (Non-blocking DB sync while camera stays active for next staff)
-            const punchLog: QueuedPunch = {
-                id: `punch_${Date.now()}`,
-                profileId: matchedEmployee.id,
-                employeeName: matchedEmployee.name,
-                timestamp: now.toISOString(),
-                punchType: 'auto',
-                synced: false,
-                latitude: terminalGps.latitude,
-                longitude: terminalGps.longitude,
-            };
-
-            (async () => {
-                if (navigator.onLine) {
-                    try {
-                        const res = await fetch('/api/kiosk/sync', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'x-kiosk-secret': pairingCode
-                            },
-                            body: JSON.stringify(punchLog),
-                        });
-                        if (!res.ok) queueOfflinePunch(punchLog);
-                    } catch {
+                (async () => {
+                    if (navigator.onLine) {
+                        try {
+                            const res = await fetch('/api/kiosk/sync', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'x-kiosk-secret': pairingCode
+                                },
+                                body: JSON.stringify(punchLog),
+                            });
+                            if (res.ok) {
+                                const data = await res.json();
+                                if (data?.punchResult) {
+                                    setVerificationResult(prev => prev ? {
+                                        ...prev,
+                                        sessionNumber: data.punchResult.sessionNumber || 1,
+                                        punchAction: data.punchResult.action || 'check_in',
+                                    } : null);
+                                }
+                            } else {
+                                queueOfflinePunch(punchLog);
+                            }
+                        } catch {
+                            queueOfflinePunch(punchLog);
+                        }
+                    } else {
                         queueOfflinePunch(punchLog);
                     }
-                } else {
-                    queueOfflinePunch(punchLog);
-                }
-            })();
+                })();
 
-            // DO NOT CLOSE MODAL! Auto-reset overlay after 2 seconds & unfreeze camera for next staff
-            setTimeout(() => {
-                setVerificationResult(null);
-                setCapturedFreezeUrl(null);
-                setIsScanning(false);
-            }, 2200);
+                // Auto-reset overlay after 2.8 seconds & unfreeze camera for next staff
+                setTimeout(() => {
+                    setVerificationResult(null);
+                    setCapturedFreezeUrl(null);
+                    setIsScanning(false);
+                }, 2800);
 
 
         } catch (err) {
@@ -1316,18 +1335,29 @@ export function ExpressKioskApp() {
                         {verificationResult && (
                             <div className="absolute bottom-4 inset-x-4 z-30 flex flex-col items-center justify-center animate-in zoom-in-95 fade-in duration-200">
                                 {verificationResult.matched ? (
-                                    <div className="w-full max-w-sm p-4 bg-slate-950/95 border-2 border-emerald-500/70 rounded-2xl backdrop-blur-md shadow-2xl space-y-1 text-center">
+                                    <div className="w-full max-w-sm p-4 bg-slate-950/95 border-2 border-emerald-500/70 rounded-2xl backdrop-blur-md shadow-2xl space-y-2 text-center">
                                         <div className="flex items-center justify-center gap-2 text-emerald-400 font-black text-sm">
                                             <CheckCheck className="w-5 h-5 text-emerald-400 shrink-0" />
                                             <span className="truncate">Verified: {verificationResult.employeeName}</span>
                                         </div>
-                                        <div className="text-[11px] font-mono text-emerald-200/90 flex items-center justify-center gap-2">
-                                            <span>Score: {verificationResult.similarity}</span>
-                                            <span>•</span>
-                                            <span>Duration: {verificationResult.duration}</span>
+                                        
+                                        {/* Multi-Session & Punch Notification Badges */}
+                                        <div className="flex flex-wrap items-center justify-center gap-1.5 pt-0.5">
+                                            <Badge className="bg-indigo-600 text-white border-indigo-400/40 px-2.5 py-0.5 text-[11px] font-black uppercase tracking-wider shadow-sm">
+                                                {verificationResult.sessionNumber ? `Session ${verificationResult.sessionNumber}` : 'Session 1'}
+                                            </Badge>
+                                            <Badge className={`${verificationResult.punchAction === 'check_out' ? 'bg-orange-600 text-white border-orange-400/40' : 'bg-emerald-600 text-white border-emerald-400/40'} px-2.5 py-0.5 text-[11px] font-black uppercase tracking-wider shadow-sm`}>
+                                                {verificationResult.punchAction === 'check_out' ? 'Check Out' : 'Check In'}
+                                            </Badge>
+                                            <Badge variant="outline" className="bg-slate-900/80 text-emerald-300 border-emerald-500/40 px-2.5 py-0.5 text-[10px] font-mono font-bold">
+                                                {verificationResult.date || format(new Date(), 'dd/MM/yyyy')} • {verificationResult.time || format(new Date(), 'hh:mm a')}
+                                            </Badge>
                                         </div>
-                                        <div className="text-[10px] font-bold text-emerald-400/90 pt-0.5">
-                                            ✅ Attendance Recorded (Clock In)
+
+                                        <div className="text-[10px] font-mono text-emerald-200/80 flex items-center justify-center gap-2 pt-0.5">
+                                            <span>Match: {verificationResult.similarity}</span>
+                                            <span>•</span>
+                                            <span>Latency: {verificationResult.duration}</span>
                                         </div>
                                     </div>
                                 ) : (

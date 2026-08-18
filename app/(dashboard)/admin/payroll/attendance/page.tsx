@@ -1,7 +1,6 @@
 import { DashboardPageLayout } from "@/components/dashboard/dashboard-page-layout"
 import { ErrorBoundary } from "@/components/ui/error-boundary"
 import { AdminAttendanceVerification } from "@/features/attendance/AdminAttendanceVerification"
-import { RealtimePunchFeed } from "@/features/attendance/RealtimePunchFeed"
 
 export default function AdminAttendancePage() {
     return (
@@ -11,10 +10,6 @@ export default function AdminAttendancePage() {
                 description="Monitor real-time biometric & kiosk punches, verify and manage employee attendance logs"
             >
                 <div className="space-y-6">
-                    <ErrorBoundary level="section">
-                        <RealtimePunchFeed />
-                    </ErrorBoundary>
-
                     <ErrorBoundary level="section">
                         <AdminAttendanceVerification />
                     </ErrorBoundary>

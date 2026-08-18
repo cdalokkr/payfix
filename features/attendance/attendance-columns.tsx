@@ -165,7 +165,7 @@ export function createAttendanceColumns({
                 <DataTableColumnHeader column={column} title="In" />
             ),
             cell: ({ row }) => {
-                const val = row.getValue("check_in")
+                const val = row.original.first_check_in || row.original.check_in
                 return val ? (
                     <div className="text-emerald-600 dark:text-emerald-400 font-bold text-[11px]">
                         {format(new Date(val as string), 'hh:mm a')}
@@ -180,7 +180,7 @@ export function createAttendanceColumns({
                 <DataTableColumnHeader column={column} title="Out" />
             ),
             cell: ({ row }) => {
-                const val = row.getValue("check_out")
+                const val = row.original.last_check_out || row.original.check_out
                 return val ? (
                     <div className="text-amber-600 dark:text-amber-400 font-bold text-[11px]">
                         {format(new Date(val as string), 'hh:mm a')}
@@ -193,14 +193,22 @@ export function createAttendanceColumns({
             accessorKey: "working_hours",
             header: "Total",
             cell: ({ row }) => {
-                const hours = row.getValue("working_hours") as number
+                const hours = row.original.working_hours ? Number(row.original.working_hours) : null
+                const totalSessions = row.original.total_sessions as number | undefined
                 return hours ? (
-                    <Badge variant="secondary" className="font-black tabular-nums bg-primary/5 text-primary border-primary/10 h-5 px-1.5 text-[10px]">
-                        {hours.toFixed(1)}h
-                    </Badge>
+                    <div className="flex items-center gap-1">
+                        <Badge variant="secondary" className="font-black tabular-nums bg-primary/5 text-primary border-primary/10 h-5 px-1.5 text-[10px]">
+                            {hours.toFixed(1)}h
+                        </Badge>
+                        {totalSessions && totalSessions > 1 && (
+                            <span className="text-[9px] font-bold text-muted-foreground bg-muted px-1 py-0.5 rounded" title={`${totalSessions} Sessions`}>
+                                {totalSessions}s
+                            </span>
+                        )}
+                    </div>
                 ) : <span className="text-muted-foreground/30 text-[10px]">--</span>
             },
-            size: 30,
+            size: 40,
         },
         {
             id: "extra_hours",

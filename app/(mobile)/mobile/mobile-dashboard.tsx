@@ -371,13 +371,13 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
         }
     }, [utils, isPwa, isReady, hasNoPhoto])
 
-    const hasCheckedIn = !!todayAttendance?.check_in
-    const hasCheckedOut = !!todayAttendance?.check_out
-    const isComplete = hasCheckedIn && hasCheckedOut
+    const isClockedIn = todayAttendance?.current_session_status === 'checked_in' || (todayAttendance?.check_in && !todayAttendance?.check_out)
+    const hasAnyPunch = !!(todayAttendance?.check_in || todayAttendance?.first_check_in)
+    const totalSessions = todayAttendance?.total_sessions || (hasAnyPunch ? 1 : 0)
 
     const getStatusColor = () => {
-        if (isComplete) return 'from-indigo-600 via-indigo-650 to-violet-700'
-        if (hasCheckedIn) return 'from-sky-500 to-blue-600'
+        if (isClockedIn) return 'from-sky-500 to-blue-600'
+        if (hasAnyPunch) return 'from-indigo-600 via-indigo-650 to-violet-700'
         return 'from-purple-500 to-indigo-600'
     }
 
@@ -398,8 +398,8 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
             {/* Today's Status Card */}
             <motion.div variants={itemVars} whileTap={{ scale: 0.99 }}>
                 <div className={`relative overflow-hidden rounded-[1.5rem] bg-gradient-to-br ${getStatusColor()} p-3.5 text-white ${
-                    isComplete ? 'shadow-[0_15px_35px_rgba(99,102,241,0.25)]' :
-                    hasCheckedIn ? 'shadow-[0_15px_35px_rgba(14,165,233,0.25)]' :
+                    isClockedIn ? 'shadow-[0_15px_35px_rgba(14,165,233,0.25)]' :
+                    hasAnyPunch ? 'shadow-[0_15px_35px_rgba(99,102,241,0.25)]' :
                     'shadow-[0_15px_35px_rgba(139,92,246,0.25)]'
                 } transition-all duration-500 border border-white/10 min-h-[235px] flex flex-col justify-between`}>
                     {/* Glass Decorations */}
@@ -600,14 +600,14 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
                                                 <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-white/10 border border-white/15 backdrop-blur-sm">
                                                     <div className="flex items-center gap-1.5 min-w-0">
                                                         <div className={`w-5.5 h-5.5 rounded-md flex items-center justify-center shrink-0
-                                                            ${hasCheckedIn ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]' : 'bg-white/10'}`}>
+                                                            ${(todayAttendance?.first_check_in || todayAttendance?.check_in) ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]' : 'bg-white/10'}`}>
                                                             <ClockArrowDown className="w-3.5 h-3.5 text-white stroke-[2.5]" />
                                                         </div>
                                                         <div className="flex items-center gap-1 min-w-0">
                                                             <span className="text-[10px] font-black uppercase text-white/90 tracking-wider">IN</span>
-                                                            <span className={`text-[13px] font-black whitespace-nowrap tracking-tight ${hasCheckedIn ? 'text-white' : 'text-white/40'}`}>
-                                                                {todayAttendance?.check_in
-                                                                    ? format(new Date(todayAttendance.check_in), 'hh:mm a')
+                                                            <span className={`text-[13px] font-black whitespace-nowrap tracking-tight ${(todayAttendance?.first_check_in || todayAttendance?.check_in) ? 'text-white' : 'text-white/40'}`}>
+                                                                {(todayAttendance?.first_check_in || todayAttendance?.check_in)
+                                                                    ? format(new Date(todayAttendance.first_check_in || todayAttendance.check_in!), 'hh:mm a')
                                                                     : '--:-- --'}
                                                             </span>
                                                         </div>
@@ -615,58 +615,57 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
                                                     <div className="w-px h-5 bg-white/20 shrink-0" />
                                                     <div className="flex items-center gap-1.5 min-w-0">
                                                         <div className={`w-5.5 h-5.5 rounded-md flex items-center justify-center shrink-0
-                                                            ${hasCheckedOut ? 'bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.3)]' : 'bg-white/10'}`}>
+                                                            ${(todayAttendance?.last_check_out || todayAttendance?.check_out) ? 'bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.3)]' : 'bg-white/10'}`}>
                                                             <ClockArrowUp className="w-3.5 h-3.5 text-white stroke-[2.5]" />
                                                         </div>
                                                         <div className="flex items-center gap-1 min-w-0">
                                                             <span className="text-[10px] font-black uppercase text-white/90 tracking-wider">OUT</span>
-                                                            <span className={`text-[13px] font-black whitespace-nowrap tracking-tight ${hasCheckedOut ? 'text-white' : 'text-white/40'}`}>
-                                                                {todayAttendance?.check_out
-                                                                    ? format(new Date(todayAttendance.check_out), 'hh:mm a')
+                                                            <span className={`text-[13px] font-black whitespace-nowrap tracking-tight ${(todayAttendance?.last_check_out || todayAttendance?.check_out) ? 'text-white' : 'text-white/40'}`}>
+                                                                {(todayAttendance?.last_check_out || todayAttendance?.check_out)
+                                                                    ? format(new Date(todayAttendance.last_check_out || todayAttendance.check_out!), 'hh:mm a')
                                                                     : '--:-- --'}
                                                             </span>
                                                         </div>
                                                     </div>
                                                 </div>
 
-                                                {/* Single Dynamic Clock Button */}
-                                                {!isComplete && (
-                                                    <motion.div whileTap={{ scale: 0.97 }} className="w-full">
-                                                        <Link
-                                                            href={`/mobile/attendance?action=${hasCheckedIn ? 'clock_out' : 'clock_in'}`}
-                                                            className={`flex items-center justify-center gap-2.5 w-full h-11 px-3.5 rounded-xl border transition-all shadow-md active:scale-98 backdrop-blur-md
-                                                                ${hasCheckedIn
-                                                                    ? 'bg-rose-500/20 border-rose-400/35 hover:bg-rose-500/30 text-white'
-                                                                    : 'bg-indigo-600/35 border-indigo-400/60 hover:bg-indigo-600/45 text-white'}`}
-                                                        >
-                                                            <div className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center shadow-sm shrink-0 border border-white/20
-                                                                ${hasCheckedIn
-                                                                    ? 'bg-rose-500/90 text-white'
-                                                                    : 'bg-indigo-600 text-white'}`}>
-                                                                {hasCheckedIn
-                                                                    ? <ClockArrowUp className="w-4 h-4 text-white stroke-[2.5]" />
-                                                                    : <ClockArrowDown className="w-4 h-4 text-white stroke-[2.5]" />}
-                                                            </div>
-                                                            <span className="text-xs font-black uppercase tracking-wider text-white">
-                                                                {hasCheckedIn ? 'Mark Office Out' : 'Mark Office In'}
-                                                            </span>
-                                                            <IconArrowRight className="w-4 h-4 text-white/80 ml-auto" />
-                                                        </Link>
-
-                                                    </motion.div>
-                                                )}
-
-
-
-                                                {/* Attendance Complete Badge */}
-                                                {isComplete && (
-                                                    <div className="flex items-center justify-center gap-2.5 px-3 py-2 rounded-xl bg-white/10 border border-white/15 backdrop-blur-md w-full">
-                                                        <div className="w-5.5 h-5.5 rounded-full bg-white flex items-center justify-center shrink-0 shadow-sm">
-                                                            <IconCheckCheck className="w-3.5 h-3.5 text-indigo-600 stroke-[3]" />
+                                                {/* Single Dynamic Multi-Session Clock Button */}
+                                                <motion.div whileTap={{ scale: 0.97 }} className="w-full">
+                                                    <Link
+                                                        href={`/mobile/attendance?action=${isClockedIn ? 'clock_out' : 'clock_in'}`}
+                                                        className={`flex items-center justify-center gap-2.5 w-full h-11 px-3.5 rounded-xl border transition-all shadow-md active:scale-98 backdrop-blur-md
+                                                            ${isClockedIn
+                                                                ? 'bg-rose-500/20 border-rose-400/35 hover:bg-rose-500/30 text-white'
+                                                                : 'bg-indigo-600/35 border-indigo-400/60 hover:bg-indigo-600/45 text-white'}`}
+                                                    >
+                                                        <div className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center shadow-sm shrink-0 border border-white/20
+                                                            ${isClockedIn
+                                                                ? 'bg-rose-500/90 text-white'
+                                                                : 'bg-indigo-600 text-white'}`}>
+                                                            {isClockedIn
+                                                                ? <ClockArrowUp className="w-4 h-4 text-white stroke-[2.5]" />
+                                                                : <ClockArrowDown className="w-4 h-4 text-white stroke-[2.5]" />}
                                                         </div>
-                                                        <span className="text-[10px] font-black uppercase tracking-[0.12em] text-white">
-                                                            Attendance Marked
+                                                        <span className="text-xs font-black uppercase tracking-wider text-white">
+                                                            {isClockedIn
+                                                                ? 'Mark Office Out'
+                                                                : (totalSessions > 0 ? `Mark Office In (Session ${totalSessions + 1})` : 'Mark Office In')}
                                                         </span>
+                                                        <IconArrowRight className="w-4 h-4 text-white/80 ml-auto" />
+                                                    </Link>
+                                                </motion.div>
+
+                                                {/* Session Progress / Hours Summary */}
+                                                {hasAnyPunch && (
+                                                    <div className="flex items-center justify-between px-2 pt-0.5 text-[10.5px] font-bold text-white/80">
+                                                        <span>
+                                                            {totalSessions > 1 ? `${totalSessions} Sessions` : 'Session 1'} {isClockedIn ? '• Active' : '• Completed'}
+                                                        </span>
+                                                        {todayAttendance?.working_hours && (
+                                                            <span className="text-emerald-300 font-mono">
+                                                                Total: {Number(todayAttendance.working_hours).toFixed(1)} hrs
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 )}
                                             </>

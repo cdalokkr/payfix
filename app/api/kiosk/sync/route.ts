@@ -51,6 +51,7 @@ export async function POST(req: NextRequest) {
             let processed = 0;
             let errors = 0;
             const errorDetails: string[] = [];
+            let lastProcessedPunch: any = null;
 
             for (const punch of punches) {
                 try {
@@ -83,14 +84,20 @@ export async function POST(req: NextRequest) {
                         )
                     });
 
+                    let punchAction: 'check_in' | 'check_out' = 'check_in';
+                    let sessionNumber = 1;
+
                     if (punch.punchType === 'check_out' || (punch.punchType === 'auto' && activeSession)) {
+                        punchAction = 'check_out';
+                        sessionNumber = activeSession?.session_number || 1;
                         await AttendanceService.clockOut({
                             profileId: punch.profileId,
                             email: 'kiosk@device.local',
                             localDate
                         });
                     } else {
-                        await AttendanceService.clockIn({
+                        punchAction = 'check_in';
+                        const parent = await AttendanceService.clockIn({
                             profileId: punch.profileId,
                             email: 'kiosk@device.local',
                             localDate,
@@ -101,9 +108,14 @@ export async function POST(req: NextRequest) {
                             latitude: punch.latitude !== null && punch.latitude !== undefined ? Number(punch.latitude) : undefined,
                             longitude: punch.longitude !== null && punch.longitude !== undefined ? Number(punch.longitude) : undefined,
                         });
-
+                        sessionNumber = parent?.total_sessions || 1;
                     }
                     processed++;
+                    lastProcessedPunch = {
+                        action: punchAction,
+                        sessionNumber,
+                        timestamp: punch.timestamp
+                    };
                 } catch (err: any) {
                     console.error(`[Kiosk Sync] Error processing punch for profile ${punch.profileId}:`, err);
                     errorDetails.push(err.message || 'Unknown error');
@@ -111,7 +123,7 @@ export async function POST(req: NextRequest) {
                 }
             }
 
-            return { processed, errors, errorDetails };
+            return { processed, errors, errorDetails, lastProcessedPunch };
         });
 
         return NextResponse.json({
@@ -121,6 +133,7 @@ export async function POST(req: NextRequest) {
             processed: result.processed,
             errors: result.errors,
             errorDetails: result.errorDetails,
+            punchResult: result.lastProcessedPunch,
             message: `Processed ${result.processed} kiosk punches. Errors: ${result.errors}`
         });
 

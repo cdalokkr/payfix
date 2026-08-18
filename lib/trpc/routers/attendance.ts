@@ -60,6 +60,11 @@ export const attendanceRouter = router({
                     id: true,
                     check_in: true,
                     check_out: true,
+                    first_check_in: true,
+                    last_check_out: true,
+                    current_session_status: true,
+                    total_sessions: true,
+                    working_hours: true,
                     status: true
                 }
             });

@@ -420,7 +420,7 @@ export class AttendanceService {
             const [updatedParent] = await db.update(attendance).set({
                 total_sessions: currentTotalSessions,
                 current_session_status: 'checked_in',
-                check_out: null, // Reset check_out for new active session
+                first_check_in: parentRecord.first_check_in || parentRecord.check_in || now,
                 updated_at: now
             }).where(eq(attendance.id, parentRecord.id)).returning()
             parentRecord = updatedParent
