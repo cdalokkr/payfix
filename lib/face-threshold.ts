@@ -125,16 +125,16 @@ export function matchFaceFast(
         }
     }
 
-    const minThreshold = threshold ?? (query.length === 512 ? 0.65 : 0.68);
+    const minThreshold = threshold ?? (query.length === 512 ? 0.62 : 0.65);
 
-    // 3. Top-2 Gap Check (Apply for borderline scores < 0.78 to prevent false ambiguous rejects on extreme high matches)
-    if (employees.length > 1 && bestScore >= minThreshold && bestScore < 0.78 && (bestScore - secondBestScore < top2GapThreshold)) {
+    // 3. Top-2 Gap Check: Only trigger if BOTH top candidate AND second candidate have passed threshold (>= minThreshold) and are virtually identical (< 0.03)
+    if (employees.length > 1 && bestScore >= minThreshold && secondBestScore >= minThreshold && (bestScore - secondBestScore < 0.03)) {
         return {
             isMatch: false,
             employee: null,
             similarity: bestScore,
             secondBestScore,
-            message: 'Ambiguous face match. Multiple candidates close. Please align face directly.'
+            message: 'Ambiguous face match. Multiple candidates with close match scores. Please align face directly.'
         };
     }
 
