@@ -1,41 +1,42 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { ProfilePhotoCapture } from '@/features/mobile/profile-photo-capture'
+import { db } from '@/lib/db'
+import { profiles } from '@/lib/db/schema'
+import { eq } from 'drizzle-orm'
+import { runWithRequestHeaders } from '@/lib/tenant/with-context'
+
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export const metadata = {
     title: 'Update Profile Photo',
 }
 
 export default async function UpdatePhotoPage() {
-    console.log('[UPDATE-PHOTO] Page started')
     const supabase = await createServerSupabaseClient()
     const { data, error: authError } = await supabase.auth.getUser()
     const user = data?.user || null
 
-    console.log('[UPDATE-PHOTO] User:', user?.id ? 'Found' : 'Not found')
     if (!user) {
-        console.log('[UPDATE-PHOTO] Redirecting to /login (no user)')
         redirect('/login')
     }
 
-    // Fetch profile data with designation
-    const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('id, full_name, email, role, avatar_url, avatar_status, mobile_no, designation:designations(name)')
-        .eq('id', user.id)
-        .single()
+    // Fetch profile data strictly from tenant schema with designation
+    const profile = await runWithRequestHeaders(async () => {
+        return await db.query.profiles.findFirst({
+            where: eq(profiles.id, user.id),
+            with: {
+                designation: true
+            }
+        })
+    })
 
-    console.log('[UPDATE-PHOTO] Profile:', profile ? 'Found' : 'Not found', 'Error:', error?.message || 'None')
     if (!profile) {
-        console.log('[UPDATE-PHOTO] Redirecting to /login (no profile)')
         redirect('/login')
     }
 
-    // Extract designation name from relation
-    const designation = profile.designation as { name: string } | { name: string }[] | null
-    const designationName = Array.isArray(designation)
-        ? designation[0]?.name
-        : designation?.name
+    const designationName = profile.designation?.name || null
 
     console.log('[UPDATE-PHOTO] Rendering component for:', profile.full_name)
 

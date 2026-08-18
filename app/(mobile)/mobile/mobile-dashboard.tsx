@@ -633,6 +633,7 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
                                                 <motion.div whileTap={{ scale: 0.97 }} className="w-full">
                                                     <Link
                                                         href={`/mobile/attendance?action=${isClockedIn ? 'clock_out' : 'clock_in'}`}
+                                                        prefetch={true}
                                                         className={`flex items-center justify-center gap-2.5 w-full h-11 px-3.5 rounded-xl border transition-all shadow-md active:scale-98 backdrop-blur-md
                                                             ${isClockedIn
                                                                 ? 'bg-rose-500/20 border-rose-400/35 hover:bg-rose-500/30 text-white'

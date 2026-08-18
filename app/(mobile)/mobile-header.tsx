@@ -50,17 +50,24 @@ export function MobileHeader({ profile }: MobileHeaderProps) {
     const [isPendingDialogOpen, setIsPendingDialogOpen] = useState(false)
     const [isPhotoCaptureOpen, setIsPhotoCaptureOpen] = useState(false)
 
+    // Dynamically bind to active user profile query so switching accounts always shows correct identity
+    const { data: dynamicProfile } = trpc.profile.get.useQuery(undefined, {
+        initialData: profile as any,
+        staleTime: 60000,
+    })
+    const activeProfile = dynamicProfile || profile
+
     // Query for pending photo request
     const { data: pendingRequest } = trpc.profile.getMyPendingPhotoRequest.useQuery()
 
     const getInitials = () => {
-        if (profile.full_name) {
-            return profile.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+        if (activeProfile.full_name) {
+            return activeProfile.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
         }
-        return profile.email[0].toUpperCase()
+        return (activeProfile.email || 'U')[0].toUpperCase()
     }
 
-    const firstName = profile.full_name?.split(' ')[0] || 'User'
+    const firstName = activeProfile.full_name?.split(' ')[0] || 'User'
 
     // Handle avatar click - open popup dialog modal directly without page reload or navigation
     const handleAvatarClick = () => {
@@ -88,7 +95,7 @@ export function MobileHeader({ profile }: MobileHeaderProps) {
                     <button onClick={handleAvatarClick} className="flex items-center gap-3 group text-left cursor-pointer">
                         <div className="relative">
                             <div className="h-9 w-9 rounded-full ring-2 ring-primary/20 group-hover:ring-primary/40 transition-all overflow-hidden">
-                                <UserAvatar src={profile.avatar_url} alt={profile.full_name || ''} initials={getInitials()} className="h-9 w-9" />
+                                <UserAvatar src={activeProfile.avatar_url} alt={activeProfile.full_name || ''} initials={getInitials()} className="h-9 w-9" />
                             </div>
                             {/* Pending indicator if request exists */}
                             {pendingRequest ? (
@@ -221,13 +228,13 @@ export function MobileHeader({ profile }: MobileHeaderProps) {
                 <DialogContent className="max-w-md w-[95vw] p-0 bg-slate-950 border-slate-800 text-slate-100 overflow-hidden rounded-3xl z-[70] max-h-[92vh] overflow-y-auto [&>button]:hidden">
 
                     <ProfilePhotoCapture
-                        profileId={profile.id}
+                        profileId={activeProfile.id}
                         profileData={{
-                            fullName: profile.full_name || 'User',
-                            email: profile.email,
+                            fullName: activeProfile.full_name || 'User',
+                            email: activeProfile.email,
                             role: 'employee',
-                            avatarUrl: profile.avatar_url,
-                            avatarStatus: profile.avatar_url ? 'custom' : 'default'
+                            avatarUrl: activeProfile.avatar_url,
+                            avatarStatus: activeProfile.avatar_url ? 'custom' : 'default'
                         }}
 
                         onSuccess={() => {

@@ -83,12 +83,13 @@ export function LogoutModal({ isOpen, onOpenChange }: LogoutModalProps) {
           // Concurrent cleanup of client-side data while server processes
           const cleanupPromise = (async () => {
             try {
-              // Clear profile storage
+              // Clear profile and session storage
               localStorage.removeItem('userProfile')
               sessionStorage.removeItem('sessionProfile')
 
-              // Clear geolocation data cached during login
+              // Clear geolocation and geofence data cached during session
               sessionStorage.removeItem('mobileUserCoords')
+              sessionStorage.removeItem('mobileGeofenceResult')
               sessionStorage.removeItem('mobileGeofenceTimestamp')
 
               // Clear tenant_fallback cookie to prevent stale tenant context on next login

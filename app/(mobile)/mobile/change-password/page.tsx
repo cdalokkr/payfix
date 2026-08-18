@@ -2,6 +2,9 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { MobileChangePasswordClient } from './mobile-change-password-client'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export const metadata = {
     title: 'Change Password',
 }

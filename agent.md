@@ -285,3 +285,29 @@ All page implementations across SuperAdmin (`/superadmin/*`) and Tenants (`/admi
 4. **Standard Dropdown Combobox (`<Combobox>`)**:
    - Component: `@/components/ui/combobox`
    - Usage: All select dropdowns, filter controls, and form select fields must use `<Combobox>` for unified dropdown popovers, searchability, and theme styling.
+
+---
+
+## 7. Next.js 16.3 + React 19 Universal Architecture Standards
+
+All future pages, components, and modules across SuperAdmin, Admin, Moderator, Employee, Mobile PWA, and Kiosk must strictly follow these Next.js 16.3 + React 19 standards (documented in `docs/NEXTJS-16-REACT-19-STANDARD.md`):
+
+1. **Instant Navigations & Partial Prefetching**:
+   - App Shells (Headers, Sidebars, Card skeletons) render instantly on the client.
+   - Primary navigation routes must use `<Link href="..." prefetch={true}>` for 0ms transitions.
+   - Dynamic data sections must stream in through `<Suspense fallback={<Skeleton />}>` boundaries without blocking page transitions.
+
+2. **React 19 Concurrent Actions (`useActionState` + `useOptimistic`)**:
+   - **Optimistic State Updates**: Any action that mutates state (attendance punch, leave request, approval toggle, theme switch, settings save) must immediately update the UI via `useOptimistic`.
+   - **Action Queueing**: Use `useActionState` to coordinate asynchronous actions, ensuring rapid consecutive user interactions are queued and executed in strict FIFO order without race conditions.
+   - **Automatic Rollback**: If a server transaction fails, `useOptimistic` automatically reverts to the previous state with a toast alert.
+
+3. **Strict Multi-Tenant Schema Partitioning**:
+   - Every tenant read/write operation must execute inside `tenant_<slug>` schema via `runWithRequestHeaders` or `runWithTenantSchema(tenantSchema, fn)`.
+   - Never query `public.profiles` or use `supabase.auth.getSession()` for tenant user data. Always use `await supabase.auth.getUser()`.
+
+4. **Zero Cross-User Cache Leakage**:
+   - `staleTimes: { dynamic: 0, static: 180 }` for dynamic authenticated boundaries.
+   - Use clean full-tree mounts (`window.location.replace`) on login/logout so the Next.js React Server Component (RSC) tree is 100% freshly rendered for the authenticated user.
+   - Layout headers must bind dynamically to live session hooks (`trpc.profile.get.useQuery`) rather than solely relying on static layout props.
+

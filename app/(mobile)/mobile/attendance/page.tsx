@@ -7,6 +7,9 @@ import { db } from '@/lib/db'
 import { attendance, profiles } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export const metadata = {
     title: 'Mark Attendance',
 }

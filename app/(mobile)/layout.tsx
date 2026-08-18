@@ -8,6 +8,9 @@ import { MobileBottomNav } from './mobile-bottom-nav'
 import { PermissionGuard } from '@/features/mobile/PermissionGuard'
 import { OfflineBanner } from '@/components/ui/offline-banner'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export default async function MobileLayout({
     children,
 }: {

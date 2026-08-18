@@ -205,8 +205,8 @@ const nextConfig: NextConfig = {
     optimizeServerReact: true,
     // Cache configuration for client-side router cache
     staleTimes: {
-      dynamic: 60, // 1 minute for dynamic routes
-      static: 86400, // 24 hours for static routes
+      dynamic: 0, // 0s for dynamic authenticated routes to eliminate cross-session layout caching
+      static: 180, // 3 minutes for static routes
     },
     // Bundle all segment data into a single response per link (Next.js 16.2)
     prefetchInlining: true,

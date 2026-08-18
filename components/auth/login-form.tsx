@@ -265,8 +265,12 @@ export function LoginForm() {
         }
       }
 
-      console.log('[LoginForm] Executing smooth client-side transition to:', redirectPath)
-      router.replace(redirectPath)
+      console.log('[LoginForm] Executing fresh clean transition to:', redirectPath)
+      if (typeof window !== 'undefined') {
+        window.location.replace(redirectPath)
+      } else {
+        router.replace(redirectPath)
+      }
     },
   })
 
