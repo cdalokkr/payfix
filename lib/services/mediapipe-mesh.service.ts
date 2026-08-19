@@ -471,7 +471,7 @@ export const MediaPipeMeshService = {
 
                     const faceCenterX = box.x + box.width / 2;
                     const faceCenterY = box.y + box.height / 2;
-                    const paddedSquareSize = Math.max(box.width, box.height) * 1.15;
+                    const paddedSquareSize = Math.max(box.width, box.height) * 1.30;
 
                     const canvas512 = document.createElement('canvas');
                     canvas512.width = 512;

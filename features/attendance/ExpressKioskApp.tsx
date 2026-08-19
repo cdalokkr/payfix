@@ -499,21 +499,29 @@ export function ExpressKioskApp() {
 
 
 
-    // Capture full-res JPEG snapshot from video stream (deferred until face match confirmed)
+    // Capture 512x512 HD face snapshot directly matching the oval mask area
     const captureSnapshot = (): string | null => {
         const video = videoRef.current;
         const snap = canvasRef.current;
         if (!video || !snap || !cameraActive) return null;
-        snap.width = video.videoWidth || 720;
-        snap.height = video.videoHeight || 1280;
+        const vw = video.videoWidth || 720;
+        const vh = video.videoHeight || 960;
+        const cropSize = Math.min(vw, vh) * 0.52;
+        const sx = (vw - cropSize) / 2;
+        const sy = vh * 0.14;
+
+        snap.width = 512;
+        snap.height = 512;
         const sctx = snap.getContext('2d');
         if (!sctx) return null;
+        sctx.imageSmoothingEnabled = true;
+        sctx.imageSmoothingQuality = 'high';
         sctx.save();
-        sctx.translate(snap.width, 0);
+        sctx.translate(512, 0);
         sctx.scale(-1, 1); // Match front camera mirror preview
-        sctx.drawImage(video, 0, 0, snap.width, snap.height);
+        sctx.drawImage(video, sx, sy, cropSize, cropSize, 0, 0, 512, 512);
         sctx.restore();
-        return snap.toDataURL('image/jpeg', 0.90);
+        return snap.toDataURL('image/jpeg', 0.94);
     };
 
     // Instant Face Verification Scan & Overlay Flow (Continuous Staff Scanning)

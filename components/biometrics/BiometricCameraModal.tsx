@@ -64,6 +64,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [aiEngineStatus, setAiEngineStatus] = useState<'loading' | 'ready' | 'fallback' | 'failed'>('loading');
 
   // Real-time In-Mask Liveness & Blink state
   const [livenessStatus, setLivenessStatus] = useState<InMaskLivenessStatus>({
@@ -195,7 +196,18 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
   useEffect(() => {
     isMountedRef.current = true;
-    FaceApiBrowserService.loadDetectorOnly().catch(() => {});
+    FaceApiBrowserService.loadDetectorOnly()
+      .then((loaded) => {
+        if (isMountedRef.current) {
+          setAiEngineStatus(loaded ? 'ready' : 'fallback');
+        }
+      })
+      .catch(() => {
+        if (isMountedRef.current) {
+          setAiEngineStatus('failed');
+        }
+      });
+
     if (isOpen) {
       startCamera();
     } else {
@@ -324,15 +336,34 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           </div>
         </div>
 
-        {/* Single Styled Close (X) Icon Button */}
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close camera modal"
-          className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-300 transition-all border border-slate-700 shadow-md cursor-pointer"
-        >
-          <X className="h-5 w-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          {aiEngineStatus === 'ready' && (
+            <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[10.5px] font-mono font-bold text-emerald-300 shadow-sm">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              AI: Ready ⚡
+            </span>
+          )}
+          {aiEngineStatus === 'fallback' && (
+            <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-[10.5px] font-mono font-bold text-amber-300 shadow-sm">
+              AI: Local Mode 🛡️
+            </span>
+          )}
+          {aiEngineStatus === 'failed' && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-500/15 border border-rose-500/30 text-[10.5px] font-mono font-bold text-rose-300 shadow-sm">
+              AI: Load Failed ⚠️
+            </span>
+          )}
+
+          {/* Single Styled Close (X) Icon Button */}
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close camera modal"
+            className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-300 transition-all border border-slate-700 shadow-md cursor-pointer"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
       </div>
 
       {/* Standardized Fixed 430px 3:4 Portrait Camera Viewport Container */}
