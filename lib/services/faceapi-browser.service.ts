@@ -302,34 +302,36 @@ export const FaceApiBrowserService = {
             const dy = rightEyeCenter.y - leftEyeCenter.y;
             const angle = Math.atan2(dy, dx); // radians
 
-            // 3. Compute 25% padded square bounding box around face
+            // 3. Compute 15% padded square bounding box around face
             const maxDim = Math.max(box.width, box.height);
-            const padding = maxDim * 0.25;
+            const padding = maxDim * 0.15;
             const squareSize = maxDim + padding * 2;
 
             const centerX = box.x + box.width / 2;
             const centerY = box.y + box.height / 2;
 
-            // 4. Create 320x320 high-quality crop canvas (natural orientation matching camera preview)
+            // 4. Create 512x512 high-quality crop canvas (natural orientation matching camera preview)
             const cropCanvas = document.createElement('canvas');
-            cropCanvas.width = 320;
-            cropCanvas.height = 320;
+            cropCanvas.width = 512;
+            cropCanvas.height = 512;
             const ctx = cropCanvas.getContext('2d');
 
             if (ctx) {
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
                 ctx.save();
-                ctx.translate(160, 160);
-                const scale = 320 / squareSize;
+                ctx.translate(256, 256);
+                const scale = 512 / squareSize;
                 // Mirror horizontally matching live video (-scale-x-100)
                 ctx.scale(-scale, scale);
                 ctx.drawImage(processInput, -centerX, -centerY);
                 ctx.restore();
             }
 
-            const croppedDataUrl = cropCanvas.toDataURL('image/jpeg', 0.90);
+            const croppedDataUrl = cropCanvas.toDataURL('image/jpeg', 0.94);
             const normalized = l2Normalize(Array.from(detection.descriptor));
 
-            onLog?.(`Face cropped to natural 320x320 (${(detection.detection.score * 100).toFixed(1)}% score)`);
+            onLog?.(`Face cropped to natural 512x512 (${(detection.detection.score * 100).toFixed(1)}% score)`);
 
 
             return {

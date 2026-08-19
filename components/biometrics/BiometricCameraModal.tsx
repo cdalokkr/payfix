@@ -133,10 +133,10 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
     try {
       const primaryConstraints: MediaStreamConstraints = {
         video: {
-          facingMode: BIOMETRIC_CAMERA_CONFIG.facingMode,
-          width: { ideal: BIOMETRIC_CAMERA_CONFIG.width, min: 720 },
-          height: { ideal: BIOMETRIC_CAMERA_CONFIG.height, min: 960 },
-          aspectRatio: { ideal: BIOMETRIC_CAMERA_CONFIG.aspectRatio },
+          facingMode: 'user',
+          width: { ideal: 720 },
+          height: { ideal: 960 },
+          aspectRatio: { ideal: 0.75 },
         },
         audio: false,
       };
@@ -146,7 +146,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
         stream = await navigator.mediaDevices.getUserMedia(primaryConstraints);
       } catch (e) {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { exact: 'user' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+          video: { facingMode: 'user' },
           audio: false,
         });
       }
@@ -352,7 +352,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
         {/* Clean 512x512 HD Cropped Portrait Freeze Preview (WITHOUT Mask/Overlay) */}
         {activeCleanPortraitUrl ? (
-          <div className="absolute inset-0 z-30 bg-slate-950 flex flex-col items-center justify-center p-3 animate-in zoom-in-95 fade-in duration-200">
+          <div className="absolute inset-0 z-10 bg-slate-950 flex flex-col items-center justify-center p-3 animate-in zoom-in-95 fade-in duration-200">
             <div className="relative w-full aspect-square max-w-[320px] rounded-3xl overflow-hidden border-2 border-emerald-500/70 shadow-2xl bg-black">
               <img
                 src={activeCleanPortraitUrl}
@@ -566,8 +566,12 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           </div>
         )}
 
-        {/* Custom Inner Slots */}
-        {children}
+        {/* Custom Inner Slots & Notification Cards (Floating at z-40 over 512x512 preview) */}
+        {children && (
+          <div className="absolute inset-0 z-40 pointer-events-none [&>*]:pointer-events-auto flex flex-col items-center justify-center">
+            {children}
+          </div>
+        )}
       </div>
 
       {/* 4. Footer Slot Container */}

@@ -414,14 +414,28 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
                         </div>
                     </div>
 
-                    {status === 'streaming' && (
+                    {status !== 'captured' && status !== 'submitted' && status !== 'success' && status !== 'uploading' && (
                         <Button
                             onClick={capturePhoto}
+                            disabled={status !== 'streaming'}
                             size="lg"
-                            className="w-full h-14 rounded-2xl bg-white text-slate-950 font-black text-base hover:bg-slate-100 shadow-lg transition-all active:scale-95 cursor-pointer"
+                            className={`w-full h-14 rounded-2xl font-black text-base transition-all active:scale-95 shadow-lg ${
+                                status === 'streaming'
+                                    ? 'bg-white text-slate-950 hover:bg-slate-100 cursor-pointer shadow-white/10'
+                                    : 'bg-slate-800 text-slate-400 border border-slate-700 cursor-not-allowed opacity-60'
+                            }`}
                         >
-                            <IconCamera className="w-5 h-5 mr-2" />
-                            CAPTURE NOW
+                            {status === 'streaming' ? (
+                                <>
+                                    <IconCamera className="w-5 h-5 mr-2" />
+                                    CAPTURE NOW
+                                </>
+                            ) : (
+                                <>
+                                    <IconLoader2 className="w-5 h-5 mr-2 animate-spin text-sky-400" />
+                                    STARTING CAMERA...
+                                </>
+                            )}
                         </Button>
                     )}
 

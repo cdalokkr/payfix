@@ -16,6 +16,7 @@ import {
 import { toast } from 'sonner';
 import { FaceApiBrowserService } from '@/lib/services/faceapi-browser.service';
 import { FaceVerificationService } from '@/lib/services/face-verification.service';
+import { MediaPipeMeshService } from '@/lib/services/mediapipe-mesh.service';
 import { KioskIndexedDBService } from '@/lib/services/kiosk-idb.service';
 import { saveEmployeeFaces, getSyncInfo as getIdbSyncInfo, getAllEmployeeFaces, EmployeeFace } from '@/lib/face-db';
 import { l2Normalize, matchFaceFast, isGoodQualityFace, getAdaptiveThreshold } from '@/lib/face-threshold';
@@ -684,8 +685,23 @@ export function ExpressKioskApp() {
             return;
         }
 
-        // 1. Immediately capture freeze-frame selfie snapshot (<5ms)
-        const freezeUrl = overrideSnapshotUrl || captureSnapshot();
+        // 1. Immediately extract clean 512x512 Face + 15% padding crop (<15ms)
+        let freezeUrl = overrideSnapshotUrl || null;
+        if (!freezeUrl && video) {
+            try {
+                const aligned = await FaceApiBrowserService.extractAlignedSquareFaceCrop(video);
+                freezeUrl = aligned?.croppedDataUrl || null;
+            } catch {}
+            if (!freezeUrl) {
+                try {
+                    const mpCrop = await MediaPipeMeshService.processFaceFrame(video);
+                    freezeUrl = mpCrop?.dataUrl512 || null;
+                } catch {}
+            }
+        }
+        if (!freezeUrl) {
+            freezeUrl = captureSnapshot();
+        }
         if (freezeUrl) setCapturedFreezeUrl(freezeUrl);
 
         setIsScanning(true);

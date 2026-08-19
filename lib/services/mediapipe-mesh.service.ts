@@ -200,13 +200,13 @@ export const MediaPipeMeshService = {
         const scanEl = getScanCanvas(video) || video;
 
         // Path A: Local Offline Face-Api (Fastest, zero CDN lag)
-        // Run on downscaled scanEl for ultra-smooth 30+ FPS performance on mobile
+        // Standardized inputSize: 224 (32-multiple required by TinyYolo) for robust real-time tracking
         if (typeof window !== 'undefined' && FaceApiBrowserService.isDetectorReady() && window.faceapi) {
             try {
                 if (window.faceapi) {
                     const faceapi = window.faceapi;
                     const detection = await faceapi
-                        .detectSingleFace(scanEl, new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.10 }))
+                        .detectSingleFace(scanEl, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.15 }))
                         .withFaceLandmarks(true);
 
                     if (detection && detection.landmarks) {
@@ -389,7 +389,7 @@ export const MediaPipeMeshService = {
                 const faceCenterY = (minY + (maxY - minY) / 2) * height;
 
                 const rawSize = Math.max(faceBoxW, faceBoxH);
-                const paddedSquareSize = rawSize * 1.18;
+                const paddedSquareSize = rawSize * 1.15;
 
                 const pts5 = this.extract5KeyPoints(rawLandmarks, width, height);
                 const dx = pts5[1].x - pts5[0].x;
@@ -469,7 +469,7 @@ export const MediaPipeMeshService = {
 
                     const faceCenterX = box.x + box.width / 2;
                     const faceCenterY = box.y + box.height / 2;
-                    const paddedSquareSize = Math.max(box.width, box.height) * 1.18;
+                    const paddedSquareSize = Math.max(box.width, box.height) * 1.15;
 
                     const canvas512 = document.createElement('canvas');
                     canvas512.width = 512;
@@ -524,7 +524,7 @@ export const MediaPipeMeshService = {
             console.warn('[MediaPipeMeshService] Frame processing error:', err);
         }
 
-        // Fail-Safe Center-Weighted 512x512 Crop (Guarantees zero null exceptions on capture)
+        // Fail-Safe Center-Weighted 512x512 Crop (Guarantees tight face region, zero chest/torso)
         try {
             const width = (typeof HTMLVideoElement !== 'undefined' && videoOrCanvas instanceof HTMLVideoElement)
                 ? videoOrCanvas.videoWidth : (videoOrCanvas.width || (videoOrCanvas as HTMLImageElement).naturalWidth || 720);
@@ -532,9 +532,9 @@ export const MediaPipeMeshService = {
                 ? videoOrCanvas.videoHeight : (videoOrCanvas.height || (videoOrCanvas as HTMLImageElement).naturalHeight || 960);
 
             if (width > 0 && height > 0) {
-                const squareSize = Math.min(width, height) * 0.75;
+                const squareSize = Math.min(width, height) * 0.52;
                 const centerX = width / 2;
-                const centerY = height * 0.44; // Slightly upper-center for natural passport head placement
+                const centerY = height * 0.40; // Upper center for tight head & face focus
 
                 const canvas512 = document.createElement('canvas');
                 canvas512.width = 512;
