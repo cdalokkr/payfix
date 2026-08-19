@@ -236,11 +236,13 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
                 canvas.height = 512
                 const ctx = canvas.getContext('2d')
                 if (ctx) {
+                    ctx.imageSmoothingEnabled = true
+                    ctx.imageSmoothingQuality = 'high'
                     const vw = video.videoWidth || 720
                     const vh = video.videoHeight || 960
-                    const squareSize = Math.min(vw, vh) * 0.55
+                    const squareSize = Math.min(vw, vh) * 0.70
                     const sx = (vw - squareSize) / 2
-                    const sy = vh * 0.15
+                    const sy = Math.max(0, (vh - squareSize) * 0.35)
                     ctx.save()
                     ctx.translate(512, 0)
                     ctx.scale(-1, 1)

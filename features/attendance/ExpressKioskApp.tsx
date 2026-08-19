@@ -540,23 +540,8 @@ export function ExpressKioskApp() {
             return;
         }
 
-        // 1. Immediately extract clean 512x512 Face + 15% padding crop (<15ms)
-        let freezeUrl = overrideSnapshotUrl || null;
-        if (!freezeUrl && video) {
-            try {
-                const aligned = await FaceApiBrowserService.extractAlignedSquareFaceCrop(video);
-                freezeUrl = aligned?.croppedDataUrl || null;
-            } catch {}
-            if (!freezeUrl) {
-                try {
-                    const mpCrop = await MediaPipeMeshService.processFaceFrame(video);
-                    freezeUrl = mpCrop?.dataUrl512 || null;
-                } catch {}
-            }
-        }
-        if (!freezeUrl) {
-            freezeUrl = captureSnapshot();
-        }
+        // 1. Instantly freeze snapshot on screen (<5ms) for instant visual feedback on button tap
+        let freezeUrl = overrideSnapshotUrl || captureSnapshot();
         if (freezeUrl) setCapturedFreezeUrl(freezeUrl);
 
         setIsScanning(true);

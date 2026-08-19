@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
             liveness_score: extractRes.liveness_score,
             face_detected: true,
             method: 'arcface-512',
-            error: matched ? undefined : `Face match score: ${simPct}% (Required: 55%). Kripya achhi roshni mein sidha chehra rakhein.`,
+            error: matched ? undefined : `Face match score: ${simPct}% (Required: 65%). Kripya achhi roshni mein sidha chehra rakhein.`,
             diagnostics: extractRes.diagnostics
         })
     } catch (err: any) {

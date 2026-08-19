@@ -391,7 +391,7 @@ export const MediaPipeMeshService = {
                 const faceCenterY = (minY + (maxY - minY) / 2) * height;
 
                 const rawSize = Math.max(faceBoxW, faceBoxH);
-                const paddedSquareSize = rawSize * 1.15;
+                const paddedSquareSize = rawSize * 1.35;
 
                 const pts5 = this.extract5KeyPoints(rawLandmarks, width, height);
                 const dx = pts5[1].x - pts5[0].x;
