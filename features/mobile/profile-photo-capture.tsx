@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { trpc } from "@/lib/trpc/client"
 import { FaceApiBrowserService } from "@/lib/services/faceapi-browser.service"
 import { FaceVerificationService } from "@/lib/services/face-verification.service"
+import { MediaPipeMeshService } from "@/lib/services/mediapipe-mesh.service"
 import { BiometricCameraModal } from "@/components/biometrics/BiometricCameraModal"
 
 
@@ -218,31 +219,19 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
         toast.success('Blink detected! Photo captured 📸')
     }, [stopCamera])
 
-    // Capture photo matching live stream orientation 100% (Full HD uncompressed)
+    // Capture photo matching live stream orientation 100% (512x512 HD face crop)
     const capturePhoto = useCallback(async () => {
-        if (!videoRef.current || !canvasRef.current || status !== 'streaming') return
+        if (!videoRef.current || status !== 'streaming') return
 
         const video = videoRef.current
-        const canvas = canvasRef.current
-        const ctx = canvas.getContext('2d')
-        if (!ctx) return
+        const cropResult = await MediaPipeMeshService.processFaceFrame(video)
+        const final512Url = cropResult?.dataUrl512 || ''
 
-        // 1. Capture exact Full HD live frame matching camera viewport aspect ratio (720x960 / 1080x1440)
-        const vw = video.videoWidth || 720
-        const vh = video.videoHeight || 960
-        canvas.width = vw
-        canvas.height = vh
-
-        ctx.save()
-        ctx.translate(vw, 0)
-        ctx.scale(-1, 1) // Mirror matching video stream
-        ctx.drawImage(video, 0, 0, vw, vh)
-        ctx.restore()
-
-        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.94)
-        setCapturedImage(imageDataUrl)
-        setStatus('captured')
-        stopCamera()
+        if (final512Url) {
+            setCapturedImage(final512Url)
+            setStatus('captured')
+            stopCamera()
+        }
     }, [stopCamera, status])
 
 
@@ -402,6 +391,7 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
             statusText={status === 'captured' ? 'Photo captured! Review below' : undefined}
             timerSeconds={!capturedImage && status !== 'captured' ? sessionTimeout : undefined}
             enableAutoBlinkCapture={!capturedImage && status !== 'uploading' && status !== 'submitted'}
+            capturedCroppedUrl={capturedImage}
             onAutoCapture={handleAutoCapture}
             footerSlot={
 

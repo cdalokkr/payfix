@@ -22,6 +22,7 @@ interface BiometricCameraModalProps {
   children?: React.ReactNode;
   timerSeconds?: number;
   enableAutoBlinkCapture?: boolean;
+  capturedCroppedUrl?: string | null;
   onAutoCapture?: (dataUrl: string) => void;
 }
 
@@ -41,6 +42,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   children,
   timerSeconds,
   enableAutoBlinkCapture = true,
+  capturedCroppedUrl,
   onAutoCapture,
 }) => {
   const internalVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -48,6 +50,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   const streamRef = useRef<MediaStream | null>(null);
   const isMountedRef = useRef(true);
   const [isStreamPlaying, setIsStreamPlaying] = useState(false);
+  const [internalPreview512Url, setInternalPreview512Url] = useState<string | null>(null);
 
   const onStreamReadyRef = useRef(onStreamReady);
   const onCameraErrorRef = useRef(onCameraError);
@@ -242,35 +245,28 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
               isCapturingRef.current = true;
               setFlashSuccess(true);
 
-              // Capture Full HD uncompressed snapshot
               const video = videoRef.current;
-              const snapCanvas = document.createElement('canvas');
-              const vw = video.videoWidth || 720;
-              const vh = video.videoHeight || 960;
-              snapCanvas.width = vw;
-              snapCanvas.height = vh;
-              const ctx = snapCanvas.getContext('2d');
-              if (ctx) {
-                ctx.save();
-                ctx.translate(vw, 0);
-                ctx.scale(-1, 1); // Match mirrored video preview exactly
-                ctx.drawImage(video, 0, 0, vw, vh);
-                ctx.restore();
-              }
+              if (video) {
+                // Generate clean 512x512 cropped portrait (+18% natural margin)
+                const cropResult = await MediaPipeMeshService.processFaceFrame(video);
+                const final512Url = cropResult?.dataUrl512 || '';
 
-              const capturedDataUrl = snapCanvas.toDataURL('image/jpeg', 0.94);
-
-              // Quick haptic pulse
-              if (typeof navigator !== 'undefined' && navigator.vibrate) {
-                try { navigator.vibrate([40, 60, 40]); } catch {}
-              }
-
-              setTimeout(() => {
-                if (onAutoCaptureRef.current) {
-                  onAutoCaptureRef.current(capturedDataUrl);
+                if (final512Url) {
+                  setInternalPreview512Url(final512Url);
                 }
-                setTimeout(() => setFlashSuccess(false), 500);
-              }, 100);
+
+                // Quick haptic pulse
+                if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                  try { navigator.vibrate([40, 60, 40]); } catch {}
+                }
+
+                setTimeout(() => {
+                  if (onAutoCaptureRef.current && final512Url) {
+                    onAutoCaptureRef.current(final512Url);
+                  }
+                  setTimeout(() => setFlashSuccess(false), 400);
+                }, 100);
+              }
             }
           } catch (err) {
             // Ignore frame errors
@@ -296,12 +292,13 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
   const isAligned = livenessStatus.isAlignedInMask;
   const isBlinkConfirmed = livenessStatus.blinkConfirmed || flashSuccess;
+  const activeCleanPortraitUrl = capturedCroppedUrl || internalPreview512Url;
 
   // Single Spacious Face Oval Path (Wider contoured shape for comfortable natural head fit)
   const OVAL_PATH = "M150 20 C236 20 290 70 290 178 C290 286 236 352 150 352 C64 352 10 286 10 178 C10 70 64 20 150 20 Z";
 
   return (
-    <div className="relative w-full h-full min-h-[580px] bg-slate-950 flex flex-col overflow-hidden rounded-3xl p-0 border border-slate-800 shadow-2xl">
+    <div className="relative w-full h-full bg-slate-950 flex flex-col overflow-hidden rounded-3xl p-0 border border-slate-800 shadow-2xl">
       {/* 1. Header Bar OUTSIDE Camera Viewport (Above camera screen area) */}
       <div className="w-full px-5 py-4 z-30 flex items-center justify-between bg-slate-900 border-b border-slate-800/80 shrink-0">
         <div className="flex items-center gap-3">
@@ -333,8 +330,8 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
         </button>
       </div>
 
-      {/* Edge-to-Edge Camera Viewport Container */}
-      <div className="relative w-full aspect-[3/4] bg-slate-950 overflow-hidden flex-1 p-0 flex items-center justify-center">
+      {/* Standardized Fixed 430px 3:4 Portrait Camera Viewport Container */}
+      <div className="relative w-full h-[430px] aspect-[3/4] max-w-[360px] mx-auto bg-slate-950 overflow-hidden shrink-0 flex items-center justify-center rounded-2xl border border-slate-800/60 my-1">
         {/* Instant HTML Video Element */}
         <video
           ref={videoRef}
@@ -353,8 +350,25 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           <div className="absolute inset-0 z-40 bg-emerald-500/35 animate-in fade-in duration-100 backdrop-blur-[2px]" />
         )}
 
-        {/* 2. Unified Single Spacious Oval Face Mask & Outside Dimmed Backdrop */}
-        {!hasError && (
+        {/* Clean 512x512 HD Cropped Portrait Freeze Preview (WITHOUT Mask/Overlay) */}
+        {activeCleanPortraitUrl ? (
+          <div className="absolute inset-0 z-30 bg-slate-950 flex flex-col items-center justify-center p-3 animate-in zoom-in-95 fade-in duration-200">
+            <div className="relative w-full aspect-square max-w-[320px] rounded-3xl overflow-hidden border-2 border-emerald-500/70 shadow-2xl bg-black">
+              <img
+                src={activeCleanPortraitUrl}
+                alt="512x512 Clean Face Portrait"
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-slate-950/85 border border-emerald-500/50 backdrop-blur-md text-[10.5px] font-mono font-bold text-emerald-300 flex items-center gap-1.5 shadow-lg">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                512×512 HD
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {/* 2. Unified Single Spacious Oval Face Mask & Outside Dimmed Backdrop (Only during live camera preview) */}
+        {!hasError && !activeCleanPortraitUrl && (
           <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-between p-4">
             {/* Single Spacious Oval Mask Reticle Container (w-[88%] max-w-[340px] aspect-[1/1.24]) */}
             <div

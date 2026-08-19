@@ -1296,6 +1296,7 @@ export function ExpressKioskApp() {
                         statusText={isScanning && !verificationResult ? "512×512 HD biometrics matching..." : undefined}
                         isProcessing={isScanning && !verificationResult}
                         enableAutoBlinkCapture={!isScanning && isVerificationModalOpen}
+                        capturedCroppedUrl={capturedFreezeUrl}
                         onAutoCapture={(dataUrl) => {
                             if (!isScanning) {
                                 toast.success('Blink verified! Matching employee face 👁️');
@@ -1322,14 +1323,6 @@ export function ExpressKioskApp() {
                             </div>
                         }
                     >
-                        {/* Freeze Frame Captured Selfie Overlay (Matches mirrored video preview exactly) */}
-                        {capturedFreezeUrl && (
-                            <img
-                                src={capturedFreezeUrl}
-                                alt="Captured Selfie Freeze"
-                                className="absolute inset-0 w-full h-full object-cover z-15"
-                            />
-                        )}
 
                         {/* Verification Result Status Pill (Positions at exact bottom status location over clear selfie photo) */}
                         {verificationResult && (

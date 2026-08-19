@@ -23,6 +23,7 @@ import {
 import { format } from "date-fns"
 import { Slider } from "@/components/ui/slider"
 import { FaceVerificationService } from "@/lib/services/face-verification.service"
+import { MediaPipeMeshService } from "@/lib/services/mediapipe-mesh.service"
 import { OfflineSyncService } from "@/lib/services/offline-sync.service"
 import { BiometricCameraModal } from "@/components/biometrics/BiometricCameraModal"
 
@@ -346,33 +347,17 @@ export function SelfieCapture({
         }
     }, [profileImageUrl, faceEmbedding, onSubmitAttendance, stopCamera])
 
-    // Manual capture fallback
-    const capturePhoto = useCallback(() => {
-        if (!videoRef.current || !canvasRef.current || status !== 'streaming') return
+    // Manual capture fallback using 512x512 HD face crop
+    const capturePhoto = useCallback(async () => {
+        if (!videoRef.current || status !== 'streaming') return
 
         const video = videoRef.current
-        const canvas = canvasRef.current
-        const ctx = canvas.getContext('2d')
-        if (!ctx) return
+        const cropResult = await MediaPipeMeshService.processFaceFrame(video)
+        const final512Url = cropResult?.dataUrl512 || ''
 
-        // 512×512 HD face snapshot
-        canvas.width = 512
-        canvas.height = 512
-
-        const vw = video.videoWidth || 720
-        const vh = video.videoHeight || 960
-        const size = Math.min(vw, vh)
-        const sx = (vw - size) / 2
-        const sy = (vh - size) / 2
-
-        ctx.save()
-        ctx.translate(canvas.width, 0)
-        ctx.scale(-1, 1)
-        ctx.drawImage(video, sx, sy, size, size, 0, 0, canvas.width, canvas.height)
-        ctx.restore()
-
-        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.94)
-        executeVerify(imageDataUrl)
+        if (final512Url) {
+            executeVerify(final512Url)
+        }
     }, [status, executeVerify])
 
     // Auto-capture on verified in-mask eye blink
@@ -488,6 +473,7 @@ export function SelfieCapture({
                     onStreamReady={() => setStatus('streaming')}
                     timerSeconds={!capturedImage && status !== 'verified' ? sessionTimeout : undefined}
                     enableAutoBlinkCapture={!capturedImage && status !== 'verifying' && status !== 'verified'}
+                    capturedCroppedUrl={capturedImage}
                     onAutoCapture={handleAutoCapture}
                     footerSlot={
 
@@ -516,19 +502,6 @@ export function SelfieCapture({
                         </div>
                     }
                 >
-
-
-                    {/* Captured Selfie Preview Overlay (Stays 100% continuous without black screen) */}
-
-                    {capturedImage && status !== 'streaming' && status !== 'idle' && (
-                        <div className="absolute inset-0 z-25 bg-slate-950 flex items-center justify-center overflow-hidden">
-                            <img
-                                src={capturedImage}
-                                alt="Captured Selfie Preview"
-                                className="w-full h-full object-cover"
-                            />
-                        </div>
-                    )}
 
                     {/* Verifying Spinner Status Pill (Positions at exact bottom status location over clear selfie) */}
                     {status === 'verifying' && (

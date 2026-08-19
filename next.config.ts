@@ -9,14 +9,13 @@ const nextConfig: NextConfig = {
     // Build CSP directives - stricter in production
     const cspDirectives = [
       "default-src 'self'",
-      // Note: 'unsafe-eval' was required by legacy face-api.js but is now removed in production for stricter security.
-      isDev
-        ? "script-src 'self' 'unsafe-eval' 'unsafe-inline'"
-        : "script-src 'self' 'unsafe-inline'",
+      // 'unsafe-eval' is required by TensorFlow.js and WebGL/WASM kernel shader compilation for face biometrics
+      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://cdn.jsdelivr.net https://storage.googleapis.com https://*.huggingface.co https://huggingface.co blob:",
+      "worker-src 'self' blob:",
       "frame-src 'none'",
       "frame-ancestors 'none'", // Enhanced: Prevents clickjacking
       "object-src 'none'",
