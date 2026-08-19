@@ -151,9 +151,6 @@ export function ExpressKioskApp() {
     const [isCameraReady, setIsCameraReady] = useState<boolean>(false);
     const [stats, setStats] = useState({ totalEmployees: 0, enrolledEmployees: 0, queuedOffline: 0 });
 
-    const warmupVideoRef = useRef<HTMLVideoElement>(null);
-
-
     const verifyPairingMutation = trpc.kioskDevices.verifyPairingCode.useMutation();
 
     // Live clock update
@@ -236,55 +233,11 @@ export function ExpressKioskApp() {
         }
     }, []);
 
-    // Background Pre-Warm Camera Stream on Kiosk Load (Instant 0ms Modal Opening)
-    const prewarmCamera = useCallback(async () => {
-        if (typeof window === 'undefined' || !navigator.mediaDevices?.getUserMedia) return;
-        if (mediaStreamRef.current && mediaStreamRef.current.active) {
-            setIsCameraReady(true);
-            return;
-        }
-        try {
-            let stream: MediaStream | null = null;
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: 'user',
-                        width: { ideal: 640 },
-                        height: { ideal: 480 },
-                    },
-                    audio: false
-                });
-            } catch {
-                // Fallback for laptops/desktops where facingMode is not user
-                stream = await navigator.mediaDevices.getUserMedia({
-                    video: true,
-                    audio: false
-                });
-            }
-
-            if (stream) {
-                mediaStreamRef.current = stream;
-
-                if (warmupVideoRef.current) {
-                    warmupVideoRef.current.srcObject = stream;
-                    await warmupVideoRef.current.play().catch(() => {});
-                }
-                setIsCameraReady(true);
-                console.log('[Kiosk Camera] Warmup stream active & video element bound');
-            }
-        } catch (err) {
-            console.warn('[Kiosk Camera] Background pre-warm notice:', err);
-        }
-    }, []);
-
-    // Parallel initialization: Pre-warm camera + Load Models + Sync Vectors on Page Load
+    // Parallel initialization: Load Models + Sync Vectors on Page Load
     useEffect(() => {
         let mounted = true;
         
         async function parallelInit() {
-            // Start camera pre-warm asynchronously in background
-            void prewarmCamera();
-
             // Load face models and face vectors in parallel
             if (pairingCode) {
                 void loadFaceModels();
@@ -525,58 +478,6 @@ export function ExpressKioskApp() {
 
 
 
-
-    // Start Camera Stream inside Modal (Instant 0ms feed swap)
-    const startCamera = async () => {
-        try {
-            if (!mediaStreamRef.current || !mediaStreamRef.current.active) {
-                await prewarmCamera();
-            }
-
-            if (mediaStreamRef.current && mediaStreamRef.current.active) {
-                setCameraActive(true);
-                setScanError(null);
-
-                if (videoRef.current) {
-                    videoRef.current.srcObject = mediaStreamRef.current;
-                    videoRef.current.muted = true;
-                    await videoRef.current.play().catch(() => {});
-                }
-            } else {
-                toast.error('Unable to access camera.');
-            }
-        } catch (err) {
-            console.error('Camera access error:', err);
-            toast.error('Unable to access camera.');
-        }
-    };
-
-
-
-
-
-
-    // Clean up mediaStream tracks on page unmount
-    useEffect(() => {
-        return () => {
-            if (mediaStreamRef.current) {
-                mediaStreamRef.current.getTracks().forEach(track => track.stop());
-                mediaStreamRef.current = null;
-            }
-        };
-    }, []);
-
-    // Stop Camera Stream (Only used on unpair or emergency reset)
-    const stopCamera = () => {
-        if (mediaStreamRef.current) {
-            mediaStreamRef.current.getTracks().forEach(track => track.stop());
-            mediaStreamRef.current = null;
-        }
-        if (videoRef.current) {
-            videoRef.current.srcObject = null;
-        }
-        setCameraActive(false);
-    };
 
     // Open Verification Modal Flow (Pre-warms WebGL AI Engine)
     const openVerificationModal = async () => {
@@ -1361,15 +1262,6 @@ export function ExpressKioskApp() {
 
                 </DialogContent>
             </Dialog>
-
-            {/* Hidden background video element keeping camera stream hot & active on page load */}
-            <video
-                ref={warmupVideoRef}
-                autoPlay
-                muted
-                playsInline
-                className="hidden pointer-events-none opacity-0 absolute -z-50"
-            />
         </div>
     );
 }

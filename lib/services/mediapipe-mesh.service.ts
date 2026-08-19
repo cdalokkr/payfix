@@ -199,14 +199,16 @@ export const MediaPipeMeshService = {
 
         const scanEl = getScanCanvas(video) || video;
 
-        // Path A: Local Offline Face-Api (Fastest, zero CDN lag)
-        // Standardized inputSize: 224 (32-multiple required by TinyYolo) for robust real-time tracking
-        if (typeof window !== 'undefined' && FaceApiBrowserService.isDetectorReady() && window.faceapi) {
+        // Path A: Local Offline Face-Api (Fastest, direct hardware WebGL streaming on video element)
+        if (typeof window !== 'undefined' && window.faceapi) {
             try {
-                if (window.faceapi) {
-                    const faceapi = window.faceapi;
+                if (!FaceApiBrowserService.isDetectorReady()) {
+                    FaceApiBrowserService.loadDetectorOnly().catch(() => {});
+                }
+                const faceapi = window.faceapi;
+                if (faceapi.nets.tinyFaceDetector.params && faceapi.nets.faceLandmark68Net.params) {
                     const detection = await faceapi
-                        .detectSingleFace(scanEl, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.15 }))
+                        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.15 }))
                         .withFaceLandmarks(true);
 
                     if (detection && detection.landmarks) {

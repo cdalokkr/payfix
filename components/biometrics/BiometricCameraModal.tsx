@@ -191,6 +191,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
   useEffect(() => {
     isMountedRef.current = true;
+    FaceApiBrowserService.loadDetectorOnly().catch(() => {});
     if (isOpen) {
       startCamera();
     } else {

@@ -69,9 +69,6 @@ export function SelfieCapture({
     const [errorMessage, setErrorMessage] = useState<string>('')
     const [capturedImage, setCapturedImage] = useState<string | null>(null)
     const [capturedAt, setCapturedAt] = useState<Date | null>(null)
-    const [countdown, setCountdown] = useState<number | null>(null)
-    const [zoom, setZoom] = useState<number>(1)
-    const [hasZoomSupport, setHasZoomSupport] = useState(false)
     const [similarity, setSimilarity] = useState<number>(0)
     const [modelsReady, setModelsReady] = useState(true)
     const [apiStatus, setApiStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle')
@@ -98,159 +95,12 @@ export function SelfieCapture({
         return () => { isMounted.current = false }
     }, [])
 
-    // Start camera stream
-    const startCamera = useCallback(async (retryCount = 0) => {
-        // Prevent multiple simultaneous calls
-        if (isInitializing.current && retryCount === 0) {
-            return
-        }
-        isInitializing.current = true
-
-        // Set models as preloaded instantly
-        modelsPreloaded = true
-        if (isMounted.current) setModelsReady(true)
-
-        stopCamera()
-        if (isMounted.current) {
-            setStatus('idle')
-            setErrorMessage('')
-        }
-
-        // Delay for hardware release (350ms) - only if we don't have a warmed stream
-        if (retryCount === 0 && !warmedStream) {
-            await new Promise(resolve => setTimeout(resolve, 350))
-        }
-
-        // Try using the pre-warmed stream
-        if (warmedStream && retryCount === 0) {
-            try {
-                streamRef.current = warmedStream
-                const videoTrack = warmedStream.getVideoTracks()[0]
-                if (videoTrack) {
-                    const capabilities = videoTrack.getCapabilities() as any
-                    if (capabilities?.zoom) {
-                        setHasZoomSupport(true)
-                    }
-                }
-
-                if (videoRef.current) {
-                    const video = videoRef.current
-                    video.srcObject = warmedStream
-                    video.setAttribute('playsinline', 'true')
-                    video.muted = true
-                    
-                    try {
-                        await video.play()
-                        if (isMounted.current) setStatus('streaming')
-                    } catch (err) {
-                        console.warn("Autoplay blocked, but setting status to streaming:", err)
-                        if (isMounted.current) setStatus('streaming')
-                    }
-                    isInitializing.current = false
-                    clearWarmedStream?.()
-                    return
-                }
-            } catch (err) {
-                console.error("Failed to use pre-warmed stream, falling back to getUserMedia:", err)
-            }
-        }
-
-        try {
-            // Request 480x640 (3:4 portrait) for consistent face vector alignment across enrollment & kiosk
-            const constraints: MediaStreamConstraints = retryCount === 0 ? {
-                video: {
-                    facingMode: { exact: 'user' },
-                    width: { ideal: 480 },
-                    height: { ideal: 640 },
-                    aspectRatio: { ideal: 0.75 }
-                },
-                audio: false,
-            } : {
-                video: { facingMode: { exact: 'user' } },
-                audio: false
-            }
-
-
-            const stream = await navigator.mediaDevices.getUserMedia(constraints)
-
-            if (!isMounted.current) {
-                stream.getTracks().forEach(track => track.stop())
-                return
-            }
-
-            streamRef.current = stream
-
-            const videoTrack = stream.getVideoTracks()[0]
-            const capabilities = videoTrack.getCapabilities() as any
-            if (capabilities?.zoom) {
-                setHasZoomSupport(true)
-            }
-
-            if (videoRef.current) {
-                const video = videoRef.current
-                video.srcObject = stream
-
-                // For mobile compatibility
-                video.setAttribute('playsinline', 'true')
-                video.muted = true
-
-                const handlePlay = async () => {
-                    if (!isMounted.current) return
-                    try {
-                        await video.play()
-                        setStatus('streaming')
-                        isInitializing.current = false
-                    } catch (err) {
-                        console.warn("Autoplay block, but status set to streaming:", err)
-                        setStatus('streaming')
-                        isInitializing.current = false
-                    }
-                }
-
-                if (video.readyState >= 2) {
-                    handlePlay()
-                } else {
-                    video.onloadedmetadata = handlePlay
-                    // Safety timeout for the spinner
-                    setTimeout(() => {
-                        if (isMounted.current && status === 'idle') handlePlay()
-                    }, 1500)
-                }
-
-                // Profile descriptor preloading now handled above in initialize() chain
-            }
-        } catch (error: unknown) {
-            console.error('Camera error:', error)
-
-            // Auto-retry once with basic video
-            if (retryCount === 0 && isMounted.current) {
-                return startCamera(1)
-            }
-
-            if (!isMounted.current) return
-
-            setStatus('error')
-            isInitializing.current = false
-            setErrorMessage('Camera access failed. Check site settings.')
-        }
-    }, [stopCamera])
-
-    // Apply zoom
-    useEffect(() => {
-        if (streamRef.current && status === 'streaming') {
-            const videoTrack = streamRef.current.getVideoTracks()[0]
-            const capabilities = videoTrack.getCapabilities() as any
-
-            if (capabilities.zoom) {
-                const min = capabilities.zoom.min || 1
-                const max = capabilities.zoom.max || 1
-                const zoomVal = min + (max - min) * (zoom - 1) / 2
-                videoTrack.applyConstraints({
-                    advanced: [{ zoom: zoomVal }] as any
-                }).catch(() => { })
-            }
-        }
-    }, [zoom, status])
+    // Retake camera stream
+    const retakePhoto = useCallback(() => {
+        setCapturedImage(null)
+        setCapturedAt(null)
+        setStatus('streaming')
+    }, [])
 
     // Core verification routine on 512x512 HD snapshot
     const executeVerify = useCallback(async (imageToVerify: string) => {
@@ -392,12 +242,6 @@ export function SelfieCapture({
         executeVerify(dataUrl)
     }, [executeVerify])
 
-    const retakePhoto = useCallback(() => {
-        setCapturedImage(null)
-        setCapturedAt(null)
-        startCamera()
-    }, [startCamera])
-
     const [verificationDuration, setVerificationDuration] = useState<string>('')
 
     const handleProceed = useCallback(async () => {
@@ -444,26 +288,6 @@ export function SelfieCapture({
         }
     }, [status, capturedImage, stopCamera, onBack])
 
-    // Auto-capture countdown — only starts after face-api models are loaded
-    useEffect(() => {
-        if (status === 'streaming' && !capturedImage && modelsReady) {
-            setCountdown(5)
-            const timer = setInterval(() => {
-                setCountdown(prev => {
-                    if (prev === null) return null
-                    if (prev <= 1) {
-                        clearInterval(timer)
-                        capturePhoto()
-                        return 0
-                    }
-                    return prev - 1
-                })
-            }, 1000)
-            return () => clearInterval(timer)
-        }
-    }, [status, capturedImage, capturePhoto, modelsReady])
-
-
     // Auto-verify immediately after capture (no confirm step)
     useEffect(() => {
         if (status === 'captured' && capturedImage && capturedAt) {
@@ -476,9 +300,8 @@ export function SelfieCapture({
     }, [status, capturedImage, capturedAt, handleProceed])
 
     useEffect(() => {
-        startCamera()
         return () => stopCamera()
-    }, [startCamera, stopCamera])
+    }, [stopCamera])
 
     return (
         <div className="fixed inset-0 z-[70] bg-slate-950/80 backdrop-blur-md flex flex-col items-center justify-center p-3 sm:p-6 overflow-hidden">
@@ -588,32 +411,6 @@ export function SelfieCapture({
                         </div>
                     )}
 
-                    {/* Countdown Progress Ring UI Overlay */}
-                    {countdown !== null && countdown > 0 && status === 'streaming' && (
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none flex flex-col items-center justify-center z-30">
-                            <div className="relative w-24 h-24 flex items-center justify-center">
-                                <svg className="absolute inset-0 w-full h-full transform -rotate-90">
-                                    <circle cx="48" cy="48" r="40" stroke="rgba(255, 255, 255, 0.15)" strokeWidth="4" fill="rgba(15, 23, 42, 0.6)" />
-                                    <motion.circle 
-                                        cx="48" 
-                                        cy="48" 
-                                        r="40" 
-                                        stroke="rgba(6, 182, 212, 1)" 
-                                        strokeWidth="4" 
-                                        fill="transparent" 
-                                        strokeDasharray={251.2}
-                                        animate={{ strokeDashoffset: 251.2 - ((countdown || 0) / 5) * 251.2 }}
-                                        transition={{ duration: 0.3, ease: "easeOut" }}
-                                        strokeLinecap="round"
-                                    />
-                                </svg>
-                                <span className="text-4xl font-black text-white relative z-10">{countdown}</span>
-                            </div>
-                            <p className="text-white/80 text-[10px] uppercase font-black tracking-widest text-center mt-4 bg-slate-900/80 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 shadow-lg">
-                                Auto-Capture
-                            </p>
-                        </div>
-                    )}
                     <canvas ref={canvasRef} className="hidden" />
                 </BiometricCameraModal>
             </div>
