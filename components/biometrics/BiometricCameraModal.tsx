@@ -80,6 +80,10 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   const [flashSuccess, setFlashSuccess] = useState(false);
   const isCapturingRef = useRef(false);
   const isEvaluatingRef = useRef(false);
+  const maxTimerRef = useRef(timerSeconds || 10);
+  if (timerSeconds && timerSeconds > maxTimerRef.current) {
+    maxTimerRef.current = timerSeconds;
+  }
 
   const stopStream = useCallback(() => {
     if (streamRef.current) {
@@ -395,39 +399,47 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                   </linearGradient>
                 </defs>
 
-                {/* 1. Base Oval Mask Outline - Crisp Solid Border */}
+                {/* 1. Base Oval Mask Outline - Dim Matte Black Background Ring */}
                 <path
                   d={OVAL_PATH}
-                  stroke={isAligned ? '#10b981' : '#0ea5e9'}
-                  strokeWidth={isAligned ? '5.0' : '4.0'}
+                  stroke="rgba(15, 23, 42, 0.85)"
+                  strokeWidth="5.5"
                   strokeDasharray="none"
-                  strokeOpacity={isAligned ? 1.0 : 0.90}
+                  strokeOpacity="1.0"
                   className="transition-all duration-300"
                   style={{
-                    filter: isAligned
-                      ? 'drop-shadow(0 0 18px rgba(16, 185, 129, 0.95))'
-                      : 'drop-shadow(0 0 12px rgba(14, 165, 233, 0.85))',
+                    filter: 'drop-shadow(0 0 6px rgba(0, 0, 0, 0.95))',
                   }}
                 />
 
-                {/* 2. 30-Second Countdown Progress Stroke directly along the SAME Oval Path */}
+                {/* 2. Dynamic Countdown Progress Stroke directly along the SAME Oval Path */}
                 {timerSeconds !== undefined && (
                   <path
                     d={OVAL_PATH}
-                    stroke={timerSeconds <= 5 ? 'url(#timerRedGradient)' : 'url(#timerGradient)'}
-                    strokeWidth="4.5"
+                    stroke={
+                      timerSeconds <= (maxTimerRef.current <= 10 ? 3 : 5)
+                        ? 'url(#timerRedGradient)'
+                        : isAligned
+                        ? '#10b981'
+                        : 'url(#timerGradient)'
+                    }
+                    strokeWidth="5.5"
                     strokeLinecap="round"
                     pathLength="100"
                     strokeDasharray="100"
                     fill="none"
-                    className={timerSeconds <= 5 ? 'animate-pulse' : ''}
+                    className={timerSeconds <= (maxTimerRef.current <= 10 ? 3 : 5) ? 'animate-pulse' : ''}
                     style={{
-                      strokeDashoffset: `${100 - (Math.max(0, Math.min(30, timerSeconds)) / 30) * 100}`,
+                      strokeDashoffset: `${
+                        100 - (Math.max(0, Math.min(maxTimerRef.current, timerSeconds)) / (maxTimerRef.current || 1)) * 100
+                      }`,
                       transition: 'stroke-dashoffset 1s linear',
                       filter:
-                        timerSeconds <= 5
-                          ? 'drop-shadow(0px 0px 8px rgba(239, 68, 68, 0.9))'
-                          : 'drop-shadow(0px 0px 6px rgba(56, 189, 248, 0.6))',
+                        timerSeconds <= (maxTimerRef.current <= 10 ? 3 : 5)
+                          ? 'drop-shadow(0px 0px 12px rgba(239, 68, 68, 0.95))'
+                          : isAligned
+                          ? 'drop-shadow(0px 0px 14px rgba(16, 185, 129, 0.95))'
+                          : 'drop-shadow(0px 0px 10px rgba(56, 189, 248, 0.85))',
                     }}
                   />
                 )}

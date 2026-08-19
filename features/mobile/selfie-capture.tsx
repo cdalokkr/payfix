@@ -266,19 +266,18 @@ export function SelfieCapture({
         }
     }, [apiStatus, similarity, onVerified, apiError])
 
-    const [sessionTimeout, setSessionTimeout] = useState<number>(30)
+    const [sessionTimeout, setSessionTimeout] = useState<number>(10)
 
-    // 30-Second Security Session Timeout (Closes camera if user doesn't complete selfie in 30s)
+    // 10-Second Auto-Capture Timer (Automatically captures selfie at 10s if not captured manually or via blink)
     useEffect(() => {
         if (status === 'streaming' && !capturedImage) {
-            setSessionTimeout(30)
+            setSessionTimeout(10)
             const interval = setInterval(() => {
                 setSessionTimeout(prev => {
                     if (prev <= 1) {
                         clearInterval(interval)
-                        toast.error("Camera session expired (30s limit). Please re-verify location.")
-                        stopCamera()
-                        onBack?.()
+                        toast.info("10s Auto-Capture triggered 📸")
+                        capturePhoto()
                         return 0
                     }
                     return prev - 1
@@ -286,7 +285,7 @@ export function SelfieCapture({
             }, 1000)
             return () => clearInterval(interval)
         }
-    }, [status, capturedImage, stopCamera, onBack])
+    }, [status, capturedImage, capturePhoto])
 
     // Auto-verify immediately after capture (no confirm step)
     useEffect(() => {

@@ -278,28 +278,14 @@ export function ExpressKioskApp() {
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
         };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pairingCode]);
-
-    // Bind camera stream whenever cameraActive or videoRef updates inside Modal
-    useEffect(() => {
-        if (cameraActive && videoRef.current && mediaStreamRef.current) {
-            const video = videoRef.current;
-            video.srcObject = mediaStreamRef.current;
-            video.muted = true;
-            video.play().catch(err => console.warn('[Kiosk Video] Play error:', err));
-        }
-    }, [cameraActive, isVerificationModalOpen]);
-
-    // Cleanup camera stream on unmount
-    useEffect(() => {
-        return () => {
-            if (mediaStreamRef.current) {
-                mediaStreamRef.current.getTracks().forEach(track => track.stop());
-                mediaStreamRef.current = null;
-            }
-        };
     }, []);
+
+    // Once AI models finish loading, transition camera/system readiness to active
+    useEffect(() => {
+        if (modelsReady) {
+            setIsCameraReady(true);
+        }
+    }, [modelsReady]);
 
     // 15-minute background refresh to fetch newly enrolled employee face vectors automatically
     useEffect(() => {
