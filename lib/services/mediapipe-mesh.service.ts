@@ -351,7 +351,7 @@ export const MediaPipeMeshService = {
         timestamp: number = performance.now()
     ): Promise<AlignedFaceCropResult | null> {
         if (!faceLandmarker) {
-            await this.initialize();
+            this.initialize().catch(() => {});
         }
 
         try {

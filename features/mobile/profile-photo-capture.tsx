@@ -224,13 +224,39 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
         if (!videoRef.current || status !== 'streaming') return
 
         const video = videoRef.current
-        const cropResult = await MediaPipeMeshService.processFaceFrame(video)
-        const final512Url = cropResult?.dataUrl512 || ''
+        try {
+            const cropPromise = MediaPipeMeshService.processFaceFrame(video)
+            const timeoutPromise = new Promise<null>((res) => setTimeout(() => res(null), 500))
+            const cropResult = await Promise.race([cropPromise, timeoutPromise])
 
-        if (final512Url) {
-            setCapturedImage(final512Url)
-            setStatus('captured')
-            stopCamera()
+            let final512Url = cropResult?.dataUrl512 || ''
+            if (!final512Url && canvasRef.current) {
+                const canvas = canvasRef.current
+                canvas.width = 512
+                canvas.height = 512
+                const ctx = canvas.getContext('2d')
+                if (ctx) {
+                    const vw = video.videoWidth || 720
+                    const vh = video.videoHeight || 960
+                    const squareSize = Math.min(vw, vh) * 0.55
+                    const sx = (vw - squareSize) / 2
+                    const sy = vh * 0.15
+                    ctx.save()
+                    ctx.translate(512, 0)
+                    ctx.scale(-1, 1)
+                    ctx.drawImage(video, sx, sy, squareSize, squareSize, 0, 0, 512, 512)
+                    ctx.restore()
+                    final512Url = canvas.toDataURL('image/jpeg', 0.94)
+                }
+            }
+
+            if (final512Url) {
+                setCapturedImage(final512Url)
+                setStatus('captured')
+                stopCamera()
+            }
+        } catch (err) {
+            console.error('Capture error:', err)
         }
     }, [stopCamera, status])
 

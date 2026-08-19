@@ -556,31 +556,6 @@ export function ExpressKioskApp() {
 
 
 
-    // Auto-attach camera stream to videoRef as soon as modal DOM element mounts
-    useEffect(() => {
-        if (isVerificationModalOpen) {
-            const attachStream = async () => {
-                if (!mediaStreamRef.current || !mediaStreamRef.current.active) {
-                    await prewarmCamera();
-                }
-
-                if (mediaStreamRef.current && mediaStreamRef.current.active) {
-                    setCameraActive(true);
-                    setScanError(null);
-                    if (videoRef.current) {
-                        videoRef.current.srcObject = mediaStreamRef.current;
-                        videoRef.current.muted = true;
-                        await videoRef.current.play().catch(() => {});
-                    }
-                }
-            };
-
-            attachStream();
-            const timer = setTimeout(attachStream, 120);
-            return () => clearTimeout(timer);
-        }
-    }, [isVerificationModalOpen, prewarmCamera]);
-
     // Clean up mediaStream tracks on page unmount
     useEffect(() => {
         return () => {
@@ -610,10 +585,6 @@ export function ExpressKioskApp() {
         setCapturedFreezeUrl(null);
         setScanError(null);
 
-        if (!mediaStreamRef.current || !mediaStreamRef.current.active) {
-            await prewarmCamera();
-        }
-
         // Background Pre-Warm Neural Engine to eliminate cold-start latency
         setTimeout(() => {
             try {
@@ -625,7 +596,7 @@ export function ExpressKioskApp() {
         }, 100);
     };
 
-    // Close Verification Modal Flow (Keeps camera stream active in background for instant re-opening)
+    // Close Verification Modal Flow
     const closeVerificationModal = () => {
         if (scanAbortControllerRef.current) {
             scanAbortControllerRef.current.abort();
@@ -636,9 +607,6 @@ export function ExpressKioskApp() {
         setVerificationResult(null);
         setCapturedFreezeUrl(null);
         setScanError(null);
-        if (videoRef.current) {
-            videoRef.current.srcObject = null;
-        }
         setCameraActive(false);
     };
 
@@ -1309,6 +1277,8 @@ export function ExpressKioskApp() {
                         title="Face Verification Scanner"
                         icon={<ScanFace className="h-5 w-5 text-sky-400" />}
                         videoRefOut={videoRef}
+                        onStreamReady={() => setCameraActive(true)}
+                        onCameraError={() => setCameraActive(false)}
                         statusText={isScanning && !verificationResult ? "512×512 HD biometrics matching..." : undefined}
                         isProcessing={isScanning && !verificationResult}
                         enableAutoBlinkCapture={!isScanning && isVerificationModalOpen}
