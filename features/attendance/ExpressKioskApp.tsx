@@ -506,9 +506,9 @@ export function ExpressKioskApp() {
         if (!video || !snap || !cameraActive) return null;
         const vw = video.videoWidth || 720;
         const vh = video.videoHeight || 960;
-        const cropSize = Math.min(vw, vh) * 0.52;
+        const cropSize = Math.min(vw, vh) * 0.66;
         const sx = (vw - cropSize) / 2;
-        const sy = vh * 0.14;
+        const sy = Math.max(0, (vh - cropSize) * 0.20);
 
         snap.width = 512;
         snap.height = 512;

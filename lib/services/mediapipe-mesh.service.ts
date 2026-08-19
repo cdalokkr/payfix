@@ -391,7 +391,7 @@ export const MediaPipeMeshService = {
                 const faceCenterY = (minY + (maxY - minY) / 2) * height;
 
                 const rawSize = Math.max(faceBoxW, faceBoxH);
-                const paddedSquareSize = rawSize * 1.35;
+                const paddedSquareSize = rawSize * 1.50;
 
                 const pts5 = this.extract5KeyPoints(rawLandmarks, width, height);
                 const dx = pts5[1].x - pts5[0].x;
@@ -424,7 +424,8 @@ export const MediaPipeMeshService = {
                     ctx512.save();
                     ctx512.translate(256, 256);
                     const scale512 = 512 / (paddedSquareSize || 1);
-                    ctx512.scale(scale512, scale512);
+                    // Match live front camera mirror view 100% so selfie freezes exactly as seen
+                    ctx512.scale(-scale512, scale512);
                     ctx512.drawImage(videoOrCanvas, -faceCenterX, -faceCenterY);
                     ctx512.restore();
                 }
@@ -471,7 +472,7 @@ export const MediaPipeMeshService = {
 
                     const faceCenterX = box.x + box.width / 2;
                     const faceCenterY = box.y + box.height / 2;
-                    const paddedSquareSize = Math.max(box.width, box.height) * 1.30;
+                    const paddedSquareSize = Math.max(box.width, box.height) * 1.50;
 
                     const canvas512 = document.createElement('canvas');
                     canvas512.width = 512;
@@ -483,7 +484,7 @@ export const MediaPipeMeshService = {
                         ctx512.save();
                         ctx512.translate(256, 256);
                         const scale512 = 512 / (paddedSquareSize || 1);
-                        ctx512.scale(scale512, scale512);
+                        ctx512.scale(-scale512, scale512);
                         ctx512.drawImage(videoOrCanvas, -faceCenterX, -faceCenterY);
                         ctx512.restore();
                     }
@@ -526,7 +527,7 @@ export const MediaPipeMeshService = {
             console.warn('[MediaPipeMeshService] Frame processing error:', err);
         }
 
-        // Fail-Safe Center-Weighted 512x512 Crop (Guarantees tight face region, zero chest/torso)
+        // Fail-Safe Center-Weighted 512x512 Crop (Guarantees full head, hair & ears, zero chest/torso)
         try {
             const width = (typeof HTMLVideoElement !== 'undefined' && videoOrCanvas instanceof HTMLVideoElement)
                 ? videoOrCanvas.videoWidth : (videoOrCanvas.width || (videoOrCanvas as HTMLImageElement).naturalWidth || 720);
@@ -534,9 +535,9 @@ export const MediaPipeMeshService = {
                 ? videoOrCanvas.videoHeight : (videoOrCanvas.height || (videoOrCanvas as HTMLImageElement).naturalHeight || 960);
 
             if (width > 0 && height > 0) {
-                const squareSize = Math.min(width, height) * 0.52;
+                const squareSize = Math.min(width, height) * 0.66;
                 const centerX = width / 2;
-                const centerY = height * 0.40; // Upper center for tight head & face focus
+                const centerY = height * 0.38; // Upper center for full head, hair & chin focus
 
                 const canvas512 = document.createElement('canvas');
                 canvas512.width = 512;
@@ -548,7 +549,7 @@ export const MediaPipeMeshService = {
                     ctx512.save();
                     ctx512.translate(256, 256);
                     const scale512 = 512 / squareSize;
-                    ctx512.scale(scale512, scale512);
+                    ctx512.scale(-scale512, scale512);
                     ctx512.drawImage(videoOrCanvas, -centerX, -centerY);
                     ctx512.restore();
                 }

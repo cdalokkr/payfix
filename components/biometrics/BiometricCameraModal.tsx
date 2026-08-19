@@ -338,13 +338,13 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
         <div className="flex items-center gap-2">
           {aiEngineStatus === 'ready' && (
-            <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[10.5px] font-mono font-bold text-emerald-300 shadow-sm">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[10.5px] font-mono font-bold text-emerald-300 shadow-sm">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               AI: Ready ⚡
             </span>
           )}
           {aiEngineStatus === 'fallback' && (
-            <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-[10.5px] font-mono font-bold text-amber-300 shadow-sm">
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-[10.5px] font-mono font-bold text-amber-300 shadow-sm">
               AI: Local Mode 🛡️
             </span>
           )}

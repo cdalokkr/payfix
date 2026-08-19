@@ -218,9 +218,9 @@ export function SelfieCapture({
                     ctx.imageSmoothingQuality = 'high'
                     const vw = video.videoWidth || 720
                     const vh = video.videoHeight || 960
-                    const squareSize = Math.min(vw, vh) * 0.52
+                    const squareSize = Math.min(vw, vh) * 0.66
                     const sx = (vw - squareSize) / 2
-                    const sy = vh * 0.14
+                    const sy = Math.max(0, (vh - squareSize) * 0.20)
                     ctx.save()
                     ctx.translate(512, 0)
                     ctx.scale(-1, 1)
