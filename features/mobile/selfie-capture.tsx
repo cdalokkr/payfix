@@ -112,21 +112,10 @@ export function SelfieCapture({
         stopCamera()
         setStatus('verifying')
 
-        // Check if offline
-        const isOffline = OfflineSyncService.isOffline()
-        if (isOffline) {
-            console.log('[SELFIE] Client is offline, bypassing server verification and saving locally')
-            setSimilarity(1.0)
-            setVerificationDuration('0.05s')
-            setStatus('verified')
-            setApiStatus('pending')
-            try {
-                await onSubmitAttendance(imageToVerify)
-                setApiStatus('success')
-            } catch (error: any) {
-                setApiStatus('error')
-                setApiError('Failed to record attendance locally')
-            }
+        // A face-only attendance event must fail closed while offline.
+        if (OfflineSyncService.isOffline()) {
+            setStatus('verify_failed')
+            setErrorMessage('An internet connection is required to verify your identity before attendance can be recorded.')
             return
         }
 
