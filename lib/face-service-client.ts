@@ -43,7 +43,9 @@ export interface FaceCompareResult {
 
 export class FaceServiceClient {
     private static getBaseUrl(): string {
-        return process.env.DEV_FACE_API_URL || process.env.FACE_API_URL || 'https://cdalokkr-face-service-dev.hf.space'
+        const configuredUrl = process.env.DEV_FACE_API_URL || process.env.FACE_API_URL
+        if (!configuredUrl) throw new Error('FACE_SERVICE_NOT_CONFIGURED')
+        return configuredUrl
     }
 
     /**
