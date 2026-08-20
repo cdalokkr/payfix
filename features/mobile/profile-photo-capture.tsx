@@ -49,9 +49,7 @@ interface ProfilePhotoCaptureProps {
 export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, onSuccess }: ProfilePhotoCaptureProps) {
     const router = useRouter()
     const supabase = createClient()
-    const updateProfilePicture = trpc.profile.updateProfilePicture.useMutation()
     const createPhotoRequest = trpc.profile.createPhotoUpdateRequest.useMutation()
-    const saveFaceEmbedding = trpc.profile.saveFaceEmbedding.useMutation()
 
     // Check if there's a pending photo request
     const { data: pendingRequest, isLoading: pendingLoading } = trpc.profile.getMyPendingPhotoRequest.useQuery()
@@ -317,10 +315,6 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
             const formData = new FormData()
             formData.append('file', blob, 'avatar.jpg')
             formData.append('profileId', profileId)
-            if (!isFirstTimeUpload) {
-                formData.append('isPending', 'true')
-            }
-
             const response = await fetch('/api/upload-avatar', {
                 method: 'POST',
                 body: formData,
@@ -336,30 +330,11 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
             addLog('Upload complete!')
             addLog(`URL: ${result.path?.slice(0, 40)}...`)
 
-            // Handle differently based on first-time upload vs update approval request
-            if (isFirstTimeUpload) {
-                // First-time: Save active face embedding immediately if pre-extracted
-                if (preExtracted512 && preExtracted512.length === 512) {
-                    try {
-                        await saveFaceEmbedding.mutateAsync({ embedding: preExtracted512 })
-                        addLog('✅ ArcFace 512-d vector saved to DB for Kiosk & PWA matching.')
-                    } catch (faceErr) {
-                        addLog('⚠️ Face vector saving warning: ' + String(faceErr))
-                    }
-                }
-
-                setStatus('success')
-                toast.success('Profile photo updated successfully!')
-            } else {
-                // Subsequent update: Create pending request WITHOUT touching active profile photo or vector!
-                addLog('Submitting for admin approval...')
-                await createPhotoRequest.mutateAsync({
-                    pendingPhotoUrl: result.path,
-                    pendingFaceEmbedding: (preExtracted512 && preExtracted512.length === 512) ? preExtracted512 : undefined
-                })
-                setStatus('submitted')
-                toast.success('Photo submitted for admin approval!')
-            }
+            // Every enrollment remains inactive until a reviewer approves a server-generated template.
+            addLog('Submitting for admin approval...')
+            await createPhotoRequest.mutateAsync({ pendingPhotoUrl: result.path })
+            setStatus('submitted')
+            toast.success('Photo submitted for admin approval!')
 
         } catch (error: any) {
             const errMsg = error?.message || 'Unknown error'
@@ -370,7 +345,7 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
         } finally {
             setIsUploading(false)
         }
-    }, [capturedImage, profileId, addLog, isFirstTimeUpload, createPhotoRequest, saveFaceEmbedding])
+    }, [capturedImage, profileId, addLog, createPhotoRequest])
 
 
     // Handle back button
