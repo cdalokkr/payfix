@@ -3,125 +3,50 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { FaceServiceClient } from '@/lib/face-service-client'
 
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024
+const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
+
+function hasSupportedImageSignature(bytes: Uint8Array) {
+    const isJpeg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+    const isPng = bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47
+    const isWebp = bytes.length >= 12 && String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF' && String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP'
+    return isJpeg || isPng || isWebp
+}
 
 export async function POST(request: NextRequest) {
     try {
-        // Verify user is authenticated
         const supabase = await createServerSupabaseClient()
-        const { data, error } = await supabase.auth.getUser()
-        const user = data?.user || null
+        const { data } = await supabase.auth.getUser()
+        const user = data?.user
+        if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-        if (!user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
-
-        // Get the form data
         const formData = await request.formData()
-        const file = formData.get('file') as Blob
-        const profileId = formData.get('profileId') as string
+        const file = formData.get('file')
+        const profileId = formData.get('profileId')
+        if (!(file instanceof Blob) || typeof profileId !== 'string') return NextResponse.json({ error: 'A profile image is required.' }, { status: 400 })
+        if (profileId !== user.id) return NextResponse.json({ error: 'Cannot upload for another user.' }, { status: 403 })
+        if (!ALLOWED_IMAGE_TYPES.has(file.type) || file.size === 0 || file.size > MAX_IMAGE_BYTES) return NextResponse.json({ error: 'Upload a JPEG, PNG, or WebP image smaller than 5 MB.' }, { status: 400 })
 
-        if (!file) {
-            return NextResponse.json({ error: 'No file provided' }, { status: 400 })
-        }
-
-        if (!profileId) {
-            return NextResponse.json({ error: 'No profileId provided' }, { status: 400 })
-        }
-
-        // Security check: only allow uploading for own profile
-        if (profileId !== user.id) {
-            return NextResponse.json({ error: 'Cannot upload for other users' }, { status: 403 })
-        }
-
-        // Validate file size (max 5MB)
-        const maxSize = 5 * 1024 * 1024
-        if (file.size > maxSize) {
-            return NextResponse.json({ error: 'File size must be less than 5MB' }, { status: 400 })
-        }
-
-        const isPending = formData.get('isPending') === 'true'
-
-        // 1. Process image through FaceServiceClient for validation & 512x512 Face Crop
         const arrayBuffer = await file.arrayBuffer()
-        const rawBase64 = Buffer.from(arrayBuffer).toString('base64')
-        const extractRes = await FaceServiceClient.extract(rawBase64)
+        if (!hasSupportedImageSignature(new Uint8Array(arrayBuffer.slice(0, 12)))) return NextResponse.json({ error: 'The uploaded file is not a supported image.' }, { status: 400 })
+        const extraction = await FaceServiceClient.extract(Buffer.from(arrayBuffer).toString('base64'))
+        const embedding = extraction.embedding_512 || (extraction.embedding?.length === 512 ? extraction.embedding : null)
+        if (!extraction.success || !extraction.face_detected || extraction.face_count !== 1 || !embedding || embedding.length !== 512) return NextResponse.json({ error: extraction.error_message || 'Exactly one clear face is required.' }, { status: 400 })
+        if (extraction.is_live !== true) return NextResponse.json({ error: 'Liveness verification failed. Please capture a new selfie.' }, { status: 400 })
 
-        if (!extractRes.success || !extractRes.face_detected) {
-            return NextResponse.json({
-                error: extractRes.error_message || 'No face detected in photo. Please ensure face is clearly visible in good lighting.'
-            }, { status: 400 })
-        }
-
-        // 2. Prepare cropped 512x512 HD avatar or fallback to original
-        let fileToUpload: Buffer = Buffer.from(arrayBuffer)
-        if (extractRes.cropped_face_base64) {
-            const cropB64Clean = extractRes.cropped_face_base64.replace(/^data:image\/\w+;base64,/, '')
-            fileToUpload = Buffer.from(cropB64Clean, 'base64')
-        }
-
-        // 3. Create admin client with service role (bypasses RLS)
-        const adminClient = createClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.SUPABASE_SERVICE_ROLE_KEY!,
-            { auth: { persistSession: false } }
-        )
-
-        // Upload to Supabase Storage using service role
-        const fileName = `profile-${profileId}-${Date.now()}.jpg`
-        const { error: uploadError } = await adminClient.storage
-            .from('avatars')
-            .upload(fileName, fileToUpload, {
-                contentType: 'image/jpeg',
-                upsert: true,
-            })
-
-        if (uploadError) {
-            console.error('[UPLOAD-API] Storage error:', uploadError)
-            return NextResponse.json({ error: uploadError.message }, { status: 500 })
-        }
-
-        // Get public URL
-        const { data: { publicUrl } } = adminClient.storage
-            .from('avatars')
-            .getPublicUrl(fileName)
-
-        // If first-time direct upload (not pending review), update profile and face vector immediately
-        if (!isPending) {
-            const updateData: any = {
-                avatar_url: publicUrl,
-                avatar_status: 'custom',
-                updated_at: new Date().toISOString()
-            }
-            if (extractRes.embedding_512 && extractRes.embedding_512.length === 512) {
-                updateData.face_embedding_512 = extractRes.embedding_512
-                updateData.face_enrolled_at = new Date().toISOString()
-            }
-
-            const { error: updateError } = await adminClient
-                .from('profiles')
-                .update(updateData)
-                .eq('id', profileId)
-
-            if (updateError) {
-                console.error('[UPLOAD-API] Profile update error:', updateError)
-                return NextResponse.json({ error: updateError.message }, { status: 500 })
-            }
-        }
-
-        console.log('[UPLOAD-API] Success with 512x512 Face Crop:', { fileName, publicUrl, isPending })
-
-        return NextResponse.json({
-            success: true,
-            path: publicUrl,
-            embedding_512: extractRes.embedding_512,
-            message: 'Avatar cropped (+15% padding) and uploaded successfully'
-        })
-
-    } catch (error: any) {
+        const cleanCrop = extraction.cropped_face_base64?.replace(/^data:image\/\w+;base64,/, '')
+        const fileToUpload = cleanCrop ? Buffer.from(cleanCrop, 'base64') : Buffer.from(arrayBuffer)
+        const contentType = cleanCrop ? 'image/jpeg' : file.type
+        const extension = cleanCrop || file.type === 'image/jpeg' ? 'jpg' : file.type === 'image/png' ? 'png' : 'webp'
+        const adminClient = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } })
+        const fileName = 'pending/' + profileId + '/' + crypto.randomUUID() + '.' + extension
+        const { error: uploadError } = await adminClient.storage.from('avatars').upload(fileName, fileToUpload, { contentType, upsert: false })
+        if (uploadError) return NextResponse.json({ error: 'Could not store the profile image.' }, { status: 500 })
+        const { data: { publicUrl } } = adminClient.storage.from('avatars').getPublicUrl(fileName)
+        // Only the admin approval service can activate this image and its biometric template.
+        return NextResponse.json({ success: true, path: publicUrl, status: 'pending_review', message: 'Photo uploaded for admin review.' })
+    } catch (error) {
         console.error('[UPLOAD-API] Error:', error)
-        return NextResponse.json(
-            { error: error.message || 'Upload failed' },
-            { status: 500 }
-        )
+        return NextResponse.json({ error: 'Upload failed.' }, { status: 500 })
     }
 }
