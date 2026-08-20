@@ -351,60 +351,17 @@ export class ProfileService {
                 updated_at: new Date()
             }
 
-            let embeddingToApply = faceEmbedding || (request as any).pending_face_embedding_512 || (request as any).pending_face_embedding
-
-            // Automatic 512-d ArcFace vector extraction + 15% Face Crop via ZeroGPU AI Service
-            if (request.pending_photo_url) {
-                try {
-                    const imgResp = await fetch(request.pending_photo_url)
-                    if (imgResp.ok) {
-                        const buffer = await imgResp.arrayBuffer()
-                        const b64 = Buffer.from(buffer).toString('base64')
-                        const extractRes = await FaceServiceClient.extract(b64)
-                        if (extractRes.success) {
-                            if (extractRes.embedding_512 || extractRes.embedding) {
-                                embeddingToApply = extractRes.embedding_512 || extractRes.embedding
-                            }
-                            // If 512x512 face crop generated, save it to storage as the final profile avatar
-                            if (extractRes.cropped_face_base64 && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-                                try {
-                                    const { createClient } = await import('@supabase/supabase-js')
-                                    const adminClient = createClient(
-                                        process.env.NEXT_PUBLIC_SUPABASE_URL,
-                                        process.env.SUPABASE_SERVICE_ROLE_KEY,
-                                        { auth: { persistSession: false } }
-                                    )
-                                    const cropClean = extractRes.cropped_face_base64.replace(/^data:image\/\w+;base64,/, '')
-                                    const cropBuffer = Buffer.from(cropClean, 'base64')
-                                    const croppedFileName = `avatar-crop-${request.profile_id}-${Date.now()}.jpg`
-                                    const { error: upErr } = await adminClient.storage
-                                        .from('avatars')
-                                        .upload(croppedFileName, cropBuffer, { contentType: 'image/jpeg', upsert: true })
-                                    if (!upErr) {
-                                        const { data: { publicUrl } } = adminClient.storage.from('avatars').getPublicUrl(croppedFileName)
-                                        updatePayload.avatar_url = publicUrl
-                                        updatePayload.face_photo_url = publicUrl
-                                    }
-                                } catch (storageErr) {
-                                    console.warn('[ProfileService] Cropped avatar storage upload warning:', storageErr)
-                                }
-                            }
-                        }
-                    }
-                } catch (extErr) {
-                    console.warn('[ProfileService] Auto 512-d vector extraction warning:', extErr)
-                }
-            }
-
-            if (embeddingToApply && Array.isArray(embeddingToApply)) {
-                if (embeddingToApply.length === 512) {
-                    updatePayload.face_embedding_512 = embeddingToApply
-                } else if (embeddingToApply.length === 128) {
-                    updatePayload.face_embedding = embeddingToApply
-                }
-                updatePayload.face_quality_score = faceQualityScore || 1.0
-                updatePayload.face_enrolled_at = new Date()
-            }
+            // Do not trust browser-provided vectors. Rebuild the template from the pending photo on the server.
+            const imageResponse = await fetch(request.pending_photo_url)
+            if (!imageResponse.ok) throwAppError('BAD_REQUEST', 'Could not load the pending profile photo for verification.')
+            const imageBase64 = Buffer.from(await imageResponse.arrayBuffer()).toString('base64')
+            const extraction = await FaceServiceClient.extract(imageBase64)
+            const serverEmbedding = extraction.embedding_512 || (extraction.embedding?.length === 512 ? extraction.embedding : null)
+            if (!extraction.success || !extraction.face_detected || extraction.face_count !== 1 || !serverEmbedding || serverEmbedding.length !== 512) throwAppError('BAD_REQUEST', extraction.error_message || 'The pending photo does not contain one usable face.')
+            if (extraction.is_live !== true) throwAppError('BAD_REQUEST', 'Liveness verification failed for the pending profile photo.')
+            updatePayload.face_embedding_512 = serverEmbedding
+            updatePayload.face_quality_score = extraction.quality_score || 1.0
+            updatePayload.face_enrolled_at = new Date()
 
             await db.update(profiles)
                 .set(updatePayload)
