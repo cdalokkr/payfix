@@ -10,15 +10,35 @@ import {
   EMBEDDING_SIZE,
 } from './face-matching';
 
-/** Shared camera configuration – Full HD (3:4 portrait) */
+/** Shared camera configuration for enrollment, attendance, and kiosk capture. */
 export const BIOMETRIC_CAMERA_CONFIG = {
-  width: 1080,
-  height: 1440,
-  aspectRatio: 0.75, // 3:4 portrait ratio
-  facingMode: { exact: 'user' } as const,
+  width: 960,
+  height: 1280,
+  minWidth: 480,
+  minHeight: 640,
+  aspectRatio: 0.75,
+  facingMode: { ideal: 'user' } as const,
   inputSize: 416 as const,
   scoreThreshold: 0.5,
 };
+
+export const BIOMETRIC_CAMERA_CONSTRAINTS: MediaTrackConstraints = {
+  facingMode: BIOMETRIC_CAMERA_CONFIG.facingMode,
+  width: { ideal: BIOMETRIC_CAMERA_CONFIG.width, min: BIOMETRIC_CAMERA_CONFIG.minWidth },
+  height: { ideal: BIOMETRIC_CAMERA_CONFIG.height, min: BIOMETRIC_CAMERA_CONFIG.minHeight },
+  aspectRatio: { ideal: BIOMETRIC_CAMERA_CONFIG.aspectRatio },
+  frameRate: { ideal: 30, max: 30 },
+};
+
+export function validateBiometricCameraFrame(width: number, height: number) {
+  const longSide = Math.max(width, height);
+  const shortSide = Math.min(width, height);
+  return {
+    minimumSupported: longSide >= 640 && shortSide >= 480,
+    preferred: longSide >= 1280 && shortSide >= 720,
+    fourByThreeFamily: Math.abs((longSide / Math.max(shortSide, 1)) - (4 / 3)) <= 0.12,
+  };
+}
 
 /** Shared detector options – keep identical everywhere */
 export const FACE_DETECT_OPTIONS = {
