@@ -602,136 +602,31 @@ export const attendanceRouter = router({
         }),
 
     verifyFace: protectedProcedure
-        .input(z.object({
-            selfieBase64: z.string(),
-        }))
+        .input(z.object({ selfieBase64: z.string().min(100).max(6_000_000).refine(value => /^data:image\/(jpeg|png|webp);base64,/.test(value), 'A camera image is required') }))
         .mutation(async ({ ctx, input }) => {
-            const FACE_API_URL = process.env.DEV_FACE_API_URL || process.env.FACE_API_URL || 'http://localhost:8000'
-
+            const threshold = Number(process.env.FACE_MATCH_COSINE_THRESHOLD ?? '0.88')
+            if (!Number.isFinite(threshold) || threshold <= 0 || threshold >= 1) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Face verification threshold is invalid.' })
             try {
-                // 1. Fetch user profile with both 512-d and 128-d embeddings
-                const profile = await ctx.db.query.profiles.findFirst({
-                    where: eq(profiles.id, ctx.profile.id),
-                    columns: { id: true, face_embedding: true, face_embedding_512: true, avatar_url: true }
-                })
-
-                if (!profile) {
-                    throw new TRPCError({
-                        code: 'NOT_FOUND',
-                        message: 'Employee profile not found'
-                    })
-                }
-
-                // 2. Extract selfie embedding via Universal FaceServiceClient (supports REST & Gradio SSE)
-                let selfieEmbedding: number[] = []
-                let selfieEmbedding512: number[] | null = null
-                let diagnostics: any = null
-                let mockFallbackUsed = false
-                try {
-                    const result = await FaceServiceClient.extract(input.selfieBase64)
-                    diagnostics = result.diagnostics || null
-
-                    if (!result.success || (!result.embedding && !result.embedding_512 && !result.embedding_128)) {
-                        if (result.error_code === 'SERVICE_UNREACHABLE' && (process.env.NODE_ENV === 'development' || process.env.FACE_API_MOCK === 'true')) {
-                            console.warn('⚠️ Python Face Service unreachable. Falling back to development mock matching.')
-                            mockFallbackUsed = true
-                        } else {
-                            const tip = result.troubleshooting_tip ? ` (${result.troubleshooting_tip})` : ''
-                            throw new TRPCError({
-                                code: 'BAD_REQUEST',
-                                message: `${result.error_message || 'No face detected in selfie'}${tip}`
-                            })
-                        }
-                    } else {
-                        selfieEmbedding512 = result.embedding_512 || (result.embedding?.length === 512 ? result.embedding : null)
-                        selfieEmbedding = result.embedding_128 || result.embedding || []
-                    }
-                } catch (e: any) {
-                    if (e instanceof TRPCError) throw e
-                    throw new TRPCError({
-                        code: 'BAD_REQUEST',
-                        message: e.message || 'Face extraction failed on selfie'
-                    })
-                }
-
-                if (mockFallbackUsed) {
-                    return {
-                        matched: true,
-                        similarity: 0.95,
-                        distance: 0.05,
-                        is_live: true,
-                        diagnostics: { mock: true },
-                        error: undefined
-                    }
-                }
-
-                // 3. Get stored profile face embedding (prefer 512-d ArcFace, fallback to 128-d)
-                const stored512 = (profile as any).face_embedding_512 as number[] | null
-                const stored128 = profile.face_embedding as number[] | null
-
-                let matched = false
-                let similarity = 0
-                let distance = 0
-
-                if (stored512 && stored512.length === 512 && selfieEmbedding512 && selfieEmbedding512.length === 512) {
-                    // Cosine similarity for 512-d unit vectors
-                    let dot = 0
-                    for (let i = 0; i < 512; i++) {
-                        dot += stored512[i] * selfieEmbedding512[i]
-                    }
-                    similarity = Math.max(0, Math.min(1, dot))
-                    distance = 1 - similarity
-                    matched = similarity >= 0.65
-                } else if (stored128 && stored128.length === 128 && selfieEmbedding.length === 128) {
-                    // Euclidean distance for 128-d vectors
-                    let sum = 0
-                    for (let i = 0; i < 128; i++) {
-                        const diff = selfieEmbedding[i] - stored128[i]
-                        sum += diff * diff
-                    }
-                    distance = Math.sqrt(sum)
-                    similarity = Math.max(0, 1 - distance)
-                    matched = distance < 0.50
-                } else if (!stored512 && !stored128) {
-                    throw new TRPCError({
-                        code: 'BAD_REQUEST',
-                        message: 'No profile photo registered. Please upload a profile photo first.'
-                    })
-                } else {
-                    // Vector format fallback comparison via /compare
-                    try {
-                        const cmpResp = await fetch(`${FACE_API_URL}/compare`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                embedding1: selfieEmbedding512 || selfieEmbedding,
-                                embedding2: stored512 || stored128
-                            })
-                        })
-                        if (cmpResp.ok) {
-                            const cmpData = await cmpResp.json()
-                            matched = cmpData.matched
-                            similarity = cmpData.similarity
-                            distance = cmpData.distance
-                        }
-                    } catch {}
-                }
-
-                return {
-                    matched,
-                    similarity: Math.round(similarity * 1000) / 1000,
-                    distance: Math.round(distance * 1000) / 1000,
-                    is_live: diagnostics?.is_live ?? true,
-                    diagnostics,
-                    error: matched ? undefined : `Face does not match profile photo (${(similarity * 100).toFixed(0)}% similarity).`
-                }
-
-            } catch (err) {
-                if (err instanceof TRPCError) throw err
-                throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: err instanceof Error ? err.message : 'Unknown verification error'
-                })
+                const profile = await ctx.db.query.profiles.findFirst({ where: eq(profiles.id, ctx.profile.id), columns: { id: true, face_embedding_512: true } })
+                if (!profile) throw new TRPCError({ code: 'NOT_FOUND', message: 'Employee profile not found.' })
+                const result = await FaceServiceClient.extract(input.selfieBase64)
+                const selfie = result.embedding_512 || (result.embedding?.length === 512 ? result.embedding : null)
+                if (!result.success || !result.face_detected || result.face_count !== 1 || !selfie || selfie.length !== 512) throw new TRPCError({ code: 'BAD_REQUEST', message: result.error_message || 'Exactly one clear face is required.' })
+                if (result.is_live !== true) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Liveness verification failed. Please retake your selfie.' })
+                const stored = profile.face_embedding_512 as number[] | null
+                if (!stored || stored.length !== 512 || !stored.every(Number.isFinite)) throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Your approved profile has no valid biometric template. Please submit a new profile photo.' })
+                const dot = selfie.reduce((sum, value, index) => sum + value * stored[index], 0)
+                const selfieNorm = Math.sqrt(selfie.reduce((sum, value) => sum + value * value, 0))
+                const storedNorm = Math.sqrt(stored.reduce((sum, value) => sum + value * value, 0))
+                if (!selfieNorm || !storedNorm) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Invalid biometric template.' })
+                const rawCosine = dot / (selfieNorm * storedNorm)
+                const similarity = Math.max(0, Math.min(1, rawCosine))
+                const distance = Math.sqrt(Math.max(0, 2 - (2 * rawCosine)))
+                const matched = similarity >= threshold
+                return { matched, similarity: Math.round(similarity * 1000) / 1000, distance: Math.round(distance * 1000) / 1000, threshold, is_live: true, diagnostics: result.diagnostics, error: matched ? undefined : 'Face does not match the approved profile photo.' }
+            } catch (error) {
+                if (error instanceof TRPCError) throw error
+                throw new TRPCError({ code: 'BAD_REQUEST', message: error instanceof Error ? error.message : 'Face verification failed.' })
             }
         }),
 })
