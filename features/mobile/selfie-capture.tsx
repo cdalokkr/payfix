@@ -18,10 +18,10 @@ import {
     ScanFace as IconScanFace,
     AlertTriangle as IconAlertTriangle
 } from "lucide-react"
-import { format } from "date-fns"
 import { Slider } from "@/components/ui/slider"
 import { FaceVerificationService } from "@/lib/services/face-verification.service"
 import { OfflineSyncService } from "@/lib/services/offline-sync.service"
+import { BIOMETRIC_CAMERA_CONSTRAINTS, captureBiometricFrame } from "@/lib/biometrics/camera"
 
 interface SelfieCaptureProps {
     profileImageUrl: string | null
@@ -143,20 +143,11 @@ export function SelfieCapture({
         }
 
         try {
-            // Request Full HD (1080p) for clearer selfies, fallback to basic video on retry
-            const constraints: MediaStreamConstraints = retryCount === 0 ? {
-                video: {
-                    facingMode: 'user',
-                    width: { ideal: 1920 },
-                    height: { ideal: 1080 },
-                },
+            // Use one camera contract on every biometric screen. The actual frame is checked again at capture time.
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: BIOMETRIC_CAMERA_CONSTRAINTS,
                 audio: false,
-            } : {
-                video: { facingMode: 'user' },
-                audio: false
-            }
-
-            const stream = await navigator.mediaDevices.getUserMedia(constraints)
+            })
 
             if (!isMounted.current) {
                 stream.getTracks().forEach(track => track.stop())
@@ -237,57 +228,19 @@ export function SelfieCapture({
         }
     }, [zoom, status])
 
-    // Capture photo
+    // Preserve the full camera frame. The server owns face cropping and alignment.
     const capturePhoto = useCallback(() => {
         if (!videoRef.current || !canvasRef.current || status !== 'streaming') return
-
-        const video = videoRef.current
-        const canvas = canvasRef.current
-        const ctx = canvas.getContext('2d')
-        if (!ctx) return
-
-        // 320×320: optimized for fast server-side processing on mobile
-        canvas.width = 320
-        canvas.height = 320
-
-        const vw = video.videoWidth
-        const vh = video.videoHeight
-        const size = Math.min(vw, vh)
-        const sx = (vw - size) / 2
-        const sy = (vh - size) / 2
-
-        ctx.save()
-        ctx.translate(canvas.width, 0)
-        ctx.scale(-1, 1)
-        ctx.drawImage(video, sx, sy, size, size, 0, 0, canvas.width, canvas.height)
-        ctx.restore()
-
-        const now = new Date()
-        const timestamp = format(now, "dd MMM yyyy, hh:mm:ss a")
-
-        // Draw modern timestamp pill (scaled to 320px canvas)
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
-        const pillWidth = 200
-        const pillHeight = 28
-        const pillX = (canvas.width - pillWidth) / 2
-        const pillY = canvas.height - 42
-
-        // Rounded rect for pill
-        ctx.beginPath()
-        ctx.roundRect(pillX, pillY, pillWidth, pillHeight, 14)
-        ctx.fill()
-
-        ctx.fillStyle = '#ffffff'
-        ctx.font = 'bold 12px Inter, system-ui'
-        ctx.textAlign = 'center'
-        ctx.fillText(timestamp, canvas.width / 2, pillY + 19)
-
-        // Compress image to quality 0.7 for tiny payload size
-        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.7)
-        setCapturedImage(imageDataUrl)
-        setCapturedAt(now)
-        setStatus('captured')
-        stopCamera()
+        try {
+            const frame = captureBiometricFrame(videoRef.current, canvasRef.current)
+            setCapturedImage(frame.dataUrl)
+            setCapturedAt(new Date())
+            setStatus('captured')
+            stopCamera()
+        } catch (error) {
+            setStatus('error')
+            setErrorMessage(error instanceof Error ? error.message : 'Could not capture a verification image.')
+        }
     }, [stopCamera, status])
 
     const retakePhoto = useCallback(() => {
@@ -302,26 +255,10 @@ export function SelfieCapture({
         // Start verification
         setStatus('verifying')
 
-        // Check if offline
-        const isOffline = OfflineSyncService.isOffline()
-        if (isOffline) {
-            console.log('[SELFIE] Client is offline, bypassing server verification and saving locally')
-            setSimilarity(1.0)
-            setStatus('verified')
-            setApiStatus('pending')
-            try {
-                await onSubmitAttendance(capturedImage)
-                setApiStatus('success')
-                // Optimistically succeed after a tiny visual delay
-                setTimeout(() => {
-                    if (isMounted.current) {
-                        onVerified({ matched: true, similarity: 1.0 })
-                    }
-                }, 500)
-            } catch (error) {
-                setApiStatus('error')
-                setApiError('Failed to record attendance locally')
-            }
+        // Face-only attendance cannot be treated as verified while offline.
+        if (OfflineSyncService.isOffline()) {
+            setStatus('verify_failed')
+            setErrorMessage('An internet connection is required to verify your identity before attendance can be recorded.')
             return
         }
 
