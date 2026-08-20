@@ -19,7 +19,7 @@ import {
     Clock as IconClock,
     Phone as IconPhone,
 } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
+import { BIOMETRIC_CAMERA_CONSTRAINTS, captureBiometricFrame } from "@/lib/biometrics/camera"
 
 interface ProfileData {
     fullName: string
@@ -40,8 +40,6 @@ interface ProfilePhotoCaptureProps {
 
 export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: ProfilePhotoCaptureProps) {
     const router = useRouter()
-    const supabase = createClient()
-    const updateProfilePicture = trpc.profile.updateProfilePicture.useMutation()
     const createPhotoRequest = trpc.profile.createPhotoUpdateRequest.useMutation()
 
     // Check if there's a pending photo request
@@ -113,21 +111,11 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         }
 
         try {
-            // Full HD for clearer selfies with better visibility
-            const constraints: MediaStreamConstraints = retryCount === 0 ? {
-                video: {
-                    facingMode: 'user',
-                    width: { ideal: 1920, min: 1280 },
-                    height: { ideal: 1080, min: 720 },
-                },
+            // Use the shared camera contract. Capture validates the actual granted stream.
+            const gumPromise = navigator.mediaDevices.getUserMedia({
+                video: BIOMETRIC_CAMERA_CONSTRAINTS,
                 audio: false,
-            } : {
-                video: { facingMode: 'user' },
-                audio: false
-            }
-
-            // 10s timeout for GUM
-            const gumPromise = navigator.mediaDevices.getUserMedia(constraints)
+            })
             const timeoutPromise = new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('GUM_TIMEOUT')), 10000)
             )
@@ -199,40 +187,18 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         }
     }, [stopCamera])
 
-    // Capture photo
+    // Keep the full source frame; the server creates the padded avatar crop after validation.
     const capturePhoto = useCallback(() => {
         if (!videoRef.current || !canvasRef.current || status !== 'streaming') return
-
-        const video = videoRef.current
-        const canvas = canvasRef.current
-        const ctx = canvas.getContext('2d')
-        if (!ctx) return
-
-        // Higher resolution for clearer photos (720x720 for quality)
-        canvas.width = 720
-        canvas.height = 720
-
-        // Source dimensions
-        const vw = video.videoWidth
-        const vh = video.videoHeight
-        const size = Math.min(vw, vh)
-
-        // Calculate crop for center square
-        const sx = (vw - size) / 2
-        const sy = (vh - size) / 2
-
-        // Draw cropped square video frame
-        ctx.save()
-        // Mirror if it's the user camera
-        ctx.translate(canvas.width, 0)
-        ctx.scale(-1, 1)
-        ctx.drawImage(video, sx, sy, size, size, 0, 0, canvas.width, canvas.height)
-        ctx.restore()
-        // Use 0.85 quality for good compression with minimal visual difference
-        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.85)
-        setCapturedImage(imageDataUrl)
-        setStatus('captured')
-        stopCamera()
+        try {
+            const frame = captureBiometricFrame(videoRef.current, canvasRef.current)
+            setCapturedImage(frame.dataUrl)
+            setStatus('captured')
+            stopCamera()
+        } catch (error) {
+            setStatus('error')
+            setErrorMessage(error instanceof Error ? error.message : 'Could not capture a profile image.')
+        }
     }, [stopCamera, status])
 
     // Retake photo
@@ -267,11 +233,6 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
             const formData = new FormData()
             formData.append('file', blob, 'avatar.jpg')
             formData.append('profileId', profileId)
-            // Use different path for pending photos
-            if (!isFirstTimeUpload) {
-                formData.append('isPending', 'true')
-            }
-
             const response = await fetch('/api/upload-avatar', {
                 method: 'POST',
                 body: formData,
@@ -287,33 +248,16 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
             addLog('Upload complete!')
             addLog(`URL: ${result.path?.slice(0, 40)}...`)
 
-            // Handle differently based on first-time vs update
-            if (isFirstTimeUpload) {
-                // First-time: Direct update (current behavior)
-                setStatus('success')
-                toast.success('Profile photo updated successfully!')
-
-                setTimeout(() => {
-                    onSuccess?.()
-                    router.push('/mobile')
-                    router.refresh()
-                }, 1500)
-            } else {
-                // Subsequent update: Create pending request
-                addLog('Creating approval request...')
-                await createPhotoRequest.mutateAsync({
-                    pendingPhotoUrl: result.path
-                })
-
-                setStatus('success')
-                toast.success('Photo submitted for admin approval!')
-
-                setTimeout(() => {
-                    onSuccess?.()
-                    router.push('/mobile')
-                    router.refresh()
-                }, 1500)
-            }
+            // An avatar becomes active only through the existing admin approval workflow.
+            addLog('Creating approval request...')
+            await createPhotoRequest.mutateAsync({ pendingPhotoUrl: result.path })
+            setStatus('success')
+            toast.success('Photo submitted for admin approval!')
+            setTimeout(() => {
+                onSuccess?.()
+                router.push('/mobile')
+                router.refresh()
+            }, 1500)
         } catch (error: any) {
             const errMsg = error?.message || 'Unknown error'
             addLog(`ERROR: ${errMsg}`)
@@ -323,7 +267,7 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         } finally {
             setIsUploading(false)
         }
-    }, [capturedImage, profileId, router, onSuccess, addLog, isFirstTimeUpload, createPhotoRequest])
+    }, [capturedImage, profileId, router, onSuccess, addLog, createPhotoRequest])
 
     // Handle back button
     const handleBack = useCallback(() => {
@@ -636,7 +580,7 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                                                 transition={{ delay: 0.1 }}
                                                 className="text-white font-bold text-base"
                                             >
-                                                {isFirstTimeUpload ? 'Photo Updated!' : 'Photo Submitted for Approval!'}
+                                                'Photo Submitted for Approval!'
                                             </motion.p>
                                             <motion.p
                                                 initial={{ opacity: 0, x: -10 }}
@@ -644,9 +588,7 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                                                 transition={{ delay: 0.2 }}
                                                 className="text-slate-400 text-sm mt-0.5"
                                             >
-                                                {isFirstTimeUpload
-                                                    ? 'Redirecting to dashboard...'
-                                                    : 'An admin will review your request soon.'}
+                                                'An admin will review your request soon.'
                                             </motion.p>
                                         </div>
                                         <motion.div
