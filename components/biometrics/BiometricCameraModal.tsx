@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { X, RefreshCw, AlertCircle } from 'lucide-react';
-import { BIOMETRIC_CAMERA_CONFIG } from '@/lib/face-pipeline';
+import { BIOMETRIC_CAMERA_CONSTRAINTS, validateBiometricCameraFrame } from '@/lib/face-pipeline';
 import { MediaPipeMeshService, InMaskLivenessStatus } from '@/lib/services/mediapipe-mesh.service';
 import { FaceApiBrowserService } from '@/lib/services/faceapi-browser.service';
 
@@ -136,25 +136,11 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
     isEvaluatingRef.current = false;
 
     try {
-      const primaryConstraints: MediaStreamConstraints = {
-        video: {
-          facingMode: 'user',
-          width: { ideal: 720 },
-          height: { ideal: 960 },
-          aspectRatio: { ideal: 0.75 },
-        },
+      // Do not silently fall back to an unknown low-resolution camera for biometric capture.
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: BIOMETRIC_CAMERA_CONSTRAINTS,
         audio: false,
-      };
-
-      let stream: MediaStream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia(primaryConstraints);
-      } catch (e) {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user' },
-          audio: false,
-        });
-      }
+      });
 
       if (!isMountedRef.current) {
         stream.getTracks().forEach((t) => t.stop());
@@ -228,6 +214,18 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
     let lastEvalTime = 0;
 
     const loop = async (time: number) => {
+      if (
+        videoRef.current &&
+        videoRef.current.videoWidth > 0 &&
+        !validateBiometricCameraFrame(videoRef.current.videoWidth, videoRef.current.videoHeight).minimumSupported &&
+        !isCapturingRef.current
+      ) {
+        stopStream();
+        setHasError(true);
+        setErrorMessage('Camera resolution is below the 640 × 480 verification minimum. Please use another device.');
+        return;
+      }
+
       if (
         videoRef.current &&
         videoRef.current.videoWidth > 0 &&
