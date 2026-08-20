@@ -353,12 +353,12 @@ export class ProfileService {
 
             // Do not trust browser-provided vectors. Rebuild the template from the pending photo on the server.
             const imageResponse = await fetch(request.pending_photo_url)
-            if (!imageResponse.ok) throwAppError('BAD_REQUEST', 'Could not load the pending profile photo for verification.')
+            if (!imageResponse.ok) throwAppError('VALIDATION_FAILED', 'Could not load the pending profile photo for verification.')
             const imageBase64 = Buffer.from(await imageResponse.arrayBuffer()).toString('base64')
             const extraction = await FaceServiceClient.extract(imageBase64)
             const serverEmbedding = extraction.embedding_512 || (extraction.embedding?.length === 512 ? extraction.embedding : null)
-            if (!extraction.success || !extraction.face_detected || extraction.face_count !== 1 || !serverEmbedding || serverEmbedding.length !== 512) throwAppError('BAD_REQUEST', extraction.error_message || 'The pending photo does not contain one usable face.')
-            if (extraction.is_live !== true) throwAppError('BAD_REQUEST', 'Liveness verification failed for the pending profile photo.')
+            if (!extraction.success || !extraction.face_detected || extraction.face_count !== 1 || !serverEmbedding || serverEmbedding.length !== 512) throwAppError('VALIDATION_FAILED', extraction.error_message || 'The pending photo does not contain one usable face.')
+            if (extraction.is_live !== true) throwAppError('VALIDATION_FAILED', 'Liveness verification failed for the pending profile photo.')
             updatePayload.face_embedding_512 = serverEmbedding
             updatePayload.face_quality_score = extraction.quality_score || 1.0
             updatePayload.face_enrolled_at = new Date()
