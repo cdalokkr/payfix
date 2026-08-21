@@ -113,12 +113,9 @@ export const MediaPipeMeshService = {
                     'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
                 );
 
-                onProgress?.(60, 'Initializing 478 3D Face Landmarker (GPU Delegate)...');
-                faceLandmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
-                    baseOptions: {
-                        modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`,
-                        delegate: 'GPU',
-                    },
+                const modelAssetPath = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
+                const createLandmarker = (delegate: 'GPU' | 'CPU') => FaceLandmarker.createFromOptions(filesetResolver, {
+                    baseOptions: { modelAssetPath, delegate },
                     runningMode: 'VIDEO',
                     numFaces: 1,
                     minFaceDetectionConfidence: 0.20,
@@ -128,10 +125,23 @@ export const MediaPipeMeshService = {
                     outputFacialTransformationMatrixes: true,
                 });
 
+                // Mobile Chrome can advertise WebGL while refusing the MediaPipe GPU delegate.
+                // A working CPU landmarker is preferable to a static overlay and no blink capture.
+                onProgress?.(60, 'Initializing 3D face landmarks...');
+                try {
+                    faceLandmarker = await createLandmarker('GPU');
+                    console.log('✅ [MediaPipe] FaceLandmarker initialized with GPU.');
+                } catch (gpuError) {
+                    console.warn('[MediaPipe] GPU delegate unavailable; switching to CPU landmarks.', gpuError);
+                    onProgress?.(75, 'GPU unavailable — starting CPU face landmarks...');
+                    faceLandmarker = await createLandmarker('CPU');
+                    console.log('✅ [MediaPipe] FaceLandmarker initialized with CPU fallback.');
+                }
+
                 onProgress?.(100, 'MediaPipe 3D Vision Ready!');
-                console.log('✅ [MediaPipe] 3D FaceLandmarker GPU delegate initialized.');
                 return faceLandmarker;
             } catch (err) {
+                console.error('[MediaPipe] FaceLandmarker initialization failed:', err);
                 initPromise = null;
                 return null;
             }
