@@ -343,6 +343,15 @@ export class ProfileService {
         if (!request) throwAppError('NOT_FOUND', 'Photo request not found')
         if (request.status !== 'pending') throwAppError('FORBIDDEN', 'This request has already been reviewed')
 
+        let verification: {
+            imageBytes: number
+            mimeType: string | null
+            faceCount: number
+            embeddingDimensions: number
+            livenessPassed: boolean
+            backend: string
+        } | undefined
+
         if (action === 'approve') {
             const updatePayload: any = {
                 avatar_url: request.pending_photo_url,
@@ -378,6 +387,14 @@ export class ProfileService {
                 throwAppError('VALIDATION_FAILED', 'Liveness verification failed for the pending profile photo.')
             }
             console.info('[ProfileService] Pending selfie verified for approval', verificationLog)
+            verification = {
+                imageBytes: imageBytes.byteLength,
+                mimeType: imageResponse.headers.get('content-type'),
+                faceCount: extraction.face_count,
+                embeddingDimensions: serverEmbedding.length,
+                livenessPassed: extraction.is_live === true,
+                backend: extraction.diagnostics?.backend_engine || 'Not reported',
+            }
             updatePayload.face_embedding_512 = serverEmbedding
             updatePayload.face_quality_score = extraction.quality_score || 1.0
             updatePayload.face_enrolled_at = new Date()
@@ -477,6 +494,6 @@ export class ProfileService {
             })
         }
 
-        return { success: true, action }
+        return { success: true, action, verification }
     }
 }
