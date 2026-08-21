@@ -354,11 +354,30 @@ export class ProfileService {
             // Do not trust browser-provided vectors. Rebuild the template from the pending photo on the server.
             const imageResponse = await fetch(request.pending_photo_url)
             if (!imageResponse.ok) throwAppError('VALIDATION_FAILED', 'Could not load the pending profile photo for verification.')
-            const imageBase64 = Buffer.from(await imageResponse.arrayBuffer()).toString('base64')
+            const imageBytes = await imageResponse.arrayBuffer()
+            const imageBase64 = Buffer.from(imageBytes).toString('base64')
             const extraction = await FaceServiceClient.extract(imageBase64)
             const serverEmbedding = extraction.embedding_512 || (extraction.embedding?.length === 512 ? extraction.embedding : null)
-            if (!extraction.success || !extraction.face_detected || extraction.face_count !== 1 || !serverEmbedding || serverEmbedding.length !== 512) throwAppError('VALIDATION_FAILED', extraction.error_message || 'The pending photo does not contain one usable face.')
-            if (extraction.is_live !== true) throwAppError('VALIDATION_FAILED', 'Liveness verification failed for the pending profile photo.')
+            const verificationLog = {
+                requestId,
+                imageBytes: imageBytes.byteLength,
+                contentType: imageResponse.headers.get('content-type'),
+                faceDetected: extraction.face_detected,
+                faceCount: extraction.face_count,
+                embeddingDimensions: serverEmbedding?.length || 0,
+                livenessPassed: extraction.is_live,
+                errorCode: extraction.error_code,
+                backend: extraction.diagnostics?.backend_engine,
+            }
+            if (!extraction.success || !extraction.face_detected || extraction.face_count !== 1 || !serverEmbedding || serverEmbedding.length !== 512) {
+                console.warn('[ProfileService] Pending selfie verification rejected', verificationLog)
+                throwAppError('VALIDATION_FAILED', extraction.error_message || 'The pending photo does not contain one usable face.')
+            }
+            if (extraction.is_live !== true) {
+                console.warn('[ProfileService] Pending selfie liveness rejected', verificationLog)
+                throwAppError('VALIDATION_FAILED', 'Liveness verification failed for the pending profile photo.')
+            }
+            console.info('[ProfileService] Pending selfie verified for approval', verificationLog)
             updatePayload.face_embedding_512 = serverEmbedding
             updatePayload.face_quality_score = extraction.quality_score || 1.0
             updatePayload.face_enrolled_at = new Date()
