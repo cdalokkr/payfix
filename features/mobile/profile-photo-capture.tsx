@@ -37,6 +37,15 @@ interface ProfileData {
     designation?: string | null
 }
 
+interface CaptureDiagnostics {
+    cameraResolution: string
+    outputResolution: string
+    outputMime: string
+    outputBytes: number
+    cropMode: string
+    serverStatus?: string
+}
+
 interface ProfilePhotoCaptureProps {
     profileId: string
     profileData: ProfileData
@@ -62,6 +71,7 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
     const [capturedImage, setCapturedImage] = useState<string | null>(null)
     const [isUploading, setIsUploading] = useState(false)
     const [debugLogs, setDebugLogs] = useState<string[]>([])
+    const [captureDiagnostics, setCaptureDiagnostics] = useState<CaptureDiagnostics | null>(null)
     const statusRef = useRef(status)
 
     // Debug logger
@@ -78,6 +88,23 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
     const videoRef = useRef<HTMLVideoElement>(null)
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const streamRef = useRef<MediaStream | null>(null)
+
+    const recordCaptureDiagnostics = useCallback((dataUrl: string, cropMode: string) => {
+        const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/)
+        const cameraResolution = videoRef.current?.videoWidth && videoRef.current?.videoHeight
+            ? `${videoRef.current.videoWidth} × ${videoRef.current.videoHeight}`
+            : 'Unavailable'
+        const outputBytes = match ? Math.floor((match[2].length * 3) / 4) : 0
+        const image = new Image()
+        image.onload = () => setCaptureDiagnostics({
+            cameraResolution,
+            outputResolution: `${image.naturalWidth} × ${image.naturalHeight}`,
+            outputMime: match?.[1] || 'Unknown',
+            outputBytes,
+            cropMode,
+        })
+        image.src = dataUrl
+    }, [])
 
     // Stop camera stream
     const stopCamera = useCallback(() => {
@@ -209,11 +236,12 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
 
     // Auto-capture triggered on verified in-mask eye blink
     const handleAutoCapture = useCallback((dataUrl: string) => {
+        recordCaptureDiagnostics(dataUrl, 'Landmark-guided 512×512 capture')
         setCapturedImage(dataUrl)
         setStatus('captured')
         stopCamera()
         toast.success('Blink detected! Photo captured 📸')
-    }, [stopCamera])
+    }, [recordCaptureDiagnostics, stopCamera])
 
     // Capture photo matching live stream orientation 100% (512x512 HD face crop)
     const capturePhoto = useCallback(async () => {
@@ -236,9 +264,9 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
                     ctx.imageSmoothingQuality = 'high'
                     const vw = video.videoWidth || 720
                     const vh = video.videoHeight || 960
-                    const squareSize = Math.min(vw, vh) * 0.66
+                    const squareSize = Math.min(vw, vh) * 0.92
                     const sx = (vw - squareSize) / 2
-                    const sy = Math.max(0, (vh - squareSize) * 0.20)
+                    const sy = (vh - squareSize) / 2
                     ctx.save()
                     ctx.translate(512, 0)
                     ctx.scale(-1, 1)
@@ -249,6 +277,7 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
             }
 
             if (final512Url) {
+                recordCaptureDiagnostics(final512Url, cropResult?.landmarks?.length ? 'Landmark-guided 512×512 capture' : 'Wide safe fallback 512×512 capture')
                 setCapturedImage(final512Url)
                 setStatus('captured')
                 stopCamera()
@@ -256,7 +285,7 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
         } catch (err) {
             console.error('Capture error:', err)
         }
-    }, [stopCamera, status])
+    }, [recordCaptureDiagnostics, stopCamera, status])
 
 
 
@@ -304,10 +333,14 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
             const result = await response.json()
 
             if (!response.ok) {
-                addLog(`SERVER ERROR: ${result.error}`)
+                const serverStatus = [result.code, result.error].filter(Boolean).join(' — ') || 'Unknown server rejection'
+                setCaptureDiagnostics(previous => previous ? { ...previous, serverStatus } : previous)
+                addLog(`SERVER ERROR: ${serverStatus}`)
+                if (result.diagnostics) addLog(`Service diagnostics: ${JSON.stringify(result.diagnostics)}`)
                 throw new Error(result.error || 'Upload failed')
             }
 
+            setCaptureDiagnostics(previous => previous ? { ...previous, serverStatus: 'Accepted: one face, server liveness passed, 512-d template pending approval' } : previous)
             addLog('Upload complete!')
             addLog(`URL: ${result.path?.slice(0, 40)}...`)
 
@@ -397,6 +430,22 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
                             </div>
                         </div>
                     </div>
+
+
+                    {captureDiagnostics && (
+                        <details open={status === 'error'} className="rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2.5 text-left">
+                            <summary className="cursor-pointer text-xs font-bold text-sky-300">Biometric capture details</summary>
+                            <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-mono text-slate-300">
+                                <dt className="text-slate-500">Camera</dt><dd>{captureDiagnostics.cameraResolution}</dd>
+                                <dt className="text-slate-500">Output</dt><dd>{captureDiagnostics.outputResolution}</dd>
+                                <dt className="text-slate-500">Format</dt><dd>{captureDiagnostics.outputMime}</dd>
+                                <dt className="text-slate-500">Payload</dt><dd>{Math.round(captureDiagnostics.outputBytes / 1024)} KB</dd>
+                                <dt className="text-slate-500">Crop</dt><dd className="col-span-1">{captureDiagnostics.cropMode}</dd>
+                            </dl>
+                            {captureDiagnostics.serverStatus && <p className="mt-2 break-words text-[10px] text-amber-200">Server: {captureDiagnostics.serverStatus}</p>}
+                            {debugLogs.length > 0 && <pre className="mt-2 max-h-24 overflow-auto whitespace-pre-wrap border-t border-slate-700 pt-2 text-[9px] leading-4 text-slate-400">{debugLogs.join('\n')}</pre>}
+                        </details>
+                    )}
 
                     {status !== 'captured' && status !== 'submitted' && status !== 'success' && status !== 'uploading' && (
                         <Button
