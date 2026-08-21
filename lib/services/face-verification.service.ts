@@ -21,6 +21,13 @@ export interface FaceVerificationResult {
     isLive?: boolean;
     error?: string;
     alignedCropDataUrl?: string;
+    threshold?: number;
+    verification?: {
+        faceCount: number;
+        embeddingDimensions: number;
+        livenessPassed: boolean;
+        backend: string;
+    };
 }
 
 // In-memory cache for profile descriptors (URL -> Float32Array)
@@ -198,6 +205,8 @@ export const FaceVerificationService = {
                     method: 'arcface-512',
                     debugLog,
                     isLive: apiData.is_live === true,
+                    threshold: Number(apiData.threshold || 0),
+                    verification: apiData.verification,
                     error: apiData.matched ? undefined : (apiData.error || 'Face verification was not successful.'),
                 };
             }
