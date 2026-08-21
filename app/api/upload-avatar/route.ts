@@ -63,7 +63,22 @@ export async function POST(request: NextRequest) {
         if (uploadError) return NextResponse.json({ error: 'Could not store the profile image.' }, { status: 500 })
         const { data: { publicUrl } } = adminClient.storage.from('avatars').getPublicUrl(fileName)
         // Only the admin approval service can activate this image and its biometric template.
-        return NextResponse.json({ success: true, path: publicUrl, status: 'pending_review', message: 'Photo uploaded for admin review.', diagnostics: extraction.diagnostics })
+        return NextResponse.json({
+            success: true,
+            path: publicUrl,
+            status: 'pending_review',
+            message: 'Photo uploaded for admin review.',
+            diagnostics: extraction.diagnostics,
+            verification: {
+                imageBytes: file.size,
+                mimeType: contentType,
+                storedOriginalPortrait: true,
+                faceCount: extraction.face_count,
+                embeddingDimensions: embedding.length,
+                livenessPassed: extraction.is_live === true,
+                backend: extraction.diagnostics?.backend_engine || 'Not reported',
+            }
+        })
     } catch (error) {
         console.error('[UPLOAD-API] Error:', error)
         return NextResponse.json({ error: 'Upload failed.' }, { status: 500 })
