@@ -401,7 +401,7 @@ export const MediaPipeMeshService = {
                 const faceCenterY = (minY + (maxY - minY) / 2) * height;
 
                 const rawSize = Math.max(faceBoxW, faceBoxH);
-                const paddedSquareSize = rawSize * 1.50;
+                const paddedSquareSize = rawSize * 1.90; // preserves useful forehead, chin, and ear margin for server detection
 
                 const pts5 = this.extract5KeyPoints(rawLandmarks, width, height);
                 const dx = pts5[1].x - pts5[0].x;
@@ -482,7 +482,7 @@ export const MediaPipeMeshService = {
 
                     const faceCenterX = box.x + box.width / 2;
                     const faceCenterY = box.y + box.height / 2;
-                    const paddedSquareSize = Math.max(box.width, box.height) * 1.50;
+                    const paddedSquareSize = Math.max(box.width, box.height) * 1.90; // preserves useful forehead, chin, and ear margin for server detection
 
                     const canvas512 = document.createElement('canvas');
                     canvas512.width = 512;
@@ -537,7 +537,7 @@ export const MediaPipeMeshService = {
             console.warn('[MediaPipeMeshService] Frame processing error:', err);
         }
 
-        // Fail-Safe Center-Weighted 512x512 Crop (Guarantees full head, hair & ears, zero chest/torso)
+        // Wide fallback 512×512 crop. It is presentation-only; server verification remains authoritative.
         try {
             const width = (typeof HTMLVideoElement !== 'undefined' && videoOrCanvas instanceof HTMLVideoElement)
                 ? videoOrCanvas.videoWidth : (videoOrCanvas.width || (videoOrCanvas as HTMLImageElement).naturalWidth || 720);
@@ -545,9 +545,9 @@ export const MediaPipeMeshService = {
                 ? videoOrCanvas.videoHeight : (videoOrCanvas.height || (videoOrCanvas as HTMLImageElement).naturalHeight || 960);
 
             if (width > 0 && height > 0) {
-                const squareSize = Math.min(width, height) * 0.66;
+                const squareSize = Math.min(width, height) * 0.92;
                 const centerX = width / 2;
-                const centerY = height * 0.38; // Upper center for full head, hair & chin focus
+                const centerY = height * 0.50; // Avoid the historical over-zoomed fallback crop
 
                 const canvas512 = document.createElement('canvas');
                 canvas512.width = 512;
@@ -588,11 +588,11 @@ export const MediaPipeMeshService = {
                     hdAvatarCanvas: canvas512,
                     hdAvatarDataUrl: dataUrl512,
                     landmarks: [],
-                    faceScore: 0.90,
-                    isLive: true,
-                    isAlignedInMask: true,
-                    alignmentPrompt: 'Face captured',
-                    livenessScore: 0.90,
+                    faceScore: 0,
+                    isLive: false,
+                    isAlignedInMask: false,
+                    alignmentPrompt: 'Wide fallback crop — server verification required',
+                    livenessScore: 0,
                     headPose: { yaw: 0, pitch: 0, roll: 0 },
                     ear: 0.22,
                 };
