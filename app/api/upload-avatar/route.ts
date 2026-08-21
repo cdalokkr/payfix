@@ -31,8 +31,16 @@ export async function POST(request: NextRequest) {
         if (!hasSupportedImageSignature(new Uint8Array(arrayBuffer.slice(0, 12)))) return NextResponse.json({ error: 'The uploaded file is not a supported image.' }, { status: 400 })
         const extraction = await FaceServiceClient.extract(Buffer.from(arrayBuffer).toString('base64'))
         const embedding = extraction.embedding_512 || (extraction.embedding?.length === 512 ? extraction.embedding : null)
-        if (!extraction.success || !extraction.face_detected || extraction.face_count !== 1 || !embedding || embedding.length !== 512) return NextResponse.json({ error: extraction.error_message || 'Exactly one clear face is required.' }, { status: 400 })
-        if (extraction.is_live !== true) return NextResponse.json({ error: 'Liveness verification failed. Please capture a new selfie.' }, { status: 400 })
+        if (!extraction.success || !extraction.face_detected || extraction.face_count !== 1 || !embedding || embedding.length !== 512) {
+            return NextResponse.json({
+                error: extraction.error_message || 'Exactly one clear face is required.',
+                code: extraction.error_code || 'FACE_EXTRACTION_FAILED',
+                diagnostics: extraction.diagnostics,
+            }, { status: 400 })
+        }
+        if (extraction.is_live !== true) {
+            return NextResponse.json({ error: 'Liveness verification failed. Please capture a new selfie.', code: 'LIVENESS_FAILED', diagnostics: extraction.diagnostics }, { status: 400 })
+        }
 
         const cleanCrop = extraction.cropped_face_base64?.replace(/^data:image\/\w+;base64,/, '')
         const fileToUpload = cleanCrop ? Buffer.from(cleanCrop, 'base64') : Buffer.from(arrayBuffer)
@@ -44,7 +52,7 @@ export async function POST(request: NextRequest) {
         if (uploadError) return NextResponse.json({ error: 'Could not store the profile image.' }, { status: 500 })
         const { data: { publicUrl } } = adminClient.storage.from('avatars').getPublicUrl(fileName)
         // Only the admin approval service can activate this image and its biometric template.
-        return NextResponse.json({ success: true, path: publicUrl, status: 'pending_review', message: 'Photo uploaded for admin review.' })
+        return NextResponse.json({ success: true, path: publicUrl, status: 'pending_review', message: 'Photo uploaded for admin review.', diagnostics: extraction.diagnostics })
     } catch (error) {
         console.error('[UPLOAD-API] Error:', error)
         return NextResponse.json({ error: 'Upload failed.' }, { status: 500 })
