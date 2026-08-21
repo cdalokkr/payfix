@@ -6,8 +6,6 @@ import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import { trpc } from "@/lib/trpc/client"
-import { FaceApiBrowserService } from "@/lib/services/faceapi-browser.service"
-import { FaceVerificationService } from "@/lib/services/face-verification.service"
 import { MediaPipeMeshService } from "@/lib/services/mediapipe-mesh.service"
 import { BiometricCameraModal } from "@/components/biometrics/BiometricCameraModal"
 
@@ -276,41 +274,24 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
         setStatus('uploading')
 
         try {
-            addLog('Starting 512x512 HD face crop & upload...')
+            // The camera has already produced the only client-side 512×512 portrait.
+            // Do not recrop or trust a browser embedding here: the server validates, aligns,
+            // stores the pending photo, and regenerates the 512-d template on approval.
+            const uploadDataUrl = capturedImage
+            const dataUrlMatch = uploadDataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/)
+            if (!dataUrlMatch) throw new Error('Captured image format is invalid. Please retake the selfie.')
 
-            // 1. Convert captured photo to 512x512 HD upright face crop (+18% natural margin)
-            let uploadDataUrl = capturedImage;
-            let preExtracted512: number[] | null = null;
-
-            try {
-                // Strict 1.2s timeout guard: Never stall mobile upload if client WASM model is downloading
-                const extractPromise = FaceVerificationService.extractAligned512dDescriptor(capturedImage);
-                const timeoutPromise = new Promise<null>((res) => setTimeout(() => res(null), 1200));
-                const extracted = await Promise.race([extractPromise, timeoutPromise]);
-
-                if (extracted?.hdAvatarDataUrl || extracted?.cropDataUrl) {
-                    uploadDataUrl = extracted.hdAvatarDataUrl || extracted.cropDataUrl;
-                    if (extracted.embedding && extracted.embedding.length === 512) {
-                        preExtracted512 = extracted.embedding;
-                    }
-                    addLog('✅ Face cropped to 512x512 HD upright avatar (+18% margin)');
-                }
-            } catch (cropErr) {
-                console.warn('[ProfileUpload] Crop fallback to full image:', cropErr);
-            }
-
-            // 2. Convert data URL to blob (mobile compatible ~20KB)
-            const base64Data = uploadDataUrl.split(',')[1]
-            const byteCharacters = atob(base64Data)
+            const mimeType = dataUrlMatch[1]
+            const byteCharacters = atob(dataUrlMatch[2])
             const byteNumbers = new Array(byteCharacters.length)
             for (let i = 0; i < byteCharacters.length; i++) {
                 byteNumbers[i] = byteCharacters.charCodeAt(i)
             }
             const byteArray = new Uint8Array(byteNumbers)
-            const blob = new Blob([byteArray], { type: 'image/jpeg' })
-            addLog(`Avatar Size: ${Math.round(blob.size / 1024)}KB`)
+            const blob = new Blob([byteArray], { type: mimeType })
+            addLog(`Sending the captured 512×512 portrait directly (${Math.round(blob.size / 1024)}KB)`)
 
-            // 3. Send to server API route (uses service role, bypasses RLS)
+            // Send to server API route (uses service role, bypasses RLS)
             addLog('Sending to server...')
             const formData = new FormData()
             formData.append('file', blob, 'avatar.jpg')
