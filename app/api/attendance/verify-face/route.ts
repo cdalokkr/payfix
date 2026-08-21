@@ -5,108 +5,58 @@ import { profiles } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { FaceServiceClient } from '@/lib/face-service-client'
 
+const SELFIE_DATA_URL = /^data:image\/(jpeg|png|webp);base64,/
+
 export async function POST(request: NextRequest) {
     try {
-        const body = await request.json()
-        const { selfieBase64, profileEmbedding } = body
-
-        if (!selfieBase64) {
-            return NextResponse.json({ error: 'No selfie image provided' }, { status: 400 })
+        const { selfieBase64 } = await request.json()
+        if (typeof selfieBase64 !== 'string' || !SELFIE_DATA_URL.test(selfieBase64)) {
+            return NextResponse.json({ error: 'A JPEG, PNG, or WebP camera selfie is required.' }, { status: 400 })
         }
 
-        let stored512: number[] | null = null
-        let stored128: number[] | null = null
+        const supabase = await createServerSupabaseClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-        if (profileEmbedding && Array.isArray(profileEmbedding)) {
-            if (profileEmbedding.length === 512) stored512 = profileEmbedding
-            else if (profileEmbedding.length === 128) stored128 = profileEmbedding
+        const profile = await db.query.profiles.findFirst({
+            where: eq(profiles.id, user.id),
+            columns: { face_embedding_512: true },
+        })
+        const stored = profile?.face_embedding_512 as number[] | null
+        if (!stored || stored.length !== 512 || !stored.every(Number.isFinite)) {
+            return NextResponse.json({ error: 'Your approved profile has no valid biometric template. Please submit a new profile photo.' }, { status: 400 })
         }
 
-        // Fallback to database profile lookup if not provided in request body
-        if (!stored512 && !stored128) {
-            const supabase = await createServerSupabaseClient()
-            const { data: { user } } = await supabase.auth.getUser()
-            if (user) {
-                const profile = await db.query.profiles.findFirst({
-                    where: eq(profiles.id, user.id),
-                    columns: { face_embedding_512: true, face_embedding: true }
-                })
-                if (profile) {
-                    stored512 = profile.face_embedding_512 as number[] | null
-                    stored128 = profile.face_embedding as number[] | null
-                }
-            }
-        }
-
-        if (!stored512 && !stored128) {
+        const extraction = await FaceServiceClient.extract(selfieBase64)
+        const selfie = extraction.embedding_512 || (extraction.embedding?.length === 512 ? extraction.embedding : null)
+        if (!extraction.success || !extraction.face_detected || extraction.face_count !== 1 || !selfie || selfie.length !== 512) {
             return NextResponse.json({
-                error: 'No enrolled face profile found. Please register your profile photo first.'
-            }, { status: 400 })
+                matched: false, similarity: 0, is_live: false, face_detected: false,
+                error: extraction.error_message || 'Exactly one clear face is required.',
+                code: extraction.error_code || 'FACE_EXTRACTION_FAILED',
+                diagnostics: extraction.diagnostics,
+            })
+        }
+        if (extraction.is_live !== true) {
+            return NextResponse.json({ matched: false, similarity: 0, is_live: false, face_detected: true, error: 'Liveness verification failed. Please retake your selfie.', diagnostics: extraction.diagnostics })
         }
 
-        // 2. Call Face AI microservice to extract 512-d ArcFace vector & liveness from selfie
-        const extractRes = await FaceServiceClient.extract(selfieBase64)
-
-        if (!extractRes.success || !extractRes.face_detected) {
-            return NextResponse.json({
-                matched: false,
-                similarity: 0.0,
-                is_live: false,
-                face_detected: false,
-                error: extractRes.error_message || 'No face detected in selfie. Please look directly at the camera.',
-                tip: extractRes.troubleshooting_tip
-            }, { status: 200 })
-        }
-
-        const selfie512 = extractRes.embedding_512 || (extractRes.embedding?.length === 512 ? extractRes.embedding : null)
-        const selfie128 = extractRes.embedding_128 || (extractRes.embedding?.length === 128 ? extractRes.embedding : null)
-
-        // 3. Match 512-d ArcFace vectors with Cosine Dot Product (optimal threshold: 0.65)
-        let matched = false
-        let similarity = 0.0
-        const threshold = 0.65
-
-        if (stored512 && stored512.length === 512 && selfie512 && selfie512.length === 512) {
-            let dot = 0
-            for (let i = 0; i < 512; i++) {
-                dot += stored512[i] * selfie512[i]
-            }
-            similarity = Math.max(0, Math.min(1, dot))
-            matched = similarity >= threshold
-        } else if (stored128 && stored128.length === 128 && selfie128 && selfie128.length === 128) {
-            let sum = 0
-            for (let i = 0; i < 128; i++) {
-                const diff = selfie128[i] - stored128[i]
-                sum += diff * diff
-            }
-            const dist = Math.sqrt(sum)
-            similarity = Math.max(0, 1 - dist)
-            matched = dist < 0.50
-        } else if (stored512 || stored128) {
-            // Compare fallback
-            const cmpRes = await FaceServiceClient.compare(
-                (selfie512 || selfie128) as number[],
-                (stored512 || stored128) as number[],
-                threshold
-            )
-            matched = cmpRes.matched
-            similarity = cmpRes.similarity
-        }
-
-        const simPct = (similarity * 100).toFixed(1)
+        const threshold = Number(process.env.FACE_MATCH_COSINE_THRESHOLD ?? '0.88')
+        if (!Number.isFinite(threshold) || threshold <= 0 || threshold >= 1) throw new Error('Invalid face-match threshold')
+        const dot = selfie.reduce((sum, value, index) => sum + value * stored[index], 0)
+        const selfieNorm = Math.sqrt(selfie.reduce((sum, value) => sum + value * value, 0))
+        const storedNorm = Math.sqrt(stored.reduce((sum, value) => sum + value * value, 0))
+        if (!selfieNorm || !storedNorm) throw new Error('Invalid biometric template')
+        const similarity = Math.max(0, Math.min(1, dot / (selfieNorm * storedNorm)))
+        const matched = similarity >= threshold
 
         return NextResponse.json({
-            matched,
-            similarity: Math.round(similarity * 1000) / 1000,
-            is_live: extractRes.is_live,
-            liveness_score: extractRes.liveness_score,
-            face_detected: true,
-            method: 'arcface-512',
-            error: matched ? undefined : `Face match score: ${simPct}% (Required: 65%). Kripya achhi roshni mein sidha chehra rakhein.`,
-            diagnostics: extractRes.diagnostics
+            matched, similarity: Math.round(similarity * 1000) / 1000, threshold, is_live: true, face_detected: true,
+            method: 'arcface-512-server', diagnostics: extraction.diagnostics,
+            error: matched ? undefined : 'Face does not match the approved profile photo.',
         })
-    } catch (err: any) {
-        console.error('[VerifyFaceAPI] Error:', err)
-        return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 })
+    } catch (error) {
+        console.error('[VerifyFaceAPI] Error:', error)
+        return NextResponse.json({ error: 'Face verification could not be completed.' }, { status: 500 })
     }
 }
