@@ -238,14 +238,15 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           lastEvalTime = time;
           isEvaluatingRef.current = true;
           try {
-            // 900ms timeout guard ensures mobile devices have ample time for face detection
+            // Allow mobile CPU landmarks to complete. A short timeout repeatedly reset the
+            // status to "Position face" even while the detector was still evaluating.
             const evalPromise = MediaPipeMeshService.evaluateInMaskLiveness(videoRef.current, time);
             const timeoutPromise = new Promise<InMaskLivenessStatus>((resolve) =>
               setTimeout(() => resolve({
                 isFaceDetected: false, isAlignedInMask: false, isBlinking: false,
                 blinkConfirmed: false, prompt: 'Position face in mask', statusBadgeColor: 'blue',
                 ear: 0, headPose: { yaw: 0, pitch: 0, roll: 0 },
-              }), 900)
+              }), 1800)
             );
             const status = await Promise.race([evalPromise, timeoutPromise]);
             if (isMountedRef.current) {
