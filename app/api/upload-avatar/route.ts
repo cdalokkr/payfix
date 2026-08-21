@@ -42,10 +42,21 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Liveness verification failed. Please capture a new selfie.', code: 'LIVENESS_FAILED', diagnostics: extraction.diagnostics }, { status: 400 })
         }
 
-        const cleanCrop = extraction.cropped_face_base64?.replace(/^data:image\/\w+;base64,/, '')
-        const fileToUpload = cleanCrop ? Buffer.from(cleanCrop, 'base64') : Buffer.from(arrayBuffer)
-        const contentType = cleanCrop ? 'image/jpeg' : file.type
-        const extension = cleanCrop || file.type === 'image/jpeg' ? 'jpg' : file.type === 'image/png' ? 'png' : 'webp'
+        // Persist the exact portrait that the service just validated.
+        // cropped_face_base64 is a detector-derived derivative, not an enrollment source: re-detecting
+        // on that tight crop during admin approval can legitimately return “no face detected”.
+        const fileToUpload = Buffer.from(arrayBuffer)
+        const contentType = file.type
+        const extension = file.type === 'image/jpeg' ? 'jpg' : file.type === 'image/png' ? 'png' : 'webp'
+        console.info('[UPLOAD-API] Profile selfie accepted', {
+            bytes: file.size,
+            contentType,
+            storedOriginalPortrait: true,
+            faceCount: extraction.face_count,
+            embeddingDimensions: embedding.length,
+            livenessPassed: extraction.is_live,
+            backend: extraction.diagnostics?.backend_engine,
+        })
         const adminClient = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } })
         const fileName = 'pending/' + profileId + '/' + crypto.randomUUID() + '.' + extension
         const { error: uploadError } = await adminClient.storage.from('avatars').upload(fileName, fileToUpload, { contentType, upsert: false })
