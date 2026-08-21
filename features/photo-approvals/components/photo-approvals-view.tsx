@@ -46,7 +46,11 @@ export function PhotoApprovalsView() {
 
     const reviewMutation = trpc.profile.reviewPhotoRequest.useMutation({
         onSuccess: (data) => {
-            toast.success(`Photo ${data.action === 'approve' ? 'approved' : 'rejected'} successfully!`)
+            const verification = data.verification
+            toast.success(verification
+                ? `Photo approved — ${verification.faceCount} face, ${verification.embeddingDimensions}-d template, liveness passed.`
+                : `Photo ${data.action === 'approve' ? 'approved' : 'rejected'} successfully!`
+            )
             utils.profile.getAllPhotoRequests.invalidate()
             utils.profile.getPhotoRequestStats.invalidate()
             setIsSheetOpen(false)
