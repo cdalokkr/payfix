@@ -53,6 +53,12 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
             matched, similarity: Math.round(similarity * 1000) / 1000, threshold, is_live: true, face_detected: true,
             method: 'arcface-512-server', diagnostics: extraction.diagnostics,
+            verification: {
+                faceCount: extraction.face_count,
+                embeddingDimensions: selfie.length,
+                livenessPassed: extraction.is_live === true,
+                backend: extraction.diagnostics?.backend_engine || 'Not reported',
+            },
             error: matched ? undefined : 'Face does not match the approved profile photo.',
         })
     } catch (error) {
