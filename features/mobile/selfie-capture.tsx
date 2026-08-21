@@ -45,6 +45,16 @@ interface SelfieCaptureProps {
 // Track whether face-api models have been loaded this session
 let modelsPreloaded = true
 
+interface DailyVerificationDetails {
+    cameraResolution: string
+    outputResolution: string
+    format: string
+    payloadBytes: number
+    server?: { faceCount: number; embeddingDimensions: number; livenessPassed: boolean; backend: string }
+    similarity?: number
+    threshold?: number
+}
+
 export interface SelfieResult {
     imageDataUrl: string
     capturedAt: Date
@@ -73,6 +83,7 @@ export function SelfieCapture({
     const [modelsReady, setModelsReady] = useState(true)
     const [apiStatus, setApiStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle')
     const [apiError, setApiError] = useState<string>('')
+    const [verificationDetails, setVerificationDetails] = useState<DailyVerificationDetails | null>(null)
 
     const videoRef = useRef<HTMLVideoElement>(null)
     const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -107,6 +118,16 @@ export function SelfieCapture({
         if (!imageToVerify) return
 
         const startTime = performance.now()
+        const payloadMatch = imageToVerify.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/)
+        const cameraResolution = videoRef.current?.videoWidth && videoRef.current?.videoHeight
+            ? `${videoRef.current.videoWidth} × ${videoRef.current.videoHeight}`
+            : 'Unavailable'
+        setVerificationDetails({
+            cameraResolution,
+            outputResolution: '512 × 512',
+            format: payloadMatch?.[1] || 'Unknown',
+            payloadBytes: payloadMatch ? Math.floor((payloadMatch[2].length * 3) / 4) : 0,
+        })
         setCapturedImage(imageToVerify)
         setCapturedAt(new Date())
         stopCamera()
@@ -139,6 +160,12 @@ export function SelfieCapture({
             setVerificationDuration(durStr)
 
             setSimilarity(result.similarity)
+            setVerificationDetails(previous => previous ? {
+                ...previous,
+                similarity: result.similarity,
+                threshold: result.threshold,
+                server: result.verification,
+            } : previous)
 
             if (!result.matched) {
                 setStatus('verify_failed')
@@ -317,6 +344,28 @@ export function SelfieCapture({
                     footerSlot={
 
                         <div className="space-y-3">
+                            {verificationDetails && (
+                                <details open={status === 'verify_failed'} className="rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2.5 text-left">
+                                    <summary className="cursor-pointer text-xs font-bold text-sky-300">Daily biometric verification details</summary>
+                                    <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-mono text-slate-300">
+                                        <dt className="text-slate-500">Camera</dt><dd>{verificationDetails.cameraResolution}</dd>
+                                        <dt className="text-slate-500">Output</dt><dd>{verificationDetails.outputResolution}</dd>
+                                        <dt className="text-slate-500">Format</dt><dd>{verificationDetails.format}</dd>
+                                        <dt className="text-slate-500">Payload</dt><dd>{Math.round(verificationDetails.payloadBytes / 1024)} KB</dd>
+                                        {verificationDetails.server && <>
+                                            <dt className="text-slate-500">Server faces</dt><dd>{verificationDetails.server.faceCount}</dd>
+                                            <dt className="text-slate-500">Template</dt><dd>{verificationDetails.server.embeddingDimensions}-d</dd>
+                                            <dt className="text-slate-500">Liveness</dt><dd>{verificationDetails.server.livenessPassed ? 'Passed' : 'Failed'}</dd>
+                                            <dt className="text-slate-500">Backend</dt><dd className="break-all">{verificationDetails.server.backend}</dd>
+                                        </>}
+                                        {typeof verificationDetails.similarity === 'number' && <>
+                                            <dt className="text-slate-500">Similarity</dt><dd>{(verificationDetails.similarity * 100).toFixed(1)}%</dd>
+                                            <dt className="text-slate-500">Required</dt><dd>{((verificationDetails.threshold || 0) * 100).toFixed(1)}%</dd>
+                                        </>}
+                                    </dl>
+                                </details>
+                            )}
+
                             {status === 'streaming' && (
                                 <Button
                                     onClick={handleProceed}
