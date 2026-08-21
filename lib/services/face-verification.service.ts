@@ -220,10 +220,10 @@ export const FaceVerificationService = {
                 error: 'The server biometric verifier is unavailable. Please check your connection and try again.',
             };
         }
-    }
+    },
 
     getThreshold(): number {
-        return 0.65;
+        return 0.88;
     },
 
     formatSimilarity(similarity: number): string {
