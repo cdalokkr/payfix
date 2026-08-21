@@ -12,6 +12,7 @@
 
 import { FilesetResolver, FaceLandmarker, FaceLandmarkerResult } from '@mediapipe/tasks-vision';
 import { FaceApiBrowserService } from './faceapi-browser.service';
+import { FACE_DETECT_OPTIONS } from '../face-pipeline';
 
 export interface AlignedFaceCropResult {
     canvas112: HTMLCanvasElement;
@@ -218,7 +219,7 @@ export const MediaPipeMeshService = {
                 const faceapi = window.faceapi;
                 if (faceapi.nets.tinyFaceDetector.params && faceapi.nets.faceLandmark68Net.params) {
                     const detection = await faceapi
-                        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.15 }))
+                        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions(FACE_DETECT_OPTIONS))
                         .withFaceLandmarks(true);
 
                     if (detection && detection.landmarks) {
@@ -470,7 +471,7 @@ export const MediaPipeMeshService = {
 
                 const faceapi = window.faceapi;
                 const detection = await faceapi
-                    .detectSingleFace(videoOrCanvas, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.15 }))
+                    .detectSingleFace(videoOrCanvas, new faceapi.TinyFaceDetectorOptions(FACE_DETECT_OPTIONS))
                     .withFaceLandmarks(true);
 
                 if (detection) {
