@@ -179,119 +179,48 @@ export const FaceVerificationService = {
             onDebugLog?.(entry);
         };
 
+        // Identity decisions are server-only. Browser models may guide framing but must not
+        // become an enrollment/attendance fallback when the biometric service is unavailable.
         try {
-            log('🚀 Starting ArcFace 512-d Face Verification...');
-
-            // 1. High-Speed Server-Side Face API Verification (ZeroGPU ~29ms)
-            try {
-                log('⚡ Verifying via ZeroGPU Biometric Service...');
-                const apiResp = await fetch('/api/attendance/verify-face', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        selfieBase64: selfieDataUrl,
-                        profileEmbedding: preSavedEmbedding ? Array.from(preSavedEmbedding) : undefined
-                    }),
-                    signal: AbortSignal.timeout(10000)
-                });
-                if (apiResp.ok) {
-                    const apiData = await apiResp.json();
-                    if (typeof apiData.matched === 'boolean') {
-                        log(`🎯 Server ArcFace 512-d Match: ${(apiData.similarity * 100).toFixed(1)}% | ${apiData.matched ? '✅ MATCH' : '❌ NO MATCH'}`);
-                        return {
-                            matched: apiData.matched,
-                            similarity: apiData.similarity,
-                            method: 'arcface-512',
-                            debugLog,
-                            isLive: apiData.is_live ?? true,
-                            error: apiData.matched ? undefined : (apiData.error || 'Face does not match registered profile photo')
-                        };
-                    }
-                }
-            } catch (serverErr) {
-                log('⚠️ Server verify fallback to client inference: ' + String(serverErr));
-            }
-
-            // 2. Client-side fallback if server unreachable
-            log('⚡ Extracting selfie face descriptor with canonical alignment...');
-            const selfieRes = await this.extractAligned512dDescriptor(selfieDataUrl);
-
-            if (!selfieRes || !selfieRes.embedding || selfieRes.embedding.length === 0) {
+            log('Sending captured selfie to the server biometric verifier...');
+            const apiResp = await fetch('/api/attendance/verify-face', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ selfieBase64: selfieDataUrl }),
+                signal: AbortSignal.timeout(30000),
+            });
+            const apiData = await apiResp.json().catch(() => ({}));
+            if (typeof apiData.matched === 'boolean') {
+                log(`Server ArcFace 512-d match: ${(Number(apiData.similarity || 0) * 100).toFixed(1)}%`);
                 return {
-                    matched: false,
-                    similarity: 0,
+                    matched: apiData.matched,
+                    similarity: Number(apiData.similarity || 0),
                     method: 'arcface-512',
                     debugLog,
-                    error: 'No face detected in selfie. Please align face inside camera circle and retake.',
+                    isLive: apiData.is_live === true,
+                    error: apiData.matched ? undefined : (apiData.error || 'Face verification was not successful.'),
                 };
             }
-
-            // 2. Resolve Profile Embedding (512-d or 128-d)
-            let profileVector: number[] | null = null;
-            if (preSavedEmbedding) {
-                profileVector = Array.isArray(preSavedEmbedding)
-                    ? preSavedEmbedding
-                    : Array.from(preSavedEmbedding);
-                log(`⚡ Using pre-saved face embedding from database (${profileVector.length}-d)`);
-            } else {
-                const cached = descriptorCache.get(profileImageUrl);
-                if (cached) {
-                    profileVector = Array.from(cached);
-                    log(`⚡ Using cached profile face embedding (${profileVector.length}-d)`);
-                } else if (profileImageUrl) {
-                    log('📷 Extracting profile photo embedding from URL...');
-                    profileVector = await this.extractAligned512dDescriptorFromUrl(profileImageUrl);
-                    if (profileVector) {
-                        descriptorCache.set(profileImageUrl, new Float32Array(profileVector));
-                    }
-                }
-            }
-
-            if (!profileVector || profileVector.length === 0) {
-                return {
-                    matched: false,
-                    similarity: 0,
-                    method: 'arcface-512',
-                    debugLog,
-                    error: 'No face detected in profile photo. Please upload a clear profile photo.',
-                };
-            }
-
-            // 3. Vector Match Calculation
-            const is512 = selfieRes.embedding.length === 512 && profileVector.length === 512;
-            const threshold = is512 ? 0.65 : 0.68;
-
-            const normSelfie = l2Normalize(selfieRes.embedding);
-            const normProfile = l2Normalize(profileVector);
-            const similarity = Math.max(0, dotProduct(normSelfie, normProfile));
-            const matched = similarity >= threshold;
-
-            const method = is512 ? 'arcface-512' : 'face-api';
-            log(`🎯 ${is512 ? 'ArcFace 512-d' : '128-d'} Similarity: ${(similarity * 100).toFixed(1)}% (Threshold: ${(threshold * 100)}%) | ${matched ? '✅ MATCH' : '❌ NO MATCH'}`);
-
-            return {
-                matched,
-                similarity,
-                method,
-                debugLog,
-                isLive: selfieRes.isLive,
-                alignedCropDataUrl: selfieRes.cropDataUrl,
-                error: matched
-                    ? undefined
-                    : `Face does not match profile photo (${(similarity * 100).toFixed(0)}% similarity, required >= ${(threshold * 100)}%).`,
-            };
-        } catch (error) {
-            const msg = error instanceof Error ? error.message : 'Unknown error';
-            log(`❌ Error: ${msg}`);
             return {
                 matched: false,
                 similarity: 0,
                 method: 'arcface-512',
                 debugLog,
-                error: `Verification error: ${msg}`,
+                isLive: false,
+                error: apiData.error || 'The server biometric verifier is unavailable. Please try again online.',
+            };
+        } catch (error) {
+            log('Server biometric verification could not be reached.');
+            return {
+                matched: false,
+                similarity: 0,
+                method: 'arcface-512',
+                debugLog,
+                isLive: false,
+                error: 'The server biometric verifier is unavailable. Please check your connection and try again.',
             };
         }
-    },
+    }
 
     getThreshold(): number {
         return 0.65;
