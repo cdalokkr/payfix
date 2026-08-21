@@ -44,6 +44,13 @@ interface CaptureDiagnostics {
     outputBytes: number
     cropMode: string
     serverStatus?: string
+    serverVerification?: {
+        faceCount: number
+        embeddingDimensions: number
+        livenessPassed: boolean
+        backend: string
+        storedOriginalPortrait: boolean
+    }
 }
 
 interface ProfilePhotoCaptureProps {
@@ -340,7 +347,7 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
                 throw new Error(result.error || 'Upload failed')
             }
 
-            setCaptureDiagnostics(previous => previous ? { ...previous, serverStatus: 'Accepted: one face, server liveness passed, 512-d template pending approval' } : previous)
+            setCaptureDiagnostics(previous => previous ? { ...previous, serverStatus: 'Accepted: one face, server liveness passed, 512-d template pending approval', serverVerification: result.verification } : previous)
             addLog('Upload complete!')
             addLog(`URL: ${result.path?.slice(0, 40)}...`)
 
@@ -443,6 +450,15 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
                                 <dt className="text-slate-500">Crop</dt><dd className="col-span-1">{captureDiagnostics.cropMode}</dd>
                             </dl>
                             {captureDiagnostics.serverStatus && <p className="mt-2 break-words text-[10px] text-amber-200">Server: {captureDiagnostics.serverStatus}</p>}
+                            {captureDiagnostics.serverVerification && (
+                                <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-slate-700 pt-2 text-[10px] font-mono text-slate-300">
+                                    <dt className="text-slate-500">Server faces</dt><dd>{captureDiagnostics.serverVerification.faceCount}</dd>
+                                    <dt className="text-slate-500">Template</dt><dd>{captureDiagnostics.serverVerification.embeddingDimensions}-d</dd>
+                                    <dt className="text-slate-500">Liveness</dt><dd>{captureDiagnostics.serverVerification.livenessPassed ? 'Passed' : 'Failed'}</dd>
+                                    <dt className="text-slate-500">Stored image</dt><dd>{captureDiagnostics.serverVerification.storedOriginalPortrait ? 'Original portrait' : 'Derivative'}</dd>
+                                    <dt className="text-slate-500">Backend</dt><dd className="break-all">{captureDiagnostics.serverVerification.backend}</dd>
+                                </dl>
+                            )}
                             {debugLogs.length > 0 && <pre className="mt-2 max-h-24 overflow-auto whitespace-pre-wrap border-t border-slate-700 pt-2 text-[9px] leading-4 text-slate-400">{debugLogs.join('\n')}</pre>}
                         </details>
                     )}
