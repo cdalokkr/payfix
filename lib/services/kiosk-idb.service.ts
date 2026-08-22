@@ -124,6 +124,27 @@ export const KioskIndexedDBService = {
     },
 
     /**
+     * Purge legacy employee template data while retaining kiosk pairing
+     * credentials. The live kiosk flow never reads or writes face vectors.
+     */
+    async clearEmployeeTemplates(): Promise<void> {
+        try {
+            const db = await openDB();
+            const tx = db.transaction([STORE_EMPLOYEES, STORE_META], 'readwrite');
+            tx.objectStore(STORE_EMPLOYEES).clear();
+            tx.objectStore(STORE_META).delete('sync-info');
+
+            await new Promise<void>((resolve, reject) => {
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+                tx.onabort = () => reject(tx.error);
+            });
+        } catch (err) {
+            console.warn('[KioskIndexedDB] Failed to clear legacy employee templates:', err);
+        }
+    },
+
+    /**
      * Get IndexedDB Sync Info (lastSyncedAt, enrolledEmployees, etc.)
      */
     async getSyncInfo(): Promise<SyncInfo | null> {
