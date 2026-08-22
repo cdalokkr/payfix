@@ -4,6 +4,7 @@ import { eq, and, desc, count, sql } from 'drizzle-orm'
 import { throwAppError } from '@/lib/errors/app-errors'
 import { invalidateUserSession } from '@/lib/auth/optimized-context'
 import { FaceServiceClient } from '@/lib/face-service-client'
+import { tenantStorage } from '@/lib/tenant/store'
 
 
 export class ProfileService {
@@ -212,6 +213,7 @@ export class ProfileService {
         pendingFaceEmbedding?: number[]
     }) {
         await ProfileService.ensurePhotoRequestsSchema()
+        if (!tenantStorage.getStore()?.tenantId) throwAppError('FORBIDDEN', 'Tenant context is required for profile photo enrollment.')
         const existingPending = await db.query.profilePhotoRequests.findFirst({
             where: and(
                 eq(profilePhotoRequests.profile_id, profileId),
@@ -335,6 +337,7 @@ export class ProfileService {
         faceQualityScore?: number
     }) {
         await ProfileService.ensurePhotoRequestsSchema()
+        if (!tenantStorage.getStore()?.tenantId) throwAppError('FORBIDDEN', 'Tenant context is required for profile photo approval.')
         const request = await db.query.profilePhotoRequests.findFirst({
             where: eq(profilePhotoRequests.id, requestId),
             with: { profile: true }
