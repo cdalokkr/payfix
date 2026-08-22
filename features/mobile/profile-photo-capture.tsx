@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import { trpc } from "@/lib/trpc/client"
-import { MediaPipeMeshService } from "@/lib/services/mediapipe-mesh.service"
+import { BIOMETRIC_CAPTURE_PIPELINE_VERSION, captureNaturalBiometricFrame } from "@/lib/face-pipeline"
 import { BiometricCameraModal } from "@/components/biometrics/BiometricCameraModal"
 
 
@@ -93,7 +93,6 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
 
 
     const videoRef = useRef<HTMLVideoElement>(null)
-    const canvasRef = useRef<HTMLCanvasElement>(null)
     const streamRef = useRef<MediaStream | null>(null)
 
     const recordCaptureDiagnostics = useCallback((dataUrl: string, cropMode: string) => {
@@ -243,65 +242,30 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
 
     // Auto-capture triggered on verified in-mask eye blink
     const handleAutoCapture = useCallback((dataUrl: string) => {
-        recordCaptureDiagnostics(dataUrl, 'Landmark-guided 512×512 capture')
+        recordCaptureDiagnostics(dataUrl, 'Natural portrait auto-capture — server canonicalization pending')
         setCapturedImage(dataUrl)
         setStatus('captured')
         stopCamera()
         toast.success('Blink detected! Photo captured 📸')
     }, [recordCaptureDiagnostics, stopCamera])
 
-    // Capture photo matching live stream orientation 100% (512x512 HD face crop)
-    const capturePhoto = useCallback(async () => {
+    // Capture a complete portrait frame. The server owns face crops and alignment.
+    const capturePhoto = useCallback(() => {
         if (!videoRef.current || status !== 'streaming') return
-
-        const video = videoRef.current
-        try {
-            const cropPromise = MediaPipeMeshService.processFaceFrame(video)
-            const timeoutPromise = new Promise<null>((res) => setTimeout(() => res(null), 500))
-            const cropResult = await Promise.race([cropPromise, timeoutPromise])
-
-            let final512Url = cropResult?.dataUrl512 || ''
-            if (!final512Url && canvasRef.current) {
-                const canvas = canvasRef.current
-                canvas.width = 512
-                canvas.height = 512
-                const ctx = canvas.getContext('2d')
-                if (ctx) {
-                    ctx.imageSmoothingEnabled = true
-                    ctx.imageSmoothingQuality = 'high'
-                    const vw = video.videoWidth || 720
-                    const vh = video.videoHeight || 960
-                    const squareSize = Math.min(vw, vh) * 0.92
-                    const sx = (vw - squareSize) / 2
-                    const sy = (vh - squareSize) / 2
-                    ctx.save()
-                    ctx.translate(512, 0)
-                    ctx.scale(-1, 1)
-                    ctx.drawImage(video, sx, sy, squareSize, squareSize, 0, 0, 512, 512)
-                    ctx.restore()
-                    final512Url = canvas.toDataURL('image/jpeg', 0.94)
-                }
-            }
-
-            if (final512Url) {
-                recordCaptureDiagnostics(final512Url, cropResult?.landmarks?.length ? 'Landmark-guided 512×512 capture' : 'Wide safe fallback 512×512 capture')
-                setCapturedImage(final512Url)
-                setStatus('captured')
-                stopCamera()
-            }
-        } catch (err) {
-            console.error('Capture error:', err)
-        }
+        const capture = captureNaturalBiometricFrame(videoRef.current)
+        if (!capture) { toast.error('Camera frame is not ready. Please try again.'); return }
+        recordCaptureDiagnostics(capture.dataUrl, 'Natural portrait capture — server canonicalization pending')
+        setCapturedImage(capture.dataUrl)
+        setStatus('captured')
+        stopCamera()
     }, [recordCaptureDiagnostics, stopCamera, status])
-
-
 
     // Retake photo
     const handleRetake = useCallback(() => {
         startCamera()
     }, [startCamera])
 
-    // Upload photo via server API (crops to 512x512 HD face avatar ~45KB before saving)
+    // Upload the natural portrait; server validation and canonicalization are authoritative.
     const handleUpload = useCallback(async () => {
         if (!capturedImage) return
 
@@ -310,9 +274,7 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
         setStatus('uploading')
 
         try {
-            // The camera has already produced the only client-side 512×512 portrait.
-            // Do not recrop or trust a browser embedding here: the server validates, aligns,
-            // stores the pending photo, and regenerates the 512-d template on approval.
+            // Do not crop or trust browser biometrics: the server validates and aligns this natural frame.
             const uploadDataUrl = capturedImage
             const dataUrlMatch = uploadDataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/)
             if (!dataUrlMatch) throw new Error('Captured image format is invalid. Please retake the selfie.')
@@ -325,13 +287,14 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
             }
             const byteArray = new Uint8Array(byteNumbers)
             const blob = new Blob([byteArray], { type: mimeType })
-            addLog(`Sending the captured 512×512 portrait directly (${Math.round(blob.size / 1024)}KB)`)
+            addLog(`Sending natural portrait to the server (${Math.round(blob.size / 1024)}KB)`)
 
             // Send to server API route (uses service role, bypasses RLS)
             addLog('Sending to server...')
             const formData = new FormData()
             formData.append('file', blob, 'avatar.jpg')
             formData.append('profileId', profileId)
+            formData.append('biometricPipelineVersion', BIOMETRIC_CAPTURE_PIPELINE_VERSION)
             const response = await fetch('/api/upload-avatar', {
                 method: 'POST',
                 body: formData,
@@ -415,7 +378,7 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
             statusText={status === 'captured' ? 'Photo captured! Review below' : undefined}
             timerSeconds={!capturedImage && status !== 'captured' ? sessionTimeout : undefined}
             enableAutoBlinkCapture={!capturedImage && status !== 'uploading' && status !== 'submitted'}
-            capturedCroppedUrl={capturedImage}
+            capturedPreviewUrl={capturedImage}
             onAutoCapture={handleAutoCapture}
             footerSlot={
 
@@ -577,8 +540,6 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
                     </motion.div>
                 </div>
             )}
-            {/* Hidden canvas for capture */}
-            <canvas ref={canvasRef} className="hidden" />
         </BiometricCameraModal>
     )
 }
