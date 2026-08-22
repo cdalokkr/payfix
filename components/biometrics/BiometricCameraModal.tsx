@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { X, RefreshCw, AlertCircle } from 'lucide-react';
-import { BIOMETRIC_CAMERA_CONSTRAINTS, validateBiometricCameraFrame } from '@/lib/face-pipeline';
+import { BIOMETRIC_CAMERA_CONSTRAINTS, captureNaturalBiometricFrame, validateBiometricCameraFrame } from '@/lib/face-pipeline';
 import { MediaPipeMeshService, InMaskLivenessStatus } from '@/lib/services/mediapipe-mesh.service';
 import { FaceApiBrowserService } from '@/lib/services/faceapi-browser.service';
 
@@ -22,7 +22,7 @@ interface BiometricCameraModalProps {
   children?: React.ReactNode;
   timerSeconds?: number;
   enableAutoBlinkCapture?: boolean;
-  capturedCroppedUrl?: string | null;
+  capturedPreviewUrl?: string | null;
   onAutoCapture?: (dataUrl: string) => void;
 }
 
@@ -42,7 +42,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   children,
   timerSeconds,
   enableAutoBlinkCapture = true,
-  capturedCroppedUrl,
+  capturedPreviewUrl,
   onAutoCapture,
 }) => {
   const internalVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -50,7 +50,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   const streamRef = useRef<MediaStream | null>(null);
   const isMountedRef = useRef(true);
   const [isStreamPlaying, setIsStreamPlaying] = useState(false);
-  const [internalPreview512Url, setInternalPreview512Url] = useState<string | null>(null);
+  const [internalPreviewUrl, setInternalPreviewUrl] = useState<string | null>(null);
 
   const onStreamReadyRef = useRef(onStreamReady);
   const onCameraErrorRef = useRef(onCameraError);
@@ -263,13 +263,10 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
               const video = videoRef.current;
               if (video) {
-                // Generate clean 512x512 cropped portrait (+18% natural margin)
-                const cropResult = await MediaPipeMeshService.processFaceFrame(video);
-                const final512Url = cropResult?.dataUrl512 || '';
-
-                if (final512Url) {
-                  setInternalPreview512Url(final512Url);
-                }
+                // Capture a complete natural frame; face crops and alignment are server-owned.
+                const naturalCapture = captureNaturalBiometricFrame(video);
+                const capturedDataUrl = naturalCapture?.dataUrl || '';
+                if (capturedDataUrl) setInternalPreviewUrl(capturedDataUrl);
 
                 // Quick haptic pulse
                 if (typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -277,8 +274,8 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                 }
 
                 setTimeout(() => {
-                  if (onAutoCaptureRef.current && final512Url) {
-                    onAutoCaptureRef.current(final512Url);
+                  if (onAutoCaptureRef.current && capturedDataUrl) {
+                    onAutoCaptureRef.current(capturedDataUrl);
                   }
                   setTimeout(() => setFlashSuccess(false), 400);
                 }, 100);
@@ -308,7 +305,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
   const isAligned = livenessStatus.isAlignedInMask;
   const isBlinkConfirmed = livenessStatus.blinkConfirmed || flashSuccess;
-  const activeCleanPortraitUrl = capturedCroppedUrl || internalPreview512Url;
+  const activeCleanPortraitUrl = capturedPreviewUrl || internalPreviewUrl;
 
   // Single Spacious Face Oval Path (Wider contoured shape for comfortable natural head fit)
   const OVAL_PATH = "M150 20 C236 20 290 70 290 178 C290 286 236 352 150 352 C64 352 10 286 10 178 C10 70 64 20 150 20 Z";
@@ -385,7 +382,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           <div className="absolute inset-0 z-40 bg-emerald-500/35 animate-in fade-in duration-100 backdrop-blur-[2px]" />
         )}
 
-        {/* Clean 512x512 HD Cropped Portrait Freeze Preview (WITHOUT Mask/Overlay) */}
+        {/* Natural portrait freeze preview (WITHOUT Mask/Overlay) */}
         {activeCleanPortraitUrl ? (
           <div className="absolute inset-0 z-10 bg-slate-950 flex flex-col items-center justify-center p-3 animate-in zoom-in-95 fade-in duration-200">
             <div className="relative w-full aspect-square max-w-[320px] rounded-3xl overflow-hidden border-2 border-emerald-500/70 shadow-2xl bg-black">
@@ -396,7 +393,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
               />
               <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-slate-950/85 border border-emerald-500/50 backdrop-blur-md text-[10.5px] font-mono font-bold text-emerald-300 flex items-center gap-1.5 shadow-lg">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                512×512 HD
+                Natural portrait
               </div>
             </div>
           </div>
