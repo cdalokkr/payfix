@@ -11,6 +11,7 @@
 import { MediaPipeMeshService, AlignedFaceCropResult } from './mediapipe-mesh.service';
 import { ArcFaceOnnxService } from './arcface-onnx.service';
 import { FaceApiBrowserService } from './faceapi-browser.service';
+import { BIOMETRIC_CAPTURE_PIPELINE_VERSION } from '@/lib/face-pipeline';
 import { l2Normalize, dotProduct } from '../face-threshold';
 
 export interface FaceVerificationResult {
@@ -193,7 +194,7 @@ export const FaceVerificationService = {
             const apiResp = await fetch('/api/attendance/verify-face', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ selfieBase64: selfieDataUrl }),
+                body: JSON.stringify({ selfieBase64: selfieDataUrl, biometricPipelineVersion: BIOMETRIC_CAPTURE_PIPELINE_VERSION }),
                 signal: AbortSignal.timeout(30000),
             });
             const apiData = await apiResp.json().catch(() => ({}));
