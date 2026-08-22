@@ -23,6 +23,8 @@ interface BiometricCameraModalProps {
   timerSeconds?: number;
   enableAutoBlinkCapture?: boolean;
   capturedPreviewUrl?: string | null;
+  /** @deprecated Legacy callers may still supply a browser-generated crop until Phase 6 migration. */
+  capturedCroppedUrl?: string | null;
   onAutoCapture?: (dataUrl: string) => void;
 }
 
@@ -43,6 +45,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   timerSeconds,
   enableAutoBlinkCapture = true,
   capturedPreviewUrl,
+  capturedCroppedUrl,
   onAutoCapture,
 }) => {
   const internalVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -305,7 +308,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
   const isAligned = livenessStatus.isAlignedInMask;
   const isBlinkConfirmed = livenessStatus.blinkConfirmed || flashSuccess;
-  const activeCleanPortraitUrl = capturedPreviewUrl || internalPreviewUrl;
+  const activeCleanPortraitUrl = capturedPreviewUrl || capturedCroppedUrl || internalPreviewUrl;
 
   // Single Spacious Face Oval Path (Wider contoured shape for comfortable natural head fit)
   const OVAL_PATH = "M150 20 C236 20 290 70 290 178 C290 286 236 352 150 352 C64 352 10 286 10 178 C10 70 64 20 150 20 Z";
