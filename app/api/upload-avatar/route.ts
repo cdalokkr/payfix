@@ -2,10 +2,12 @@ import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { FaceServiceClient } from '@/lib/face-service-client'
+import { consumeLivenessChallenge, LIVENESS_FRAME_COUNT } from '@/lib/liveness-challenge'
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const NATURAL_PORTRAIT_PIPELINE = 'natural-portrait-v1'
+const SELFIE_DATA_URL = /^data:image\/(jpeg|png|webp);base64,/
 
 function hasSupportedImageSignature(bytes: Uint8Array) {
     const isJpeg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
@@ -25,14 +27,25 @@ export async function POST(request: NextRequest) {
         const file = formData.get('file')
         const profileId = formData.get('profileId')
         const submittedPipelineVersion = formData.get('biometricPipelineVersion')
+        const challenge = formData.get('challenge')
+        const submittedFrames = JSON.parse(String(formData.get('livenessFrames') || '[]'))
         const capturePipeline = submittedPipelineVersion === NATURAL_PORTRAIT_PIPELINE ? NATURAL_PORTRAIT_PIPELINE : 'legacy-client-crop-v1'
         if (!(file instanceof Blob) || typeof profileId !== 'string') return NextResponse.json({ error: 'A profile image is required.' }, { status: 400 })
         if (profileId !== user.id) return NextResponse.json({ error: 'Cannot upload for another user.' }, { status: 403 })
+        if (!Array.isArray(submittedFrames) || submittedFrames.length !== LIVENESS_FRAME_COUNT || submittedFrames.some(frame => typeof frame !== 'string' || !SELFIE_DATA_URL.test(frame))) {
+            return NextResponse.json({ error: 'Three natural camera frames are required.', code: 'LIVENESS_FRAMES_REQUIRED' }, { status: 400 })
+        }
+        const challengeResult = consumeLivenessChallenge(challenge, user.id, 'enrollment')
+        if (!challengeResult.ok) return NextResponse.json({ error: 'Liveness challenge failed or expired.', code: challengeResult.code }, { status: 403 })
         if (!ALLOWED_IMAGE_TYPES.has(file.type) || file.size === 0 || file.size > MAX_IMAGE_BYTES) return NextResponse.json({ error: 'Upload a JPEG, PNG, or WebP image smaller than 5 MB.' }, { status: 400 })
 
         const arrayBuffer = await file.arrayBuffer()
         if (!hasSupportedImageSignature(new Uint8Array(arrayBuffer.slice(0, 12)))) return NextResponse.json({ error: 'The uploaded file is not a supported image.' }, { status: 400 })
-        const extraction = await FaceServiceClient.extract(Buffer.from(arrayBuffer).toString('base64'))
+        const extractions = await Promise.all(submittedFrames.map(frame => FaceServiceClient.extract(frame.replace(/^data:image\/(?:jpeg|png|webp);base64,/, ''))))
+        const extraction = extractions[0]
+        if (extractions.some(item => !item.success || !item.face_detected || item.face_count !== 1 || item.is_live !== true)) {
+            return NextResponse.json({ error: 'Liveness movement could not be verified across all camera frames.', code: 'LIVENESS_FAILED' }, { status: 400 })
+        }
         const embedding = extraction.embedding_512 || (extraction.embedding?.length === 512 ? extraction.embedding : null)
         if (!extraction.success || !extraction.face_detected || extraction.face_count !== 1 || !embedding || embedding.length !== 512) {
             return NextResponse.json({

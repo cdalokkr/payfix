@@ -178,7 +178,9 @@ export const FaceVerificationService = {
         selfieDataUrl: string,
         profileImageUrl: string,
         onDebugLog?: (log: string) => void,
-        preSavedEmbedding?: number[] | Float32Array | null
+        preSavedEmbedding?: number[] | Float32Array | null,
+        livenessChallenge?: string,
+        livenessFrames?: string[]
     ): Promise<FaceVerificationResult> {
         const debugLog: string[] = [];
         const log = (msg: string) => {
@@ -194,7 +196,11 @@ export const FaceVerificationService = {
             const apiResp = await fetch('/api/attendance/verify-face', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ selfieBase64: selfieDataUrl, biometricPipelineVersion: BIOMETRIC_CAPTURE_PIPELINE_VERSION }),
+                body: JSON.stringify({
+                    frames: livenessFrames?.length ? livenessFrames : [selfieDataUrl],
+                    challenge: livenessChallenge,
+                    biometricPipelineVersion: BIOMETRIC_CAPTURE_PIPELINE_VERSION,
+                }),
                 signal: AbortSignal.timeout(30000),
             });
             const apiData = await apiResp.json().catch(() => ({}));

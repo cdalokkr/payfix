@@ -14,12 +14,7 @@ import {
     Maximize2, User, Cpu
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { FaceApiBrowserService } from '@/lib/services/faceapi-browser.service';
-import { FaceVerificationService } from '@/lib/services/face-verification.service';
-import { MediaPipeMeshService } from '@/lib/services/mediapipe-mesh.service';
 import { KioskIndexedDBService } from '@/lib/services/kiosk-idb.service';
-import { saveEmployeeFaces, getSyncInfo as getIdbSyncInfo, getAllEmployeeFaces, EmployeeFace } from '@/lib/face-db';
-import { l2Normalize, matchFaceFast, isGoodQualityFace, getAdaptiveThreshold } from '@/lib/face-threshold';
 import { trpc } from '@/lib/trpc/client';
 import { BiometricCameraModal } from '@/components/biometrics/BiometricCameraModal';
 import { format } from 'date-fns';
@@ -60,25 +55,6 @@ function getHardwareAccelerationInfo(): { backend: string; isGpu: boolean } {
 
 
 
-
-interface CachedEmployee {
-    id: string;
-    name: string;
-    avatarUrl?: string | null;
-    biometricUserId?: string | null;
-    faceEmbedding: number[] | null; // 512-d ArcFace or 128-d vector
-}
-
-interface QueuedPunch {
-    id: string;
-    profileId: string;
-    employeeName: string;
-    timestamp: string;
-    punchType: 'auto' | 'check_in' | 'check_out';
-    synced: boolean;
-    latitude?: number | null;
-    longitude?: number | null;
-}
 
 interface PairedDeviceInfo {
     id: string;
@@ -135,22 +111,16 @@ export function ExpressKioskApp() {
 
     const [isOnline, setIsOnline] = useState<boolean>(true);
     const [cameraActive, setCameraActive] = useState<boolean>(false);
-    const [employees, setEmployees] = useState<CachedEmployee[]>([]);
-    const [offlineQueue, setOfflineQueue] = useState<QueuedPunch[]>([]);
     const [lastScanResult, setLastScanResult] = useState<{ name: string; time: string; type: string } | null>(null);
     const [isScanning, setIsScanning] = useState<boolean>(false);
     const [scanError, setScanError] = useState<string | null>(null);
     const [capturedFreezeUrl, setCapturedFreezeUrl] = useState<string | null>(null);
     const [hardwareInfo] = useState(() => getHardwareAccelerationInfo());
 
-    const [idbSyncInfo, setIdbSyncInfo] = useState<{ lastSyncedAt: number; totalEmployees: number; enrolledEmployees: number } | null>(null);
-
     const [modelsLoading, setModelsLoading] = useState<boolean>(false);
     const [modelsReady, setModelsReady] = useState<boolean>(false);
     const [modelProgress, setModelProgress] = useState<number>(0);
     const [isCameraReady, setIsCameraReady] = useState<boolean>(false);
-    const [stats, setStats] = useState({ totalEmployees: 0, enrolledEmployees: 0, queuedOffline: 0 });
-
     const verifyPairingMutation = trpc.kioskDevices.verifyPairingCode.useMutation();
 
     // Live clock update
@@ -173,27 +143,14 @@ export function ExpressKioskApp() {
         async function restorePairing() {
             if (typeof window === 'undefined') return;
             
-            // 1. Check URL parameters for auto-heal (?key=KSK-XXXX-YYYY or ?pairingCode=...)
-            const urlParams = new URLSearchParams(window.location.search);
-            const urlKey = urlParams.get('key') || urlParams.get('pairingCode') || urlParams.get('kiosk_key');
-
             const { pairingCode: savedKey, deviceInfo: savedDeviceInfo } = await KioskIndexedDBService.loadPairingCredentials();
-            const activeKey = urlKey || savedKey;
+            const activeKey = savedKey;
 
             if (activeKey && isMounted) {
                 setPairingCode(activeKey);
                 if (savedDeviceInfo) {
                     setPairedDevice(savedDeviceInfo);
                 }
-
-                // Sync URL query param to address bar for easy bookmarking
-                try {
-                    const currentUrl = new URL(window.location.href);
-                    if (currentUrl.searchParams.get('key') !== activeKey) {
-                        currentUrl.searchParams.set('key', activeKey);
-                        window.history.replaceState({}, '', currentUrl.toString());
-                    }
-                } catch {}
 
                 verifyPairingMutation.mutate({ pairingCode: activeKey }, {
                     onSuccess: (res) => {
@@ -262,13 +219,12 @@ export function ExpressKioskApp() {
 
         const handleOnline = () => {
             setIsOnline(true);
-            toast.success('Internet Restored! Syncing queued kiosk punches...');
-            flushOfflineQueue();
+            toast.success('Internet restored. Live kiosk verification is available.');
         };
 
         const handleOffline = () => {
             setIsOnline(false);
-            toast.warning('Internet Disconnected. Kiosk running in 100% Local Offline Mode.');
+            toast.warning('Internet disconnected. Kiosk verification is unavailable until connectivity returns.');
         };
 
         window.addEventListener('online', handleOnline);
@@ -286,19 +242,6 @@ export function ExpressKioskApp() {
             setIsCameraReady(true);
         }
     }, [modelsReady]);
-
-    // 15-minute background refresh to fetch newly enrolled employee face vectors automatically
-    useEffect(() => {
-        if (!pairingCode) return;
-        
-        const syncInterval = setInterval(() => {
-            console.log('[Kiosk Background] Running 15-minute periodic face vector sync...');
-            fetchEmployeeFaceVectors();
-        }, 15 * 60 * 1000);
-
-        return () => clearInterval(syncInterval);
-    }, [pairingCode]);
-
 
     const handlePairDevice = (e: React.FormEvent) => {
         e.preventDefault();
@@ -334,132 +277,23 @@ export function ExpressKioskApp() {
         setPairingCode(null);
         setPairedDevice(null);
         setInputKey('');
-        setEmployees([]);
         closeVerificationModal();
     };
 
-    const loadFaceModels = async () => {
-        if (FaceApiBrowserService.isReady()) {
-            setModelsReady(true);
-            fetchEmployeeFaceVectors();
-            return;
-        }
-        setModelsLoading(true);
-        setModelProgress(0);
-
-        const ok = await FaceApiBrowserService.loadModels((pct) => {
-            setModelProgress(pct);
-        });
-
-        if (ok) {
-            setModelProgress(100);
-            // 2-second delay after 100% load before revealing Start Verification button
-            setTimeout(() => {
-                setModelsReady(true);
-                setModelsLoading(false);
-                fetchEmployeeFaceVectors();
-            }, 2000);
-        } else {
-            setModelsLoading(false);
-            toast.error('Failed to load face recognition models. Please refresh.');
-        }
+    // The browser only guides capture. It does not load recognition models,
+    // receive employee templates, or decide identities.
+    const loadFaceModels = () => {
+        clearLegacyBiometricCache();
+        setModelsLoading(false);
+        setModelProgress(100);
+        setModelsReady(true);
     };
 
-
-    const descriptorMapRef = useRef<Map<string, Float32Array>>(new Map());
-
-    // Fetch and cache employee face vectors locally using Kiosk Pairing Key (IndexedDB + RAM)
-    const fetchEmployeeFaceVectors = async () => {
-        if (!pairingCode) return;
+    const clearLegacyBiometricCache = async () => {
         try {
-            const res = await fetch('/api/kiosk/face-vectors', {
-                headers: {
-                    'x-kiosk-secret': pairingCode
-                }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                if (data.success) {
-                    const mapped: CachedEmployee[] = data.employees.map((e: any) => {
-                        const vec512 = (Array.isArray(e.faceEmbedding512) && e.faceEmbedding512.length === 512)
-                            ? e.faceEmbedding512
-                            : ((Array.isArray(e.faceEmbedding) && e.faceEmbedding.length === 512) ? e.faceEmbedding : null);
-                        return {
-                            id: e.id,
-                            name: e.name,
-                            avatarUrl: e.avatarUrl,
-                            biometricUserId: e.biometricUserId,
-                            faceEmbedding: vec512,
-                        };
-                    });
-                    setEmployees(mapped);
-                    
-                    // Save to IndexedDB via 'idb' package (saveEmployeeFaces in lib/face-db.ts)
-                    const idbFormatted: EmployeeFace[] = mapped.map(e => ({
-                        id: e.id,
-                        fullName: e.name,
-                        avatarUrl: e.avatarUrl,
-                        employeeCode: e.biometricUserId || undefined,
-                        embedding: e.faceEmbedding || [],
-                        updatedAt: Date.now()
-                    }));
-                    
-                    await saveEmployeeFaces(idbFormatted, pairingCode);
-                    await KioskIndexedDBService.saveEmployees(mapped, pairingCode);
-                    try { localStorage.setItem('payfix_kiosk_cached_employees', JSON.stringify(mapped)); } catch {}
-
-                    const info = await getIdbSyncInfo();
-                    if (info) {
-                        setIdbSyncInfo({
-                            lastSyncedAt: info.lastSyncedAt,
-                            totalEmployees: info.totalEmployees,
-                            enrolledEmployees: info.enrolledEmployees
-                        });
-                    }
-
-                    // Pre-parse Float32Array descriptors into memory cache for instant matching
-                    const newMap = new Map<string, Float32Array>();
-                    mapped.forEach(e => {
-                        if (e.faceEmbedding && e.faceEmbedding.length === 512) {
-                            newMap.set(e.id, new Float32Array(e.faceEmbedding));
-                        }
-                    });
-                    descriptorMapRef.current = newMap;
-
-                    const enrolledCount = mapped.filter(e => e.faceEmbedding && e.faceEmbedding.length === 512).length;
-                    setStats(prev => ({ ...prev, totalEmployees: data.total, enrolledEmployees: enrolledCount }));
-                }
-            } else if (res.status === 401) {
-                toast.error('Unauthorized Kiosk device. Pairing Key rejected.');
-                handleUnpair();
-            }
-        } catch (err) {
-            console.warn('[Kiosk] Failed to fetch face vectors from cloud. Checking IndexedDB offline cache...');
-            const idbEmployees = await KioskIndexedDBService.getEmployees();
-            let mapped: CachedEmployee[] = idbEmployees;
-
-            if (!mapped || mapped.length === 0) {
-                const cached = localStorage.getItem('payfix_kiosk_cached_employees');
-                if (cached) {
-                    try { mapped = JSON.parse(cached); } catch {}
-                }
-            }
-
-            if (mapped && mapped.length > 0) {
-                setEmployees(mapped);
-
-                const newMap = new Map<string, Float32Array>();
-                mapped.forEach(e => {
-                    if (e.faceEmbedding && (e.faceEmbedding.length === 512 || e.faceEmbedding.length === 128)) {
-                        newMap.set(e.id, new Float32Array(e.faceEmbedding));
-                    }
-                });
-                descriptorMapRef.current = newMap;
-
-                const enrolledCount = mapped.filter(e => e.faceEmbedding !== null).length;
-                setStats(prev => ({ ...prev, totalEmployees: mapped.length, enrolledEmployees: enrolledCount }));
-            }
-        }
+            localStorage.removeItem('payfix_kiosk_cached_employees');
+        } catch {}
+        await KioskIndexedDBService.clearEmployeeTemplates();
     };
 
 
@@ -472,15 +306,6 @@ export function ExpressKioskApp() {
         setCapturedFreezeUrl(null);
         setScanError(null);
 
-        // Background Pre-Warm Neural Engine to eliminate cold-start latency
-        setTimeout(() => {
-            try {
-                const dummyCanvas = document.createElement('canvas');
-                dummyCanvas.width = 64;
-                dummyCanvas.height = 64;
-                FaceApiBrowserService.extractDescriptor(dummyCanvas).catch(() => {});
-            } catch {}
-        }, 100);
     };
 
     // Close Verification Modal Flow
@@ -499,29 +324,38 @@ export function ExpressKioskApp() {
 
 
 
-    // Capture 512x512 HD face snapshot directly matching the oval mask area
+    // Capture the complete natural camera frame. The server owns portrait
+    // canonicalization and ArcFace alignment; the kiosk must not make a face crop.
     const captureSnapshot = (): string | null => {
         const video = videoRef.current;
         const snap = canvasRef.current;
         if (!video || !snap || !cameraActive) return null;
         const vw = video.videoWidth || 720;
         const vh = video.videoHeight || 960;
-        const cropSize = Math.min(vw, vh) * 0.66;
-        const sx = (vw - cropSize) / 2;
-        const sy = Math.max(0, (vh - cropSize) * 0.20);
-
-        snap.width = 512;
-        snap.height = 512;
+        const scale = Math.min(1, Math.sqrt(1_000_000 / (vw * vh)));
+        snap.width = Math.max(1, Math.round(vw * scale));
+        snap.height = Math.max(1, Math.round(vh * scale));
         const sctx = snap.getContext('2d');
         if (!sctx) return null;
         sctx.imageSmoothingEnabled = true;
         sctx.imageSmoothingQuality = 'high';
         sctx.save();
-        sctx.translate(512, 0);
+        sctx.translate(snap.width, 0);
         sctx.scale(-1, 1); // Match front camera mirror preview
-        sctx.drawImage(video, sx, sy, cropSize, cropSize, 0, 0, 512, 512);
+        sctx.drawImage(video, 0, 0, vw, vh, 0, 0, snap.width, snap.height);
         sctx.restore();
         return snap.toDataURL('image/jpeg', 0.94);
+    };
+
+    const captureChallengeFrames = async (): Promise<string[]> => {
+        const frames: string[] = [];
+        for (let index = 0; index < 3; index += 1) {
+            const frame = captureSnapshot();
+            if (!frame) return [];
+            frames.push(frame);
+            if (index < 2) await new Promise(resolve => setTimeout(resolve, 260));
+        }
+        return frames;
     };
 
     // Instant Face Verification Scan & Overlay Flow (Continuous Staff Scanning)
@@ -540,14 +374,6 @@ export function ExpressKioskApp() {
             return;
         }
 
-        const enrolledEmployees = employees.filter(e => e.faceEmbedding !== null && (e.faceEmbedding.length === 512 || e.faceEmbedding.length === 128));
-
-        if (enrolledEmployees.length === 0) {
-            playErrorChimeSound();
-            setScanError('No enrolled face vectors found! Employees must upload a profile photo first.');
-            return;
-        }
-
         // 1. Instantly freeze snapshot on screen (<5ms) for instant visual feedback on button tap
         let freezeUrl = overrideSnapshotUrl || captureSnapshot();
         if (freezeUrl) setCapturedFreezeUrl(freezeUrl);
@@ -558,98 +384,40 @@ export function ExpressKioskApp() {
         // 2. Yield control to browser renderer — React repaints freeze frame & bottom status bar BEFORE heavy AI extraction
         setTimeout(async () => {
             try {
-                // Pre-flight lighting check (<2ms) before heavy neural pass
-                if (canvasRef.current && video) {
-                    const tempCanvas = canvasRef.current;
-                    tempCanvas.width = 160;
-                    tempCanvas.height = 120;
-                    const tctx = tempCanvas.getContext('2d');
-                    if (tctx) {
-                        tctx.drawImage(video, 0, 0, 160, 120);
-                        const quality = FaceApiBrowserService.checkFrameQuality(tempCanvas);
-                        if (!quality.acceptable) {
-                            playErrorChimeSound();
-                            setScanError('Lighting too dark! Please ensure face area is well lit.');
-                            setIsScanning(false);
-                            setCapturedFreezeUrl(null);
-                            return;
-                        }
+                 const challengeResponse = await fetch('/api/biometric/challenge', {
+                     method: 'POST',
+                     headers: { 'x-kiosk-secret': pairingCode },
+                     signal: AbortSignal.timeout(10000),
+                 });
+                 const challengeResult = await challengeResponse.json().catch(() => ({}));
+                 if (!challengeResponse.ok || typeof challengeResult.challenge !== 'string') {
+                     throw new Error(challengeResult.error || 'Could not start liveness verification.');
+                 }
+                 const frames = await captureChallengeFrames();
+                 if (frames.length !== 3) throw new Error('Camera frames were not available.');
+                 const snapshotB64 = frames[0];
+                const response = await fetch('/api/kiosk/verify-face', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-kiosk-secret': pairingCode,
+                    },
+                    body: JSON.stringify({
+                         frames,
+                         challenge: challengeResult.challenge,
+                        biometricPipelineVersion: 'natural-portrait-v1',
+                        latitude: terminalGps.latitude,
+                        longitude: terminalGps.longitude,
+                    }),
+                    signal: AbortSignal.timeout(30000),
+                });
+                const serverResult = await response.json().catch(() => ({}));
+                const matchedEmployee = serverResult.matched && serverResult.employee
+                    ? {
+                        id: serverResult.employee.id as string,
+                        name: serverResult.employee.name as string,
+                        avatarUrl: serverResult.employee.avatarUrl as string | null,
                     }
-                }
-
-                // Extract 512-d ArcFace vector with +15% Face Crop & Liveness
-                let liveDescriptor: Float32Array | null = null;
-
-                // 1. High-Speed Server AI Microservice Extraction (ZeroGPU ~29ms)
-                try {
-                    const snapshotB64 = freezeUrl || captureSnapshot();
-                    if (snapshotB64) {
-                        const apiResp = await fetch('/api/kiosk/extract-face', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ imageBase64: snapshotB64 }),
-                            signal: AbortSignal.timeout(5000)
-                        });
-                        if (apiResp.ok) {
-                            const apiData = await apiResp.json();
-                            if (apiData.success && apiData.embedding_512 && apiData.embedding_512.length === 512) {
-                                liveDescriptor = new Float32Array(apiData.embedding_512);
-                                if (apiData.cropped_face_base64) {
-                                    setCapturedFreezeUrl(apiData.cropped_face_base64);
-                                }
-                            }
-                        }
-                    }
-                } catch (servErr) {
-                    console.warn('[Kiosk] Fast server extract fallback to local:', servErr);
-                }
-
-                // 2. Offline / Local Fallback if server unreachable
-                if (!liveDescriptor) {
-                    const extracted512 = await FaceVerificationService.extractAligned512dDescriptor(video);
-                    if (extracted512?.embedding) {
-                        liveDescriptor = new Float32Array(extracted512.embedding);
-                        if (extracted512?.cropDataUrl) {
-                            setCapturedFreezeUrl(extracted512.cropDataUrl);
-                        }
-                    } else {
-                        const alignedResult = await FaceApiBrowserService.extractAlignedSquareFaceCrop(video);
-                        liveDescriptor = alignedResult?.descriptor || await FaceApiBrowserService.extractDescriptor(video);
-                        if (alignedResult?.croppedDataUrl) {
-                            setCapturedFreezeUrl(alignedResult.croppedDataUrl);
-                        }
-                    }
-                }
-
-                if (!liveDescriptor) {
-                    playErrorChimeSound();
-                    const snapshotUrl = freezeUrl || captureSnapshot();
-                    setVerificationResult({
-                        status: 'rejected',
-                        matched: false,
-                        error: 'No face detected. Please align face inside camera circle.',
-                        duration: getDurationStr(),
-                        snapshotUrl,
-                    });
-                    setTimeout(() => {
-                        setVerificationResult(null);
-                        setCapturedFreezeUrl(null);
-                        setIsScanning(false);
-                    }, 2400);
-                    return;
-                }
-
-                // 3. Fast L2-Normalized Dot-Product Matching + Adaptive Threshold (0.68) + Top-2 Gap Check (0.08)
-                const candidateList: EmployeeFace[] = enrolledEmployees.map(emp => ({
-                    id: emp.id,
-                    fullName: emp.name,
-                    embedding: l2Normalize(emp.faceEmbedding!)
-                }));
-
-                const matchRes = matchFaceFast(liveDescriptor, candidateList, 0.62, 0.03);
-
-                const matchedEmployee = matchRes.isMatch && matchRes.employee
-                    ? enrolledEmployees.find(e => e.id === matchRes.employee!.id) || null
                     : null;
 
                 const now = new Date();
@@ -661,7 +429,7 @@ export function ExpressKioskApp() {
                     setVerificationResult({
                         status: 'rejected',
                         matched: false,
-                        error: matchRes.message.includes('Ambiguous') ? matchRes.message : `Face Not Recognized. (Score: ${(matchRes.similarity * 100).toFixed(0)}%)`,
+                        error: serverResult.error || 'Face is not recognized. Please try again.',
                         duration: getDurationStr(),
                         snapshotUrl,
                     });
@@ -675,7 +443,7 @@ export function ExpressKioskApp() {
 
                 // 4. Face MATCHED!
                 const snapshotUrl = freezeUrl || captureSnapshot();
-                const similarity = `${(matchRes.similarity * 100).toFixed(1)}%`;
+                const similarity = `${(Number(serverResult.similarity || 0) * 100).toFixed(1)}%`;
                 const duration = getDurationStr();
                 const dateFormatted = format(now, 'dd/MM/yyyy');
                 const timeFormatted = format(now, 'hh:mm a');
@@ -688,8 +456,8 @@ export function ExpressKioskApp() {
                     avatarUrl: matchedEmployee.avatarUrl,
                     time: timeFormatted,
                     date: dateFormatted,
-                    sessionNumber: 1,
-                    punchAction: 'check_in',
+                    sessionNumber: serverResult.punch?.sessionNumber || 1,
+                    punchAction: serverResult.punch?.action || 'check_in',
                     similarity,
                     duration,
                     snapshotUrl,
@@ -703,48 +471,8 @@ export function ExpressKioskApp() {
 
                 playChimeSound();
 
-                // 5. ASYNC BACKGROUND PUNCH (Non-blocking DB sync while camera stays active for next staff)
-                const punchLog: QueuedPunch = {
-                    id: `punch_${Date.now()}`,
-                    profileId: matchedEmployee.id,
-                    employeeName: matchedEmployee.name,
-                    timestamp: now.toISOString(),
-                    punchType: 'auto',
-                    synced: false,
-                    latitude: terminalGps.latitude,
-                    longitude: terminalGps.longitude,
-                };
-
-                (async () => {
-                    if (navigator.onLine) {
-                        try {
-                            const res = await fetch('/api/kiosk/sync', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'x-kiosk-secret': pairingCode
-                                },
-                                body: JSON.stringify(punchLog),
-                            });
-                            if (res.ok) {
-                                const data = await res.json();
-                                if (data?.punchResult) {
-                                    setVerificationResult(prev => prev ? {
-                                        ...prev,
-                                        sessionNumber: data.punchResult.sessionNumber || 1,
-                                        punchAction: data.punchResult.action || 'check_in',
-                                    } : null);
-                                }
-                            } else {
-                                queueOfflinePunch(punchLog);
-                            }
-                        } catch {
-                            queueOfflinePunch(punchLog);
-                        }
-                    } else {
-                        queueOfflinePunch(punchLog);
-                    }
-                })();
+                // The paired server has already verified the face and recorded the
+                // attendance event. There is deliberately no offline punch fallback.
 
                 // Auto-reset overlay after 2.8 seconds & unfreeze camera for next staff
                 setTimeout(() => {
@@ -762,7 +490,7 @@ export function ExpressKioskApp() {
         }
         }, 10);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isScanning, modelsReady, employees, cameraActive, pairingCode, terminalGps]);
+    }, [isScanning, modelsReady, cameraActive, pairingCode, terminalGps]);
 
 
     const playErrorChimeSound = () => {
@@ -795,35 +523,6 @@ export function ExpressKioskApp() {
             osc.start();
             osc.stop(ctx.currentTime + 0.4);
         } catch (e) { }
-    };
-
-    const queueOfflinePunch = (punch: QueuedPunch) => {
-        setOfflineQueue(prev => {
-            const updated = [...prev, punch];
-            setStats(s => ({ ...s, queuedOffline: updated.length }));
-            return updated;
-        });
-    };
-
-    const flushOfflineQueue = async () => {
-        if (!pairingCode) return;
-        setOfflineQueue(prev => {
-            if (prev.length === 0) return prev;
-            fetch('/api/kiosk/sync', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-kiosk-secret': pairingCode
-                },
-                body: JSON.stringify({ punches: prev }),
-            }).then(res => {
-                if (res.ok) {
-                    toast.success(`Synced ${prev.length} offline punches!`);
-                    setStats(s => ({ ...s, queuedOffline: 0 }));
-                }
-            }).catch(() => {});
-            return [];
-        });
     };
 
     // =========================================================================
@@ -937,7 +636,7 @@ export function ExpressKioskApp() {
                         </Badge>
                     ) : (
                         <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 px-2.5 py-0.5 font-semibold text-xs flex items-center gap-1">
-                            <WifiOff className="h-3 w-3" /> Offline ({stats.queuedOffline})
+                            <WifiOff className="h-3 w-3" /> Offline — verification unavailable
                         </Badge>
                     )}
 
@@ -975,12 +674,6 @@ export function ExpressKioskApp() {
                                 <Cpu className="h-3.5 w-3.5 text-sky-400" />
                                 <span>{hardwareInfo.backend}</span>
                             </Badge>
-                            {idbSyncInfo && (
-                                <Badge variant="outline" className="border-sky-500/40 bg-sky-950/60 text-sky-300 text-[11px] font-bold gap-1.5 py-1 px-2.5 shadow-md">
-                                    <ShieldCheck className="h-3.5 w-3.5 text-sky-400 animate-pulse" />
-                                    <span>💾 IndexedDB: {idbSyncInfo.enrolledEmployees} Vectors Cached</span>
-                                </Badge>
-                            )}
                         </div>
 
                     </div>
@@ -1064,33 +757,33 @@ export function ExpressKioskApp() {
 
                         )}
 
-                        {/* 3. TERMINAL LOCAL CACHE EMBEDDED INSIDE HERO CARD */}
+                        {/* 3. SERVER-VERIFIED SECURITY STATUS */}
                         <div className="w-full max-w-xl mx-auto mt-4 p-3.5 rounded-xl bg-slate-950/70 border border-slate-800/80 backdrop-blur-md space-y-2.5">
                             <div className="flex items-center justify-between border-b border-slate-800/80 pb-1.5">
                                 <span className="text-xs text-slate-400 flex items-center gap-1.5 font-medium">
-                                    <Zap className="h-3.5 w-3.5 text-sky-400" /> Terminal Local Cache
+                                    <ShieldCheck className="h-3.5 w-3.5 text-sky-400" /> Biometric Security
                                 </span>
                                 <Button
-                                    onClick={fetchEmployeeFaceVectors}
+                                    onClick={clearLegacyBiometricCache}
                                     variant="ghost"
                                     size="sm"
                                     className="h-6 px-2 text-[11px] text-slate-400 hover:text-white hover:bg-slate-800/80 font-semibold"
                                 >
-                                    <RefreshCw className="h-3 w-3 mr-1" /> Reload Vectors
+                                    <RefreshCw className="h-3 w-3 mr-1" /> Clear old local data
                                 </Button>
                             </div>
                             <div className="grid grid-cols-3 gap-2 text-center text-xs">
                                 <div className="p-2 rounded-lg bg-slate-900/80 border border-slate-800">
-                                    <div className="text-[10px] text-slate-400">Workspace Staff</div>
-                                    <div className="text-sm font-bold text-white font-mono mt-0.5">{stats.totalEmployees}</div>
+                                    <div className="text-[10px] text-slate-400">Identity matching</div>
+                                    <div className="text-sm font-bold text-white font-mono mt-0.5">Server</div>
                                 </div>
                                 <div className="p-2 rounded-lg bg-slate-900/80 border border-slate-800">
-                                    <div className="text-[10px] text-slate-400">Face Enrolled</div>
-                                    <div className="text-sm font-bold text-emerald-400 font-mono mt-0.5">{stats.enrolledEmployees}</div>
+                                    <div className="text-[10px] text-slate-400">Browser templates</div>
+                                    <div className="text-sm font-bold text-emerald-400 font-mono mt-0.5">None</div>
                                 </div>
                                 <div className="p-2 rounded-lg bg-slate-900/80 border border-slate-800">
-                                    <div className="text-[10px] text-slate-400">Queued Offline</div>
-                                    <div className="text-sm font-bold text-amber-400 font-mono mt-0.5">{stats.queuedOffline}</div>
+                                    <div className="text-[10px] text-slate-400">Offline punches</div>
+                                    <div className="text-sm font-bold text-amber-400 font-mono mt-0.5">Disabled</div>
                                 </div>
                             </div>
                         </div>
@@ -1159,13 +852,13 @@ export function ExpressKioskApp() {
                         videoRefOut={videoRef}
                         onStreamReady={() => setCameraActive(true)}
                         onCameraError={() => setCameraActive(false)}
-                        statusText={isScanning && !verificationResult ? "512×512 HD biometrics matching..." : undefined}
+                        statusText={isScanning && !verificationResult ? "Verifying securely on the server..." : undefined}
                         isProcessing={isScanning && !verificationResult}
                         enableAutoBlinkCapture={!isScanning && isVerificationModalOpen}
                         capturedCroppedUrl={capturedFreezeUrl}
                         onAutoCapture={(dataUrl) => {
                             if (!isScanning) {
-                                toast.success('Blink verified! Matching employee face 👁️');
+                                toast.success('Camera frame captured. Verifying attendance...');
                                 handleFaceScan(dataUrl);
                             }
                         }}

@@ -280,6 +280,12 @@ export class AttendanceService {
                     "raw_payload" jsonb,
                     "created_at" timestamp with time zone DEFAULT now()
                 );
+
+                 -- The active-session index is the final concurrency guard for
+                 -- kiosk/mobile requests that arrive in different processes.
+                 CREATE UNIQUE INDEX IF NOT EXISTS "attendance_sessions_one_active_per_profile_day"
+                     ON "attendance_sessions" ("profile_id", "date")
+                     WHERE "status" = 'active';
             `);
             _attendanceSchemaEnsured.add(schemaKey)
         } catch (e) {
@@ -328,19 +334,6 @@ export class AttendanceService {
         // For off days and holidays, they are automatically clocked in as pending extra days
         const autoExtraDay = isOffDay || isHoliday
 
-        // Check if an active session exists for this user today
-        const activeSession = await db.query.attendanceSessions.findFirst({
-            where: and(
-                eq(attendanceSessions.profile_id, profileId),
-                eq(attendanceSessions.date, today),
-                eq(attendanceSessions.status, 'active')
-            )
-        })
-
-        if (activeSession) {
-            throwAppError('ALREADY_CLOCKED_IN', 'An active attendance session is currently in progress. Please clock out first.')
-        }
-
         // Resolve location name & Validate Geofence
         let locationName: string | null = null
 
@@ -388,51 +381,62 @@ export class AttendanceService {
 
         const now = new Date()
 
-        // Fetch parent attendance record
-        let parentRecord = await db.query.attendance.findFirst({
-            where: and(
-                eq(attendance.profile_id, profileId),
-                eq(attendance.date, today)
-            )
-        })
+        // Keep the active-session check and both writes in one transaction.
+        // The unique partial index above protects this invariant across
+        // concurrent requests and across multiple application instances.
+        const parentRecord = await db.transaction(async (tx) => {
+            const activeSession = await tx.query.attendanceSessions.findFirst({
+                where: and(
+                    eq(attendanceSessions.profile_id, profileId),
+                    eq(attendanceSessions.date, today),
+                    eq(attendanceSessions.status, 'active')
+                )
+            })
 
-        const currentTotalSessions = (parentRecord?.total_sessions || 0) + 1
+            if (activeSession) {
+                throwAppError('ALREADY_CLOCKED_IN', 'An active attendance session is currently in progress. Please clock out first.')
+            }
 
-        const validSource = (source === 'kiosk' ? 'biometric' : (source || 'mobile')) as any
+            let record = await tx.query.attendance.findFirst({
+                where: and(
+                    eq(attendance.profile_id, profileId),
+                    eq(attendance.date, today)
+                )
+            })
+            const currentTotalSessions = (record?.total_sessions || 0) + 1
+            const validSource = (source === 'kiosk' ? 'biometric' : (source || 'mobile')) as any
 
-        if (!parentRecord) {
-            const [newParent] = await db.insert(attendance).values({
-                profile_id: profileId,
-                date: today,
-                check_in: now,
-                first_check_in: now,
-                total_sessions: 1,
-                current_session_status: 'checked_in',
-                status: 'pending',
-                source: validSource,
-                device_id: deviceId || null,
-                location_id: locationId || null,
-                selfie_url: selfieUrl || null,
-                is_extra_day: isExtraDay || autoExtraDay,
-                checkin_latitude: latitude ? String(latitude) : null,
-                checkin_longitude: longitude ? String(longitude) : null,
-                checkin_location_name: locationName
-            }).returning()
-            parentRecord = newParent
-        } else {
-            const [updatedParent] = await db.update(attendance).set({
-                total_sessions: currentTotalSessions,
-                current_session_status: 'checked_in',
-                first_check_in: parentRecord.first_check_in || parentRecord.check_in || now,
-                updated_at: now
-            }).where(eq(attendance.id, parentRecord.id)).returning()
-            parentRecord = updatedParent
-        }
+            if (!record) {
+                const [newParent] = await tx.insert(attendance).values({
+                    profile_id: profileId,
+                    date: today,
+                    check_in: now,
+                    first_check_in: now,
+                    total_sessions: 1,
+                    current_session_status: 'checked_in',
+                    status: 'pending',
+                    source: validSource,
+                    device_id: deviceId || null,
+                    location_id: locationId || null,
+                    selfie_url: selfieUrl || null,
+                    is_extra_day: isExtraDay || autoExtraDay,
+                    checkin_latitude: latitude ? String(latitude) : null,
+                    checkin_longitude: longitude ? String(longitude) : null,
+                    checkin_location_name: locationName
+                }).returning()
+                record = newParent
+            } else {
+                const [updatedParent] = await tx.update(attendance).set({
+                    total_sessions: currentTotalSessions,
+                    current_session_status: 'checked_in',
+                    first_check_in: record.first_check_in || record.check_in || now,
+                    updated_at: now
+                }).where(eq(attendance.id, record.id)).returning()
+                record = updatedParent
+            }
 
-        // Insert session + activity in parallel (independent writes)
-        await Promise.all([
-            db.insert(attendanceSessions).values({
-                attendance_id: parentRecord.id,
+            await tx.insert(attendanceSessions).values({
+                attendance_id: record.id,
                 profile_id: profileId,
                 date: today,
                 session_number: currentTotalSessions,
@@ -445,14 +449,15 @@ export class AttendanceService {
                 checkin_latitude: latitude ? String(latitude) : null,
                 checkin_longitude: longitude ? String(longitude) : null,
                 checkin_location_name: locationName
-            }),
-            db.insert(activities).values({
+            })
+            await tx.insert(activities).values({
                 user_id: profileId,
                 activity_type: 'data_create',
                 module: 'attendance',
                 description: `Clocked in (Session #${currentTotalSessions}) at ${getLocalTimeIST12Hour()}${isExtraDay ? ' (Extra Work)' : ''}${locationName ? ` from ${locationName}` : ''}`,
             })
-        ])
+            return record
+        })
 
         return parentRecord
     }

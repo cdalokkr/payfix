@@ -84,6 +84,7 @@ export function SelfieCapture({
     const [apiStatus, setApiStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle')
     const [apiError, setApiError] = useState<string>('')
     const [verificationDetails, setVerificationDetails] = useState<DailyVerificationDetails | null>(null)
+    const [livenessChallenge, setLivenessChallenge] = useState<string | null>(null)
 
     const videoRef = useRef<HTMLVideoElement>(null)
     const streamRef = useRef<MediaStream | null>(null)
@@ -112,8 +113,29 @@ export function SelfieCapture({
         setStatus('streaming')
     }, [])
 
+    const getLivenessChallenge = useCallback(async () => {
+        const response = await fetch('/api/biometric/challenge', { method: 'POST' })
+        const result = await response.json().catch(() => ({}))
+        if (!response.ok || typeof result.challenge !== 'string') throw new Error(result.error || 'Could not start liveness verification.')
+        setLivenessChallenge(result.challenge)
+        return result.challenge as string
+    }, [])
+
+    const captureChallengeFrames = useCallback(async () => {
+        const video = videoRef.current
+        if (!video) return []
+        const frames: string[] = []
+        for (let index = 0; index < 3; index += 1) {
+            const capture = captureNaturalBiometricFrame(video)
+            if (!capture) return []
+            frames.push(capture.dataUrl)
+            if (index < 2) await new Promise(resolve => setTimeout(resolve, 260))
+        }
+        return frames
+    }, [])
+
     // Core verification routine on 512x512 HD snapshot
-    const executeVerify = useCallback(async (imageToVerify: string) => {
+    const executeVerify = useCallback(async (imageToVerify: string, challenge?: string, frames?: string[]) => {
         if (!imageToVerify) return
 
         const startTime = performance.now()
@@ -148,7 +170,7 @@ export function SelfieCapture({
         try {
             // Hard timeout — 45s allows for model loading + inference on slow mobile devices
             const result = await Promise.race([
-                FaceVerificationService.compareFaces(imageToVerify, profileImageUrl, undefined, faceEmbedding),
+                FaceVerificationService.compareFaces(imageToVerify, profileImageUrl, undefined, faceEmbedding, challenge, frames),
                 new Promise<never>((_, reject) =>
                     setTimeout(() => reject(new Error('TIMEOUT')), 45000)
                 ),
@@ -217,14 +239,34 @@ export function SelfieCapture({
         if (!videoRef.current || status !== 'streaming') return
         const capture = captureNaturalBiometricFrame(videoRef.current)
         if (!capture) { toast.error('Camera frame is not ready. Please try again.'); return }
-        executeVerify(capture.dataUrl)
-    }, [status, executeVerify])
+        void (async () => {
+            try {
+                const challenge = await getLivenessChallenge()
+                const frames = await captureChallengeFrames()
+                if (frames.length !== 3) throw new Error('Camera frames were not available. Please retake your selfie.')
+                executeVerify(frames[0], challenge, frames)
+            } catch (error: any) {
+                setStatus('verify_failed')
+                setErrorMessage(error?.message || 'Could not start liveness verification.')
+            }
+        })()
+    }, [status, executeVerify, getLivenessChallenge, captureChallengeFrames])
 
     // Auto-capture on verified in-mask eye blink
     const handleAutoCapture = useCallback((dataUrl: string) => {
         toast.success('Blink verified! Verifying face biometrics 👁️')
-        executeVerify(dataUrl)
-    }, [executeVerify])
+        void (async () => {
+            try {
+                const challenge = await getLivenessChallenge()
+                const frames = await captureChallengeFrames()
+                if (frames.length !== 3) throw new Error('Camera frames were not available. Please retake your selfie.')
+                executeVerify(frames[0] || dataUrl, challenge, frames)
+            } catch (error: any) {
+                setStatus('verify_failed')
+                setErrorMessage(error?.message || 'Could not start liveness verification.')
+            }
+        })()
+    }, [executeVerify, getLivenessChallenge, captureChallengeFrames])
 
     const [verificationDuration, setVerificationDuration] = useState<string>('')
 

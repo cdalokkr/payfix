@@ -79,6 +79,8 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
     const [isUploading, setIsUploading] = useState(false)
     const [debugLogs, setDebugLogs] = useState<string[]>([])
     const [captureDiagnostics, setCaptureDiagnostics] = useState<CaptureDiagnostics | null>(null)
+    const [livenessChallenge, setLivenessChallenge] = useState<string | null>(null)
+    const [livenessFrames, setLivenessFrames] = useState<string[]>([])
     const statusRef = useRef(status)
 
     // Debug logger
@@ -241,24 +243,41 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
     }, [stopCamera])
 
     // Auto-capture triggered on verified in-mask eye blink
-    const handleAutoCapture = useCallback((dataUrl: string) => {
-        recordCaptureDiagnostics(dataUrl, 'Natural portrait auto-capture — server canonicalization pending')
-        setCapturedImage(dataUrl)
-        setStatus('captured')
-        stopCamera()
-        toast.success('Blink detected! Photo captured 📸')
-    }, [recordCaptureDiagnostics, stopCamera])
-
     // Capture a complete portrait frame. The server owns face crops and alignment.
     const capturePhoto = useCallback(() => {
         if (!videoRef.current || status !== 'streaming') return
-        const capture = captureNaturalBiometricFrame(videoRef.current)
-        if (!capture) { toast.error('Camera frame is not ready. Please try again.'); return }
-        recordCaptureDiagnostics(capture.dataUrl, 'Natural portrait capture — server canonicalization pending')
-        setCapturedImage(capture.dataUrl)
-        setStatus('captured')
-        stopCamera()
+        void (async () => {
+            try {
+                const challengeResponse = await fetch('/api/biometric/challenge', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ purpose: 'enrollment' }),
+                })
+                const challengeResult = await challengeResponse.json().catch(() => ({}))
+                if (!challengeResponse.ok || typeof challengeResult.challenge !== 'string') throw new Error(challengeResult.error || 'Could not start liveness verification.')
+                const frames: string[] = []
+                for (let index = 0; index < 3; index += 1) {
+                    const capture = captureNaturalBiometricFrame(videoRef.current!)
+                    if (!capture) throw new Error('Camera frame is not ready. Please retake the selfie.')
+                    frames.push(capture.dataUrl)
+                    if (index < 2) await new Promise(resolve => setTimeout(resolve, 260))
+                }
+                recordCaptureDiagnostics(frames[0], 'Natural portrait multi-frame capture')
+                setLivenessChallenge(challengeResult.challenge)
+                setLivenessFrames(frames)
+                setCapturedImage(frames[0])
+                setStatus('captured')
+                stopCamera()
+            } catch (error: any) {
+                toast.error(error?.message || 'Could not start liveness verification.')
+            }
+        })()
     }, [recordCaptureDiagnostics, stopCamera, status])
+
+    const handleAutoCapture = useCallback((_dataUrl: string) => {
+        toast.success('Blink detected! Capturing liveness frames...')
+        capturePhoto()
+    }, [capturePhoto])
 
     // Retake photo
     const handleRetake = useCallback(() => {
@@ -295,6 +314,8 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
             formData.append('file', blob, 'avatar.jpg')
             formData.append('profileId', profileId)
             formData.append('biometricPipelineVersion', BIOMETRIC_CAPTURE_PIPELINE_VERSION)
+            formData.append('challenge', livenessChallenge || '')
+            formData.append('livenessFrames', JSON.stringify(livenessFrames))
             const response = await fetch('/api/upload-avatar', {
                 method: 'POST',
                 body: formData,
@@ -329,7 +350,7 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
         } finally {
             setIsUploading(false)
         }
-    }, [capturedImage, profileId, addLog, createPhotoRequest])
+    }, [capturedImage, livenessChallenge, livenessFrames, profileId, addLog, createPhotoRequest])
 
 
     // Handle back button
