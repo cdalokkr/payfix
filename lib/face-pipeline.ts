@@ -16,7 +16,7 @@ export const BIOMETRIC_CAMERA_CONFIG = {
   height: 1280,
   minWidth: 480,
   minHeight: 640,
-  aspectRatio: 0.75,
+  aspectRatio: 4 / 3, // Camera-native 4:3 family; the canonical biometric output is always square.
   facingMode: { ideal: 'user' } as const,
   inputSize: 416 as const,
   scoreThreshold: 0.5,
