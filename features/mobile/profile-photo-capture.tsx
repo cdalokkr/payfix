@@ -72,7 +72,7 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
     const isFirstTimeUpload = profileData.avatarStatus !== 'custom'
     const hasPendingRequest = !!pendingRequest
 
-    const [status, setStatus] = useState<'idle' | 'streaming' | 'captured' | 'uploading' | 'success' | 'submitted' | 'error'>('idle')
+    const [status, setStatus] = useState<'idle' | 'streaming' | 'capturing' | 'captured' | 'uploading' | 'success' | 'submitted' | 'error'>('idle')
 
     const [errorMessage, setErrorMessage] = useState<string>('')
     const [capturedImage, setCapturedImage] = useState<string | null>(null)
@@ -246,6 +246,8 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
     // Capture a complete portrait frame. The server owns face crops and alignment.
     const capturePhoto = useCallback(() => {
         if (!videoRef.current || status !== 'streaming') return
+        setStatus('capturing')
+        setErrorMessage('')
         void (async () => {
             try {
                 const challengeResponse = await fetch('/api/biometric/challenge', {
@@ -269,6 +271,8 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
                 setStatus('captured')
                 stopCamera()
             } catch (error: any) {
+                setStatus('streaming')
+                setErrorMessage(error?.message || 'Could not start liveness verification.')
                 toast.error(error?.message || 'Could not start liveness verification.')
             }
         })()
@@ -396,9 +400,15 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
             videoRefOut={videoRef}
             warmedStream={preWarmedStream}
             onStreamReady={() => setStatus('streaming')}
-            statusText={status === 'captured' ? 'Photo captured! Review below' : undefined}
+            statusText={
+                status === 'capturing'
+                    ? 'Preparing secure liveness capture...'
+                    : status === 'captured'
+                        ? 'Photo captured! Review below'
+                        : undefined
+            }
             timerSeconds={!capturedImage && status !== 'captured' ? sessionTimeout : undefined}
-            enableAutoBlinkCapture={!capturedImage && status !== 'uploading' && status !== 'submitted'}
+             enableAutoBlinkCapture={!capturedImage && status !== 'capturing' && status !== 'uploading' && status !== 'submitted'}
             capturedPreviewUrl={capturedImage}
             onAutoCapture={handleAutoCapture}
             footerSlot={
@@ -447,7 +457,7 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
                         </details>
                     )}
 
-                    {status !== 'captured' && status !== 'submitted' && status !== 'success' && status !== 'uploading' && (
+                    {status !== 'captured' && status !== 'submitted' && status !== 'success' && status !== 'uploading' && status !== 'capturing' && (
                         <Button
                             onClick={capturePhoto}
                             disabled={status !== 'streaming'}
@@ -469,6 +479,17 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
                                     STARTING CAMERA...
                                 </>
                             )}
+                        </Button>
+                    )}
+
+                    {status === 'capturing' && (
+                        <Button
+                            disabled
+                            size="lg"
+                            className="w-full h-14 rounded-2xl bg-slate-800 text-slate-300 border border-slate-700 cursor-wait opacity-90"
+                        >
+                            <IconLoader2 className="w-5 h-5 mr-2 animate-spin text-sky-400" />
+                            PREPARING SECURE CAPTURE...
                         </Button>
                     )}
 
