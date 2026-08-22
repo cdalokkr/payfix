@@ -5,6 +5,7 @@
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch'
 import { appRouter } from '@/lib/trpc/routers'
 import { createContext } from '@/lib/trpc/server'
+import { runWithRequestHeaders } from '@/lib/tenant/with-context'
 
 // Security headers for API responses
 const SECURITY_HEADERS = {
@@ -24,7 +25,7 @@ function onError({ error, path }: { error: Error; path: string | undefined }) {
   })
 }
 
-const handler = async (req: Request) => {
+const handler = async (req: Request) => runWithRequestHeaders(async () => {
   // Validate request method
   const method = req.method
   if (!['GET', 'POST'].includes(method)) {
@@ -67,7 +68,7 @@ const handler = async (req: Request) => {
     statusText: response.statusText,
     headers,
   })
-}
+})
 
 export { handler as GET, handler as POST }
 
