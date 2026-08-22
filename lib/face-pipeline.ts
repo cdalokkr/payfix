@@ -109,3 +109,19 @@ export function verifyAgainstEmployees(
     profile,
   });
 }
+
+/** Browser capture contract: complete camera frame only; server owns face cropping and alignment. */
+export const BIOMETRIC_CAPTURE_PIPELINE_VERSION = 'natural-portrait-v1';
+export interface NaturalBiometricCapture { dataUrl: string; width: number; height: number; }
+export function captureNaturalBiometricFrame(video: HTMLVideoElement, options: { maxDimension?: number; jpegQuality?: number; mirror?: boolean } = {}): NaturalBiometricCapture | null {
+  const sourceWidth = video.videoWidth; const sourceHeight = video.videoHeight;
+  if (!sourceWidth || !sourceHeight) return null;
+  const scale = Math.min(1, (options.maxDimension ?? 1280) / Math.max(sourceWidth, sourceHeight));
+  const width = Math.max(1, Math.round(sourceWidth * scale)); const height = Math.max(1, Math.round(sourceHeight * scale));
+  const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
+  const context = canvas.getContext('2d'); if (!context) return null;
+  context.imageSmoothingEnabled = true; context.imageSmoothingQuality = 'high';
+  if (options.mirror ?? true) { context.translate(width, 0); context.scale(-1, 1); }
+  context.drawImage(video, 0, 0, sourceWidth, sourceHeight, 0, 0, width, height);
+  return { dataUrl: canvas.toDataURL('image/jpeg', options.jpegQuality ?? 0.88), width, height };
+}
