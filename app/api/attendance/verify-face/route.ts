@@ -7,6 +7,8 @@ import { FaceServiceClient } from '@/lib/face-service-client'
 import { runWithRequestHeaders } from '@/lib/tenant/with-context'
 import { tenantStorage } from '@/lib/tenant/store'
 
+const NATURAL_PORTRAIT_PIPELINE = 'natural-portrait-v1'
+
 const SELFIE_DATA_URL = /^data:image\/(jpeg|png|webp);base64,/
 
 export async function POST(request: NextRequest) {
@@ -16,7 +18,8 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Tenant context is required for biometric verification.' }, { status: 400 })
         }
     try {
-        const { selfieBase64 } = await request.json()
+        const { selfieBase64, biometricPipelineVersion } = await request.json()
+        const capturePipeline = biometricPipelineVersion === NATURAL_PORTRAIT_PIPELINE ? NATURAL_PORTRAIT_PIPELINE : 'legacy-client-crop-v1'
         if (typeof selfieBase64 !== 'string' || !SELFIE_DATA_URL.test(selfieBase64)) {
             return NextResponse.json({ error: 'A JPEG, PNG, or WebP camera selfie is required.' }, { status: 400 })
         }
@@ -65,6 +68,7 @@ export async function POST(request: NextRequest) {
                 embeddingDimensions: selfie.length,
                 livenessPassed: extraction.is_live === true,
                 backend: extraction.diagnostics?.backend_engine || 'Not reported',
+                capturePipeline,
             },
             error: matched ? undefined : 'Face does not match the approved profile photo.',
         })
