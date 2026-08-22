@@ -269,7 +269,9 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                 // Capture a complete natural frame; face crops and alignment are server-owned.
                 const naturalCapture = captureNaturalBiometricFrame(video);
                 const capturedDataUrl = naturalCapture?.dataUrl || '';
-                if (capturedDataUrl) setInternalPreviewUrl(capturedDataUrl);
+                // Do not show a frozen preview until the parent has completed the
+                // server-bound challenge and accepted all natural frames. Showing
+                // this intermediate frame made a failed challenge look captured.
 
                 // Quick haptic pulse
                 if (typeof navigator !== 'undefined' && navigator.vibrate) {
