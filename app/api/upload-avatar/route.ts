@@ -5,6 +5,7 @@ import { FaceServiceClient } from '@/lib/face-service-client'
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
+const NATURAL_PORTRAIT_PIPELINE = 'natural-portrait-v1'
 
 function hasSupportedImageSignature(bytes: Uint8Array) {
     const isJpeg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
@@ -23,6 +24,8 @@ export async function POST(request: NextRequest) {
         const formData = await request.formData()
         const file = formData.get('file')
         const profileId = formData.get('profileId')
+        const submittedPipelineVersion = formData.get('biometricPipelineVersion')
+        const capturePipeline = submittedPipelineVersion === NATURAL_PORTRAIT_PIPELINE ? NATURAL_PORTRAIT_PIPELINE : 'legacy-client-crop-v1'
         if (!(file instanceof Blob) || typeof profileId !== 'string') return NextResponse.json({ error: 'A profile image is required.' }, { status: 400 })
         if (profileId !== user.id) return NextResponse.json({ error: 'Cannot upload for another user.' }, { status: 403 })
         if (!ALLOWED_IMAGE_TYPES.has(file.type) || file.size === 0 || file.size > MAX_IMAGE_BYTES) return NextResponse.json({ error: 'Upload a JPEG, PNG, or WebP image smaller than 5 MB.' }, { status: 400 })
@@ -52,6 +55,7 @@ export async function POST(request: NextRequest) {
             bytes: file.size,
             contentType,
             storedOriginalPortrait: true,
+            capturePipeline,
             faceCount: extraction.face_count,
             embeddingDimensions: embedding.length,
             livenessPassed: extraction.is_live,
@@ -73,6 +77,7 @@ export async function POST(request: NextRequest) {
                 imageBytes: file.size,
                 mimeType: contentType,
                 storedOriginalPortrait: true,
+                capturePipeline,
                 faceCount: extraction.face_count,
                 embeddingDimensions: embedding.length,
                 livenessPassed: extraction.is_live === true,
