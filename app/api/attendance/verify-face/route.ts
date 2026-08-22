@@ -4,10 +4,17 @@ import { db } from '@/lib/db'
 import { profiles } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { FaceServiceClient } from '@/lib/face-service-client'
+import { runWithRequestHeaders } from '@/lib/tenant/with-context'
+import { tenantStorage } from '@/lib/tenant/store'
 
 const SELFIE_DATA_URL = /^data:image\/(jpeg|png|webp);base64,/
 
 export async function POST(request: NextRequest) {
+    return runWithRequestHeaders(async () => {
+        const tenant = tenantStorage.getStore()
+        if (!tenant?.tenantId) {
+            return NextResponse.json({ error: 'Tenant context is required for biometric verification.' }, { status: 400 })
+        }
     try {
         const { selfieBase64 } = await request.json()
         if (typeof selfieBase64 !== 'string' || !SELFIE_DATA_URL.test(selfieBase64)) {
@@ -65,4 +72,5 @@ export async function POST(request: NextRequest) {
         console.error('[VerifyFaceAPI] Error:', error)
         return NextResponse.json({ error: 'Face verification could not be completed.' }, { status: 500 })
     }
+    })
 }
