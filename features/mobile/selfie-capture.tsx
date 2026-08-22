@@ -23,7 +23,7 @@ import {
 import { format } from "date-fns"
 import { Slider } from "@/components/ui/slider"
 import { FaceVerificationService } from "@/lib/services/face-verification.service"
-import { MediaPipeMeshService } from "@/lib/services/mediapipe-mesh.service"
+import { captureNaturalBiometricFrame } from "@/lib/face-pipeline"
 import { OfflineSyncService } from "@/lib/services/offline-sync.service"
 import { BiometricCameraModal } from "@/components/biometrics/BiometricCameraModal"
 
@@ -86,7 +86,6 @@ export function SelfieCapture({
     const [verificationDetails, setVerificationDetails] = useState<DailyVerificationDetails | null>(null)
 
     const videoRef = useRef<HTMLVideoElement>(null)
-    const canvasRef = useRef<HTMLCanvasElement>(null)
     const streamRef = useRef<MediaStream | null>(null)
 
     // Stop camera stream
@@ -124,7 +123,7 @@ export function SelfieCapture({
             : 'Unavailable'
         setVerificationDetails({
             cameraResolution,
-            outputResolution: '512 × 512',
+            outputResolution: `${videoRef.current?.videoWidth || 'Unknown'} × ${videoRef.current?.videoHeight || 'Unknown'} natural frame`,
             format: payloadMatch?.[1] || 'Unknown',
             payloadBytes: payloadMatch ? Math.floor((payloadMatch[2].length * 3) / 4) : 0,
         })
@@ -213,45 +212,12 @@ export function SelfieCapture({
         }
     }, [profileImageUrl, faceEmbedding, onSubmitAttendance, stopCamera])
 
-    // Manual capture fallback using 512x512 HD face crop
-    const capturePhoto = useCallback(async () => {
+    // Capture a natural frame; the server owns face crops, alignment, and identity decisions.
+    const capturePhoto = useCallback(() => {
         if (!videoRef.current || status !== 'streaming') return
-
-        const video = videoRef.current
-        try {
-            const cropPromise = MediaPipeMeshService.processFaceFrame(video)
-            const timeoutPromise = new Promise<null>((res) => setTimeout(() => res(null), 500))
-            const cropResult = await Promise.race([cropPromise, timeoutPromise])
-
-            let final512Url = cropResult?.dataUrl512 || ''
-            if (!final512Url && canvasRef.current) {
-                const canvas = canvasRef.current
-                canvas.width = 512
-                canvas.height = 512
-                const ctx = canvas.getContext('2d')
-                if (ctx) {
-                    ctx.imageSmoothingEnabled = true
-                    ctx.imageSmoothingQuality = 'high'
-                    const vw = video.videoWidth || 720
-                    const vh = video.videoHeight || 960
-                    const squareSize = Math.min(vw, vh) * 0.92
-                    const sx = (vw - squareSize) / 2
-                    const sy = (vh - squareSize) / 2
-                    ctx.save()
-                    ctx.translate(512, 0)
-                    ctx.scale(-1, 1)
-                    ctx.drawImage(video, sx, sy, squareSize, squareSize, 0, 0, 512, 512)
-                    ctx.restore()
-                    final512Url = canvas.toDataURL('image/jpeg', 0.94)
-                }
-            }
-
-            if (final512Url) {
-                executeVerify(final512Url)
-            }
-        } catch (err) {
-            console.error('Selfie capture error:', err)
-        }
+        const capture = captureNaturalBiometricFrame(videoRef.current)
+        if (!capture) { toast.error('Camera frame is not ready. Please try again.'); return }
+        executeVerify(capture.dataUrl)
     }, [status, executeVerify])
 
     // Auto-capture on verified in-mask eye blink
@@ -339,7 +305,7 @@ export function SelfieCapture({
                     onStreamReady={() => setStatus('streaming')}
                     timerSeconds={!capturedImage && status !== 'verified' ? sessionTimeout : undefined}
                     enableAutoBlinkCapture={!capturedImage && status !== 'verifying' && status !== 'verified'}
-                    capturedCroppedUrl={capturedImage}
+                    capturedPreviewUrl={capturedImage}
                     onAutoCapture={handleAutoCapture}
                     footerSlot={
 
@@ -449,8 +415,6 @@ export function SelfieCapture({
                             </div>
                         </div>
                     )}
-
-                    <canvas ref={canvasRef} className="hidden" />
                 </BiometricCameraModal>
             </div>
         </div>
