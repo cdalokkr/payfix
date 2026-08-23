@@ -67,6 +67,11 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
     video?: number;
     guidance?: number;
   }>({});
+  const startupReadyMs = startupMilestones.stream !== undefined
+    && startupMilestones.video !== undefined
+    && startupMilestones.guidance !== undefined
+    ? Math.max(startupMilestones.stream, startupMilestones.video, startupMilestones.guidance)
+    : null;
 
   const onStreamReadyRef = useRef(onStreamReady);
   const onCameraErrorRef = useRef(onCameraError);
@@ -668,7 +673,8 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
             {startupStartedAtRef.current !== null && startupNow !== null && (
               <div className="z-30 mb-2 rounded-xl bg-slate-950/90 px-3 py-1.5 text-[9px] font-mono text-slate-300 border border-slate-700/80">
                 <div className="font-bold text-sky-300">
-                  Camera startup: {((startupNow - startupStartedAtRef.current) / 1000).toFixed(1)}s
+                  {startupReadyMs !== null ? 'Camera ready in' : 'Camera startup'}:{' '}
+                  {((startupReadyMs ?? (startupNow - startupStartedAtRef.current)) / 1000).toFixed(1)}s
                 </div>
                 <div className="mt-0.5 flex gap-2 text-[8px]">
                   <span className={startupMilestones.stream !== undefined ? 'text-emerald-300' : 'text-slate-500'}>
@@ -681,6 +687,11 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                     AI {startupMilestones.guidance !== undefined ? `${(startupMilestones.guidance / 1000).toFixed(1)}s` : '…'}
                   </span>
                 </div>
+                {startupReadyMs !== null && (
+                  <div className="mt-0.5 text-[8px] text-slate-500">
+                    Page open {((startupNow - startupStartedAtRef.current) / 1000).toFixed(1)}s
+                  </div>
+                )}
               </div>
             )}
           </div>
