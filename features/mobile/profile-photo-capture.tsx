@@ -439,7 +439,7 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
                             <summary className="cursor-pointer text-xs font-bold text-sky-300">Biometric capture details</summary>
                             <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-mono text-slate-300">
                                 <dt className="text-slate-500">Camera</dt><dd>{captureDiagnostics.cameraResolution}</dd>
-                                <dt className="text-slate-500">Output</dt><dd>{captureDiagnostics.outputResolution}</dd>
+                                <dt className="text-slate-500">Natural frame</dt><dd>{captureDiagnostics.outputResolution}</dd>
                                 <dt className="text-slate-500">Format</dt><dd>{captureDiagnostics.outputMime}</dd>
                                 <dt className="text-slate-500">Payload</dt><dd>{Math.round(captureDiagnostics.outputBytes / 1024)} KB</dd>
                                 <dt className="text-slate-500">Crop</dt><dd className="col-span-1">{captureDiagnostics.cropMode}</dd>
@@ -450,7 +450,7 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
                                     <dt className="text-slate-500">Server faces</dt><dd>{captureDiagnostics.serverVerification.faceCount}</dd>
                                     <dt className="text-slate-500">Template</dt><dd>{captureDiagnostics.serverVerification.embeddingDimensions}-d</dd>
                                     <dt className="text-slate-500">Liveness</dt><dd>{captureDiagnostics.serverVerification.livenessPassed ? 'Passed' : 'Failed'}</dd>
-                                    <dt className="text-slate-500">Stored image</dt><dd>{captureDiagnostics.serverVerification.storedCanonicalPortrait ? '3:4 canonical portrait' : 'Not stored'}</dd>
+                                    <dt className="text-slate-500">Server portrait</dt><dd>{captureDiagnostics.serverVerification.storedCanonicalPortrait ? '3:4 canonical portrait' : 'Not stored'}</dd>
                                     <dt className="text-slate-500">Backend</dt><dd className="break-all">{captureDiagnostics.serverVerification.backend}</dd>
                                 </dl>
                             )}
@@ -557,7 +557,7 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
                             <div className="p-6 bg-slate-900/90 border border-white/15 rounded-3xl space-y-3 shadow-2xl flex flex-col items-center max-w-xs animate-in zoom-in-95">
                                 <IconRefresh className="w-10 h-10 text-sky-400 animate-spin" />
                                 <p className="text-sm font-bold text-white">Submitting Profile Photo...</p>
-                                <p className="text-xs text-slate-300">Generating 512-d ArcFace vector</p>
+                                <p className="text-xs text-slate-300">Server validating frames and creating the 3:4 portrait</p>
                             </div>
                         </div>
                     )}
