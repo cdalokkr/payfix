@@ -340,7 +340,13 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
 
             // Every enrollment remains inactive until a reviewer approves a server-generated template.
             addLog('Submitting for admin approval...')
-            await createPhotoRequest.mutateAsync({ pendingPhotoUrl: result.path })
+            if (typeof result.enrollmentProof !== 'string') {
+                throw new Error('The server did not provide a secure enrollment proof. Please retake the selfie.')
+            }
+            await createPhotoRequest.mutateAsync({
+                pendingPhotoUrl: result.path,
+                enrollmentProof: result.enrollmentProof,
+            })
             setStatus('submitted')
             toast.success('Photo submitted for admin approval!')
 

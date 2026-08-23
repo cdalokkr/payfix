@@ -2,12 +2,13 @@ import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { FaceServiceClient } from '@/lib/face-service-client'
-import { findFrameFailure, hasDistinctNaturalFrames, selectBestValidatedFrame } from '@/lib/biometric-frame-validation'
+import { averageNormalizedEmbeddings, findFrameFailure, hasDistinctNaturalFrames, selectBestValidatedFrame } from '@/lib/biometric-frame-validation'
+import { issueEnrollmentProof, sha256Hex } from '@/lib/biometric-enrollment-proof'
 import { consumeLivenessChallenge, LIVENESS_FRAME_COUNT } from '@/lib/liveness-challenge'
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
-const NATURAL_PORTRAIT_PIPELINE = 'natural-portrait-v1'
+const NATURAL_PORTRAIT_PIPELINES = new Set(['natural-portrait-v1', 'natural-portrait-3x4-v2'])
 const SELFIE_DATA_URL = /^data:image\/(jpeg|png|webp);base64,/
 
 function hasSupportedImageSignature(bytes: Uint8Array) {
@@ -30,7 +31,9 @@ export async function POST(request: NextRequest) {
         const submittedPipelineVersion = formData.get('biometricPipelineVersion')
         const challenge = formData.get('challenge')
         const submittedFrames = JSON.parse(String(formData.get('livenessFrames') || '[]'))
-        const capturePipeline = submittedPipelineVersion === NATURAL_PORTRAIT_PIPELINE ? NATURAL_PORTRAIT_PIPELINE : 'legacy-client-crop-v1'
+        const capturePipeline = NATURAL_PORTRAIT_PIPELINES.has(String(submittedPipelineVersion))
+            ? String(submittedPipelineVersion)
+            : 'legacy-client-crop-v1'
         if (!(file instanceof Blob) || typeof profileId !== 'string') return NextResponse.json({ error: 'A profile image is required.' }, { status: 400 })
         if (profileId !== user.id) return NextResponse.json({ error: 'Cannot upload for another user.' }, { status: 403 })
         if (!Array.isArray(submittedFrames) || submittedFrames.length !== LIVENESS_FRAME_COUNT || submittedFrames.some(frame => typeof frame !== 'string' || !SELFIE_DATA_URL.test(frame))) {
@@ -56,7 +59,9 @@ export async function POST(request: NextRequest) {
         }
         const extraction = selectBestValidatedFrame(extractions)
         if (!extraction) return NextResponse.json({ error: 'No valid server-processed frame was available.', code: 'FACE_EXTRACTION_FAILED' }, { status: 400 })
-        const embedding = extraction.embedding_512 || (extraction.embedding?.length === 512 ? extraction.embedding : null)
+        const embedding = averageNormalizedEmbeddings(extractions.map(item =>
+            item.embedding_512 || (item.embedding?.length === 512 ? item.embedding : [])
+        ))
         if (!extraction.success || !extraction.face_detected || extraction.face_count !== 1 || !embedding || embedding.length !== 512) {
             return NextResponse.json({
                 error: extraction.error_message || 'Exactly one clear face is required.',
@@ -91,12 +96,20 @@ export async function POST(request: NextRequest) {
         const { error: uploadError } = await adminClient.storage.from('avatars').upload(fileName, fileToUpload, { contentType, upsert: false })
         if (uploadError) return NextResponse.json({ error: 'Could not store the profile image.' }, { status: 500 })
         const { data: { publicUrl } } = adminClient.storage.from('avatars').getPublicUrl(fileName)
+        const enrollmentProof = issueEnrollmentProof({
+            subject: user.id,
+            portraitUrl: publicUrl,
+            portraitSha256: sha256Hex(fileToUpload),
+            embedding512: embedding,
+            qualityScore: extraction.quality_score || 0,
+        })
         // Only the admin approval service can activate this image and its biometric template.
         return NextResponse.json({
             success: true,
             path: publicUrl,
             status: 'pending_review',
             message: 'Photo uploaded for admin review.',
+            enrollmentProof,
             diagnostics: extraction.diagnostics,
             verification: {
                 imageBytes: file.size,

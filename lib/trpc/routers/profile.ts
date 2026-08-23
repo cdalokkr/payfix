@@ -170,14 +170,14 @@ export const profileRouter = router({
   createPhotoUpdateRequest: protectedProcedure
     .input(z.object({
       pendingPhotoUrl: z.string().min(1),
-      pendingFaceEmbedding: z.array(z.number()).optional(),
+      enrollmentProof: z.string().min(1),
     }))
     .mutation(async ({ ctx, input }) => {
       try {
         return await ProfileService.createPhotoUpdateRequest({
           profileId: ctx.profile.id,
           pendingPhotoUrl: input.pendingPhotoUrl,
-          pendingFaceEmbedding: input.pendingFaceEmbedding,
+          enrollmentProof: input.enrollmentProof,
         })
       } catch (err: any) {
         throw new TRPCError({

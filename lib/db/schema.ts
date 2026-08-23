@@ -325,6 +325,7 @@ export const profilePhotoRequests = pgTable('profile_photo_requests', {
     id: uuid('id').primaryKey().defaultRandom(),
     profile_id: uuid('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
     pending_photo_url: text('pending_photo_url').notNull(),
+    pending_photo_sha256: text('pending_photo_sha256'),
     pending_face_embedding_512: vector512('pending_face_embedding_512'),
     pending_face_embedding: vector128('pending_face_embedding'),
     status: text('status').notNull().default('pending'), // 'pending', 'approved', 'rejected'

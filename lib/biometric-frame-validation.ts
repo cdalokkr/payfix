@@ -53,3 +53,13 @@ export function selectBestValidatedFrame(extractions: FaceExtractResult[]): Face
     return candidateScore > bestScore ? candidate : best
   }, null)
 }
+
+/** Average then L2-normalize server-validated ArcFace templates. */
+export function averageNormalizedEmbeddings(embeddings: number[][]): number[] | null {
+  if (!embeddings.length || embeddings.some(vector => vector.length !== 512 || vector.some(value => !Number.isFinite(value)))) return null
+  const average = Array.from({ length: 512 }, (_, index) =>
+    embeddings.reduce((sum, vector) => sum + vector[index], 0) / embeddings.length
+  )
+  const magnitude = Math.hypot(...average)
+  return magnitude > 0 ? average.map(value => value / magnitude) : null
+}

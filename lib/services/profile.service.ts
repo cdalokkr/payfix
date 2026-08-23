@@ -3,8 +3,8 @@ import { profiles, activities, profilePhotoRequests } from '@/lib/db/schema'
 import { eq, and, desc, count, sql } from 'drizzle-orm'
 import { throwAppError } from '@/lib/errors/app-errors'
 import { invalidateUserSession } from '@/lib/auth/optimized-context'
-import { FaceServiceClient } from '@/lib/face-service-client'
 import { tenantStorage } from '@/lib/tenant/store'
+import { consumeEnrollmentProof, sha256Hex } from '@/lib/biometric-enrollment-proof'
 
 
 export class ProfileService {
@@ -29,7 +29,8 @@ export class ProfileService {
 
                 ALTER TABLE IF EXISTS "profile_photo_requests"
                     ADD COLUMN IF NOT EXISTS "pending_face_embedding_512" vector(512),
-                    ADD COLUMN IF NOT EXISTS "pending_face_embedding" vector(128);
+                    ADD COLUMN IF NOT EXISTS "pending_face_embedding" vector(128),
+                    ADD COLUMN IF NOT EXISTS "pending_photo_sha256" text;
 
                 ALTER TABLE IF EXISTS "profiles"
                     ADD COLUMN IF NOT EXISTS "face_embedding_512" vector(512),
@@ -206,11 +207,11 @@ export class ProfileService {
     static async createPhotoUpdateRequest({
         profileId,
         pendingPhotoUrl,
-        pendingFaceEmbedding
+        enrollmentProof,
     }: {
         profileId: string
         pendingPhotoUrl: string
-        pendingFaceEmbedding?: number[]
+        enrollmentProof: string
     }) {
         await ProfileService.ensurePhotoRequestsSchema()
         if (!tenantStorage.getStore()?.tenantId) throwAppError('FORBIDDEN', 'Tenant context is required for profile photo enrollment.')
@@ -225,17 +226,19 @@ export class ProfileService {
             throwAppError('ALREADY_EXISTS', 'You already have a pending photo update request. Please wait for admin approval.')
         }
 
+        const verifiedEnrollment = consumeEnrollmentProof(enrollmentProof, {
+            subject: profileId,
+            portraitUrl: pendingPhotoUrl,
+        })
+        if (!verifiedEnrollment) {
+            throwAppError('VALIDATION_FAILED', 'The secure enrollment proof is missing, invalid, or expired. Please retake the selfie.')
+        }
         const insertValues: any = {
             profile_id: profileId,
             pending_photo_url: pendingPhotoUrl,
+            pending_photo_sha256: verifiedEnrollment.portraitSha256,
+            pending_face_embedding_512: verifiedEnrollment.embedding512,
             status: 'pending'
-        }
-        if (pendingFaceEmbedding && Array.isArray(pendingFaceEmbedding)) {
-            if (pendingFaceEmbedding.length === 512) {
-                insertValues.pending_face_embedding_512 = pendingFaceEmbedding
-            } else if (pendingFaceEmbedding.length === 128) {
-                insertValues.pending_face_embedding = pendingFaceEmbedding
-            }
         }
 
         const [request] = await db.insert(profilePhotoRequests).values(insertValues).returning()
@@ -363,43 +366,39 @@ export class ProfileService {
                 updated_at: new Date()
             }
 
-            // Do not trust browser-provided vectors. Rebuild the template from the pending photo on the server.
+            // The template was built from all server-validated natural frames and is
+            // carried here in an HMAC-signed proof, never trusted from the browser.
             const imageResponse = await fetch(request.pending_photo_url)
             if (!imageResponse.ok) throwAppError('VALIDATION_FAILED', 'Could not load the pending profile photo for verification.')
             const imageBytes = await imageResponse.arrayBuffer()
-            const imageBase64 = Buffer.from(imageBytes).toString('base64')
-            const extraction = await FaceServiceClient.extract(imageBase64)
-            const serverEmbedding = extraction.embedding_512 || (extraction.embedding?.length === 512 ? extraction.embedding : null)
+            const portraitHash = sha256Hex(new Uint8Array(imageBytes))
+            const serverEmbedding = request.pending_face_embedding_512
             const verificationLog = {
                 requestId,
                 imageBytes: imageBytes.byteLength,
                 contentType: imageResponse.headers.get('content-type'),
-                faceDetected: extraction.face_detected,
-                faceCount: extraction.face_count,
+                faceDetected: true,
+                faceCount: 1,
                 embeddingDimensions: serverEmbedding?.length || 0,
-                livenessPassed: extraction.is_live,
-                errorCode: extraction.error_code,
-                backend: extraction.diagnostics?.backend_engine,
+                livenessPassed: true,
+                portraitHashMatches: request.pending_photo_sha256 === portraitHash,
+                backend: 'signed server enrollment',
             }
-            if (!extraction.success || !extraction.face_detected || extraction.face_count !== 1 || !serverEmbedding || serverEmbedding.length !== 512) {
+            if (!request.pending_photo_sha256 || request.pending_photo_sha256 !== portraitHash || !serverEmbedding || serverEmbedding.length !== 512 || !serverEmbedding.every(Number.isFinite)) {
                 console.warn('[ProfileService] Pending selfie verification rejected', verificationLog)
-                throwAppError('VALIDATION_FAILED', extraction.error_message || 'The pending photo does not contain one usable face.')
-            }
-            if (extraction.is_live !== true) {
-                console.warn('[ProfileService] Pending selfie liveness rejected', verificationLog)
-                throwAppError('VALIDATION_FAILED', 'Liveness verification failed for the pending profile photo.')
+                throwAppError('VALIDATION_FAILED', 'The pending server portrait or its verified biometric template could not be validated. Please request a new profile photo.')
             }
             console.info('[ProfileService] Pending selfie verified for approval', verificationLog)
             verification = {
                 imageBytes: imageBytes.byteLength,
                 mimeType: imageResponse.headers.get('content-type'),
-                faceCount: extraction.face_count,
+                faceCount: 1,
                 embeddingDimensions: serverEmbedding.length,
-                livenessPassed: extraction.is_live === true,
-                backend: extraction.diagnostics?.backend_engine || 'Not reported',
+                livenessPassed: true,
+                backend: 'signed server enrollment',
             }
             updatePayload.face_embedding_512 = serverEmbedding
-            updatePayload.face_quality_score = extraction.quality_score || 1.0
+            updatePayload.face_quality_score = 1.0
             updatePayload.face_enrolled_at = new Date()
 
             await db.update(profiles)

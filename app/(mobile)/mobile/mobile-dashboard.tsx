@@ -46,6 +46,7 @@ import {
     Cpu
 } from "lucide-react"
 import { usePwaCheck } from "@/hooks/use-pwa-check"
+import { BIOMETRIC_CAMERA_CONSTRAINTS } from "@/lib/face-pipeline"
 import { isDefaultAvatar } from "@/lib/utils/avatar-helper"
 import { FaceVerificationService } from "@/lib/services/face-verification.service"
 import { FaceApiBrowserService } from "@/lib/services/faceapi-browser.service"
@@ -142,8 +143,8 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
             try {
                 if (navigator?.mediaDevices?.getUserMedia) {
                     const stream = await navigator.mediaDevices.getUserMedia({
-                        video: { facingMode: { exact: 'user' }, width: { ideal: 480 }, height: { ideal: 640 } },
-                        audio: false
+                        video: BIOMETRIC_CAMERA_CONSTRAINTS,
+                        audio: false,
                     })
                     preWarmedStreamRef.current = stream
                     setPreWarmedStream(stream)
