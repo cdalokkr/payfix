@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { profiles } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { FaceServiceClient } from '@/lib/face-service-client'
+import { findFrameFailure, hasDistinctNaturalFrames, selectBestValidatedFrame } from '@/lib/biometric-frame-validation'
 import { runWithRequestHeaders } from '@/lib/tenant/with-context'
 import { tenantStorage } from '@/lib/tenant/store'
 import { consumeLivenessChallenge, LIVENESS_FRAME_COUNT } from '@/lib/liveness-challenge'
@@ -41,6 +42,10 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Camera image is too large. Please retake the selfie.' }, { status: 413 })
         }
 
+        if (!hasDistinctNaturalFrames(submittedFrames)) {
+            return NextResponse.json({ matched: false, is_live: false, error: 'Capture three distinct natural camera frames. Please retake the selfie.', code: 'LIVENESS_FRAMES_NOT_DISTINCT' }, { status: 400 })
+        }
+
         const supabase = await createServerSupabaseClient()
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -57,16 +62,20 @@ export async function POST(request: NextRequest) {
         }
 
         const extractions = await Promise.all(submittedFrames.map(frame => FaceServiceClient.extract(frame)))
-        const extraction = extractions[0]
-        if (extractions.some(item => !item.success || !item.face_detected || item.face_count !== 1 || item.is_live !== true)) {
+        const frameFailure = findFrameFailure(extractions)
+        if (frameFailure) {
+            const failedFrame = frameFailure.result
             return NextResponse.json({
-                matched: false, similarity: 0, is_live: false, face_detected: true,
-                canonical_portrait_base64: extraction.canonical_portrait_base64 || null,
-                canonical_portrait_aspect_ratio: extraction.canonical_portrait_aspect_ratio || null,
-                error: 'Liveness movement could not be verified across all camera frames.',
-                code: 'LIVENESS_FAILED'
+                matched: false, similarity: 0, is_live: false, face_detected: failedFrame.face_detected,
+                canonical_portrait_base64: failedFrame.canonical_portrait_base64 || null,
+                canonical_portrait_aspect_ratio: failedFrame.canonical_portrait_aspect_ratio || null,
+                diagnostics: failedFrame.diagnostics,
+                error: 'Frame ' + (frameFailure.index + 1) + ': ' + frameFailure.message,
+                code: frameFailure.code
             }, { status: 400 })
         }
+        const extraction = selectBestValidatedFrame(extractions)
+        if (!extraction) return NextResponse.json({ matched: false, is_live: false, error: 'No valid server-processed frame was available.', code: 'FACE_EXTRACTION_FAILED' }, { status: 400 })
         const selfie = averageNormalizedEmbeddings(extractions.map(item =>
             item.embedding_512 || (item.embedding?.length === 512 ? item.embedding : [])
         ))
