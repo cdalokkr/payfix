@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { FaceServiceClient } from '@/lib/face-service-client'
+import { findFrameFailure, hasDistinctNaturalFrames, selectBestValidatedFrame } from '@/lib/biometric-frame-validation'
 import { consumeLivenessChallenge, LIVENESS_FRAME_COUNT } from '@/lib/liveness-challenge'
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
@@ -35,6 +36,9 @@ export async function POST(request: NextRequest) {
         if (!Array.isArray(submittedFrames) || submittedFrames.length !== LIVENESS_FRAME_COUNT || submittedFrames.some(frame => typeof frame !== 'string' || !SELFIE_DATA_URL.test(frame))) {
             return NextResponse.json({ error: 'Three natural camera frames are required.', code: 'LIVENESS_FRAMES_REQUIRED' }, { status: 400 })
         }
+        if (!hasDistinctNaturalFrames(submittedFrames)) {
+            return NextResponse.json({ error: 'Capture three distinct natural camera frames. Please retake the selfie.', code: 'LIVENESS_FRAMES_NOT_DISTINCT' }, { status: 400 })
+        }
         const challengeResult = consumeLivenessChallenge(challenge, user.id, 'enrollment')
         if (!challengeResult.ok) return NextResponse.json({ error: 'Liveness challenge failed or expired.', code: challengeResult.code }, { status: 403 })
         if (!ALLOWED_IMAGE_TYPES.has(file.type) || file.size === 0 || file.size > MAX_IMAGE_BYTES) return NextResponse.json({ error: 'Upload a JPEG, PNG, or WebP image smaller than 5 MB.' }, { status: 400 })
@@ -42,10 +46,16 @@ export async function POST(request: NextRequest) {
         const arrayBuffer = await file.arrayBuffer()
         if (!hasSupportedImageSignature(new Uint8Array(arrayBuffer.slice(0, 12)))) return NextResponse.json({ error: 'The uploaded file is not a supported image.' }, { status: 400 })
         const extractions = await Promise.all(submittedFrames.map(frame => FaceServiceClient.extract(frame.replace(/^data:image\/(?:jpeg|png|webp);base64,/, ''))))
-        const extraction = extractions[0]
-        if (extractions.some(item => !item.success || !item.face_detected || item.face_count !== 1 || item.is_live !== true)) {
-            return NextResponse.json({ error: 'Liveness movement could not be verified across all camera frames.', code: 'LIVENESS_FAILED' }, { status: 400 })
+        const frameFailure = findFrameFailure(extractions)
+        if (frameFailure) {
+            return NextResponse.json({
+                error: 'Frame ' + (frameFailure.index + 1) + ': ' + frameFailure.message,
+                code: frameFailure.code,
+                diagnostics: frameFailure.result.diagnostics,
+            }, { status: 400 })
         }
+        const extraction = selectBestValidatedFrame(extractions)
+        if (!extraction) return NextResponse.json({ error: 'No valid server-processed frame was available.', code: 'FACE_EXTRACTION_FAILED' }, { status: 400 })
         const embedding = extraction.embedding_512 || (extraction.embedding?.length === 512 ? extraction.embedding : null)
         if (!extraction.success || !extraction.face_detected || extraction.face_count !== 1 || !embedding || embedding.length !== 512) {
             return NextResponse.json({
