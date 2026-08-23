@@ -60,6 +60,13 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   const isMountedRef = useRef(true);
   const [isStreamPlaying, setIsStreamPlaying] = useState(false);
   const [internalPreviewUrl, setInternalPreviewUrl] = useState<string | null>(null);
+  const startupStartedAtRef = useRef<number | null>(null);
+  const [startupNow, setStartupNow] = useState<number | null>(null);
+  const [startupMilestones, setStartupMilestones] = useState<{
+    stream?: number;
+    video?: number;
+    guidance?: number;
+  }>({});
 
   const onStreamReadyRef = useRef(onStreamReady);
   const onCameraErrorRef = useRef(onCameraError);
@@ -95,6 +102,35 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
     maxTimerRef.current = timerSeconds;
   }
 
+  const markStartup = useCallback((milestone: 'stream' | 'video' | 'guidance') => {
+    const startedAt = startupStartedAtRef.current;
+    if (startedAt === null) return;
+    setStartupMilestones((current) => current[milestone] === undefined
+      ? { ...current, [milestone]: performance.now() - startedAt }
+      : current);
+  }, []);
+
+  // Keep a small, visible stopwatch on the camera screen. This measures the
+  // user-visible startup path rather than guessing from network/API timings.
+  useEffect(() => {
+    if (!isOpen) {
+      startupStartedAtRef.current = null;
+      setStartupNow(null);
+      setStartupMilestones({});
+      return;
+    }
+    const startedAt = performance.now();
+    startupStartedAtRef.current = startedAt;
+    setStartupNow(startedAt);
+    setStartupMilestones({});
+    const interval = window.setInterval(() => setStartupNow(performance.now()), 100);
+    return () => window.clearInterval(interval);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen && aiEngineStatus === 'ready') markStartup('guidance');
+  }, [aiEngineStatus, isOpen, markStartup]);
+
   const stopStream = useCallback(() => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
@@ -112,6 +148,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
     // Fast-path: use pre-warmed stream if active
     if (warmedStream && warmedStream.active) {
       streamRef.current = warmedStream;
+      markStartup('stream');
       isCapturingRef.current = false;
       isEvaluatingRef.current = false;
       MediaPipeMeshService.resetBlinkState();
@@ -122,6 +159,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
         video.setAttribute('playsinline', 'true');
         video.muted = true;
         video.play().then(() => setIsStreamPlaying(true)).catch(() => {});
+        markStartup('video');
         FaceApiBrowserService.loadDetectorOnly().catch(() => {});
         MediaPipeMeshService.initialize().catch(() => {});
         onStreamReadyRef.current?.(warmedStream, video);
@@ -158,6 +196,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
       }
 
       streamRef.current = stream;
+      markStartup('stream');
       setIsStreamPlaying(true);
 
       if (videoRef.current) {
@@ -166,9 +205,15 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
         video.setAttribute('playsinline', 'true');
         video.muted = true;
         video.play().then(() => {
-          if (isMountedRef.current) setIsStreamPlaying(true);
+          if (isMountedRef.current) {
+            setIsStreamPlaying(true);
+            markStartup('video');
+          }
         }).catch(() => {
-          if (isMountedRef.current) setIsStreamPlaying(true);
+          if (isMountedRef.current) {
+            setIsStreamPlaying(true);
+            markStartup('video');
+          }
         });
 
         // Fast preload detector for instant blink detection
@@ -188,7 +233,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
         onCameraErrorRef.current(err);
       }
     }
-  }, [isOpen, videoRef, warmedStream]);
+  }, [isOpen, markStartup, videoRef, warmedStream]);
 
   // A retake must begin as a fresh liveness session, while retaining the
   // already-open front camera when it is still healthy.
@@ -400,7 +445,10 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           muted
           playsInline
           onPlay={() => setIsStreamPlaying(true)}
-          onPlaying={() => setIsStreamPlaying(true)}
+          onPlaying={() => {
+            setIsStreamPlaying(true);
+            markStartup('video');
+          }}
           onLoadedData={() => setIsStreamPlaying(true)}
           onCanPlay={() => setIsStreamPlaying(true)}
           className="absolute inset-0 h-full w-full object-cover transform -scale-x-100"
@@ -617,6 +665,24 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                 </>
               )}
             </div>
+            {startupStartedAtRef.current !== null && startupNow !== null && (
+              <div className="z-30 mb-2 rounded-xl bg-slate-950/90 px-3 py-1.5 text-[9px] font-mono text-slate-300 border border-slate-700/80">
+                <div className="font-bold text-sky-300">
+                  Camera startup: {((startupNow - startupStartedAtRef.current) / 1000).toFixed(1)}s
+                </div>
+                <div className="mt-0.5 flex gap-2 text-[8px]">
+                  <span className={startupMilestones.stream !== undefined ? 'text-emerald-300' : 'text-slate-500'}>
+                    stream {startupMilestones.stream !== undefined ? `${(startupMilestones.stream / 1000).toFixed(1)}s` : '…'}
+                  </span>
+                  <span className={startupMilestones.video !== undefined ? 'text-emerald-300' : 'text-slate-500'}>
+                    video {startupMilestones.video !== undefined ? `${(startupMilestones.video / 1000).toFixed(1)}s` : '…'}
+                  </span>
+                  <span className={startupMilestones.guidance !== undefined ? 'text-emerald-300' : 'text-slate-500'}>
+                    AI {startupMilestones.guidance !== undefined ? `${(startupMilestones.guidance / 1000).toFixed(1)}s` : '…'}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
