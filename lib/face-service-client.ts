@@ -13,6 +13,8 @@ export interface FaceExtractResult {
     cropped_face_base64?: string | null
     canonical_portrait_base64?: string | null
     canonical_portrait_aspect_ratio?: string | null
+    canonical_portrait_width?: number | null
+    canonical_portrait_height?: number | null
     dimensions: number
     quality_score: number
     is_live: boolean
@@ -51,6 +53,23 @@ export class FaceServiceClient {
     }
 
     /**
+     * Accept a canonical portrait only when the service itself supplied either its
+     * 3:4 contract label or dimensions that prove that exact ratio. This never
+     * creates or substitutes a portrait on the application side.
+     */
+    private static normalizeCanonicalPortrait(result: FaceExtractResult): FaceExtractResult {
+        if (!result.canonical_portrait_base64) return result
+        if (result.canonical_portrait_aspect_ratio === '3:4') return result
+
+        const width = Number(result.canonical_portrait_width)
+        const height = Number(result.canonical_portrait_height)
+        if (Number.isInteger(width) && Number.isInteger(height) && width > 0 && height > 0 && width * 4 === height * 3) {
+            return { ...result, canonical_portrait_aspect_ratio: '3:4' }
+        }
+        return result
+    }
+
+    /**
      * Extracts 512-d ArcFace vector & liveness diagnostics from a base64 image.
      */
     static async extract(imageBase64: string): Promise<FaceExtractResult> {
@@ -71,7 +90,7 @@ export class FaceServiceClient {
             })
 
             if (resp.ok) {
-                return (await resp.json()) as FaceExtractResult
+                return this.normalizeCanonicalPortrait((await resp.json()) as FaceExtractResult)
             }
         } catch {
             // Fallback to Gradio SSE Call API
@@ -118,7 +137,7 @@ export class FaceServiceClient {
                         const raw = parsedArr[0]
                         const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
                         if (parsed && typeof parsed.success === 'boolean') {
-                            return parsed as FaceExtractResult
+                            return this.normalizeCanonicalPortrait(parsed as FaceExtractResult)
                         }
                     }
                 }
