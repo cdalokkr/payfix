@@ -9,7 +9,10 @@ import { runWithRequestHeaders } from '@/lib/tenant/with-context'
 import { tenantStorage } from '@/lib/tenant/store'
 import { consumeLivenessChallenge, LIVENESS_FRAME_COUNT } from '@/lib/liveness-challenge'
 
-const NATURAL_PORTRAIT_PIPELINE = 'natural-portrait-v1'
+// Keep attendance aligned with the current shared capture contract. The
+// enrollment route accepts the migration alias as well, so an installed PWA
+// must not be rejected merely because it reports the current v2 pipeline.
+const NATURAL_PORTRAIT_PIPELINES = new Set(['natural-portrait-v1', 'natural-portrait-3x4-v2'])
 
 const SELFIE_DATA_URL = /^data:image\/(jpeg|png|webp);base64,/
 
@@ -31,7 +34,7 @@ export async function POST(request: NextRequest) {
     try {
         const { frames, selfieBase64, challenge, biometricPipelineVersion } = await request.json()
         const capturePipeline = biometricPipelineVersion
-        if (capturePipeline !== NATURAL_PORTRAIT_PIPELINE) {
+        if (!NATURAL_PORTRAIT_PIPELINES.has(String(capturePipeline))) {
             return NextResponse.json({ error: 'Update the camera flow and submit a natural portrait frame.', code: 'UNSUPPORTED_BIOMETRIC_PIPELINE' }, { status: 400 })
         }
         const submittedFrames = Array.isArray(frames) ? frames : (typeof selfieBase64 === 'string' ? [selfieBase64] : [])
