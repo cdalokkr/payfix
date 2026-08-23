@@ -676,6 +676,9 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                 <div className="font-bold text-sky-300">
                   {startupReadyMs !== null ? 'Camera ready in' : 'Camera startup'}:{' '}
                   {((startupReadyMs ?? (startupNow - startupStartedAtRef.current)) / 1000).toFixed(1)}s
+                  <span className="ml-1.5 text-emerald-300">
+                    · MP {MediaPipeMeshService.getActiveDelegate()}
+                  </span>
                 </div>
                 <div className="mt-0.5 flex gap-2 text-[8px]">
                   <span className={startupMilestones.stream !== undefined ? 'text-emerald-300' : 'text-slate-500'}>
@@ -687,16 +690,8 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                   <span className={startupMilestones.guidance !== undefined ? 'text-emerald-300' : 'text-slate-500'}>
                     AI {startupMilestones.guidance !== undefined ? `${(startupMilestones.guidance / 1000).toFixed(1)}s` : '…'}
                   </span>
+                  <span className="text-emerald-300">Arc {ArcFaceOnnxService.getExecutionProvider()}</span>
                 </div>
-                <div className="mt-0.5 flex gap-2 text-[8px] text-slate-500">
-                  <span>MediaPipe {MediaPipeMeshService.getActiveDelegate()}</span>
-                  <span>ArcFace {ArcFaceOnnxService.getExecutionProvider()}</span>
-                </div>
-                {startupReadyMs !== null && (
-                  <div className="mt-0.5 text-[8px] text-slate-500">
-                    Page open {((startupNow - startupStartedAtRef.current) / 1000).toFixed(1)}s
-                  </div>
-                )}
               </div>
             )}
           </div>
