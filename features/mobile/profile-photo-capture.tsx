@@ -161,7 +161,9 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
                 video: BIOMETRIC_CAMERA_CONSTRAINTS,
                 audio: false,
             } : {
-                video: { facingMode: { ideal: 'user' } },
+                // Do not fall back to the rear camera: this flow requires a live
+                // front-camera selfie for enrollment.
+                video: { facingMode: { exact: 'user' } },
                 audio: false
             }
 
