@@ -44,6 +44,7 @@ export interface InMaskLivenessStatus {
 
 let faceLandmarker: FaceLandmarker | null = null;
 let initPromise: Promise<FaceLandmarker | null> | null = null;
+let activeDelegate: 'GPU' | 'CPU' | 'Unknown' = 'Unknown';
 
 // Reusable optical scan canvas
 let _scanCanvas: HTMLCanvasElement | null = null;
@@ -91,6 +92,9 @@ function getScanCanvas(video: HTMLVideoElement): HTMLCanvasElement | null {
 }
 
 export const MediaPipeMeshService = {
+    getActiveDelegate(): 'GPU' | 'CPU' | 'Unknown' {
+        return activeDelegate;
+    },
     isReady(): boolean {
         return faceLandmarker !== null || FaceApiBrowserService.isReady();
     },
@@ -131,11 +135,13 @@ export const MediaPipeMeshService = {
                 onProgress?.(60, 'Initializing 3D face landmarks...');
                 try {
                     faceLandmarker = await createLandmarker('GPU');
+                    activeDelegate = 'GPU';
                     console.log('✅ [MediaPipe] FaceLandmarker initialized with GPU.');
                 } catch (gpuError) {
                     console.warn('[MediaPipe] GPU delegate unavailable; switching to CPU landmarks.', gpuError);
                     onProgress?.(75, 'GPU unavailable — starting CPU face landmarks...');
                     faceLandmarker = await createLandmarker('CPU');
+                    activeDelegate = 'CPU';
                     console.log('✅ [MediaPipe] FaceLandmarker initialized with CPU fallback.');
                 }
 

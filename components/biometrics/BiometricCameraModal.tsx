@@ -5,6 +5,7 @@ import { X, RefreshCw, AlertCircle } from 'lucide-react';
 import { BIOMETRIC_CAMERA_CONSTRAINTS, captureNaturalBiometricFrame, validateBiometricCameraFrame } from '@/lib/face-pipeline';
 import { MediaPipeMeshService, InMaskLivenessStatus } from '@/lib/services/mediapipe-mesh.service';
 import { FaceApiBrowserService } from '@/lib/services/faceapi-browser.service';
+import { ArcFaceOnnxService } from '@/lib/services/arcface-onnx.service';
 import { takePrewarmedBiometricCamera } from '@/lib/biometric-camera-prewarm';
 
 interface BiometricCameraModalProps {
@@ -686,6 +687,10 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                   <span className={startupMilestones.guidance !== undefined ? 'text-emerald-300' : 'text-slate-500'}>
                     AI {startupMilestones.guidance !== undefined ? `${(startupMilestones.guidance / 1000).toFixed(1)}s` : '…'}
                   </span>
+                </div>
+                <div className="mt-0.5 flex gap-2 text-[8px] text-slate-500">
+                  <span>MediaPipe {MediaPipeMeshService.getActiveDelegate()}</span>
+                  <span>ArcFace {ArcFaceOnnxService.getExecutionProvider()}</span>
                 </div>
                 {startupReadyMs !== null && (
                   <div className="mt-0.5 text-[8px] text-slate-500">

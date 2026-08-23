@@ -27,8 +27,12 @@ const MODEL_URLS = [
 
 let session: ort.InferenceSession | null = null;
 let initPromise: Promise<boolean> | null = null;
+let executionProvider: 'WebGPU' | 'WASM' | 'Unknown' = 'Unknown';
 
 export const ArcFaceOnnxService = {
+    getExecutionProvider(): 'WebGPU' | 'WASM' | 'Unknown' {
+        return executionProvider;
+    },
     isReady(): boolean {
         return session !== null;
     },
@@ -56,7 +60,10 @@ export const ArcFaceOnnxService = {
                     try {
                         onProgress?.(40, `Loading ArcFace 512-d model...`);
                         loadedSession = await ort.InferenceSession.create(url, sessionOptions);
-                        if (loadedSession) break;
+                        if (loadedSession) {
+                            executionProvider = 'WebGPU';
+                            break;
+                        }
                     } catch (e) {
                         console.warn(`[ArcFace] Could not load from ${url}, trying fallback...`, e);
                     }
@@ -70,7 +77,10 @@ export const ArcFaceOnnxService = {
                                 executionProviders: ['wasm'],
                                 graphOptimizationLevel: 'all',
                             });
-                            if (loadedSession) break;
+                            if (loadedSession) {
+                                executionProvider = 'WASM';
+                                break;
+                            }
                         } catch {}
                     }
                 }
