@@ -74,6 +74,11 @@ export class FaceServiceClient {
      */
     static async extract(imageBase64: string): Promise<FaceExtractResult> {
         const baseUrl = this.getBaseUrl().replace(/\/$/, '')
+        // The profile-enrollment route sends raw base64 while attendance sends
+        // browser data URLs. Keep both flows identical at the service boundary:
+        // the Hugging Face extractor expects the encoded image bytes, not the
+        // `data:image/...;base64,` transport prefix.
+        const serviceImageBase64 = imageBase64.replace(/^data:image\/(?:jpeg|png|webp);base64,/, '')
 
         // 1. Try Direct REST /extract first
         try {
@@ -81,7 +86,7 @@ export class FaceServiceClient {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    image_base64: imageBase64,
+                    image_base64: serviceImageBase64,
                     require_512: true,
                     require_128: true,
                     check_liveness: true
@@ -102,7 +107,7 @@ export class FaceServiceClient {
                 const callResp = await fetch(`${baseUrl}/gradio_api/call/extract`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ data: [imageBase64] }),
+                    body: JSON.stringify({ data: [serviceImageBase64] }),
                     signal: AbortSignal.timeout(12000)
                 })
 

@@ -21,6 +21,7 @@ export interface FaceVerificationResult {
     debugLog: string[];
     isLive?: boolean;
     error?: string;
+    code?: string;
     alignedCropDataUrl?: string;
     canonicalPortraitDataUrl?: string;
     threshold?: number;
@@ -219,8 +220,10 @@ export const FaceVerificationService = {
                         ? apiData.canonical_portrait_base64
                         : undefined,
                     error: apiData.matched ? undefined : (apiData.error || 'Face verification was not successful.'),
+                    code: apiData.code,
                 };
             }
+            log(`Server rejected verification: ${apiData.error || 'unknown server response'}`);
             return {
                 matched: false,
                 similarity: 0,
@@ -228,6 +231,7 @@ export const FaceVerificationService = {
                 debugLog,
                 isLive: false,
                 error: apiData.error || 'The server biometric verifier is unavailable. Please try again online.',
+                code: apiData.code,
             };
         } catch (error) {
             log('Server biometric verification could not be reached.');

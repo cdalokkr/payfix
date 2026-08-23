@@ -136,6 +136,13 @@ export function SelfieCapture({
         return frames
     }, [])
 
+    const readImageDimensions = useCallback((dataUrl: string) => new Promise<{ width: number; height: number } | null>((resolve) => {
+        const image = new Image()
+        image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight })
+        image.onerror = () => resolve(null)
+        image.src = dataUrl
+    }), [])
+
     // Core verification routine on 512x512 HD snapshot
     const executeVerify = useCallback(async (imageToVerify: string, challenge?: string, frames?: string[]) => {
         if (!imageToVerify) return
@@ -147,9 +154,16 @@ export function SelfieCapture({
             : 'Unavailable'
         setVerificationDetails({
             cameraResolution,
-            outputResolution: `${videoRef.current?.videoWidth || 'Unknown'} × ${videoRef.current?.videoHeight || 'Unknown'} natural frame`,
+            outputResolution: 'Reading captured frame…',
             format: payloadMatch?.[1] || 'Unknown',
             payloadBytes: payloadMatch ? Math.floor((payloadMatch[2].length * 3) / 4) : 0,
+        })
+        void readImageDimensions(imageToVerify).then(dimensions => {
+            if (!dimensions || !isMounted.current) return
+            setVerificationDetails(previous => previous ? {
+                ...previous,
+                outputResolution: `${dimensions.width} × ${dimensions.height} natural frame`,
+            } : previous)
         })
         setCapturedImage(imageToVerify)
         setProcessedPortrait(null)
@@ -241,7 +255,7 @@ export function SelfieCapture({
                 setErrorMessage(errMsg || 'Face verification failed. Please retake your selfie.')
             }
         }
-    }, [profileImageUrl, faceEmbedding, onSubmitAttendance, stopCamera])
+    }, [profileImageUrl, faceEmbedding, onSubmitAttendance, stopCamera, readImageDimensions])
 
     // Capture a natural frame; the server owns face crops, alignment, and identity decisions.
     const capturePhoto = useCallback(() => {
