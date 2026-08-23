@@ -446,19 +446,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           autoPlay
           muted
           playsInline
-          onPlay={() => {
-            setIsStreamPlaying(true);
-            markStartup('video');
-          }}
           onPlaying={() => {
-            setIsStreamPlaying(true);
-            markStartup('video');
-          }}
-          onLoadedData={() => {
-            setIsStreamPlaying(true);
-            markStartup('video');
-          }}
-          onCanPlay={() => {
             setIsStreamPlaying(true);
             markStartup('video');
           }}
