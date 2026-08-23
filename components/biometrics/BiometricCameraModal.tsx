@@ -176,10 +176,11 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
     // Stream is active — DO NOT STOP stream!
     if (streamRef.current && streamRef.current.active) {
       setIsStreamPlaying(false);
-      if (videoRef.current && videoRef.current.srcObject !== streamRef.current) {
-        videoRef.current.srcObject = streamRef.current;
-        videoRef.current.play().catch(() => {});
-      } else if (videoRef.current?.readyState >= 2 && videoRef.current.videoWidth > 0) {
+      const video = videoRef.current;
+      if (video && video.srcObject !== streamRef.current) {
+        video.srcObject = streamRef.current;
+        video.play().catch(() => {});
+      } else if (video && video.readyState >= 2 && video.videoWidth > 0) {
         setIsStreamPlaying(true);
       }
       return;
