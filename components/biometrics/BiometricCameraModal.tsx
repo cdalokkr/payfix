@@ -5,6 +5,7 @@ import { X, RefreshCw, AlertCircle } from 'lucide-react';
 import { BIOMETRIC_CAMERA_CONSTRAINTS, captureNaturalBiometricFrame, validateBiometricCameraFrame } from '@/lib/face-pipeline';
 import { MediaPipeMeshService, InMaskLivenessStatus } from '@/lib/services/mediapipe-mesh.service';
 import { FaceApiBrowserService } from '@/lib/services/faceapi-browser.service';
+import { takePrewarmedBiometricCamera } from '@/lib/biometric-camera-prewarm';
 
 interface BiometricCameraModalProps {
   isOpen: boolean;
@@ -27,6 +28,8 @@ interface BiometricCameraModalProps {
   /** @deprecated Legacy callers may still supply a browser-generated crop until Phase 6 migration. */
   capturedCroppedUrl?: string | null;
   onAutoCapture?: (dataUrl: string) => void;
+  /** Advances when a parent discards a failed capture and returns to live camera. */
+  captureResetKey?: number;
 }
 
 export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
@@ -49,6 +52,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   processedPreviewUrl,
   capturedCroppedUrl,
   onAutoCapture,
+  captureResetKey = 0,
 }) => {
   const internalVideoRef = useRef<HTMLVideoElement | null>(null);
   const videoRef = videoRefOut || internalVideoRef;
@@ -141,8 +145,9 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
     isEvaluatingRef.current = false;
 
     try {
-      // Do not silently fall back to an unknown low-resolution camera for biometric capture.
-      const stream = await navigator.mediaDevices.getUserMedia({
+      // Reuse the authenticated-layout prewarmed stream when available. The
+      // constraints remain exactly the shared biometric constraints.
+      const stream = takePrewarmedBiometricCamera() || await navigator.mediaDevices.getUserMedia({
         video: BIOMETRIC_CAMERA_CONSTRAINTS,
         audio: false,
       });
@@ -184,6 +189,22 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
       }
     }
   }, [isOpen, videoRef, warmedStream]);
+
+  // A retake must begin as a fresh liveness session, while retaining the
+  // already-open front camera when it is still healthy.
+  useEffect(() => {
+    if (!isOpen || captureResetKey === 0) return;
+    isCapturingRef.current = false;
+    isEvaluatingRef.current = false;
+    MediaPipeMeshService.resetBlinkState();
+    setFlashSuccess(false);
+    setLivenessStatus({
+      isFaceDetected: false, isAlignedInMask: false, isBlinking: false,
+      blinkConfirmed: false, prompt: 'Position face in mask', statusBadgeColor: 'blue',
+      ear: 0, headPose: { yaw: 0, pitch: 0, roll: 0 },
+    });
+    if (!streamRef.current?.active) void startCamera();
+  }, [captureResetKey, isOpen, startCamera]);
 
   useEffect(() => {
     isMountedRef.current = true;

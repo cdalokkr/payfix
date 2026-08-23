@@ -82,6 +82,7 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
     const [captureDiagnostics, setCaptureDiagnostics] = useState<CaptureDiagnostics | null>(null)
     const [livenessChallenge, setLivenessChallenge] = useState<string | null>(null)
     const [livenessFrames, setLivenessFrames] = useState<string[]>([])
+    const [captureResetKey, setCaptureResetKey] = useState(0)
     const statusRef = useRef(status)
 
     // Debug logger
@@ -284,8 +285,15 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
 
     // Retake photo
     const handleRetake = useCallback(() => {
-        startCamera()
-    }, [startCamera])
+        setErrorMessage('')
+        setCapturedImage(null)
+        setCaptureDiagnostics(null)
+        setDebugLogs([])
+        setLivenessChallenge(null)
+        setLivenessFrames([])
+        setCaptureResetKey(value => value + 1)
+        setStatus('streaming')
+    }, [])
 
     // Upload the natural portrait; server validation and canonicalization are authoritative.
     const handleUpload = useCallback(async () => {
@@ -408,6 +416,7 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
              enableAutoBlinkCapture={!capturedImage && status !== 'capturing' && status !== 'uploading' && status !== 'submitted'}
             capturedPreviewUrl={capturedImage}
             onAutoCapture={handleAutoCapture}
+            captureResetKey={captureResetKey}
             footerSlot={
 
 

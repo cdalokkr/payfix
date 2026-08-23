@@ -6,7 +6,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { format } from "date-fns"
 import Link from "next/link"
 import { motion } from "framer-motion"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { trpc } from "@/lib/trpc/client"
 import { ProfilePhotoCapture } from "@/features/mobile/profile-photo-capture"
 
@@ -46,7 +46,6 @@ import {
     Cpu
 } from "lucide-react"
 import { usePwaCheck } from "@/hooks/use-pwa-check"
-import { BIOMETRIC_CAMERA_CONSTRAINTS } from "@/lib/face-pipeline"
 import { isDefaultAvatar } from "@/lib/utils/avatar-helper"
 import { FaceVerificationService } from "@/lib/services/face-verification.service"
 import { FaceApiBrowserService } from "@/lib/services/faceapi-browser.service"
@@ -130,8 +129,6 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
     const { isPwa, isMobile, isReady } = usePwaCheck(isPwaServer)
     const [isDesktop, setIsDesktop] = useState(false)
     const [isPhotoCaptureOpen, setIsPhotoCaptureOpen] = useState(false)
-    const [preWarmedStream, setPreWarmedStream] = useState<MediaStream | null>(null)
-    const preWarmedStreamRef = useRef<MediaStream | null>(null)
     const [hardwareInfo] = useState(() => getHardwareAccelerationInfo())
     useEffect(() => {
         // Pre-warm face recognition models & MediaPipe vision in background
@@ -139,31 +136,11 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
         FaceApiBrowserService.loadDetectorOnly().catch(() => {})
         MediaPipeMeshService.initialize().catch(() => {})
 
-        const preWarmTimer = setTimeout(async () => {
-            try {
-                if (navigator?.mediaDevices?.getUserMedia) {
-                    const stream = await navigator.mediaDevices.getUserMedia({
-                        video: BIOMETRIC_CAMERA_CONSTRAINTS,
-                        audio: false,
-                    })
-                    preWarmedStreamRef.current = stream
-                    setPreWarmedStream(stream)
-                }
-            } catch {
-                // Silently ignore camera pre-warm errors
-            }
-        }, 2000)
-
         setIsDesktop(window.innerWidth >= 1024)
 
         const handleResize = () => setIsDesktop(window.innerWidth >= 1024)
         window.addEventListener('resize', handleResize)
         return () => {
-            clearTimeout(preWarmTimer)
-            if (preWarmedStreamRef.current) {
-                preWarmedStreamRef.current.getTracks().forEach(track => track.stop())
-                preWarmedStreamRef.current = null
-            }
             window.removeEventListener('resize', handleResize)
         }
     }, [])
@@ -741,11 +718,6 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
                 onOpenChange={(open) => {
                     if (!open) {
                         setIsPhotoCaptureOpen(false)
-                        if (preWarmedStreamRef.current) {
-                            preWarmedStreamRef.current.getTracks().forEach(track => track.stop())
-                            preWarmedStreamRef.current = null
-                            setPreWarmedStream(null)
-                        }
                     }
                 }}
             >
@@ -760,14 +732,8 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
                             avatarUrl: profile.avatar_url,
                             avatarStatus: profile.avatar_status
                         }}
-                        preWarmedStream={preWarmedStream}
                         onSuccess={() => {
                             setIsPhotoCaptureOpen(false)
-                            if (preWarmedStreamRef.current) {
-                                preWarmedStreamRef.current.getTracks().forEach(track => track.stop())
-                                preWarmedStreamRef.current = null
-                                setPreWarmedStream(null)
-                            }
                             utils.profile.invalidate()
                             utils.attendance.invalidate()
                         }}

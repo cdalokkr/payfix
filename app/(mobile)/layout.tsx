@@ -7,6 +7,7 @@ import { MobileHeader } from './mobile-header'
 import { MobileBottomNav } from './mobile-bottom-nav'
 import { PermissionGuard } from '@/features/mobile/PermissionGuard'
 import { OfflineBanner } from '@/components/ui/offline-banner'
+import { BiometricCameraPrewarm } from '@/features/mobile/biometric-camera-prewarm'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -56,6 +57,7 @@ export default async function MobileLayout({
     return (
         <TRPCProvider>
             <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+                <BiometricCameraPrewarm />
                 {/* Sticky Header */}
                 <MobileHeader profile={profile} />
 

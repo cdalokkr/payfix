@@ -86,6 +86,7 @@ export function SelfieCapture({
     const [apiError, setApiError] = useState<string>('')
     const [verificationDetails, setVerificationDetails] = useState<DailyVerificationDetails | null>(null)
     const [livenessChallenge, setLivenessChallenge] = useState<string | null>(null)
+    const [captureResetKey, setCaptureResetKey] = useState(0)
 
     const videoRef = useRef<HTMLVideoElement>(null)
     const streamRef = useRef<MediaStream | null>(null)
@@ -112,6 +113,13 @@ export function SelfieCapture({
         setCapturedImage(null)
         setProcessedPortrait(null)
         setCapturedAt(null)
+        setErrorMessage('')
+        setApiStatus('idle')
+        setApiError('')
+        setVerificationDetails(null)
+        setVerificationDuration('')
+        setLivenessChallenge(null)
+        setCaptureResetKey(value => value + 1)
         setStatus('streaming')
     }, [])
 
@@ -372,6 +380,7 @@ export function SelfieCapture({
                     capturedPreviewUrl={capturedImage}
                     processedPreviewUrl={processedPortrait}
                     onAutoCapture={handleAutoCapture}
+                    captureResetKey={captureResetKey}
                     footerSlot={
 
                         <div className="space-y-3">
