@@ -361,22 +361,14 @@ export function SelfieCapture({
 
     return (
         <div className="fixed inset-0 z-[70] bg-slate-950/80 backdrop-blur-md flex flex-col items-center justify-center p-3 sm:p-6 overflow-hidden">
-            {/* Topmost Mode Badge Row above Camera Screen Header */}
-            <div className="w-full max-w-md flex justify-center pb-2">
-                <span className="text-[11px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/35 backdrop-blur-md shadow-lg">
-                    {mode === 'check_out' ? 'CLOCKING OUT' : 'CLOCKING IN'}
-                </span>
-            </div>
-
             <div className="w-full max-w-md">
                 <BiometricCameraModal
                     isOpen={true}
                     onClose={onBack || (() => {})}
                     title="Identify Yourself"
-                    topLabel={mode === 'check_out' ? 'Clocking Out' : 'Clocking In'}
                     icon={<IconScanFace className="w-5 h-5 text-sky-400" />}
                     videoRefOut={videoRef}
-                    onStreamReady={() => setStatus('streaming')}
+                    onVideoReady={() => setStatus(current => current === 'idle' ? 'streaming' : current)}
                     timerSeconds={!capturedImage && status !== 'verified' ? sessionTimeout : undefined}
                     enableAutoBlinkCapture={!capturedImage && status !== 'verifying' && status !== 'verified'}
                     capturedPreviewUrl={capturedImage}
@@ -423,14 +415,24 @@ export function SelfieCapture({
                                 </details>
                             )}
 
-                            {status === 'streaming' && (
+                            {(status === 'idle' || status === 'streaming') && (
                                 <Button
                                     onClick={handleProceed}
+                                    disabled={status !== 'streaming'}
                                     size="lg"
-                                    className="w-full h-14 rounded-2xl bg-sky-500 text-white font-black text-base hover:bg-sky-400 shadow-lg shadow-sky-500/25 transition-all active:scale-95 cursor-pointer"
+                                    className="w-full h-14 rounded-2xl bg-sky-500 text-white font-black text-base hover:bg-sky-400 shadow-lg shadow-sky-500/25 transition-all active:scale-95 cursor-pointer disabled:opacity-65 disabled:cursor-wait"
                                 >
-                                    <IconScanFace className="w-5 h-5 mr-2" />
-                                    IDENTIFY NOW
+                                    {status === 'streaming' ? (
+                                        <>
+                                            <IconScanFace className="w-5 h-5 mr-2" />
+                                            IDENTIFY NOW
+                                        </>
+                                    ) : (
+                                        <>
+                                            <IconLoader2 className="w-5 h-5 mr-2 animate-spin" />
+                                            STARTING CAMERA…
+                                        </>
+                                    )}
                                 </Button>
                             )}
 

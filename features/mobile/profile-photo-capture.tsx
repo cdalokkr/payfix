@@ -404,7 +404,7 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
             icon={<IconUser className="w-5 h-5 text-sky-400" />}
             videoRefOut={videoRef}
             warmedStream={preWarmedStream}
-            onStreamReady={() => setStatus('streaming')}
+            onVideoReady={() => setStatus(current => current === 'idle' ? 'streaming' : current)}
             statusText={
                 status === 'capturing'
                     ? 'Preparing secure liveness capture...'

@@ -12,11 +12,11 @@ interface BiometricCameraModalProps {
   onClose: () => void;
   title: string | React.ReactNode;
   subtitle?: string;
-  topLabel?: string;
   icon?: React.ReactNode;
   videoRefOut?: React.RefObject<HTMLVideoElement | null>;
   warmedStream?: MediaStream | null;
   onStreamReady?: (stream: MediaStream, videoEl: HTMLVideoElement) => void;
+  onVideoReady?: () => void;
   onCameraError?: (error: Error) => void;
   statusText?: string;
   isProcessing?: boolean;
@@ -38,11 +38,11 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   onClose,
   title,
   subtitle,
-  topLabel,
   icon,
   videoRefOut,
   warmedStream,
   onStreamReady,
+  onVideoReady,
   onCameraError,
   statusText,
   isProcessing = false,
@@ -76,14 +76,16 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
     : null;
 
   const onStreamReadyRef = useRef(onStreamReady);
+  const onVideoReadyRef = useRef(onVideoReady);
   const onCameraErrorRef = useRef(onCameraError);
   const onAutoCaptureRef = useRef(onAutoCapture);
 
   useEffect(() => {
     onStreamReadyRef.current = onStreamReady;
+    onVideoReadyRef.current = onVideoReady;
     onCameraErrorRef.current = onCameraError;
     onAutoCaptureRef.current = onAutoCapture;
-  }, [onStreamReady, onCameraError, onAutoCapture]);
+  }, [onStreamReady, onVideoReady, onCameraError, onAutoCapture]);
 
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -407,6 +409,24 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                 {subtitle}
               </span>
             )}
+            <div className="mt-1">
+              {aiEngineStatus === 'ready' && (
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[9px] font-mono font-bold text-emerald-300">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Guidance AI: Ready
+                </span>
+              )}
+              {aiEngineStatus === 'fallback' && (
+                <span className="inline-flex px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-[9px] font-mono font-bold text-amber-300">
+                  Guidance AI: Local
+                </span>
+              )}
+              {aiEngineStatus === 'failed' && (
+                <span className="inline-flex px-2 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/30 text-[9px] font-mono font-bold text-rose-300">
+                  Guidance AI: Unavailable
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -425,31 +445,6 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
       {/* Standardized Fixed 430px 3:4 Portrait Camera Viewport Container */}
       <div className="relative w-full h-[430px] aspect-[3/4] max-w-[360px] mx-auto bg-slate-950 overflow-hidden shrink-0 flex items-center justify-center rounded-2xl border border-slate-800/60 my-1">
-        {topLabel && (
-          <div className="absolute top-3 left-3 z-30">
-            <span className="inline-flex px-2.5 py-1 rounded-full bg-slate-950/85 text-[9px] font-black uppercase tracking-widest text-sky-300 border border-sky-500/35 shadow-lg backdrop-blur-md">
-              {topLabel}
-            </span>
-          </div>
-        )}
-        <div className="absolute top-3 right-3 z-30">
-          {aiEngineStatus === 'ready' && (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-950/85 border border-emerald-500/40 text-[10px] font-mono font-bold text-emerald-300 shadow-lg backdrop-blur-md">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              Guidance AI: Ready
-            </span>
-          )}
-          {aiEngineStatus === 'fallback' && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-950/85 border border-amber-500/40 text-[10px] font-mono font-bold text-amber-300 shadow-lg backdrop-blur-md">
-              Guidance AI: Local
-            </span>
-          )}
-          {aiEngineStatus === 'failed' && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-950/85 border border-rose-500/40 text-[10px] font-mono font-bold text-rose-300 shadow-lg backdrop-blur-md">
-              Guidance AI: Unavailable
-            </span>
-          )}
-        </div>
         {/* Instant HTML Video Element */}
         <video
           ref={videoRef}
@@ -459,6 +454,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           onPlaying={() => {
             setIsStreamPlaying(true);
             markStartup('video');
+            onVideoReadyRef.current?.();
           }}
           className="absolute inset-0 h-full w-full object-cover transform -scale-x-100"
         />
