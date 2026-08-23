@@ -204,18 +204,17 @@ export function SelfieCapture({
                 threshold: result.threshold,
                 server: result.verification,
             } : previous)
-            if (!result.canonicalPortraitDataUrl) {
-                setStatus('verify_failed')
-                setErrorMessage('The server did not return the portrait used for verification. Please retake your selfie.')
-                return
-            }
-            setProcessedPortrait(result.canonicalPortraitDataUrl)
-
             if (!result.matched) {
                 setStatus('verify_failed')
                 setErrorMessage(result.error || 'Face does not match profile photo')
                 return
             }
+            if (!result.canonicalPortraitDataUrl) {
+                setStatus('verify_failed')
+                setErrorMessage('The server accepted the match but did not return its canonical portrait. Please retake your selfie.')
+                return
+            }
+            setProcessedPortrait(result.canonicalPortraitDataUrl)
 
             // Verification passed — now submit attendance
             setStatus('verified')
