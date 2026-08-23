@@ -19,6 +19,7 @@ import { trpc } from "@/lib/trpc/client"
 import { SelfieCapture, type SelfieResult } from "./selfie-capture"
 import { format } from "date-fns"
 import { usePwaCheck } from "@/hooks/use-pwa-check"
+import { BIOMETRIC_CAMERA_CONSTRAINTS } from "@/lib/face-pipeline"
 
 type WizardStep = 'selfie' | 'submitting' | 'complete' | 'error'
 
@@ -52,12 +53,7 @@ export function MobileAttendanceWizard({
         const prewarm = async () => {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: { exact: 'user' },
-                        width: { ideal: 480 },
-                        height: { ideal: 640 },
-                        aspectRatio: { ideal: 0.75 }
-                    },
+                    video: BIOMETRIC_CAMERA_CONSTRAINTS,
 
                     audio: false,
                 })

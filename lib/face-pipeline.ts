@@ -12,11 +12,15 @@ import {
 
 /** Shared camera configuration for enrollment, attendance, and kiosk capture. */
 export const BIOMETRIC_CAMERA_CONFIG = {
-  width: 960,
-  height: 1280,
+  // Ask for a high-resolution 3:4 front-camera stream. These are ideals rather
+  // than exact constraints: each phone keeps control of its best supported mode.
+  width: 1920,
+  height: 2560,
   minWidth: 480,
   minHeight: 640,
   aspectRatio: 0.75, // Portrait-first 3:4 preference; hardware may report another native ratio, while the server generates the canonical 3:4 portrait.
+  captureMaxDimension: 1920,
+  captureJpegQuality: 0.92,
   facingMode: { ideal: 'user' } as const,
   inputSize: 416 as const,
   scoreThreshold: 0.5,
@@ -110,18 +114,59 @@ export function verifyAgainstEmployees(
   });
 }
 
-/** Browser capture contract: complete camera frame only; server owns face cropping and alignment. */
-export const BIOMETRIC_CAPTURE_PIPELINE_VERSION = 'natural-portrait-v1';
-export interface NaturalBiometricCapture { dataUrl: string; width: number; height: number; }
-export function captureNaturalBiometricFrame(video: HTMLVideoElement, options: { maxDimension?: number; jpegQuality?: number; mirror?: boolean } = {}): NaturalBiometricCapture | null {
-  const sourceWidth = video.videoWidth; const sourceHeight = video.videoHeight;
+/**
+ * Browser capture contract: a high-resolution, centre-framed 3:4 camera image only.
+ * This does not detect, align, or crop a face. The biometric service remains the
+ * authority for face validation and the stored 720 × 960 canonical portrait.
+ */
+export const BIOMETRIC_CAPTURE_PIPELINE_VERSION = 'natural-portrait-3x4-v2';
+export interface NaturalBiometricCapture {
+  dataUrl: string;
+  width: number;
+  height: number;
+  sourceWidth: number;
+  sourceHeight: number;
+}
+export function captureNaturalBiometricFrame(
+  video: HTMLVideoElement,
+  options: {
+    maxDimension?: number;
+    jpegQuality?: number;
+    mirror?: boolean;
+    aspectRatio?: number;
+  } = {}
+): NaturalBiometricCapture | null {
+  const sourceWidth = video.videoWidth;
+  const sourceHeight = video.videoHeight;
   if (!sourceWidth || !sourceHeight) return null;
-  const scale = Math.min(1, (options.maxDimension ?? 1280) / Math.max(sourceWidth, sourceHeight));
-  const width = Math.max(1, Math.round(sourceWidth * scale)); const height = Math.max(1, Math.round(sourceHeight * scale));
-  const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
+
+  // Sensors that cannot provide 3:4 still produce a consistent, centre-framed
+  // portrait input. This is an image-frame crop, never a browser face crop.
+  const aspectRatio = options.aspectRatio ?? BIOMETRIC_CAMERA_CONFIG.aspectRatio;
+  let cropWidth = sourceWidth;
+  let cropHeight = sourceHeight;
+  if (sourceWidth / sourceHeight > aspectRatio) {
+    cropWidth = Math.round(sourceHeight * aspectRatio);
+  } else {
+    cropHeight = Math.round(sourceWidth / aspectRatio);
+  }
+  const sourceX = Math.max(0, Math.round((sourceWidth - cropWidth) / 2));
+  const sourceY = Math.max(0, Math.round((sourceHeight - cropHeight) / 2));
+  const scale = Math.min(1, (options.maxDimension ?? BIOMETRIC_CAMERA_CONFIG.captureMaxDimension) / Math.max(cropWidth, cropHeight));
+  const width = Math.max(1, Math.round(cropWidth * scale));
+  const height = Math.max(1, Math.round(cropHeight * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
   const context = canvas.getContext('2d'); if (!context) return null;
   context.imageSmoothingEnabled = true; context.imageSmoothingQuality = 'high';
   if (options.mirror ?? true) { context.translate(width, 0); context.scale(-1, 1); }
-  context.drawImage(video, 0, 0, sourceWidth, sourceHeight, 0, 0, width, height);
-  return { dataUrl: canvas.toDataURL('image/jpeg', options.jpegQuality ?? 0.88), width, height };
+  context.drawImage(video, sourceX, sourceY, cropWidth, cropHeight, 0, 0, width, height);
+  return {
+    dataUrl: canvas.toDataURL('image/jpeg', options.jpegQuality ?? BIOMETRIC_CAMERA_CONFIG.captureJpegQuality),
+    width,
+    height,
+    sourceWidth,
+    sourceHeight,
+  };
 }

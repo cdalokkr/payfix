@@ -61,7 +61,8 @@ export const BiometricCamera: React.FC<BiometricCameraProps> = ({
     setErrorMessage('');
 
     try {
-      // Primary constraint: 480x640 (3:4 portrait) standard
+      // Shared high-resolution 3:4 preference. The browser selects the closest
+      // front-camera mode a device supports.
       const primaryConstraints: MediaStreamConstraints = {
         video: {
           facingMode: BIOMETRIC_CAMERA_CONFIG.facingMode,

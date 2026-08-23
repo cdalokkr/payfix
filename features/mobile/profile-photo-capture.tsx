@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import { trpc } from "@/lib/trpc/client"
-import { BIOMETRIC_CAPTURE_PIPELINE_VERSION, captureNaturalBiometricFrame } from "@/lib/face-pipeline"
+import { BIOMETRIC_CAMERA_CONSTRAINTS, BIOMETRIC_CAPTURE_PIPELINE_VERSION, captureNaturalBiometricFrame } from "@/lib/face-pipeline"
 import { BiometricCameraModal } from "@/components/biometrics/BiometricCameraModal"
 
 
@@ -155,17 +155,13 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
         }
 
         try {
-            // 480x640 (3:4 portrait) for consistent face vector alignment across enrollment & kiosk
+            // Shared high-resolution 3:4 preference. The device may select its nearest
+            // supported front-camera mode; capture then makes a centred 3:4 frame.
             const constraints: MediaStreamConstraints = retryCount === 0 ? {
-                video: {
-                    facingMode: { exact: 'user' },
-                    width: { ideal: 480 },
-                    height: { ideal: 640 },
-                    aspectRatio: { ideal: 0.75 }
-                },
+                video: BIOMETRIC_CAMERA_CONSTRAINTS,
                 audio: false,
             } : {
-                video: { facingMode: { exact: 'user' } },
+                video: { facingMode: { ideal: 'user' } },
                 audio: false
             }
 

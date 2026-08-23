@@ -268,7 +268,8 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
               const video = videoRef.current;
               if (video) {
-                // Capture a complete natural frame; face crops and alignment are server-owned.
+                // Capture a high-resolution, centre-framed 3:4 camera image. Face
+                // detection, alignment, and canonical portrait generation are server-owned.
                 const naturalCapture = captureNaturalBiometricFrame(video);
                 const capturedDataUrl = naturalCapture?.dataUrl || '';
                 // Do not show a frozen preview until the parent has completed the
