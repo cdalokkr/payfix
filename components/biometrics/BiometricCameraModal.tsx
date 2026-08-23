@@ -5,7 +5,6 @@ import { X, RefreshCw, AlertCircle } from 'lucide-react';
 import { BIOMETRIC_CAMERA_CONSTRAINTS, captureNaturalBiometricFrame, validateBiometricCameraFrame } from '@/lib/face-pipeline';
 import { MediaPipeMeshService, InMaskLivenessStatus } from '@/lib/services/mediapipe-mesh.service';
 import { FaceApiBrowserService } from '@/lib/services/faceapi-browser.service';
-import { ArcFaceOnnxService } from '@/lib/services/arcface-onnx.service';
 import { takePrewarmedBiometricCamera } from '@/lib/biometric-camera-prewarm';
 
 interface BiometricCameraModalProps {
@@ -18,6 +17,7 @@ interface BiometricCameraModalProps {
   warmedStream?: MediaStream | null;
   onStreamReady?: (stream: MediaStream, videoEl: HTMLVideoElement) => void;
   onVideoReady?: () => void;
+  serverVerificationBackend?: string | null;
   onCameraError?: (error: Error) => void;
   statusText?: string;
   isProcessing?: boolean;
@@ -44,6 +44,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   warmedStream,
   onStreamReady,
   onVideoReady,
+  serverVerificationBackend,
   onCameraError,
   statusText,
   isProcessing = false,
@@ -690,7 +691,9 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                   <span className={startupMilestones.guidance !== undefined ? 'text-emerald-300' : 'text-slate-500'}>
                     AI {startupMilestones.guidance !== undefined ? `${(startupMilestones.guidance / 1000).toFixed(1)}s` : '…'}
                   </span>
-                  <span className="text-emerald-300">Arc {ArcFaceOnnxService.getExecutionProvider()}</span>
+                  <span className="max-w-[84px] truncate text-slate-400" title={serverVerificationBackend || 'pending'}>
+                    Server {serverVerificationBackend || 'pending'}
+                  </span>
                 </div>
               </div>
             )}

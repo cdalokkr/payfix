@@ -86,6 +86,7 @@ export function SelfieCapture({
     const [apiStatus, setApiStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle')
     const [apiError, setApiError] = useState<string>('')
     const [verificationDetails, setVerificationDetails] = useState<DailyVerificationDetails | null>(null)
+    const [serverVerificationBackend, setServerVerificationBackend] = useState<string | null>(null)
     const [livenessChallenge, setLivenessChallenge] = useState<string | null>(null)
     const [captureResetKey, setCaptureResetKey] = useState(0)
 
@@ -118,6 +119,7 @@ export function SelfieCapture({
         setApiStatus('idle')
         setApiError('')
         setVerificationDetails(null)
+        setServerVerificationBackend(null)
         setVerificationDuration('')
         setLivenessChallenge(null)
         setCaptureResetKey(value => value + 1)
@@ -167,6 +169,7 @@ export function SelfieCapture({
             format: payloadMatch?.[1] || 'Unknown',
             payloadBytes: payloadMatch ? Math.floor((payloadMatch[2].length * 3) / 4) : 0,
         })
+        setServerVerificationBackend('pending')
         void readImageDimensions(imageToVerify).then(dimensions => {
             if (!dimensions || !isMounted.current) return
             setVerificationDetails(previous => previous ? {
@@ -182,12 +185,14 @@ export function SelfieCapture({
 
         // A face-only attendance event must fail closed while offline.
         if (OfflineSyncService.isOffline()) {
+            setServerVerificationBackend('not run (offline)')
             setStatus('verify_failed')
             setErrorMessage('An internet connection is required to verify your identity before attendance can be recorded.')
             return
         }
 
         if (!profileImageUrl) {
+            setServerVerificationBackend('not run (no profile)')
             setStatus('verify_failed')
             setErrorMessage('No profile photo found. Please upload a profile photo first.')
             return
@@ -213,6 +218,7 @@ export function SelfieCapture({
                 threshold: result.threshold,
                 server: result.verification,
             } : previous)
+            setServerVerificationBackend(result.verification?.backend || 'response unavailable')
             if (!result.matched) {
                 setStatus('verify_failed')
                 setErrorMessage(result.error || 'Face does not match profile photo')
@@ -240,6 +246,7 @@ export function SelfieCapture({
                 throw error
             }
         } catch (error: any) {
+            setServerVerificationBackend('request failed')
             setStatus('verify_failed')
             const errMsg: string = error?.message || ''
 
@@ -369,6 +376,7 @@ export function SelfieCapture({
                     icon={<IconScanFace className="w-5 h-5 text-sky-400" />}
                     videoRefOut={videoRef}
                     onVideoReady={() => setStatus(current => current === 'idle' ? 'streaming' : current)}
+                    serverVerificationBackend={serverVerificationBackend}
                     timerSeconds={!capturedImage && status !== 'verified' ? sessionTimeout : undefined}
                     enableAutoBlinkCapture={!capturedImage && status !== 'verifying' && status !== 'verified'}
                     capturedPreviewUrl={capturedImage}
