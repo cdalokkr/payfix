@@ -9,6 +9,7 @@ interface MobileAttendanceClientProps {
     profile: {
         id: string
         full_name: string | null
+        email: string | null
         avatar_url: string | null
     }
     action: 'clock_in' | 'clock_out'
@@ -67,6 +68,8 @@ export function MobileAttendanceClient({ profile, action }: MobileAttendanceClie
         <MobileAttendanceWizard
             action={action}
             profileImageUrl={profile.avatar_url}
+            profileName={profile.full_name}
+            profileEmail={profile.email}
             onComplete={handleComplete}
             onCancel={handleCancel}
         />

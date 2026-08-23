@@ -1,11 +1,11 @@
 "use client"
 
-import React, { useState, useCallback, useEffect, useRef } from "react"
+import React, { useState, useCallback } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { toast } from "sonner"
-import { motion, AnimatePresence } from "framer-motion"
+import { motion } from "framer-motion"
 import {
     Check as IconCheck,
     Loader2 as IconLoader2,
@@ -19,13 +19,14 @@ import { trpc } from "@/lib/trpc/client"
 import { SelfieCapture, type SelfieResult } from "./selfie-capture"
 import { format } from "date-fns"
 import { usePwaCheck } from "@/hooks/use-pwa-check"
-import { BIOMETRIC_CAMERA_CONSTRAINTS } from "@/lib/face-pipeline"
 
 type WizardStep = 'selfie' | 'submitting' | 'complete' | 'error'
 
 interface MobileAttendanceWizardProps {
     action: 'clock_in' | 'clock_out'
     profileImageUrl: string | null
+    profileName?: string | null
+    profileEmail?: string | null
     onComplete: () => void
     onCancel: () => void
 }
@@ -37,49 +38,14 @@ const STEPS = [
 export function MobileAttendanceWizard({
     action,
     profileImageUrl,
+    profileName,
+    profileEmail,
     onComplete,
     onCancel,
 }: MobileAttendanceWizardProps) {
     const { isPwa, isReady } = usePwaCheck()
     const [currentStep, setCurrentStep] = useState<WizardStep>('selfie')
     const [errorMessage, setErrorMessage] = useState('')
-    const [warmedStream, setWarmedStream] = useState<MediaStream | null>(null)
-    const warmedStreamRef = useRef<MediaStream | null>(null)
-
-    // Pre-warm camera stream as soon as the wizard is mounted
-    useEffect(() => {
-        let activeStream: MediaStream | null = null
-
-        const prewarm = async () => {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: BIOMETRIC_CAMERA_CONSTRAINTS,
-
-                    audio: false,
-                })
-                activeStream = stream
-                warmedStreamRef.current = stream
-                setWarmedStream(stream)
-            } catch (err) {
-                console.warn('Failed to pre-warm camera:', err)
-            }
-        }
-
-        prewarm()
-
-        return () => {
-            if (warmedStreamRef.current) {
-                warmedStreamRef.current.getTracks().forEach(track => track.stop())
-                warmedStreamRef.current = null
-            }
-        }
-    }, [])
-
-    const clearWarmedStream = useCallback(() => {
-        warmedStreamRef.current = null
-        setWarmedStream(null)
-    }, [])
-
     const utils = trpc.useUtils()
     const localDate = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Kolkata' })
 
@@ -245,26 +211,6 @@ export function MobileAttendanceWizard({
 
     return (
         <div className="w-full max-w-md mx-auto space-y-6">
-            <AnimatePresence mode="wait">
-                {!['complete', 'error', 'submitting'].includes(currentStep) && (
-                    <motion.div
-                        key="progress-header"
-                        initial={{ opacity: 0, y: -20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -20 }}
-                        className="space-y-4"
-                    >
-                        <div className="flex items-center justify-center">
-                            <div className="flex items-center gap-2 px-6 py-2 bg-primary/10 rounded-full border border-primary/20 backdrop-blur-md">
-                                <span className="text-xs font-black uppercase shadow-sm tracking-[0.2em] text-primary">
-                                    {action === 'clock_in' ? 'Clocking In' : 'Clocking Out'}
-                                </span>
-                            </div>
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-
             <motion.div
                 layout
                 initial={{ opacity: 0, scale: 0.95 }}
@@ -274,12 +220,12 @@ export function MobileAttendanceWizard({
                 {currentStep === 'selfie' && (
                     <SelfieCapture
                         profileImageUrl={profileImageUrl}
+                        profileName={profileName}
+                        profileEmail={profileEmail}
                         onCaptured={handleSelfieCaptured}
                         onVerified={handleVerified}
                         onSubmitAttendance={handleSubmitAttendance}
                         onBack={handleBack}
-                        warmedStream={warmedStream}
-                        clearWarmedStream={clearWarmedStream}
                         mode={action === 'clock_out' ? 'check_out' : 'check_in'}
                     />
                 )}

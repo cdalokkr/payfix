@@ -17,7 +17,8 @@ import {
     CheckCheck as IconCheckCheck,
     ScanFace as IconScanFace,
     AlertTriangle as IconAlertTriangle,
-    Clock as IconClock
+    Clock as IconClock,
+    User as IconUser,
 } from "lucide-react"
 
 import { format } from "date-fns"
@@ -31,13 +32,13 @@ import { BiometricCameraModal } from "@/components/biometrics/BiometricCameraMod
 
 interface SelfieCaptureProps {
     profileImageUrl: string | null
+    profileName?: string | null
+    profileEmail?: string | null
     faceEmbedding?: number[] | null
     onCaptured: (result: SelfieResult) => void
     onVerified: (result: { matched: boolean; similarity: number }) => void
     onSubmitAttendance: () => Promise<void>
     onBack?: () => void
-    warmedStream?: MediaStream | null
-    clearWarmedStream?: () => void
     mode?: 'check_in' | 'check_out'
 }
 
@@ -64,13 +65,13 @@ export interface SelfieResult {
 
 export function SelfieCapture({
     profileImageUrl,
+    profileName,
+    profileEmail,
     faceEmbedding,
     onCaptured,
     onVerified,
     onSubmitAttendance,
     onBack,
-    warmedStream,
-    clearWarmedStream,
     mode = 'check_in'
 }: SelfieCaptureProps) {
 
@@ -372,6 +373,7 @@ export function SelfieCapture({
                     isOpen={true}
                     onClose={onBack || (() => {})}
                     title="Identify Yourself"
+                    topLabel={mode === 'check_out' ? 'Clocking Out' : 'Clocking In'}
                     icon={<IconScanFace className="w-5 h-5 text-sky-400" />}
                     videoRefOut={videoRef}
                     onStreamReady={() => setStatus('streaming')}
@@ -384,6 +386,21 @@ export function SelfieCapture({
                     footerSlot={
 
                         <div className="space-y-3">
+                            <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 backdrop-blur-lg">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-sky-500/30 to-sky-500/10 border-2 border-sky-500/30 flex items-center justify-center overflow-hidden shrink-0">
+                                        {profileImageUrl ? (
+                                            <img src={profileImageUrl} alt="Profile" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <IconUser className="w-5 h-5 text-sky-400" />
+                                        )}
+                                    </div>
+                                    <div className="flex-1 min-w-0 space-y-0.5">
+                                        <p className="text-white font-bold text-sm truncate">{profileName || 'Employee'}</p>
+                                        {profileEmail && <p className="text-slate-400 text-xs truncate">{profileEmail}</p>}
+                                    </div>
+                                </div>
+                            </div>
                             {verificationDetails && (
                                 <details open={status === 'verify_failed'} className="rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2.5 text-left">
                                     <summary className="cursor-pointer text-xs font-bold text-sky-300">Daily biometric verification details</summary>
