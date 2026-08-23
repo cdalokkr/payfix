@@ -16,7 +16,7 @@ export const BIOMETRIC_CAMERA_CONFIG = {
   height: 1280,
   minWidth: 480,
   minHeight: 640,
-  aspectRatio: 0.75, // Portrait-first 3:4 preference; hardware may report 4:3, and canonical output is always square.
+  aspectRatio: 0.75, // Portrait-first 3:4 preference; hardware may report another native ratio, while the server generates the canonical 3:4 portrait.
   facingMode: { ideal: 'user' } as const,
   inputSize: 416 as const,
   scoreThreshold: 0.5,
