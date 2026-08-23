@@ -157,14 +157,15 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
       isCapturingRef.current = false;
       isEvaluatingRef.current = false;
       MediaPipeMeshService.resetBlinkState();
-      setIsStreamPlaying(true);
+      // A MediaStream can exist before its first camera frame arrives. Keep
+      // the loading state until the video element reports that it can play.
+      setIsStreamPlaying(false);
       if (videoRef.current) {
         const video = videoRef.current;
         video.srcObject = warmedStream;
         video.setAttribute('playsinline', 'true');
         video.muted = true;
-        video.play().then(() => setIsStreamPlaying(true)).catch(() => {});
-        markStartup('video');
+        video.play().catch(() => {});
         FaceApiBrowserService.loadDetectorOnly().catch(() => {});
         MediaPipeMeshService.initialize().catch(() => {});
         onStreamReadyRef.current?.(warmedStream, video);
@@ -174,10 +175,12 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
     // Stream is active — DO NOT STOP stream!
     if (streamRef.current && streamRef.current.active) {
-      setIsStreamPlaying(true);
+      setIsStreamPlaying(false);
       if (videoRef.current && videoRef.current.srcObject !== streamRef.current) {
         videoRef.current.srcObject = streamRef.current;
-        videoRef.current.play().then(() => setIsStreamPlaying(true)).catch(() => {});
+        videoRef.current.play().catch(() => {});
+      } else if (videoRef.current?.readyState >= 2 && videoRef.current.videoWidth > 0) {
+        setIsStreamPlaying(true);
       }
       return;
     }
@@ -202,23 +205,16 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
       streamRef.current = stream;
       markStartup('stream');
-      setIsStreamPlaying(true);
+      setIsStreamPlaying(false);
 
       if (videoRef.current) {
         const video = videoRef.current;
         video.srcObject = stream;
         video.setAttribute('playsinline', 'true');
         video.muted = true;
-        video.play().then(() => {
-          if (isMountedRef.current) {
-            setIsStreamPlaying(true);
-            markStartup('video');
-          }
-        }).catch(() => {
-          if (isMountedRef.current) {
-            setIsStreamPlaying(true);
-            markStartup('video');
-          }
+        video.play().catch(() => {
+          // Remain in the startup state until the video element receives
+          // usable frames; a stream alone can still render a black preview.
         });
 
         // Fast preload detector for instant blink detection
@@ -449,13 +445,22 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           autoPlay
           muted
           playsInline
-          onPlay={() => setIsStreamPlaying(true)}
+          onPlay={() => {
+            setIsStreamPlaying(true);
+            markStartup('video');
+          }}
           onPlaying={() => {
             setIsStreamPlaying(true);
             markStartup('video');
           }}
-          onLoadedData={() => setIsStreamPlaying(true)}
-          onCanPlay={() => setIsStreamPlaying(true)}
+          onLoadedData={() => {
+            setIsStreamPlaying(true);
+            markStartup('video');
+          }}
+          onCanPlay={() => {
+            setIsStreamPlaying(true);
+            markStartup('video');
+          }}
           className="absolute inset-0 h-full w-full object-cover transform -scale-x-100"
         />
 
