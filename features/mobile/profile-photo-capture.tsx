@@ -297,24 +297,12 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
 
         try {
             // Do not crop or trust browser biometrics: the server validates and aligns this natural frame.
-            const uploadDataUrl = capturedImage
-            const dataUrlMatch = uploadDataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/)
-            if (!dataUrlMatch) throw new Error('Captured image format is invalid. Please retake the selfie.')
-
-            const mimeType = dataUrlMatch[1]
-            const byteCharacters = atob(dataUrlMatch[2])
-            const byteNumbers = new Array(byteCharacters.length)
-            for (let i = 0; i < byteCharacters.length; i++) {
-                byteNumbers[i] = byteCharacters.charCodeAt(i)
-            }
-            const byteArray = new Uint8Array(byteNumbers)
-            const blob = new Blob([byteArray], { type: mimeType })
-            addLog(`Sending natural portrait to the server (${Math.round(blob.size / 1024)}KB)`)
-
-            // Send to server API route (uses service role, bypasses RLS)
+            // The three natural frames are the upload payload. Do not append a
+            // fourth duplicate copy of the first frame; the server already
+            // selects and stores its own canonical portrait.
+            addLog(`Sending three natural portrait frames to the server`)
             addLog('Sending to server...')
             const formData = new FormData()
-            formData.append('file', blob, 'avatar.jpg')
             formData.append('profileId', profileId)
             formData.append('biometricPipelineVersion', BIOMETRIC_CAPTURE_PIPELINE_VERSION)
             formData.append('challenge', livenessChallenge || '')
@@ -324,7 +312,11 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
                 body: formData,
             })
 
-            const result = await response.json()
+            const responseText = await response.text()
+            let result: any = {}
+            try { result = responseText ? JSON.parse(responseText) : {} } catch {
+                throw new Error(`Upload request rejected (${response.status}): ${responseText.slice(0, 120) || 'server returned an invalid response'}`)
+            }
 
             if (!response.ok) {
                 const serverStatus = [result.code, result.error].filter(Boolean).join(' — ') || 'Unknown server rejection'

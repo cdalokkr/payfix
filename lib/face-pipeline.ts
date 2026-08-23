@@ -19,8 +19,10 @@ export const BIOMETRIC_CAMERA_CONFIG = {
   minWidth: 480,
   minHeight: 640,
   aspectRatio: 0.75, // Portrait-first 3:4 preference; hardware may report another native ratio, while the server generates the canonical 3:4 portrait.
-  captureMaxDimension: 1920,
-  captureJpegQuality: 0.92,
+  // 1280 × 1707 maximum keeps three temporal frames comfortably below common
+  // serverless request limits while remaining sharper than the 720 × 960 output.
+  captureMaxDimension: 1280,
+  captureJpegQuality: 0.9,
   // Biometric capture must never silently fall back to the rear camera.
   facingMode: { exact: 'user' } as const,
   inputSize: 416 as const,
