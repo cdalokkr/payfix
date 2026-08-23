@@ -7,7 +7,6 @@ export interface QueuedPunch {
   timestamp: string;
   latitude: number | null;
   longitude: number | null;
-  selfie: string | null;
   status: 'pending' | 'syncing' | 'failed';
   errorMessage?: string;
   retryCount: number;

@@ -49,7 +49,8 @@ interface CaptureDiagnostics {
         embeddingDimensions: number
         livenessPassed: boolean
         backend: string
-        storedOriginalPortrait: boolean
+            storedCanonicalPortrait: boolean
+            canonicalPortraitAspectRatio: string
     }
 }
 
@@ -449,7 +450,7 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
                                     <dt className="text-slate-500">Server faces</dt><dd>{captureDiagnostics.serverVerification.faceCount}</dd>
                                     <dt className="text-slate-500">Template</dt><dd>{captureDiagnostics.serverVerification.embeddingDimensions}-d</dd>
                                     <dt className="text-slate-500">Liveness</dt><dd>{captureDiagnostics.serverVerification.livenessPassed ? 'Passed' : 'Failed'}</dd>
-                                    <dt className="text-slate-500">Stored image</dt><dd>{captureDiagnostics.serverVerification.storedOriginalPortrait ? 'Original portrait' : 'Derivative'}</dd>
+                                    <dt className="text-slate-500">Stored image</dt><dd>{captureDiagnostics.serverVerification.storedCanonicalPortrait ? '3:4 canonical portrait' : 'Not stored'}</dd>
                                     <dt className="text-slate-500">Backend</dt><dd className="break-all">{captureDiagnostics.serverVerification.backend}</dd>
                                 </dl>
                             )}

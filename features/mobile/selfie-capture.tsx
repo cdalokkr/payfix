@@ -34,7 +34,7 @@ interface SelfieCaptureProps {
     faceEmbedding?: number[] | null
     onCaptured: (result: SelfieResult) => void
     onVerified: (result: { matched: boolean; similarity: number }) => void
-    onSubmitAttendance: (selfie?: string) => Promise<void>
+    onSubmitAttendance: () => Promise<void>
     onBack?: () => void
     warmedStream?: MediaStream | null
     clearWarmedStream?: () => void
@@ -78,6 +78,7 @@ export function SelfieCapture({
     const [status, setStatus] = useState<'idle' | 'streaming' | 'captured' | 'verifying' | 'verified' | 'verify_failed' | 'error'>('idle')
     const [errorMessage, setErrorMessage] = useState<string>('')
     const [capturedImage, setCapturedImage] = useState<string | null>(null)
+    const [processedPortrait, setProcessedPortrait] = useState<string | null>(null)
     const [capturedAt, setCapturedAt] = useState<Date | null>(null)
     const [similarity, setSimilarity] = useState<number>(0)
     const [modelsReady, setModelsReady] = useState(true)
@@ -109,6 +110,7 @@ export function SelfieCapture({
     // Retake camera stream
     const retakePhoto = useCallback(() => {
         setCapturedImage(null)
+        setProcessedPortrait(null)
         setCapturedAt(null)
         setStatus('streaming')
     }, [])
@@ -150,6 +152,7 @@ export function SelfieCapture({
             payloadBytes: payloadMatch ? Math.floor((payloadMatch[2].length * 3) / 4) : 0,
         })
         setCapturedImage(imageToVerify)
+        setProcessedPortrait(null)
         setCapturedAt(new Date())
         stopCamera()
         setStatus('verifying')
@@ -187,6 +190,12 @@ export function SelfieCapture({
                 threshold: result.threshold,
                 server: result.verification,
             } : previous)
+            if (!result.canonicalPortraitDataUrl) {
+                setStatus('verify_failed')
+                setErrorMessage('The server did not return the portrait used for verification. Please retake your selfie.')
+                return
+            }
+            setProcessedPortrait(result.canonicalPortraitDataUrl)
 
             if (!result.matched) {
                 setStatus('verify_failed')
@@ -199,7 +208,7 @@ export function SelfieCapture({
             setApiStatus('pending')
 
             try {
-                await onSubmitAttendance(imageToVerify)
+                await onSubmitAttendance()
                 setApiStatus('success')
             } catch (error: any) {
                 setApiStatus('error')
@@ -348,6 +357,7 @@ export function SelfieCapture({
                     timerSeconds={!capturedImage && status !== 'verified' ? sessionTimeout : undefined}
                     enableAutoBlinkCapture={!capturedImage && status !== 'verifying' && status !== 'verified'}
                     capturedPreviewUrl={capturedImage}
+                    processedPreviewUrl={processedPortrait}
                     onAutoCapture={handleAutoCapture}
                     footerSlot={
 
@@ -406,7 +416,7 @@ export function SelfieCapture({
                                 <IconRefresh className="w-5 h-5 text-sky-400 animate-spin shrink-0" />
                                 <div className="text-left">
                                     <p className="text-xs font-bold text-white">Verifying Face...</p>
-                                    <p className="text-[10px] text-sky-300 font-mono">512×512 HD biometrics verification</p>
+                                    <p className="text-[10px] text-sky-300 font-mono">Server 3:4 portrait &amp; 512-d biometric verification</p>
                                 </div>
                             </div>
                         </div>

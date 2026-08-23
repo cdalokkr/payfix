@@ -11,6 +11,8 @@ export interface FaceExtractResult {
     embedding_128: number[] | null
     embedding: number[] | null
     cropped_face_base64?: string | null
+    canonical_portrait_base64?: string | null
+    canonical_portrait_aspect_ratio?: string | null
     dimensions: number
     quality_score: number
     is_live: boolean

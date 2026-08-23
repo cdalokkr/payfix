@@ -23,6 +23,7 @@ interface BiometricCameraModalProps {
   timerSeconds?: number;
   enableAutoBlinkCapture?: boolean;
   capturedPreviewUrl?: string | null;
+  processedPreviewUrl?: string | null;
   /** @deprecated Legacy callers may still supply a browser-generated crop until Phase 6 migration. */
   capturedCroppedUrl?: string | null;
   onAutoCapture?: (dataUrl: string) => void;
@@ -45,6 +46,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   timerSeconds,
   enableAutoBlinkCapture = true,
   capturedPreviewUrl,
+  processedPreviewUrl,
   capturedCroppedUrl,
   onAutoCapture,
 }) => {
@@ -310,7 +312,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
   const isAligned = livenessStatus.isAlignedInMask;
   const isBlinkConfirmed = livenessStatus.blinkConfirmed || flashSuccess;
-  const activeCleanPortraitUrl = capturedPreviewUrl || capturedCroppedUrl || internalPreviewUrl;
+  const activeCleanPortraitUrl = processedPreviewUrl || capturedPreviewUrl || capturedCroppedUrl || internalPreviewUrl;
 
   // Single Spacious Face Oval Path (Wider contoured shape for comfortable natural head fit)
   const OVAL_PATH = "M150 20 C236 20 290 70 290 178 C290 286 236 352 150 352 C64 352 10 286 10 178 C10 70 64 20 150 20 Z";
@@ -390,15 +392,15 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
         {/* Natural portrait freeze preview (WITHOUT Mask/Overlay) */}
         {activeCleanPortraitUrl ? (
           <div className="absolute inset-0 z-10 bg-slate-950 flex flex-col items-center justify-center p-3 animate-in zoom-in-95 fade-in duration-200">
-            <div className="relative w-full aspect-square max-w-[320px] rounded-3xl overflow-hidden border-2 border-emerald-500/70 shadow-2xl bg-black">
+            <div className="relative w-full aspect-[3/4] max-w-[320px] rounded-3xl overflow-hidden border-2 border-emerald-500/70 shadow-2xl bg-black">
               <img
                 src={activeCleanPortraitUrl}
-                alt="512x512 Clean Face Portrait"
+                alt={processedPreviewUrl ? "Server-processed 3:4 verification portrait" : "Natural camera portrait"}
                 className="w-full h-full object-cover"
               />
               <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-slate-950/85 border border-emerald-500/50 backdrop-blur-md text-[10.5px] font-mono font-bold text-emerald-300 flex items-center gap-1.5 shadow-lg">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                Natural portrait
+                {processedPreviewUrl ? 'Server processed portrait' : 'Natural portrait'}
               </div>
             </div>
           </div>

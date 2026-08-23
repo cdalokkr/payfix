@@ -22,6 +22,7 @@ export interface FaceVerificationResult {
     isLive?: boolean;
     error?: string;
     alignedCropDataUrl?: string;
+    canonicalPortraitDataUrl?: string;
     threshold?: number;
     verification?: {
         faceCount: number;
@@ -214,6 +215,9 @@ export const FaceVerificationService = {
                     isLive: apiData.is_live === true,
                     threshold: Number(apiData.threshold || 0),
                     verification: apiData.verification,
+                    canonicalPortraitDataUrl: typeof apiData.canonical_portrait_base64 === 'string'
+                        ? apiData.canonical_portrait_base64
+                        : undefined,
                     error: apiData.matched ? undefined : (apiData.error || 'Face verification was not successful.'),
                 };
             }

@@ -12,6 +12,15 @@ const NATURAL_PORTRAIT_PIPELINE = 'natural-portrait-v1'
 
 const SELFIE_DATA_URL = /^data:image\/(jpeg|png|webp);base64,/
 
+function averageNormalizedEmbeddings(embeddings: number[][]): number[] | null {
+    if (!embeddings.length || embeddings.some(vector => vector.length !== 512 || vector.some(value => !Number.isFinite(value)))) return null
+    const average = Array.from({ length: 512 }, (_, index) =>
+        embeddings.reduce((sum, vector) => sum + vector[index], 0) / embeddings.length
+    )
+    const norm = Math.sqrt(average.reduce((sum, value) => sum + value * value, 0))
+    return norm > 0 ? average.map(value => value / norm) : null
+}
+
 export async function POST(request: NextRequest) {
     return runWithRequestHeaders(async () => {
         const tenant = tenantStorage.getStore()
@@ -50,9 +59,17 @@ export async function POST(request: NextRequest) {
         const extractions = await Promise.all(submittedFrames.map(frame => FaceServiceClient.extract(frame)))
         const extraction = extractions[0]
         if (extractions.some(item => !item.success || !item.face_detected || item.face_count !== 1 || item.is_live !== true)) {
-            return NextResponse.json({ matched: false, similarity: 0, is_live: false, face_detected: true, error: 'Liveness movement could not be verified across all camera frames.', code: 'LIVENESS_FAILED' }, { status: 400 })
+            return NextResponse.json({
+                matched: false, similarity: 0, is_live: false, face_detected: true,
+                canonical_portrait_base64: extraction.canonical_portrait_base64 || null,
+                canonical_portrait_aspect_ratio: extraction.canonical_portrait_aspect_ratio || null,
+                error: 'Liveness movement could not be verified across all camera frames.',
+                code: 'LIVENESS_FAILED'
+            }, { status: 400 })
         }
-        const selfie = extraction.embedding_512 || (extraction.embedding?.length === 512 ? extraction.embedding : null)
+        const selfie = averageNormalizedEmbeddings(extractions.map(item =>
+            item.embedding_512 || (item.embedding?.length === 512 ? item.embedding : [])
+        ))
         if (!extraction.success || !extraction.face_detected || extraction.face_count !== 1 || !selfie || selfie.length !== 512) {
             return NextResponse.json({
                 matched: false, similarity: 0, is_live: false, face_detected: false,
@@ -62,7 +79,20 @@ export async function POST(request: NextRequest) {
             })
         }
         if (extraction.is_live !== true) {
-            return NextResponse.json({ matched: false, similarity: 0, is_live: false, face_detected: true, error: 'Liveness verification failed. Please retake your selfie.', diagnostics: extraction.diagnostics })
+            return NextResponse.json({
+                matched: false, similarity: 0, is_live: false, face_detected: true,
+                canonical_portrait_base64: extraction.canonical_portrait_base64 || null,
+                canonical_portrait_aspect_ratio: extraction.canonical_portrait_aspect_ratio || null,
+                error: 'Liveness verification failed. Please retake your selfie.',
+                diagnostics: extraction.diagnostics
+            })
+        }
+        if (!extraction.canonical_portrait_base64 || extraction.canonical_portrait_aspect_ratio !== '3:4') {
+            return NextResponse.json({
+                matched: false, similarity: 0, is_live: false, face_detected: true,
+                error: 'The server did not return a canonical verification portrait. Please try again.',
+                code: 'CANONICAL_PORTRAIT_MISSING'
+            }, { status: 502 })
         }
 
         const threshold = Number(process.env.FACE_MATCH_COSINE_THRESHOLD ?? '0.88')
@@ -76,6 +106,8 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json({
             matched, similarity: Math.round(similarity * 1000) / 1000, threshold, is_live: true, face_detected: true,
+            canonical_portrait_base64: extraction.canonical_portrait_base64,
+            canonical_portrait_aspect_ratio: extraction.canonical_portrait_aspect_ratio,
             method: 'arcface-512-server', diagnostics: extraction.diagnostics,
             verification: {
                 faceCount: extraction.face_count,

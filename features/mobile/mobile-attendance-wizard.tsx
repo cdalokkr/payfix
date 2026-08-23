@@ -19,7 +19,6 @@ import { trpc } from "@/lib/trpc/client"
 import { SelfieCapture, type SelfieResult } from "./selfie-capture"
 import { format } from "date-fns"
 import { usePwaCheck } from "@/hooks/use-pwa-check"
-import { OfflineSyncService } from "@/lib/services/offline-sync.service"
 
 type WizardStep = 'selfie' | 'submitting' | 'complete' | 'error'
 
@@ -118,7 +117,7 @@ export function MobileAttendanceWizard({
     }, [])
 
     // This is called by SelfieCapture to submit attendance in parallel with verification
-    const handleSubmitAttendance = useCallback(async (selfie?: string) => {
+    const handleSubmitAttendance = useCallback(async () => {
         let coords: { latitude: number | null; longitude: number | null } = { latitude: null, longitude: null }
         if (effectiveAction === 'clock_in') {
             try {
@@ -162,18 +161,8 @@ export function MobileAttendanceWizard({
             }
         }
 
-        const isOffline = OfflineSyncService.isOffline()
-        if (isOffline) {
-            console.log('[WIZARD] Client is offline, queuing punch directly in IndexedDB')
-            await OfflineSyncService.queuePunch({
-                action: effectiveAction,
-                localDate,
-                latitude: coords.latitude,
-                longitude: coords.longitude,
-                selfie: selfie || null
-            })
-            toast.success("Connection unavailable. Punched successfully offline!")
-            return
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            throw new Error('An internet connection is required to verify your identity before attendance can be recorded.')
         }
 
         try {
@@ -215,14 +204,7 @@ export function MobileAttendanceWizard({
 
             // Only genuine offline / network failures reach here
             console.warn('[WIZARD] Network error — falling back to IndexedDB local queue:', err)
-            await OfflineSyncService.queuePunch({
-                action: effectiveAction,
-                localDate,
-                latitude: coords.latitude,
-                longitude: coords.longitude,
-                selfie: selfie || null
-            })
-            toast.success('Server connection lost. Saved offline successfully!')
+            throw new Error('Attendance could not be recorded because the server connection was lost. Please verify again while online.')
         }
 
         // Invalidate BOTH queries for real-time UI update

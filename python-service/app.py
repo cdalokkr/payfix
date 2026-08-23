@@ -61,6 +61,8 @@ class ExtractResponse(BaseModel):
     embedding_128: Optional[List[float]] = None
     embedding: Optional[List[float]] = None
     cropped_face_base64: Optional[str] = None
+    canonical_portrait_base64: Optional[str] = None
+    canonical_portrait_aspect_ratio: Optional[str] = None
     dimensions: int = 0
     quality_score: float = 0.0
     is_live: bool = True
@@ -169,7 +171,7 @@ def l2_normalize(vector: np.ndarray) -> np.ndarray:
     norm = np.linalg.norm(vector)
     return vector if norm == 0 else vector / norm
 
-def crop_face_avatar(image: Image.Image, face_box: Optional[Dict[str, int]] = None, padding: float = 0.15) -> tuple[Image.Image, Image.Image]:
+def crop_face_avatar(image: Image.Image, face_box: Optional[Dict[str, int]] = None, padding: float = 0.15) -> tuple[Image.Image, Image.Image, Image.Image]:
     img_w, img_h = image.size
     if face_box:
         fx = face_box["left"]
@@ -187,15 +189,51 @@ def crop_face_avatar(image: Image.Image, face_box: Optional[Dict[str, int]] = No
         y2 = min(img_h, int(cy + size * 0.48))  # natural margin for chin
 
         cropped = image.crop((x1, y1, x2, y2))
+
+        # Keep a separate 3:4 display portrait. The internal ArcFace crop below
+        # remains square and is never used as the user-facing profile image.
+        portrait_ratio = 3 / 4
+        portrait_height = max(fh * 2.35, fw * 2.0)
+        portrait_width = portrait_height * portrait_ratio
+        portrait_center_x = cx
+        portrait_center_y = fy + (fh * 0.62)
+        px1 = portrait_center_x - portrait_width / 2
+        py1 = portrait_center_y - portrait_height / 2
+        px2 = portrait_center_x + portrait_width / 2
+        py2 = portrait_center_y + portrait_height / 2
+
+        # Shift the requested portrait into the source image without changing
+        # its 3:4 ratio, preserving hair/ears/chin where the camera frame allows.
+        if px1 < 0:
+            px2 -= px1
+            px1 = 0
+        if px2 > img_w:
+            px1 -= px2 - img_w
+            px2 = img_w
+        if py1 < 0:
+            py2 -= py1
+            py1 = 0
+        if py2 > img_h:
+            py1 -= py2 - img_h
+            py2 = img_h
+        px1, py1 = max(0, px1), max(0, py1)
+        px2, py2 = min(img_w, px2), min(img_h, py2)
+        portrait = image.crop((int(px1), int(py1), int(px2), int(py2)))
     else:
         min_dim = min(img_w, img_h)
         x1 = (img_w - min_dim) // 2
         y1 = (img_h - min_dim) // 2
         cropped = image.crop((x1, y1, x1 + min_dim, y1 + min_dim))
+        portrait_height = min(img_h, int(img_w / (3 / 4)))
+        portrait_width = int(portrait_height * (3 / 4))
+        portrait_x1 = max(0, (img_w - portrait_width) // 2)
+        portrait_y1 = max(0, (img_h - portrait_height) // 2)
+        portrait = image.crop((portrait_x1, portrait_y1, portrait_x1 + portrait_width, portrait_y1 + portrait_height))
 
     crop_512 = cropped.resize((512, 512), Image.Resampling.LANCZOS)
     crop_112 = cropped.resize((112, 112), Image.Resampling.BILINEAR)
-    return crop_512, crop_112
+    portrait = portrait.resize((480, 640), Image.Resampling.LANCZOS)
+    return crop_512, crop_112, portrait
 
 import urllib.request
 
@@ -342,7 +380,7 @@ def _raw_extract(payload: ExtractRequest) -> ExtractResponse:
     timings["liveness_ms"] = round((time.perf_counter() - t0) * 1000, 2)
 
     t0 = time.perf_counter()
-    crop_512, crop_112 = crop_face_avatar(pil_image, face_box, padding=0.15)
+    crop_512, crop_112, canonical_portrait = crop_face_avatar(pil_image, face_box, padding=0.15)
     embedding_512 = compute_512d_embedding_from_crop(crop_112)
     embedding_128 = embedding_512[:128]
     timings["embedding_512_ms"] = round((time.perf_counter() - t0) * 1000, 2)
@@ -351,6 +389,9 @@ def _raw_extract(payload: ExtractRequest) -> ExtractResponse:
     buf = io.BytesIO()
     crop_512.save(buf, format="JPEG", quality=92)
     cropped_b64 = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+    portrait_buf = io.BytesIO()
+    canonical_portrait.save(portrait_buf, format="JPEG", quality=92)
+    canonical_portrait_b64 = "data:image/jpeg;base64," + base64.b64encode(portrait_buf.getvalue()).decode()
 
     timings["total_ms"] = round((time.perf_counter() - t_start) * 1000, 2)
 
@@ -371,6 +412,8 @@ def _raw_extract(payload: ExtractRequest) -> ExtractResponse:
         success=True, face_detected=True, face_count=1,
         embedding_512=embedding_512, embedding_128=embedding_128,
         embedding=embedding_512, cropped_face_base64=cropped_b64,
+        canonical_portrait_base64=canonical_portrait_b64,
+        canonical_portrait_aspect_ratio="3:4",
         dimensions=512, quality_score=quality["liveness_score"],
         is_live=quality["is_live"], liveness_score=quality["liveness_score"],
         diagnostics=diagnostics

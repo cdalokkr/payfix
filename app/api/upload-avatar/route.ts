@@ -57,17 +57,19 @@ export async function POST(request: NextRequest) {
         if (extraction.is_live !== true) {
             return NextResponse.json({ error: 'Liveness verification failed. Please capture a new selfie.', code: 'LIVENESS_FAILED', diagnostics: extraction.diagnostics }, { status: 400 })
         }
+        if (!extraction.canonical_portrait_base64 || extraction.canonical_portrait_aspect_ratio !== '3:4') {
+            return NextResponse.json({ error: 'The server did not return a canonical profile portrait. Please retake the selfie.', code: 'CANONICAL_PORTRAIT_MISSING' }, { status: 502 })
+        }
 
-        // Persist the exact portrait that the service just validated.
-        // cropped_face_base64 is a detector-derived derivative, not an enrollment source: re-detecting
-        // on that tight crop during admin approval can legitimately return “no face detected”.
-        const fileToUpload = Buffer.from(arrayBuffer)
-        const contentType = file.type
-        const extension = file.type === 'image/jpeg' ? 'jpg' : file.type === 'image/png' ? 'png' : 'webp'
+        // Store only the server-generated 3:4 portrait for review and profile display.
+        // The original natural capture stays in request memory and is discarded after this response.
+        const fileToUpload = Buffer.from(extraction.canonical_portrait_base64.split(',')[1], 'base64')
+        const contentType = 'image/jpeg'
+        const extension = 'jpg'
         console.info('[UPLOAD-API] Profile selfie accepted', {
-            bytes: file.size,
+            bytes: fileToUpload.byteLength,
             contentType,
-            storedOriginalPortrait: true,
+            storedCanonicalPortrait: true,
             capturePipeline,
             faceCount: extraction.face_count,
             embeddingDimensions: embedding.length,
@@ -89,7 +91,8 @@ export async function POST(request: NextRequest) {
             verification: {
                 imageBytes: file.size,
                 mimeType: contentType,
-                storedOriginalPortrait: true,
+                storedCanonicalPortrait: true,
+                canonicalPortraitAspectRatio: extraction.canonical_portrait_aspect_ratio,
                 capturePipeline,
                 faceCount: extraction.face_count,
                 embeddingDimensions: embedding.length,

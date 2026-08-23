@@ -201,19 +201,22 @@ export function PhotoApprovalsView() {
                                         <div className="h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent flex-1" />
                                     </div>
 
-                                    {/* Requested Photo */}
+                                    {/* Server-generated requested portrait */}
                                     <div className="space-y-3 px-6">
                                         <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-[0.2em] text-primary">
-                                            <span>Requested Photo</span>
-                                            <Badge className="text-[9px] font-black h-4 px-1 bg-primary text-primary-foreground shadow-lg shadow-primary/20">Pending</Badge>
+                                            <span>Canonical Portrait</span>
+                                            <Badge className="text-[9px] font-black h-4 px-1 bg-primary text-primary-foreground shadow-lg shadow-primary/20">Server 3:4</Badge>
                                         </div>
-                                        <div className="aspect-square w-full max-w-[240px] mx-auto rounded-[2.5rem] overflow-hidden bg-primary/5 border-4 border-white shadow-2xl relative ring-2 ring-primary/20">
+                                        <div className="aspect-[3/4] w-full max-w-[240px] mx-auto rounded-[2.5rem] overflow-hidden bg-primary/5 border-4 border-white shadow-2xl relative ring-2 ring-primary/20">
                                             <img
                                                 src={selectedRequest.pending_photo_url}
-                                                alt="New"
+                                                alt="Server-generated canonical portrait for approval"
                                                 className="w-full h-full object-cover"
                                             />
                                         </div>
+                                        <p className="text-center text-[10px] font-medium text-muted-foreground">
+                                            Server-generated portrait used for profile approval and the approved avatar.
+                                        </p>
                                     </div>
                                 </div>
 
