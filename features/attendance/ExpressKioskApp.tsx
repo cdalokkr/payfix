@@ -1230,7 +1230,6 @@ export function ExpressKioskApp() {
                                 )}
                             </div>
                         )}
-                        }
                     />
 
 
