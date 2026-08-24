@@ -81,6 +81,13 @@ export async function POST(request: NextRequest) {
         const extraction = extractions[0]
         const earlyCanonicalPortrait = extraction?.canonical_portrait_base64 || null
         const earlyCanonicalAspectRatio = extraction?.canonical_portrait_aspect_ratio || null
+        const serviceVerification = {
+            faceCount: extraction?.face_count ?? 0,
+            embeddingDimensions: extraction?.embedding_512?.length || extraction?.embedding?.length || 0,
+            livenessPassed: extraction?.is_live === true,
+            backend: extraction?.diagnostics?.backend_engine || 'Not reported',
+            canonicalPortrait: earlyCanonicalAspectRatio === '3:4',
+        }
         if (extractions.some(item => !item.success || !item.face_detected || item.face_count !== 1 || item.is_live !== true)) {
             return NextResponse.json({
                 matched: false,
@@ -88,6 +95,7 @@ export async function POST(request: NextRequest) {
                 code: 'LIVENESS_FAILED',
                 canonical_portrait_base64: earlyCanonicalPortrait,
                 canonical_portrait_aspect_ratio: earlyCanonicalAspectRatio,
+                verification: serviceVerification,
             }, { status: 400 })
         }
         const probe = extraction.embedding_512 || (extraction.embedding?.length === 512 ? extraction.embedding : null)
@@ -99,6 +107,7 @@ export async function POST(request: NextRequest) {
                 diagnostics: extraction.diagnostics,
                 canonical_portrait_base64: earlyCanonicalPortrait,
                 canonical_portrait_aspect_ratio: earlyCanonicalAspectRatio,
+                verification: serviceVerification,
             }, { status: 400 })
         }
         if (extraction.is_live !== true) {
@@ -108,6 +117,7 @@ export async function POST(request: NextRequest) {
                 code: 'LIVENESS_FAILED',
                 canonical_portrait_base64: earlyCanonicalPortrait,
                 canonical_portrait_aspect_ratio: earlyCanonicalAspectRatio,
+                verification: serviceVerification,
             }, { status: 400 })
         }
         const canonicalPortrait = extraction.canonical_portrait_base64
@@ -117,6 +127,7 @@ export async function POST(request: NextRequest) {
                 is_live: false,
                 error: 'The server did not return a canonical 3:4 verification portrait. Please try again.',
                 code: 'CANONICAL_PORTRAIT_MISSING',
+                verification: serviceVerification,
             }, { status: 502 })
         }
 
@@ -158,6 +169,7 @@ export async function POST(request: NextRequest) {
                         : 'Face is not recognized.',
                     canonical_portrait_base64: canonicalPortrait,
                     canonical_portrait_aspect_ratio: extraction.canonical_portrait_aspect_ratio,
+                    verification: { ...serviceVerification, canonicalPortrait: true },
                 }, { status: 200 })
             }
 
@@ -233,6 +245,7 @@ export async function POST(request: NextRequest) {
                     livenessPassed: true,
                     backend: extraction.diagnostics?.backend_engine || 'Not reported',
                     capturePipeline: NATURAL_PORTRAIT_PIPELINE,
+                    canonicalPortrait: true,
                 },
                 canonical_portrait_base64: canonicalPortrait,
                 canonical_portrait_aspect_ratio: extraction.canonical_portrait_aspect_ratio,

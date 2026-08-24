@@ -81,6 +81,10 @@ interface VerificationOverlayState {
     duration?: string;
     error?: string;
     snapshotUrl?: string | null;
+    faceCount?: number;
+    embeddingDimensions?: number;
+    livenessPassed?: boolean;
+    serverBackend?: string;
 }
 
 
@@ -521,6 +525,10 @@ export function ExpressKioskApp() {
                         error: serverResult.error || 'Face is not recognized. Please try again.',
                         duration: getDurationStr(),
                         snapshotUrl,
+                        faceCount: serverResult.verification?.faceCount,
+                        embeddingDimensions: serverResult.verification?.embeddingDimensions,
+                        livenessPassed: serverResult.verification?.livenessPassed,
+                        serverBackend: serverResult.verification?.backend,
                     });
                     setTimeout(() => {
                         setVerificationResult(null);
@@ -551,6 +559,10 @@ export function ExpressKioskApp() {
                     similarity,
                     duration,
                     snapshotUrl,
+                    faceCount: serverResult.verification?.faceCount,
+                    embeddingDimensions: serverResult.verification?.embeddingDimensions,
+                    livenessPassed: serverResult.verification?.livenessPassed,
+                    serverBackend: serverResult.verification?.backend,
                 });
 
                 setLastScanResult({
@@ -1084,6 +1096,10 @@ export function ExpressKioskApp() {
                                             <span>•</span>
                                             <span>Latency: {verificationResult.duration}</span>
                                         </div>
+                                        <div className="border-t border-emerald-500/20 pt-2 text-[10px] font-mono text-emerald-100/80">
+                                            <div>Faces: {verificationResult.faceCount ?? '—'} · Template: {verificationResult.embeddingDimensions ?? '—'}-d · Liveness: {verificationResult.livenessPassed ? 'Passed' : 'Failed'}</div>
+                                            <div className="mt-0.5 truncate">Python service: {verificationResult.serverBackend || 'Not reported'} · Canonical: 3:4</div>
+                                        </div>
                                     </div>
                                 ) : (
                                     <div className="w-full max-w-sm p-4 bg-slate-950/95 border-2 border-rose-500/70 rounded-2xl backdrop-blur-md shadow-2xl space-y-1 text-center">
@@ -1096,6 +1112,10 @@ export function ExpressKioskApp() {
                                                 Duration: {verificationResult.duration}
                                             </div>
                                         )}
+                                        <div className="border-t border-rose-500/20 pt-2 text-[10px] font-mono text-rose-100/80">
+                                            <div>Faces: {verificationResult.faceCount ?? '—'} · Template: {verificationResult.embeddingDimensions ?? '—'}-d · Liveness: {verificationResult.livenessPassed ? 'Passed' : 'Failed'}</div>
+                                            <div className="mt-0.5 truncate">Python service: {verificationResult.serverBackend || 'Not reported'} · Canonical: 3:4</div>
+                                        </div>
                                     </div>
                                 )}
                             </div>
