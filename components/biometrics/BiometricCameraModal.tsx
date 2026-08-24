@@ -23,6 +23,8 @@ interface BiometricCameraModalProps {
   isProcessing?: boolean;
   /** Pause only the visual decoder after capture frames have been collected. */
   pausePreviewWhileProcessing?: boolean;
+  /** Result content shown below the portrait, keeping the server portrait unobscured. */
+  resultSlot?: React.ReactNode;
   footerSlot?: React.ReactNode;
   diagnosticsSlot?: React.ReactNode;
   children?: React.ReactNode;
@@ -52,6 +54,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   statusText,
   isProcessing = false,
   pausePreviewWhileProcessing = false,
+  resultSlot,
   footerSlot,
   diagnosticsSlot,
   children,
@@ -754,6 +757,12 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           </div>
         )}
       </div>
+
+      {resultSlot && (
+        <div className="w-full px-4 pt-3 shrink-0">
+          {resultSlot}
+        </div>
+      )}
 
       {diagnosticsSlot && (
         <div className="w-full px-4 pb-3 shrink-0">

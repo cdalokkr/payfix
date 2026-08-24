@@ -1178,11 +1178,9 @@ export function ExpressKioskApp() {
                                 </Button>
                             </div>
                         }
-                    >
-
-                        {/* Verification Result Status Pill (Positions at exact bottom status location over clear selfie photo) */}
-                        {verificationResult && (
-                            <div className="absolute bottom-4 inset-x-4 z-30 flex flex-col items-center justify-center animate-in zoom-in-95 fade-in duration-200">
+                        resultSlot={
+                            verificationResult && (
+                            <div className="w-full flex flex-col items-center justify-center animate-in zoom-in-95 fade-in duration-200">
                                 {verificationResult.matched ? (
                                     <div className="w-full max-w-sm p-4 bg-slate-950/95 border-2 border-emerald-500/70 rounded-2xl backdrop-blur-md shadow-2xl space-y-2 text-center">
                                         <div className="flex items-center justify-center gap-2 text-emerald-400 font-black text-sm">
@@ -1232,9 +1230,8 @@ export function ExpressKioskApp() {
                                 )}
                             </div>
                         )}
-
-
-                    </BiometricCameraModal>
+                        }
+                    />
 
 
                 </DialogContent>
