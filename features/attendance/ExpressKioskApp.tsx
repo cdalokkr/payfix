@@ -86,6 +86,15 @@ interface VerificationOverlayState {
     livenessPassed?: boolean;
     serverBackend?: string;
     serverProcessingMs?: number;
+    threshold?: number;
+}
+
+interface KioskCaptureDiagnostics {
+    cameraWidth: number;
+    cameraHeight: number;
+    outputWidth: number;
+    outputHeight: number;
+    payloadBytes: number;
 }
 
 
@@ -126,6 +135,7 @@ export function ExpressKioskApp() {
     const [scanError, setScanError] = useState<string | null>(null);
     const [capturedFreezeUrl, setCapturedFreezeUrl] = useState<string | null>(null);
     const [canonicalPortraitUrl, setCanonicalPortraitUrl] = useState<string | null>(null);
+    const [captureDiagnostics, setCaptureDiagnostics] = useState<KioskCaptureDiagnostics | null>(null);
     const [hardwareInfo] = useState(() => getHardwareAccelerationInfo());
 
     const [modelsLoading, setModelsLoading] = useState<boolean>(false);
@@ -405,6 +415,7 @@ export function ExpressKioskApp() {
         setVerificationResult(null);
         setCapturedFreezeUrl(null);
         setCanonicalPortraitUrl(null);
+        setCaptureDiagnostics(null);
         setScanError(null);
         setVerificationStage('');
 
@@ -421,6 +432,7 @@ export function ExpressKioskApp() {
         setVerificationResult(null);
         setCapturedFreezeUrl(null);
         setCanonicalPortraitUrl(null);
+        setCaptureDiagnostics(null);
         setScanError(null);
         setVerificationStage('');
         setCameraActive(false);
@@ -435,14 +447,24 @@ export function ExpressKioskApp() {
         if (!video || !cameraActive) return null;
         // Exact shared PWA/enrollment capture contract: centre-framed natural
         // 3:4 portrait, high-quality JPEG, no browser face crop or alignment.
-        return captureNaturalBiometricFrame(video)?.dataUrl || null;
+        const capture = captureNaturalBiometricFrame(video);
+        if (!capture) return null;
+        const encoded = capture.dataUrl.split(',')[1] || '';
+        setCaptureDiagnostics({
+            cameraWidth: capture.sourceWidth,
+            cameraHeight: capture.sourceHeight,
+            outputWidth: capture.width,
+            outputHeight: capture.height,
+            payloadBytes: Math.floor((encoded.length * 3) / 4),
+        });
+        return capture.dataUrl;
     };
 
-    const captureChallengeFrames = async (firstFrame?: string | null): Promise<string[]> => {
-        // Reuse the visible frozen frame as frame one. It is a natural portrait
-        // from this same continuous camera session, avoiding a needless fourth
-        // high-resolution JPEG encode on the terminal.
-        const frames: string[] = firstFrame ? [firstFrame] : [];
+    const captureChallengeFrames = async (): Promise<string[]> => {
+        // Match the PWA and profile contract exactly: the three server-bound
+        // natural frames are all captured after the server has issued the
+        // liveness challenge. The earlier frozen preview is visual feedback only.
+        const frames: string[] = [];
         while (frames.length < 3) {
             const frame = captureSnapshot();
             if (!frame) return [];
@@ -500,7 +522,7 @@ export function ExpressKioskApp() {
                      throw new Error(challengeResult.error || 'Could not start liveness verification.');
                  }
                   setVerificationStage('Capturing three natural frames…');
-                  const frames = await captureChallengeFrames(freezeUrl);
+                  const frames = await captureChallengeFrames();
                  if (frames.length !== 3) throw new Error('Camera frames were not available.');
                   setVerificationStage('Sending frames for server verification…');
                 const response = await fetch('/api/kiosk/verify-face', {
@@ -560,6 +582,7 @@ export function ExpressKioskApp() {
                         livenessPassed: serverResult.verification?.livenessPassed,
                         serverBackend: serverResult.verification?.backend,
                         serverProcessingMs: serverResult.verification?.processingMs,
+                        threshold: serverResult.threshold,
                     });
                     setTimeout(() => {
                         setVerificationResult(null);
@@ -596,6 +619,7 @@ export function ExpressKioskApp() {
                     livenessPassed: serverResult.verification?.livenessPassed,
                     serverBackend: serverResult.verification?.backend,
                     serverProcessingMs: serverResult.verification?.processingMs,
+                    threshold: serverResult.threshold,
                 });
 
                 setLastScanResult({
@@ -1099,12 +1123,14 @@ export function ExpressKioskApp() {
                                 </summary>
                                 <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 border-t border-slate-800 px-4 py-3 text-[10px] font-mono text-slate-300">
                                     <span className="text-slate-500">Camera</span>
-                                    <span>{videoRef.current?.videoWidth || '—'} × {videoRef.current?.videoHeight || '—'}</span>
-                                    <span className="text-slate-500">Input frame</span>
-                                    <span>3:4 natural portrait</span>
+                                    <span>{captureDiagnostics ? `${captureDiagnostics.cameraWidth} × ${captureDiagnostics.cameraHeight}` : '—'}</span>
+                                    <span className="text-slate-500">Output</span>
+                                    <span>{captureDiagnostics ? `${captureDiagnostics.outputWidth} × ${captureDiagnostics.outputHeight} natural frame` : 'Reading captured frame…'}</span>
                                     <span className="text-slate-500">Format</span>
                                     <span>image/jpeg</span>
-                                    <span className="text-slate-500">Crop</span>
+                                    <span className="text-slate-500">Payload</span>
+                                    <span>{captureDiagnostics ? `${Math.round(captureDiagnostics.payloadBytes / 1024)} KB/frame · ${Math.round((captureDiagnostics.payloadBytes * 3) / 1024)} KB session` : 'pending'}</span>
+                                    <span className="text-slate-500">Capture</span>
                                     <span>Natural portrait · 3-frame capture</span>
                                     <span className="text-slate-500">Server faces</span>
                                     <span>{verificationResult?.faceCount ?? 'pending'}</span>
@@ -1116,6 +1142,12 @@ export function ExpressKioskApp() {
                                     <span className="max-w-[180px] truncate">{verificationResult?.serverBackend || (isScanning ? 'pending' : '—')}</span>
                                     <span className="text-slate-500">AI processing</span>
                                     <span>{verificationResult?.serverProcessingMs ? `${(verificationResult.serverProcessingMs / 1000).toFixed(1)}s` : 'pending'}</span>
+                                    {verificationResult && <>
+                                        <span className="text-slate-500">Similarity</span>
+                                        <span>{verificationResult.similarity || '—'}</span>
+                                        <span className="text-slate-500">Required</span>
+                                        <span>{verificationResult.threshold ? `${(verificationResult.threshold * 100).toFixed(1)}%` : '88.0%'}</span>
+                                    </>}
                                     <span className="text-slate-500">Canonical</span>
                                     <span>{canonicalPortraitUrl ? '3:4 server portrait' : 'pending'}</span>
                                 </div>
