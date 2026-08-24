@@ -85,6 +85,7 @@ interface VerificationOverlayState {
     embeddingDimensions?: number;
     livenessPassed?: boolean;
     serverBackend?: string;
+    serverProcessingMs?: number;
 }
 
 
@@ -120,6 +121,8 @@ export function ExpressKioskApp() {
     const [cameraActive, setCameraActive] = useState<boolean>(false);
     const [lastScanResult, setLastScanResult] = useState<{ name: string; time: string; type: string } | null>(null);
     const [isScanning, setIsScanning] = useState<boolean>(false);
+    const [verificationStage, setVerificationStage] = useState('');
+    const [verificationElapsedSeconds, setVerificationElapsedSeconds] = useState(0);
     const [scanError, setScanError] = useState<string | null>(null);
     const [capturedFreezeUrl, setCapturedFreezeUrl] = useState<string | null>(null);
     const [canonicalPortraitUrl, setCanonicalPortraitUrl] = useState<string | null>(null);
@@ -151,6 +154,18 @@ export function ExpressKioskApp() {
     }, []);
 
     const scanAbortControllerRef = useRef<AbortController | null>(null);
+
+    useEffect(() => {
+        if (!isScanning) {
+            setVerificationElapsedSeconds(0);
+            return;
+        }
+        const startedAt = performance.now();
+        const updateElapsed = () => setVerificationElapsedSeconds(Math.floor((performance.now() - startedAt) / 1000));
+        updateElapsed();
+        const interval = window.setInterval(updateElapsed, 250);
+        return () => window.clearInterval(interval);
+    }, [isScanning]);
 
     // A locally stored key is not proof that a terminal is still paired.
     // Restore the terminal only after the server confirms its record remains
@@ -391,6 +406,7 @@ export function ExpressKioskApp() {
         setCapturedFreezeUrl(null);
         setCanonicalPortraitUrl(null);
         setScanError(null);
+        setVerificationStage('');
 
     };
 
@@ -406,6 +422,7 @@ export function ExpressKioskApp() {
         setCapturedFreezeUrl(null);
         setCanonicalPortraitUrl(null);
         setScanError(null);
+        setVerificationStage('');
         setCameraActive(false);
     };
 
@@ -421,13 +438,19 @@ export function ExpressKioskApp() {
         return captureNaturalBiometricFrame(video)?.dataUrl || null;
     };
 
-    const captureChallengeFrames = async (): Promise<string[]> => {
-        const frames: string[] = [];
-        for (let index = 0; index < 3; index += 1) {
+    const captureChallengeFrames = async (firstFrame?: string | null): Promise<string[]> => {
+        // Reuse the visible frozen frame as frame one. It is a natural portrait
+        // from this same continuous camera session, avoiding a needless fourth
+        // high-resolution JPEG encode on the terminal.
+        const frames: string[] = firstFrame ? [firstFrame] : [];
+        while (frames.length < 3) {
             const frame = captureSnapshot();
             if (!frame) return [];
             frames.push(frame);
-            if (index < 2) await new Promise(resolve => setTimeout(resolve, 260));
+            // Yield after JPEG encoding so Android Chrome can paint the frozen
+            // preview before it processes the next high-resolution frame.
+            await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+            if (frames.length < 3) await new Promise(resolve => setTimeout(resolve, 260));
         }
         return frames;
     };
@@ -454,6 +477,10 @@ export function ExpressKioskApp() {
 
         setIsScanning(true);
         setScanError(null);
+        setVerificationStage('Preparing secure liveness check…');
+        const abortController = new AbortController();
+        scanAbortControllerRef.current = abortController;
+        const verificationTimeout = window.setTimeout(() => abortController.abort(), 35_000);
 
         // 2. Yield control to browser renderer — React repaints freeze frame & bottom status bar BEFORE heavy AI extraction
         setTimeout(async () => {
@@ -461,7 +488,7 @@ export function ExpressKioskApp() {
                  const challengeResponse = await fetch('/api/biometric/challenge', {
                      method: 'POST',
                      headers: { 'x-kiosk-secret': pairingCode, 'x-kiosk-installation-id': terminalInstallationId || '' },
-                     signal: AbortSignal.timeout(10000),
+                      signal: abortController.signal,
                  });
                  const challengeResult = await challengeResponse.json().catch(() => ({}));
                  if (!challengeResponse.ok || typeof challengeResult.challenge !== 'string') {
@@ -472,8 +499,10 @@ export function ExpressKioskApp() {
                      }
                      throw new Error(challengeResult.error || 'Could not start liveness verification.');
                  }
-                 const frames = await captureChallengeFrames();
+                  setVerificationStage('Capturing three natural frames…');
+                  const frames = await captureChallengeFrames(freezeUrl);
                  if (frames.length !== 3) throw new Error('Camera frames were not available.');
+                  setVerificationStage('Sending frames for server verification…');
                 const response = await fetch('/api/kiosk/verify-face', {
                     method: 'POST',
                     headers: {
@@ -488,8 +517,9 @@ export function ExpressKioskApp() {
                         latitude: terminalGps.latitude,
                         longitude: terminalGps.longitude,
                     }),
-                    signal: AbortSignal.timeout(30000),
+                     signal: abortController.signal,
                 });
+                 setVerificationStage('Finalizing attendance…');
                 const serverResult = await response.json().catch(() => ({}));
                 if (typeof serverResult.canonical_portrait_base64 === 'string') {
                     const canonical = serverResult.canonical_portrait_base64;
@@ -529,12 +559,14 @@ export function ExpressKioskApp() {
                         embeddingDimensions: serverResult.verification?.embeddingDimensions,
                         livenessPassed: serverResult.verification?.livenessPassed,
                         serverBackend: serverResult.verification?.backend,
+                        serverProcessingMs: serverResult.verification?.processingMs,
                     });
                     setTimeout(() => {
                         setVerificationResult(null);
                         setCapturedFreezeUrl(null);
                         setCanonicalPortraitUrl(null);
                         setIsScanning(false);
+                        setVerificationStage('');
                     }, 2400);
                     return;
                 }
@@ -563,6 +595,7 @@ export function ExpressKioskApp() {
                     embeddingDimensions: serverResult.verification?.embeddingDimensions,
                     livenessPassed: serverResult.verification?.livenessPassed,
                     serverBackend: serverResult.verification?.backend,
+                    serverProcessingMs: serverResult.verification?.processingMs,
                 });
 
                 setLastScanResult({
@@ -582,14 +615,22 @@ export function ExpressKioskApp() {
                     setCapturedFreezeUrl(null);
                     setCanonicalPortraitUrl(null);
                     setIsScanning(false);
+                    setVerificationStage('');
                 }, 2800);
 
 
         } catch (err) {
+            if ((err as Error)?.name === 'AbortError') return;
             console.error('[Kiosk] Scan error:', err);
             playErrorChimeSound();
             setScanError('Verification processing failed. Please try again.');
             setIsScanning(false);
+            setVerificationStage('');
+        } finally {
+            window.clearTimeout(verificationTimeout);
+            if (scanAbortControllerRef.current === abortController) {
+                scanAbortControllerRef.current = null;
+            }
         }
         }, 10);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1037,8 +1078,14 @@ export function ExpressKioskApp() {
                         onStreamReady={() => setCameraActive(true)}
                         onCameraError={() => setCameraActive(false)}
                         serverVerificationBackend={verificationResult?.serverBackend || (isScanning ? 'pending' : null)}
-                        statusText={isScanning && !verificationResult ? "Verifying securely on the server..." : undefined}
+                        statusText={isScanning && !verificationResult
+                            ? `${verificationStage || 'Verifying securely on the server…'} ${verificationElapsedSeconds}s`
+                            : undefined}
                         isProcessing={isScanning && !verificationResult}
+                        pausePreviewWhileProcessing={
+                            verificationStage === 'Sending frames for server verification…'
+                            || verificationStage === 'Finalizing attendance…'
+                        }
                         enableAutoBlinkCapture={!isScanning && isVerificationModalOpen}
                         capturedCroppedUrl={capturedFreezeUrl}
                         processedPreviewUrl={canonicalPortraitUrl}
@@ -1067,6 +1114,8 @@ export function ExpressKioskApp() {
                                     <span>{verificationResult ? (verificationResult.livenessPassed ? 'Passed' : 'Failed') : 'pending'}</span>
                                     <span className="text-slate-500">Backend</span>
                                     <span className="max-w-[180px] truncate">{verificationResult?.serverBackend || (isScanning ? 'pending' : '—')}</span>
+                                    <span className="text-slate-500">AI processing</span>
+                                    <span>{verificationResult?.serverProcessingMs ? `${(verificationResult.serverProcessingMs / 1000).toFixed(1)}s` : 'pending'}</span>
                                     <span className="text-slate-500">Canonical</span>
                                     <span>{canonicalPortraitUrl ? '3:4 server portrait' : 'pending'}</span>
                                 </div>
@@ -1129,7 +1178,7 @@ export function ExpressKioskApp() {
                                         </div>
                                         <div className="border-t border-emerald-500/20 pt-2 text-[10px] font-mono text-emerald-100/80">
                                             <div>Faces: {verificationResult.faceCount ?? '—'} · Template: {verificationResult.embeddingDimensions ?? '—'}-d · Liveness: {verificationResult.livenessPassed ? 'Passed' : 'Failed'}</div>
-                                            <div className="mt-0.5 truncate">Python service: {verificationResult.serverBackend || 'Not reported'} · Canonical: 3:4</div>
+                                            <div className="mt-0.5 truncate">Python service: {verificationResult.serverBackend || 'Not reported'} · AI: {verificationResult.serverProcessingMs ? `${(verificationResult.serverProcessingMs / 1000).toFixed(1)}s` : '—'} · Canonical: 3:4</div>
                                         </div>
                                     </div>
                                 ) : (
@@ -1145,7 +1194,7 @@ export function ExpressKioskApp() {
                                         )}
                                         <div className="border-t border-rose-500/20 pt-2 text-[10px] font-mono text-rose-100/80">
                                             <div>Faces: {verificationResult.faceCount ?? '—'} · Template: {verificationResult.embeddingDimensions ?? '—'}-d · Liveness: {verificationResult.livenessPassed ? 'Passed' : 'Failed'}</div>
-                                            <div className="mt-0.5 truncate">Python service: {verificationResult.serverBackend || 'Not reported'} · Canonical: 3:4</div>
+                                            <div className="mt-0.5 truncate">Python service: {verificationResult.serverBackend || 'Not reported'} · AI: {verificationResult.serverProcessingMs ? `${(verificationResult.serverProcessingMs / 1000).toFixed(1)}s` : '—'} · Canonical: 3:4</div>
                                         </div>
                                     </div>
                                 )}

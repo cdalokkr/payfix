@@ -21,6 +21,8 @@ interface BiometricCameraModalProps {
   onCameraError?: (error: Error) => void;
   statusText?: string;
   isProcessing?: boolean;
+  /** Pause only the visual decoder after capture frames have been collected. */
+  pausePreviewWhileProcessing?: boolean;
   footerSlot?: React.ReactNode;
   diagnosticsSlot?: React.ReactNode;
   children?: React.ReactNode;
@@ -49,6 +51,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   onCameraError,
   statusText,
   isProcessing = false,
+  pausePreviewWhileProcessing = false,
   footerSlot,
   diagnosticsSlot,
   children,
@@ -78,6 +81,8 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
     && startupMilestones.guidance !== undefined
     ? Math.max(startupMilestones.stream, startupMilestones.video, startupMilestones.guidance)
     : null;
+  const mediaPipeDelegate = MediaPipeMeshService.getActiveDelegate();
+  const mediaPipeLabel = mediaPipeDelegate === 'Unknown' ? 'starting' : mediaPipeDelegate;
 
   const onStreamReadyRef = useRef(onStreamReady);
   const onVideoReadyRef = useRef(onVideoReady);
@@ -143,6 +148,31 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   useEffect(() => {
     if (isOpen && aiEngineStatus === 'ready') markStartup('guidance');
   }, [aiEngineStatus, isOpen, markStartup]);
+
+  // Once a frame set is accepted, the result screen is intentionally a frozen
+  // portrait. Pausing video decoding frees a noticeable amount of CPU/GPU on
+  // lower-powered phones while the server verifies the three frames. The stream
+  // itself stays alive, so the live preview returns immediately for the next scan.
+  useEffect(() => {
+    if (!isOpen) return;
+    const video = videoRef.current;
+    if (!video) return;
+    if (isProcessing && pausePreviewWhileProcessing) {
+      video.pause();
+      return;
+    }
+    if (streamRef.current?.active && video.paused) {
+      void video.play().catch(() => {});
+    }
+  }, [isOpen, isProcessing, pausePreviewWhileProcessing, videoRef]);
+
+  // Auto-capture is one capture per verification. Reset only when the parent has
+  // completed (or cancelled) that verification, never while the server is working.
+  useEffect(() => {
+    if (isOpen && !isProcessing) {
+      isCapturingRef.current = false;
+    }
+  }, [isOpen, isProcessing]);
 
   const stopStream = useCallback(() => {
     if (streamRef.current) {
@@ -680,7 +710,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                   {startupReadyMs !== null ? 'Camera ready in' : 'Camera startup'}:{' '}
                   {((startupReadyMs ?? (startupNow - startupStartedAtRef.current)) / 1000).toFixed(1)}s
                   <span className="ml-1.5 text-emerald-300">
-                    · MP {MediaPipeMeshService.getActiveDelegate()}
+                    · MP {mediaPipeLabel}
                   </span>
                 </div>
                 <div className="mt-0.5 flex gap-2 text-[8px]">

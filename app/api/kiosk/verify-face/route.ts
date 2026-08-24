@@ -77,7 +77,9 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        const extractionStartedAt = Date.now()
         const extractions = await Promise.all(submittedFrames.map(frame => FaceServiceClient.extract(frame)))
+        const extractionDurationMs = Date.now() - extractionStartedAt
         const extraction = extractions[0]
         const earlyCanonicalPortrait = extraction?.canonical_portrait_base64 || null
         const earlyCanonicalAspectRatio = extraction?.canonical_portrait_aspect_ratio || null
@@ -87,6 +89,7 @@ export async function POST(request: NextRequest) {
             livenessPassed: extraction?.is_live === true,
             backend: extraction?.diagnostics?.backend_engine || 'Not reported',
             canonicalPortrait: earlyCanonicalAspectRatio === '3:4',
+            processingMs: extractionDurationMs,
         }
         if (extractions.some(item => !item.success || !item.face_detected || item.face_count !== 1 || item.is_live !== true)) {
             return NextResponse.json({
@@ -246,6 +249,7 @@ export async function POST(request: NextRequest) {
                     backend: extraction.diagnostics?.backend_engine || 'Not reported',
                     capturePipeline: NATURAL_PORTRAIT_PIPELINE,
                     canonicalPortrait: true,
+                    processingMs: extractionDurationMs,
                 },
                 canonical_portrait_base64: canonicalPortrait,
                 canonical_portrait_aspect_ratio: extraction.canonical_portrait_aspect_ratio,
