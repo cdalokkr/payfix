@@ -124,6 +124,7 @@ export function ExpressKioskApp() {
     const [isCameraReady, setIsCameraReady] = useState<boolean>(false);
     const verifyPairingMutation = trpc.kioskDevices.verifyPairingCode.useMutation();
     const registerPairingMutation = trpc.kioskDevices.registerPairingCode.useMutation();
+    const logoutMutation = trpc.auth.logout.useMutation();
     const kioskSetupAccess = trpc.kioskDevices.getSetupAccess.useQuery(undefined, {
         enabled: pairingRestoreResolved && !pairingCode,
         retry: false,
@@ -165,7 +166,7 @@ export function ExpressKioskApp() {
                             void KioskIndexedDBService.savePairingCredentials(activeKey, res.device);
                         } else {
                             toast.error('Kiosk Pairing Key is no longer active. Please pair again.');
-                            handleUnpair();
+                            clearLocalPairing();
                         }
                     }
                 });
@@ -273,9 +274,17 @@ export function ExpressKioskApp() {
                 setIsPairing(false);
                 if (res.success && 'device' in res && res.device) {
                     toast.success(`Kiosk Terminal Paired Successfully! (${res.device.name})`);
-                    setPairingCode(code);
-                    setPairedDevice(res.device);
-                    void KioskIndexedDBService.savePairingCredentials(code, res.device);
+                    void (async () => {
+                        // Store only the terminal credential, then remove the
+                        // admin session before this shared device opens attendance.
+                        await KioskIndexedDBService.savePairingCredentials(code, res.device);
+                        try {
+                            await logoutMutation.mutateAsync();
+                            window.location.replace('/kiosk');
+                        } catch {
+                            toast.error('Terminal saved, but admin sign-out failed. Retry sign out before leaving this shared device.');
+                        }
+                    })();
                 } else {
                     const msg = 'message' in res ? res.message : 'Invalid or inactive Pairing Key';
                     toast.error(msg);
@@ -290,7 +299,7 @@ export function ExpressKioskApp() {
         });
     };
 
-    const handleUnpair = () => {
+    const clearLocalPairing = () => {
         void KioskIndexedDBService.clearPairingCredentials();
         setPairingCode(null);
         setPairedDevice(null);
@@ -604,6 +613,19 @@ export function ExpressKioskApp() {
                                 )}
                             </Button>
                         </form>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() => logoutMutation.mutate(undefined, {
+                                onSuccess: () => window.location.replace('/login'),
+                                onError: () => toast.error('Could not sign out. Please try again before leaving this terminal.'),
+                            })}
+                            disabled={logoutMutation.isPending || setupAccessLoading}
+                            className="w-full text-slate-400 hover:text-white hover:bg-white/5"
+                        >
+                            <LogOut className="h-4 w-4 mr-2" />
+                            {logoutMutation.isPending ? 'Signing out…' : 'Exit and Sign Out'}
+                        </Button>
                     </CardContent>
                 </Card>
             </div>
@@ -665,17 +687,6 @@ export function ExpressKioskApp() {
                             <WifiOff className="h-3 w-3" /> Offline — verification unavailable
                         </Badge>
                     )}
-
-
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={handleUnpair}
-                        className="text-slate-400 hover:text-red-400 hover:bg-red-500/10 h-8 w-8 rounded-lg"
-                        title="Unpair Terminal"
-                    >
-                        <LogOut className="h-4 w-4" />
-                    </Button>
                 </div>
             </header>
 

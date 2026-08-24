@@ -19,6 +19,7 @@ export function AdminKioskDevices() {
     const [name, setName] = useState('')
     const [locationId, setLocationId] = useState<string>('')
     const [copiedCode, setCopiedCode] = useState<string | null>(null)
+    const [deviceToUnpair, setDeviceToUnpair] = useState<{ id: string; name: string } | null>(null)
 
     const { data: devices, isLoading: isDevicesLoading } = trpc.admin.kioskDevices.getAll.useQuery()
     const { data: locations } = trpc.admin.officeLocations.getAll.useQuery()
@@ -212,15 +213,6 @@ export function AdminKioskDevices() {
                                             </div>
                                         </div>
 
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={() => deleteMutation.mutate({ id: device.id })}
-                                            className="text-muted-foreground hover:text-red-600 dark:hover:text-red-400 hover:bg-red-500/10 h-8 w-8"
-                                            title="Remove Device"
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
                                     </div>
 
                                     {/* Pairing Key Box */}
@@ -247,6 +239,15 @@ export function AdminKioskDevices() {
                                                 </>
                                             )}
                                         </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => setDeviceToUnpair({ id: device.id, name: device.name })}
+                                            className="h-8 text-xs font-bold gap-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                                            title="Unpair Terminal"
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5" /> Unpair
+                                        </Button>
                                     </div>
 
                                     {device.lastSeenAt && (
@@ -260,6 +261,34 @@ export function AdminKioskDevices() {
                     )}
                 </CardContent>
             </Card>
+
+            <Dialog open={!!deviceToUnpair} onOpenChange={(open) => !open && setDeviceToUnpair(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Unpair kiosk terminal?</DialogTitle>
+                        <DialogDescription>
+                            This will disable <strong>{deviceToUnpair?.name}</strong> and stop terminals using its pairing key from verifying attendance. The terminal can be registered again with a new pairing key.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setDeviceToUnpair(null)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            disabled={deleteMutation.isPending}
+                            onClick={() => {
+                                if (!deviceToUnpair) return
+                                deleteMutation.mutate({ id: deviceToUnpair.id }, {
+                                    onSettled: () => setDeviceToUnpair(null),
+                                })
+                            }}
+                        >
+                            {deleteMutation.isPending ? 'Unpairing…' : 'Unpair Terminal'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Register Kiosk Device Modal */}
             <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
