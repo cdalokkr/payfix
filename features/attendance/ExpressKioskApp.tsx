@@ -122,6 +122,7 @@ export function ExpressKioskApp() {
     const [modelProgress, setModelProgress] = useState<number>(0);
     const [isCameraReady, setIsCameraReady] = useState<boolean>(false);
     const verifyPairingMutation = trpc.kioskDevices.verifyPairingCode.useMutation();
+    const registerPairingMutation = trpc.kioskDevices.registerPairingCode.useMutation();
 
     // Live clock update
     useEffect(() => {
@@ -252,7 +253,7 @@ export function ExpressKioskApp() {
         }
 
         setIsPairing(true);
-        verifyPairingMutation.mutate({ pairingCode: code }, {
+        registerPairingMutation.mutate({ pairingCode: code }, {
             onSuccess: (res) => {
                 setIsPairing(false);
                 if (res.success && 'device' in res && res.device) {
@@ -267,7 +268,9 @@ export function ExpressKioskApp() {
             },
             onError: (err) => {
                 setIsPairing(false);
-                toast.error(err.message || 'Failed to verify pairing code');
+                toast.error(err.data?.code === 'UNAUTHORIZED' || err.data?.code === 'FORBIDDEN'
+                    ? 'Only a tenant admin can register or recover this kiosk terminal.'
+                    : err.message || 'Failed to register kiosk terminal');
             }
         });
     };
@@ -526,7 +529,7 @@ export function ExpressKioskApp() {
     };
 
     // =========================================================================
-    // UNPAIRED STATE — Pairing Key Screen
+    // UNPAIRED STATE — Admin-only terminal registration/recovery
     // =========================================================================
     if (!pairingCode) {
         return (
@@ -537,10 +540,10 @@ export function ExpressKioskApp() {
                             <Key className="h-8 w-8" />
                         </div>
                         <CardTitle className="text-2xl font-bold tracking-tight text-white">
-                            Pair Kiosk Terminal
+                            Admin Terminal Setup
                         </CardTitle>
                         <CardDescription className="text-slate-400 text-xs">
-                            Enter Kiosk Pairing Key generated in Admin Settings panel.
+                            Sign in with a tenant admin account, then enter the pairing key from Admin Settings. Employees and moderators can use an already registered terminal for attendance.
                         </CardDescription>
                     </CardHeader>
 
@@ -569,11 +572,11 @@ export function ExpressKioskApp() {
                             >
                                 {isPairing ? (
                                     <>
-                                        <RefreshCw className="h-5 w-5 mr-2 animate-spin" /> Verifying Key...
+                                        <RefreshCw className="h-5 w-5 mr-2 animate-spin" /> Registering Terminal...
                                     </>
                                 ) : (
                                     <>
-                                        <ShieldCheck className="h-5 w-5 mr-2" /> Pair Terminal &amp; Start
+                                        <ShieldCheck className="h-5 w-5 mr-2" /> Admin Register &amp; Start
                                     </>
                                 )}
                             </Button>

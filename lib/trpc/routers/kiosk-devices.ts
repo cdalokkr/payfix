@@ -31,7 +31,8 @@ export const kioskDevicesRouter = router({
             return await KioskDeviceService.deleteDevice(input.id)
         }),
 
-    // Public endpoint: Validate a pairing code entered on Kiosk terminal screen
+    // Public endpoint: Restore an already-paired terminal on normal kiosk open.
+    // This does not register, claim, or reassign a terminal.
     verifyPairingCode: publicProcedure
         .input(z.object({
             pairingCode: z.string().trim().min(3, 'Invalid pairing code'),
@@ -41,6 +42,31 @@ export const kioskDevicesRouter = router({
             if (!result) {
                 return { success: false, message: 'Invalid or inactive pairing code' }
             }
+            return {
+                success: true,
+                device: result.device,
+                tenantSlug: result.tenantSlug,
+                tenantSchema: result.tenantSchema,
+            }
+        }),
+
+    // Admin-only endpoint: first-time registration or recovery after local
+    // kiosk storage has been lost. Keeping this separate from restore prevents
+    // possession of a pairing code from becoming a terminal-management grant.
+    registerPairingCode: adminProcedure
+        .input(z.object({
+            pairingCode: z.string().trim().min(3, 'Invalid pairing code'),
+        }))
+        .mutation(async ({ ctx, input }) => {
+            const result = await KioskDeviceService.verifyPairingCode(input.pairingCode)
+            if (!result) {
+                return { success: false, message: 'Invalid or inactive pairing code' }
+            }
+
+            if (!ctx.tenant || result.tenantSlug !== ctx.tenant.slug) {
+                return { success: false, message: 'This terminal does not belong to the current tenant workspace' }
+            }
+
             return {
                 success: true,
                 device: result.device,
