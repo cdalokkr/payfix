@@ -46,7 +46,13 @@ export const kioskDevicesRouter = router({
             terminalId: z.string().trim().min(8).max(128),
         }))
         .mutation(async ({ input }) => {
-            const result = await KioskDeviceService.verifyPairingCode(input.pairingCode, input.terminalId)
+            let result = await KioskDeviceService.verifyPairingCode(input.pairingCode, input.terminalId)
+            // One-time migration for terminals paired before installation
+            // binding existed. Their next normal kiosk open claims the key;
+            // every later terminal must present that same installation ID.
+            if (result && !result.device.terminalId) {
+                result = await KioskDeviceService.claimPairingCode(input.pairingCode, input.terminalId)
+            }
             if (!result) {
                 return { success: false, message: 'Invalid or inactive pairing code' }
             }
