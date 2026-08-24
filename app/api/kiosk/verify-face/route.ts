@@ -79,8 +79,16 @@ export async function POST(request: NextRequest) {
 
         const extractions = await Promise.all(submittedFrames.map(frame => FaceServiceClient.extract(frame)))
         const extraction = extractions[0]
+        const earlyCanonicalPortrait = extraction?.canonical_portrait_base64 || null
+        const earlyCanonicalAspectRatio = extraction?.canonical_portrait_aspect_ratio || null
         if (extractions.some(item => !item.success || !item.face_detected || item.face_count !== 1 || item.is_live !== true)) {
-            return NextResponse.json({ matched: false, error: 'Liveness movement could not be verified across all camera frames.', code: 'LIVENESS_FAILED' }, { status: 400 })
+            return NextResponse.json({
+                matched: false,
+                error: 'Liveness movement could not be verified across all camera frames.',
+                code: 'LIVENESS_FAILED',
+                canonical_portrait_base64: earlyCanonicalPortrait,
+                canonical_portrait_aspect_ratio: earlyCanonicalAspectRatio,
+            }, { status: 400 })
         }
         const probe = extraction.embedding_512 || (extraction.embedding?.length === 512 ? extraction.embedding : null)
         if (!extraction.success || !extraction.face_detected || extraction.face_count !== 1 || !probe || probe.length !== 512) {
@@ -89,10 +97,27 @@ export async function POST(request: NextRequest) {
                 error: extraction.error_message || 'Exactly one clear face is required.',
                 code: extraction.error_code || 'FACE_EXTRACTION_FAILED',
                 diagnostics: extraction.diagnostics,
+                canonical_portrait_base64: earlyCanonicalPortrait,
+                canonical_portrait_aspect_ratio: earlyCanonicalAspectRatio,
             }, { status: 400 })
         }
         if (extraction.is_live !== true) {
-            return NextResponse.json({ matched: false, error: 'Liveness verification failed. Please retake the selfie.', code: 'LIVENESS_FAILED' }, { status: 400 })
+            return NextResponse.json({
+                matched: false,
+                error: 'Liveness verification failed. Please retake the selfie.',
+                code: 'LIVENESS_FAILED',
+                canonical_portrait_base64: earlyCanonicalPortrait,
+                canonical_portrait_aspect_ratio: earlyCanonicalAspectRatio,
+            }, { status: 400 })
+        }
+        const canonicalPortrait = extraction.canonical_portrait_base64
+        if (!canonicalPortrait || extraction.canonical_portrait_aspect_ratio !== '3:4') {
+            return NextResponse.json({
+                matched: false,
+                is_live: false,
+                error: 'The server did not return a canonical 3:4 verification portrait. Please try again.',
+                code: 'CANONICAL_PORTRAIT_MISSING',
+            }, { status: 502 })
         }
 
         const threshold = Number(process.env.FACE_MATCH_COSINE_THRESHOLD ?? '0.88')
@@ -131,6 +156,8 @@ export async function POST(request: NextRequest) {
                     error: runnerUp && best && best.similarity - runnerUp.similarity < 0.03
                         ? 'Face match is ambiguous. Please try again.'
                         : 'Face is not recognized.',
+                    canonical_portrait_base64: canonicalPortrait,
+                    canonical_portrait_aspect_ratio: extraction.canonical_portrait_aspect_ratio,
                 }, { status: 200 })
             }
 
@@ -207,6 +234,8 @@ export async function POST(request: NextRequest) {
                     backend: extraction.diagnostics?.backend_engine || 'Not reported',
                     capturePipeline: NATURAL_PORTRAIT_PIPELINE,
                 },
+                canonical_portrait_base64: canonicalPortrait,
+                canonical_portrait_aspect_ratio: extraction.canonical_portrait_aspect_ratio,
             })
         })
     } catch (error) {

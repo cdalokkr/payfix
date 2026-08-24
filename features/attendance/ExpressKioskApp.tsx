@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { KioskIndexedDBService } from '@/lib/services/kiosk-idb.service';
+import { captureNaturalBiometricFrame } from '@/lib/face-pipeline';
 import { trpc } from '@/lib/trpc/client';
 import { BiometricCameraModal } from '@/components/biometrics/BiometricCameraModal';
 import { format } from 'date-fns';
@@ -117,6 +118,7 @@ export function ExpressKioskApp() {
     const [isScanning, setIsScanning] = useState<boolean>(false);
     const [scanError, setScanError] = useState<string | null>(null);
     const [capturedFreezeUrl, setCapturedFreezeUrl] = useState<string | null>(null);
+    const [canonicalPortraitUrl, setCanonicalPortraitUrl] = useState<string | null>(null);
     const [hardwareInfo] = useState(() => getHardwareAccelerationInfo());
 
     const [modelsLoading, setModelsLoading] = useState<boolean>(false);
@@ -383,6 +385,7 @@ export function ExpressKioskApp() {
         setIsVerificationModalOpen(true);
         setVerificationResult(null);
         setCapturedFreezeUrl(null);
+        setCanonicalPortraitUrl(null);
         setScanError(null);
 
     };
@@ -397,6 +400,7 @@ export function ExpressKioskApp() {
         setIsVerificationModalOpen(false);
         setVerificationResult(null);
         setCapturedFreezeUrl(null);
+        setCanonicalPortraitUrl(null);
         setScanError(null);
         setCameraActive(false);
     };
@@ -407,23 +411,10 @@ export function ExpressKioskApp() {
     // canonicalization and ArcFace alignment; the kiosk must not make a face crop.
     const captureSnapshot = (): string | null => {
         const video = videoRef.current;
-        const snap = canvasRef.current;
-        if (!video || !snap || !cameraActive) return null;
-        const vw = video.videoWidth || 720;
-        const vh = video.videoHeight || 960;
-        const scale = Math.min(1, Math.sqrt(1_000_000 / (vw * vh)));
-        snap.width = Math.max(1, Math.round(vw * scale));
-        snap.height = Math.max(1, Math.round(vh * scale));
-        const sctx = snap.getContext('2d');
-        if (!sctx) return null;
-        sctx.imageSmoothingEnabled = true;
-        sctx.imageSmoothingQuality = 'high';
-        sctx.save();
-        sctx.translate(snap.width, 0);
-        sctx.scale(-1, 1); // Match front camera mirror preview
-        sctx.drawImage(video, 0, 0, vw, vh, 0, 0, snap.width, snap.height);
-        sctx.restore();
-        return snap.toDataURL('image/jpeg', 0.94);
+        if (!video || !cameraActive) return null;
+        // Exact shared PWA/enrollment capture contract: centre-framed natural
+        // 3:4 portrait, high-quality JPEG, no browser face crop or alignment.
+        return captureNaturalBiometricFrame(video)?.dataUrl || null;
     };
 
     const captureChallengeFrames = async (): Promise<string[]> => {
@@ -479,7 +470,6 @@ export function ExpressKioskApp() {
                  }
                  const frames = await captureChallengeFrames();
                  if (frames.length !== 3) throw new Error('Camera frames were not available.');
-                 const snapshotB64 = frames[0];
                 const response = await fetch('/api/kiosk/verify-face', {
                     method: 'POST',
                     headers: {
@@ -497,6 +487,12 @@ export function ExpressKioskApp() {
                     signal: AbortSignal.timeout(30000),
                 });
                 const serverResult = await response.json().catch(() => ({}));
+                if (typeof serverResult.canonical_portrait_base64 === 'string') {
+                    const canonical = serverResult.canonical_portrait_base64;
+                    setCanonicalPortraitUrl(canonical.startsWith('data:image/')
+                        ? canonical
+                        : `data:image/jpeg;base64,${canonical}`);
+                }
                 if (response.status === 401 && (
                     serverResult.error === 'INVALID_PAIRING_CODE'
                     || serverResult.error === 'UNAUTHORIZED_KIOSK_DEVICE'
@@ -529,6 +525,7 @@ export function ExpressKioskApp() {
                     setTimeout(() => {
                         setVerificationResult(null);
                         setCapturedFreezeUrl(null);
+                        setCanonicalPortraitUrl(null);
                         setIsScanning(false);
                     }, 2400);
                     return;
@@ -571,6 +568,7 @@ export function ExpressKioskApp() {
                 setTimeout(() => {
                     setVerificationResult(null);
                     setCapturedFreezeUrl(null);
+                    setCanonicalPortraitUrl(null);
                     setIsScanning(false);
                 }, 2800);
 
@@ -1030,6 +1028,7 @@ export function ExpressKioskApp() {
                         isProcessing={isScanning && !verificationResult}
                         enableAutoBlinkCapture={!isScanning && isVerificationModalOpen}
                         capturedCroppedUrl={capturedFreezeUrl}
+                        processedPreviewUrl={canonicalPortraitUrl}
                         onAutoCapture={(dataUrl) => {
                             if (!isScanning) {
                                 toast.success('Camera frame captured. Verifying attendance...');
