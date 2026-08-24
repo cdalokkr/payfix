@@ -590,7 +590,9 @@ export function ExpressKioskApp() {
                         setCanonicalPortraitUrl(null);
                         setIsScanning(false);
                         setVerificationStage('');
-                    }, 2400);
+                    // Keep rejection diagnostics visible long enough for a
+                    // kiosk user or supervisor to read the failure reason.
+                    }, 6000);
                     return;
                 }
 
@@ -633,14 +635,15 @@ export function ExpressKioskApp() {
                 // The paired server has already verified the face and recorded the
                 // attendance event. There is deliberately no offline punch fallback.
 
-                // Auto-reset overlay after 2.8 seconds & unfreeze camera for next staff
+                // Auto-reset result after six seconds so the portrait and
+                // verification details are readable before the next scan.
                 setTimeout(() => {
                     setVerificationResult(null);
                     setCapturedFreezeUrl(null);
                     setCanonicalPortraitUrl(null);
                     setIsScanning(false);
                     setVerificationStage('');
-                }, 2800);
+                }, 6000);
 
 
         } catch (err) {
