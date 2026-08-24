@@ -92,6 +92,7 @@ export function ExpressKioskApp() {
     // Kiosk Terminal Pairing State
     const [pairingCode, setPairingCode] = useState<string | null>(null);
     const [pairedDevice, setPairedDevice] = useState<PairedDeviceInfo | null>(null);
+    const [pairingRestoreResolved, setPairingRestoreResolved] = useState(false);
     const [inputKey, setInputKey] = useState('');
     const [isPairing, setIsPairing] = useState(false);
 
@@ -123,6 +124,10 @@ export function ExpressKioskApp() {
     const [isCameraReady, setIsCameraReady] = useState<boolean>(false);
     const verifyPairingMutation = trpc.kioskDevices.verifyPairingCode.useMutation();
     const registerPairingMutation = trpc.kioskDevices.registerPairingCode.useMutation();
+    const kioskSetupAccess = trpc.kioskDevices.getSetupAccess.useQuery(undefined, {
+        enabled: pairingRestoreResolved && !pairingCode,
+        retry: false,
+    });
 
     // Live clock update
     useEffect(() => {
@@ -165,12 +170,22 @@ export function ExpressKioskApp() {
                     }
                 });
             }
+            if (isMounted) setPairingRestoreResolved(true);
         }
 
         restorePairing();
         return () => { isMounted = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // A terminal with a stored credential restores without a person logging in.
+    // An unpaired terminal must first authenticate into PayFix before setup.
+    useEffect(() => {
+        if (!pairingRestoreResolved || pairingCode || !kioskSetupAccess.isError) return;
+        if (kioskSetupAccess.error?.data?.code === 'UNAUTHORIZED') {
+            window.location.replace('/login?next=%2Fkiosk');
+        }
+    }, [pairingRestoreResolved, pairingCode, kioskSetupAccess.isError, kioskSetupAccess.error]);
 
     // Watch terminal GPS position
     useEffect(() => {
@@ -532,6 +547,9 @@ export function ExpressKioskApp() {
     // UNPAIRED STATE — Admin-only terminal registration/recovery
     // =========================================================================
     if (!pairingCode) {
+        const setupAccessLoading = !pairingRestoreResolved || kioskSetupAccess.isLoading;
+        const canRegisterTerminal = kioskSetupAccess.data?.canRegisterTerminal === true;
+        const moderatorBlocked = pairingRestoreResolved && kioskSetupAccess.isSuccess && !canRegisterTerminal;
         return (
             <div className="h-screen w-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4 overflow-hidden select-none">
                 <Card className="w-full max-w-md bg-slate-900/90 border-slate-800 shadow-2xl text-slate-100 backdrop-blur-xl">
@@ -543,7 +561,11 @@ export function ExpressKioskApp() {
                             Admin Terminal Setup
                         </CardTitle>
                         <CardDescription className="text-slate-400 text-xs">
-                            Sign in with a tenant admin account, then enter the pairing key from Admin Settings. Employees and moderators can use an already registered terminal for attendance.
+                            {setupAccessLoading
+                                ? 'Checking PayFix setup access…'
+                                : moderatorBlocked
+                                    ? 'Only a tenant admin can register or recover this terminal. Moderators and employees can use an already registered terminal for attendance.'
+                                    : 'Signed in as a tenant admin. Enter the pairing key from Admin Settings to register or recover this terminal.'}
                         </CardDescription>
                     </CardHeader>
 
@@ -562,12 +584,13 @@ export function ExpressKioskApp() {
                                     className="bg-slate-950/80 border-slate-700 text-white font-mono tracking-wider font-bold text-center h-12 text-base focus-visible:ring-sky-500"
                                     required
                                     autoFocus
+                                    disabled={setupAccessLoading || !canRegisterTerminal}
                                 />
                             </div>
 
                             <Button
                                 type="submit"
-                                disabled={isPairing || !inputKey.trim()}
+                                disabled={isPairing || setupAccessLoading || !canRegisterTerminal || !inputKey.trim()}
                                 className="w-full h-12 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-bold text-base shadow-lg shadow-sky-600/20"
                             >
                                 {isPairing ? (

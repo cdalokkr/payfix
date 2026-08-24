@@ -41,6 +41,12 @@ export function LoginForm() {
   const loading = buttonState === 'loading'
   const [authError, setAuthError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({})
+  const requestedReturnPath = typeof window === 'undefined'
+    ? null
+    : new URLSearchParams(window.location.search).get('next')
+  const safeReturnPath = requestedReturnPath?.startsWith('/') && !requestedReturnPath.startsWith('//')
+    ? requestedReturnPath
+    : null
 
   const {
     register,
@@ -151,6 +157,7 @@ export function LoginForm() {
             redirectPath = isMobileViewport ? '/mobile' : '/employee'
           }
         }
+        if (safeReturnPath && !(data as any).redirectTo) redirectPath = safeReturnPath
         
         const toastDescription = (data as any).redirectTo === '/setup' 
           ? `Setting up your workspace...` 
@@ -264,6 +271,7 @@ export function LoginForm() {
           redirectPath = '/admin'
         }
       }
+      if (safeReturnPath && !(data as any).redirectTo) redirectPath = safeReturnPath
 
       console.log('[LoginForm] Executing fresh clean transition to:', redirectPath)
       if (typeof window !== 'undefined') {

@@ -1,8 +1,15 @@
 import { z } from 'zod'
-import { router, adminProcedure, publicProcedure } from '../server'
+import { router, adminProcedure, protectedProcedure, publicProcedure } from '../server'
 import { KioskDeviceService } from '@/lib/services/kiosk-device.service'
 
 export const kioskDevicesRouter = router({
+    // Used only by an unpaired kiosk to decide whether the signed-in person
+    // may enter terminal setup. Daily kiosk attendance never calls this.
+    getSetupAccess: protectedProcedure.query(({ ctx }) => ({
+        role: ctx.profile.role,
+        canRegisterTerminal: ctx.profile.role === 'admin' || ctx.profile.role === 'super_admin',
+    })),
+
     // Get all registered kiosk devices for current tenant (Admin)
     getAll: adminProcedure.query(async () => {
         return await KioskDeviceService.getDevices()
