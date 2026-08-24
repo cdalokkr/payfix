@@ -184,15 +184,6 @@ export function ExpressKioskApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // A terminal with a stored credential restores without a person logging in.
-    // An unpaired terminal must first authenticate into PayFix before setup.
-    useEffect(() => {
-        if (!pairingRestoreResolved || pairingCode || !kioskSetupAccess.isError) return;
-        if (kioskSetupAccess.error?.data?.code === 'UNAUTHORIZED') {
-            window.location.replace('/login?next=%2Fkiosk');
-        }
-    }, [pairingRestoreResolved, pairingCode, kioskSetupAccess.isError, kioskSetupAccess.error]);
-
     // Watch terminal GPS position
     useEffect(() => {
         if ('geolocation' in navigator) {
@@ -616,12 +607,85 @@ export function ExpressKioskApp() {
     };
 
     // =========================================================================
-    // UNPAIRED STATE — Admin-only terminal registration/recovery
+    // UNPAIRED STATE — validate first, then guide an admin through setup
     // =========================================================================
     if (!pairingCode) {
-        const setupAccessLoading = !pairingRestoreResolved || kioskSetupAccess.isLoading;
         const canRegisterTerminal = kioskSetupAccess.data?.canRegisterTerminal === true;
-        const moderatorBlocked = pairingRestoreResolved && kioskSetupAccess.isSuccess && !canRegisterTerminal;
+        const needsLogin = pairingRestoreResolved
+            && kioskSetupAccess.isError
+            && kioskSetupAccess.error?.data?.code === 'UNAUTHORIZED';
+        const moderatorBlocked = kioskSetupAccess.isSuccess && !canRegisterTerminal;
+
+        if (!pairingRestoreResolved || kioskSetupAccess.isLoading) {
+            return (
+                <div className="h-screen w-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4 overflow-hidden select-none">
+                    <Card className="w-full max-w-md bg-slate-900/90 border-slate-800 shadow-2xl text-slate-100 backdrop-blur-xl">
+                        <CardHeader className="text-center space-y-3">
+                            <div className="mx-auto w-16 h-16 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-sky-400 flex items-center justify-center shadow-inner">
+                                <RefreshCw className="h-8 w-8 animate-spin" />
+                            </div>
+                            <CardTitle className="text-2xl font-bold tracking-tight text-white">
+                                Preparing Kiosk Terminal
+                            </CardTitle>
+                            <CardDescription className="text-slate-400 text-xs">
+                                Please wait while this terminal confirms its secure setup.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            {[
+                                ['Validating saved terminal key', pairingRestoreResolved],
+                                ['Verifying kiosk registration', kioskSetupAccess.isSuccess || kioskSetupAccess.isError],
+                                ['Loading tenant kiosk details', Boolean(pairingCode)],
+                            ].map(([label, complete]) => (
+                                <div key={label as string} className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-3 text-sm">
+                                    {complete ? (
+                                        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                                    ) : (
+                                        <RefreshCw className="h-4 w-4 shrink-0 animate-spin text-sky-400" />
+                                    )}
+                                    <span className={complete ? 'text-slate-300' : 'text-white font-medium'}>
+                                        {label as string}
+                                    </span>
+                                </div>
+                            ))}
+                        </CardContent>
+                    </Card>
+                </div>
+            );
+        }
+
+        if (needsLogin) {
+            return (
+                <div className="h-screen w-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4 overflow-hidden select-none">
+                    <Card className="w-full max-w-md bg-slate-900/90 border-slate-800 shadow-2xl text-slate-100 backdrop-blur-xl">
+                        <CardHeader className="text-center space-y-3">
+                            <div className="mx-auto w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center shadow-inner">
+                                <ShieldCheck className="h-8 w-8" />
+                            </div>
+                            <CardTitle className="text-2xl font-bold tracking-tight text-white">
+                                Admin Login Required
+                            </CardTitle>
+                            <CardDescription className="text-slate-400 text-xs leading-relaxed">
+                                This terminal is not paired yet. Sign in with a tenant admin account to register it securely with the pairing key from Admin Settings.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            <Button
+                                type="button"
+                                onClick={() => window.location.replace('/login?next=%2Fkiosk')}
+                                className="w-full h-12 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-bold text-base shadow-lg shadow-sky-600/20"
+                            >
+                                <LogOut className="h-5 w-5 mr-2 rotate-180" /> Click here for login
+                            </Button>
+                            <p className="text-center text-[11px] text-slate-500">
+                                After successful login, you will return here to enter the terminal pairing key.
+                            </p>
+                        </CardContent>
+                    </Card>
+                </div>
+            );
+        }
+
         return (
             <div className="h-screen w-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4 overflow-hidden select-none">
                 <Card className="w-full max-w-md bg-slate-900/90 border-slate-800 shadow-2xl text-slate-100 backdrop-blur-xl">
@@ -633,11 +697,9 @@ export function ExpressKioskApp() {
                             Admin Terminal Setup
                         </CardTitle>
                         <CardDescription className="text-slate-400 text-xs">
-                            {setupAccessLoading
-                                ? 'Checking PayFix setup access…'
-                                : moderatorBlocked
-                                    ? 'Only a tenant admin can register or recover this terminal. Moderators and employees can use an already registered terminal for attendance.'
-                                    : 'Signed in as a tenant admin. Enter the pairing key from Admin Settings to register or recover this terminal.'}
+                            {moderatorBlocked
+                                ? 'Only a tenant admin can register or recover this terminal. Moderators and employees can use an already registered terminal for attendance.'
+                                : 'Signed in as a tenant admin. Enter the pairing key from Admin Settings to register or recover this terminal.'}
                         </CardDescription>
                     </CardHeader>
 
@@ -656,13 +718,13 @@ export function ExpressKioskApp() {
                                     className="bg-slate-950/80 border-slate-700 text-white font-mono tracking-wider font-bold text-center h-12 text-base focus-visible:ring-sky-500"
                                     required
                                     autoFocus
-                                    disabled={setupAccessLoading || !canRegisterTerminal}
+                                    disabled={!canRegisterTerminal}
                                 />
                             </div>
 
                             <Button
                                 type="submit"
-                                disabled={isPairing || setupAccessLoading || !canRegisterTerminal || !inputKey.trim()}
+                                disabled={isPairing || !canRegisterTerminal || !inputKey.trim()}
                                 className="w-full h-12 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-bold text-base shadow-lg shadow-sky-600/20"
                             >
                                 {isPairing ? (
@@ -683,7 +745,7 @@ export function ExpressKioskApp() {
                                 onSuccess: () => window.location.replace('/login'),
                                 onError: () => toast.error('Could not sign out. Please try again before leaving this terminal.'),
                             })}
-                            disabled={logoutMutation.isPending || setupAccessLoading}
+                            disabled={logoutMutation.isPending}
                             className="w-full text-slate-400 hover:text-white hover:bg-white/5"
                         >
                             <LogOut className="h-4 w-4 mr-2" />
