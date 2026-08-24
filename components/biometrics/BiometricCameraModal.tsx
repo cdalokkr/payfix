@@ -22,6 +22,7 @@ interface BiometricCameraModalProps {
   statusText?: string;
   isProcessing?: boolean;
   footerSlot?: React.ReactNode;
+  diagnosticsSlot?: React.ReactNode;
   children?: React.ReactNode;
   timerSeconds?: number;
   enableAutoBlinkCapture?: boolean;
@@ -49,6 +50,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   statusText,
   isProcessing = false,
   footerSlot,
+  diagnosticsSlot,
   children,
   timerSeconds,
   enableAutoBlinkCapture = true,
@@ -722,6 +724,12 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           </div>
         )}
       </div>
+
+      {diagnosticsSlot && (
+        <div className="w-full px-4 pb-3 shrink-0">
+          {diagnosticsSlot}
+        </div>
+      )}
 
       {/* 4. Footer Slot Container */}
       {footerSlot && (

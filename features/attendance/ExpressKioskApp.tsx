@@ -1027,7 +1027,7 @@ export function ExpressKioskApp() {
                     if (!open) closeVerificationModal();
                 }}
             >
-                <DialogContent className="max-w-md w-[95vw] bg-slate-950 border-slate-800 text-slate-100 p-0 overflow-hidden shadow-2xl rounded-3xl backdrop-blur-2xl [&>button]:hidden">
+                <DialogContent className="max-w-md w-[95vw] max-h-[92vh] bg-slate-950 border-slate-800 text-slate-100 p-0 overflow-y-auto shadow-2xl rounded-3xl backdrop-blur-2xl [&>button]:hidden">
                     <BiometricCameraModal
                         isOpen={isVerificationModalOpen}
                         onClose={() => closeVerificationModal()}
@@ -1036,11 +1036,42 @@ export function ExpressKioskApp() {
                         videoRefOut={videoRef}
                         onStreamReady={() => setCameraActive(true)}
                         onCameraError={() => setCameraActive(false)}
+                        serverVerificationBackend={verificationResult?.serverBackend || (isScanning ? 'pending' : null)}
                         statusText={isScanning && !verificationResult ? "Verifying securely on the server..." : undefined}
                         isProcessing={isScanning && !verificationResult}
                         enableAutoBlinkCapture={!isScanning && isVerificationModalOpen}
                         capturedCroppedUrl={capturedFreezeUrl}
                         processedPreviewUrl={canonicalPortraitUrl}
+                        diagnosticsSlot={
+                            <details
+                                open={Boolean(verificationResult)}
+                                className="rounded-2xl border border-sky-500/25 bg-slate-950/90 text-left shadow-xl"
+                            >
+                                <summary className="cursor-pointer list-none px-4 py-2.5 text-xs font-bold text-sky-300">
+                                    {verificationResult ? '▼ Daily biometric verification details' : '▶ Biometric capture details'}
+                                </summary>
+                                <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 border-t border-slate-800 px-4 py-3 text-[10px] font-mono text-slate-300">
+                                    <span className="text-slate-500">Camera</span>
+                                    <span>{videoRef.current?.videoWidth || '—'} × {videoRef.current?.videoHeight || '—'}</span>
+                                    <span className="text-slate-500">Input frame</span>
+                                    <span>3:4 natural portrait</span>
+                                    <span className="text-slate-500">Format</span>
+                                    <span>image/jpeg</span>
+                                    <span className="text-slate-500">Crop</span>
+                                    <span>Natural portrait · 3-frame capture</span>
+                                    <span className="text-slate-500">Server faces</span>
+                                    <span>{verificationResult?.faceCount ?? 'pending'}</span>
+                                    <span className="text-slate-500">Template</span>
+                                    <span>{verificationResult?.embeddingDimensions ? `${verificationResult.embeddingDimensions}-d` : 'pending'}</span>
+                                    <span className="text-slate-500">Liveness</span>
+                                    <span>{verificationResult ? (verificationResult.livenessPassed ? 'Passed' : 'Failed') : 'pending'}</span>
+                                    <span className="text-slate-500">Backend</span>
+                                    <span className="max-w-[180px] truncate">{verificationResult?.serverBackend || (isScanning ? 'pending' : '—')}</span>
+                                    <span className="text-slate-500">Canonical</span>
+                                    <span>{canonicalPortraitUrl ? '3:4 server portrait' : 'pending'}</span>
+                                </div>
+                            </details>
+                        }
                         onAutoCapture={(dataUrl) => {
                             if (!isScanning) {
                                 toast.success('Camera frame captured. Verifying attendance...');
