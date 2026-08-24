@@ -131,7 +131,18 @@ export class KioskDeviceService {
      */
     static async deleteDevice(id: string) {
         await KioskDeviceService.ensureSchema()
-        await db.delete(kioskDevices).where(eq(kioskDevices.id, id))
+        const [deletedDevice] = await db
+            .delete(kioskDevices)
+            .where(eq(kioskDevices.id, id))
+            .returning({ pairingCode: kioskDevices.pairing_code })
+
+        // A pairing lookup may have been cached for up to five minutes. Remove
+        // it immediately so an unpaired terminal cannot keep authenticating
+        // through the cached credential.
+        if (deletedDevice?.pairingCode) {
+            _pairingCache.delete(deletedDevice.pairingCode.trim().toUpperCase())
+        }
+
         return { success: true }
     }
 
@@ -144,10 +155,28 @@ export class KioskDeviceService {
 
         const cleanCode = pairingCode.trim().toUpperCase()
 
-        // ✅ Cache hit — skip full tenant schema scan loop
+        // A cache hit is only a routing optimisation, never an authorization
+        // decision. Recheck the exact terminal record so an admin unpair takes
+        // effect immediately even on a warm server instance.
         const cached = _pairingCache.get(cleanCode)
         if (cached && cached.expiresAt > Date.now()) {
-            return cached.data
+            try {
+                const stillActive = await centralDb.execute(sql`
+                    SELECT id
+                    FROM ${sql.raw(cached.data.tenantSchema)}.kiosk_devices
+                    WHERE id = ${cached.data.device.id}
+                      AND pairing_code = ${cleanCode}
+                      AND is_active = true
+                    LIMIT 1;
+                `)
+                if (stillActive[0]) {
+                    return cached.data
+                }
+            } catch {
+                // Treat a failed cache recheck as invalid and fall through to
+                // the authoritative tenant scan below.
+            }
+            _pairingCache.delete(cleanCode)
         }
 
         try {

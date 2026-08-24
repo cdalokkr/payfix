@@ -123,6 +123,7 @@ export function ExpressKioskApp() {
     const [modelProgress, setModelProgress] = useState<number>(0);
     const [isCameraReady, setIsCameraReady] = useState<boolean>(false);
     const verifyPairingMutation = trpc.kioskDevices.verifyPairingCode.useMutation();
+    const terminalHealthMutation = trpc.kioskDevices.verifyPairingCode.useMutation();
     const registerPairingMutation = trpc.kioskDevices.registerPairingCode.useMutation();
     const logoutMutation = trpc.auth.logout.useMutation();
     const kioskSetupAccess = trpc.kioskDevices.getSetupAccess.useQuery(undefined, {
@@ -144,34 +145,38 @@ export function ExpressKioskApp() {
 
     const scanAbortControllerRef = useRef<AbortController | null>(null);
 
-    // Check stored pairing key on mount (from LocalStorage, IndexedDB, or 10-Year Cookies)
+    // A locally stored key is not proof that a terminal is still paired.
+    // Restore the terminal only after the server confirms its record remains
+    // active; an admin unpair therefore clears this browser on the next open.
     useEffect(() => {
         let isMounted = true;
         async function restorePairing() {
             if (typeof window === 'undefined') return;
             
-            const { pairingCode: savedKey, deviceInfo: savedDeviceInfo } = await KioskIndexedDBService.loadPairingCredentials();
-            const activeKey = savedKey;
+            const { pairingCode: savedKey } = await KioskIndexedDBService.loadPairingCredentials();
 
-            if (activeKey && isMounted) {
-                setPairingCode(activeKey);
-                if (savedDeviceInfo) {
-                    setPairedDevice(savedDeviceInfo);
-                }
+            if (savedKey) {
+                try {
+                    const res = await verifyPairingMutation.mutateAsync({ pairingCode: savedKey });
+                    if (!isMounted) return;
 
-                verifyPairingMutation.mutate({ pairingCode: activeKey }, {
-                    onSuccess: (res) => {
-                        if (res.success && 'device' in res && res.device) {
-                            setPairedDevice(res.device);
-                            void KioskIndexedDBService.savePairingCredentials(activeKey, res.device);
-                        } else {
-                            toast.error('Kiosk Pairing Key is no longer active. Please pair again.');
-                            clearLocalPairing();
-                        }
+                    if (res.success && 'device' in res && res.device) {
+                        setPairingCode(savedKey);
+                        setPairedDevice(res.device);
+                        void KioskIndexedDBService.savePairingCredentials(savedKey, res.device);
+                    } else {
+                        toast.error('This terminal was unpaired by an administrator. Pair it again before use.');
+                        clearLocalPairing();
                     }
-                });
+                } catch {
+                    if (isMounted) {
+                        toast.error('Terminal pairing could not be validated. Attendance remains locked until it reconnects.');
+                    }
+                }
             }
-            if (isMounted) setPairingRestoreResolved(true);
+            if (isMounted) {
+                setPairingRestoreResolved(true);
+            }
         }
 
         restorePairing();
@@ -307,6 +312,37 @@ export function ExpressKioskApp() {
         closeVerificationModal();
     };
 
+    // Revocation is checked while the kiosk stays open too. The attendance API
+    // independently rejects an unpaired key, but this also removes the
+    // credential and returns the terminal to setup without needing a refresh.
+    useEffect(() => {
+        if (!pairingCode) return;
+
+        let isMounted = true;
+        const checkTerminalIsStillPaired = async () => {
+            try {
+                const result = await terminalHealthMutation.mutateAsync({ pairingCode });
+                if (isMounted && (!result.success || !('device' in result) || !result.device)) {
+                    toast.error('This terminal was unpaired by an administrator and has been locked.');
+                    clearLocalPairing();
+                }
+            } catch {
+                // A connection failure must not delete a valid local terminal
+                // credential. Attendance remains server-authoritative and will
+                // not produce an offline punch.
+            }
+        };
+
+        const intervalId = window.setInterval(checkTerminalIsStillPaired, 15_000);
+        return () => {
+            isMounted = false;
+            window.clearInterval(intervalId);
+        };
+    // terminalHealthMutation is intentionally not a dependency: its mutation
+    // object changes with render, while the paired key is the heartbeat scope.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pairingCode]);
+
     // The browser only guides capture. It does not load recognition models,
     // receive employee templates, or decide identities.
     const loadFaceModels = () => {
@@ -328,6 +364,20 @@ export function ExpressKioskApp() {
 
     // Open Verification Modal Flow (Pre-warms WebGL AI Engine)
     const openVerificationModal = async () => {
+        if (!pairingCode) return;
+
+        try {
+            const result = await terminalHealthMutation.mutateAsync({ pairingCode });
+            if (!result.success || !('device' in result) || !result.device) {
+                toast.error('This terminal is no longer paired. An administrator must register it again.');
+                clearLocalPairing();
+                return;
+            }
+        } catch {
+            toast.error('Terminal pairing could not be confirmed. Attendance stays locked until it reconnects.');
+            return;
+        }
+
         setIsVerificationModalOpen(true);
         setVerificationResult(null);
         setCapturedFreezeUrl(null);
@@ -418,6 +468,11 @@ export function ExpressKioskApp() {
                  });
                  const challengeResult = await challengeResponse.json().catch(() => ({}));
                  if (!challengeResponse.ok || typeof challengeResult.challenge !== 'string') {
+                     if (challengeResponse.status === 401) {
+                         toast.error('This terminal was unpaired by an administrator and has been locked.');
+                         clearLocalPairing();
+                         return;
+                     }
                      throw new Error(challengeResult.error || 'Could not start liveness verification.');
                  }
                  const frames = await captureChallengeFrames();
@@ -439,6 +494,14 @@ export function ExpressKioskApp() {
                     signal: AbortSignal.timeout(30000),
                 });
                 const serverResult = await response.json().catch(() => ({}));
+                if (response.status === 401 && (
+                    serverResult.error === 'INVALID_PAIRING_CODE'
+                    || serverResult.error === 'UNAUTHORIZED_KIOSK_DEVICE'
+                )) {
+                    toast.error('This terminal was unpaired by an administrator and has been locked.');
+                    clearLocalPairing();
+                    return;
+                }
                 const matchedEmployee = serverResult.matched && serverResult.employee
                     ? {
                         id: serverResult.employee.id as string,
