@@ -9,6 +9,7 @@ interface PairingInfo {
         id: string
         name: string
         pairingCode: string
+        terminalId: string | null
         locationId: string | null
         locationName: string | null
         latitude: number | null
@@ -37,6 +38,7 @@ export class KioskDeviceService {
                     "id"            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
                     "name"          text NOT NULL,
                     "pairing_code"  text NOT NULL UNIQUE,
+                    "terminal_id"   text,
                     "location_id"   uuid REFERENCES "office_locations"("id") ON DELETE SET NULL,
                     "is_active"     boolean DEFAULT true,
                     "last_seen_at"  timestamp with time zone,
@@ -45,6 +47,7 @@ export class KioskDeviceService {
                     "updated_at"    timestamp with time zone DEFAULT now()
                 );
             `)
+            await db.execute(sql`ALTER TABLE "kiosk_devices" ADD COLUMN IF NOT EXISTS "terminal_id" text;`)
             _kioskSchemaEnsured.add(schemaKey)
         } catch (e) {
             // Table already exists or concurrent creation
@@ -111,6 +114,7 @@ export class KioskDeviceService {
                 id: kioskDevices.id,
                 name: kioskDevices.name,
                 pairingCode: kioskDevices.pairing_code,
+                terminalId: kioskDevices.terminal_id,
                 locationId: kioskDevices.location_id,
                 locationName: officeLocations.name,
                 locationLatitude: officeLocations.latitude,
@@ -150,7 +154,7 @@ export class KioskDeviceService {
      * Verify a Kiosk Pairing Code across all tenant schemas.
      * Used by /api/kiosk endpoints to resolve tenant context & validate terminal key.
      */
-    static async verifyPairingCode(pairingCode: string) {
+    static async verifyPairingCode(pairingCode: string, terminalId?: string) {
         if (!pairingCode) return null
 
         const cleanCode = pairingCode.trim().toUpperCase()
@@ -160,16 +164,19 @@ export class KioskDeviceService {
         // effect immediately even on a warm server instance.
         const cached = _pairingCache.get(cleanCode)
         if (cached && cached.expiresAt > Date.now()) {
+            if (cached.data.device.terminalId && cached.data.device.terminalId !== terminalId) {
+                return null
+            }
             try {
                 const stillActive = await centralDb.execute(sql`
-                    SELECT id
+                    SELECT id, terminal_id
                     FROM ${sql.raw(cached.data.tenantSchema)}.kiosk_devices
                     WHERE id = ${cached.data.device.id}
                       AND pairing_code = ${cleanCode}
                       AND is_active = true
                     LIMIT 1;
                 `)
-                if (stillActive[0]) {
+                if (stillActive[0] && (!(stillActive[0] as any).terminal_id || (stillActive[0] as any).terminal_id === terminalId)) {
                     return cached.data
                 }
             } catch {
@@ -189,7 +196,7 @@ export class KioskDeviceService {
                 const schemaName = (row as any).schema_name
                 try {
                     const devices = await centralDb.execute(sql`
-                        SELECT id, name, pairing_code, location_id, is_active
+                        SELECT id, name, pairing_code, terminal_id, location_id, is_active
                         FROM ${sql.raw(schemaName)}.kiosk_devices
                         WHERE pairing_code = ${cleanCode} AND is_active = true
                         LIMIT 1;
@@ -197,6 +204,9 @@ export class KioskDeviceService {
 
                     if (devices[0]) {
                         const device = devices[0] as any
+                        if (device.terminal_id && device.terminal_id !== terminalId) {
+                            return null
+                        }
                         const slug = schemaName.replace(/^tenant_/, '')
 
                         let locationName: string | null = null
@@ -236,6 +246,7 @@ export class KioskDeviceService {
                                 id: device.id,
                                 name: device.name,
                                 pairingCode: device.pairing_code,
+                                terminalId: device.terminal_id || null,
                                 locationId: device.location_id,
                                 locationName,
                                 latitude,
@@ -260,6 +271,21 @@ export class KioskDeviceService {
         }
 
         return null
+    }
+
+    static async claimPairingCode(pairingCode: string, terminalId: string) {
+        const result = await KioskDeviceService.verifyPairingCode(pairingCode)
+        if (!result) return null
+        const [claimed] = await db.update(kioskDevices)
+            .set({ terminal_id: terminalId, updated_at: new Date() })
+            .where(and(
+                eq(kioskDevices.id, result.device.id),
+                eq(kioskDevices.is_active, true),
+                sql`("terminal_id" IS NULL OR "terminal_id" = ${terminalId})`
+            ))
+            .returning({ id: kioskDevices.id })
+        _pairingCache.delete(pairingCode.trim().toUpperCase())
+        return claimed ? { ...result, device: { ...result.device, terminalId } } : null
     }
 
 }

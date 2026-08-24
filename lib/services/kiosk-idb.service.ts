@@ -61,6 +61,40 @@ function openDB(): Promise<IDBDatabase> {
 
 export const KioskIndexedDBService = {
     /**
+     * Stable browser installation identity used to bind one pairing key to one
+     * kiosk installation. It is separate from the pairing credential so
+     * unpairing removes access without changing the hardware identity.
+     */
+    async getTerminalInstallationId(): Promise<string> {
+        try {
+            const db = await openDB();
+            const tx = db.transaction(STORE_META, 'readwrite');
+            const store = tx.objectStore(STORE_META);
+            const existing = await new Promise<any>((resolve) => {
+                const req = store.get('terminal_installation_id');
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => resolve(null);
+            });
+            if (existing?.value) {
+                await new Promise<void>((resolve, reject) => {
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject(tx.error);
+                });
+                return existing.value;
+            }
+            const id = crypto.randomUUID();
+            store.put({ key: 'terminal_installation_id', value: id, updatedAt: Date.now() });
+            await new Promise<void>((resolve, reject) => {
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
+            return id;
+        } catch {
+            return crypto.randomUUID();
+        }
+    },
+
+    /**
      * Save employee face vectors and sync metadata to IndexedDB
      */
     async saveEmployees(employees: any[], tenantId?: string): Promise<void> {

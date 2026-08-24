@@ -202,6 +202,15 @@ export function AdminKioskDevices() {
                                                 <Badge variant="outline" className="border-emerald-500/40 text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
                                                     Active
                                                 </Badge>
+                                                {device.terminalId ? (
+                                                    <Badge className="bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/30 text-xs font-semibold">
+                                                        Paired
+                                                    </Badge>
+                                                ) : (
+                                                    <Badge variant="outline" className="border-amber-500/40 text-amber-700 dark:text-amber-300 text-xs font-semibold">
+                                                        Awaiting Pairing
+                                                    </Badge>
+                                                )}
                                             </div>
                                             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                                 <MapPin className="h-3.5 w-3.5 text-sky-500 shrink-0" />

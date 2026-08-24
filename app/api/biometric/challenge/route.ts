@@ -9,7 +9,8 @@ export async function POST(request: NextRequest) {
         const purpose = body.purpose === 'enrollment' ? 'enrollment' : 'attendance'
         const kioskSecret = request.headers.get('x-kiosk-secret')
         if (kioskSecret) {
-            const pairing = await KioskDeviceService.verifyPairingCode(kioskSecret)
+            const terminalId = request.headers.get('x-kiosk-installation-id') || undefined
+            const pairing = await KioskDeviceService.verifyPairingCode(kioskSecret, terminalId)
             if (!pairing) return NextResponse.json({ error: 'Invalid kiosk pairing.' }, { status: 401 })
             if (purpose !== 'attendance') return NextResponse.json({ error: 'Invalid challenge purpose.' }, { status: 400 })
             return NextResponse.json(issueLivenessChallenge(pairing.device.id, purpose))

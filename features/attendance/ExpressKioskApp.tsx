@@ -93,6 +93,7 @@ export function ExpressKioskApp() {
     const [pairingCode, setPairingCode] = useState<string | null>(null);
     const [pairedDevice, setPairedDevice] = useState<PairedDeviceInfo | null>(null);
     const [pairingRestoreResolved, setPairingRestoreResolved] = useState(false);
+    const [terminalInstallationId, setTerminalInstallationId] = useState<string | null>(null);
     const [inputKey, setInputKey] = useState('');
     const [isPairing, setIsPairing] = useState(false);
 
@@ -153,11 +154,16 @@ export function ExpressKioskApp() {
         async function restorePairing() {
             if (typeof window === 'undefined') return;
             
-            const { pairingCode: savedKey } = await KioskIndexedDBService.loadPairingCredentials();
+            const [credentials, installationId] = await Promise.all([
+                KioskIndexedDBService.loadPairingCredentials(),
+                KioskIndexedDBService.getTerminalInstallationId(),
+            ]);
+            const savedKey = credentials.pairingCode;
+            if (isMounted) setTerminalInstallationId(installationId);
 
             if (savedKey) {
                 try {
-                    const res = await verifyPairingMutation.mutateAsync({ pairingCode: savedKey });
+                    const res = await verifyPairingMutation.mutateAsync({ pairingCode: savedKey, terminalId: installationId });
                     if (!isMounted) return;
 
                     if (res.success && 'device' in res && res.device) {
@@ -265,7 +271,12 @@ export function ExpressKioskApp() {
         }
 
         setIsPairing(true);
-        registerPairingMutation.mutate({ pairingCode: code }, {
+        if (!terminalInstallationId) {
+            toast.error('Preparing kiosk identity. Please wait a moment and try again.');
+            return;
+        }
+
+        registerPairingMutation.mutate({ pairingCode: code, terminalId: terminalInstallationId }, {
             onSuccess: (res) => {
                 setIsPairing(false);
                 if (res.success && 'device' in res && res.device) {
@@ -307,12 +318,12 @@ export function ExpressKioskApp() {
     // independently rejects an unpaired key, but this also removes the
     // credential and returns the terminal to setup without needing a refresh.
     useEffect(() => {
-        if (!pairingCode) return;
+        if (!pairingCode || !terminalInstallationId) return;
 
         let isMounted = true;
         const checkTerminalIsStillPaired = async () => {
             try {
-                const result = await terminalHealthMutation.mutateAsync({ pairingCode });
+                const result = await terminalHealthMutation.mutateAsync({ pairingCode, terminalId: terminalInstallationId });
                 if (isMounted && (!result.success || !('device' in result) || !result.device)) {
                     toast.error('This terminal was unpaired by an administrator and has been locked.');
                     clearLocalPairing();
@@ -332,7 +343,7 @@ export function ExpressKioskApp() {
     // terminalHealthMutation is intentionally not a dependency: its mutation
     // object changes with render, while the paired key is the heartbeat scope.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pairingCode]);
+    }, [pairingCode, terminalInstallationId]);
 
     // The browser only guides capture. It does not load recognition models,
     // receive employee templates, or decide identities.
@@ -355,10 +366,10 @@ export function ExpressKioskApp() {
 
     // Open Verification Modal Flow (Pre-warms WebGL AI Engine)
     const openVerificationModal = async () => {
-        if (!pairingCode) return;
+        if (!pairingCode || !terminalInstallationId) return;
 
         try {
-            const result = await terminalHealthMutation.mutateAsync({ pairingCode });
+            const result = await terminalHealthMutation.mutateAsync({ pairingCode, terminalId: terminalInstallationId });
             if (!result.success || !('device' in result) || !result.device) {
                 toast.error('This terminal is no longer paired. An administrator must register it again.');
                 clearLocalPairing();
@@ -454,7 +465,7 @@ export function ExpressKioskApp() {
             try {
                  const challengeResponse = await fetch('/api/biometric/challenge', {
                      method: 'POST',
-                     headers: { 'x-kiosk-secret': pairingCode },
+                     headers: { 'x-kiosk-secret': pairingCode, 'x-kiosk-installation-id': terminalInstallationId || '' },
                      signal: AbortSignal.timeout(10000),
                  });
                  const challengeResult = await challengeResponse.json().catch(() => ({}));
@@ -474,6 +485,7 @@ export function ExpressKioskApp() {
                     headers: {
                         'Content-Type': 'application/json',
                         'x-kiosk-secret': pairingCode,
+                        'x-kiosk-installation-id': terminalInstallationId || '',
                     },
                     body: JSON.stringify({
                          frames,
@@ -724,7 +736,7 @@ export function ExpressKioskApp() {
 
                             <Button
                                 type="submit"
-                                disabled={isPairing || !canRegisterTerminal || !inputKey.trim()}
+                                disabled={isPairing || !terminalInstallationId || !canRegisterTerminal || !inputKey.trim()}
                                 className="w-full h-12 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-bold text-base shadow-lg shadow-sky-600/20"
                             >
                                 {isPairing ? (

@@ -43,9 +43,10 @@ export const kioskDevicesRouter = router({
     verifyPairingCode: publicProcedure
         .input(z.object({
             pairingCode: z.string().trim().min(3, 'Invalid pairing code'),
+            terminalId: z.string().trim().min(8).max(128),
         }))
         .mutation(async ({ input }) => {
-            const result = await KioskDeviceService.verifyPairingCode(input.pairingCode)
+            const result = await KioskDeviceService.verifyPairingCode(input.pairingCode, input.terminalId)
             if (!result) {
                 return { success: false, message: 'Invalid or inactive pairing code' }
             }
@@ -63,15 +64,22 @@ export const kioskDevicesRouter = router({
     registerPairingCode: adminProcedure
         .input(z.object({
             pairingCode: z.string().trim().min(3, 'Invalid pairing code'),
+            terminalId: z.string().trim().min(8).max(128),
         }))
         .mutation(async ({ ctx, input }) => {
-            const result = await KioskDeviceService.verifyPairingCode(input.pairingCode)
-            if (!result) {
+            await KioskDeviceService.ensureSchema()
+            const existing = await KioskDeviceService.verifyPairingCode(input.pairingCode)
+            if (!existing) {
                 return { success: false, message: 'Invalid or inactive pairing code' }
             }
 
-            if (!ctx.tenant || result.tenantSlug !== ctx.tenant.slug) {
+            if (!ctx.tenant || existing.tenantSlug !== ctx.tenant.slug) {
                 return { success: false, message: 'This terminal does not belong to the current tenant workspace' }
+            }
+
+            const result = await KioskDeviceService.claimPairingCode(input.pairingCode, input.terminalId)
+            if (!result) {
+                return { success: false, message: 'This pairing key is already registered to another kiosk terminal. Unpair it in Admin Settings before registering a replacement.' }
             }
 
             return {

@@ -32,7 +32,8 @@ export async function POST(request: NextRequest) {
         if (!kioskSecret) {
             return NextResponse.json({ error: 'UNAUTHORIZED_KIOSK_DEVICE', message: 'This kiosk is not paired.' }, { status: 401 })
         }
-        const pairingInfo = await KioskDeviceService.verifyPairingCode(kioskSecret)
+        const terminalId = request.headers.get('x-kiosk-installation-id') || undefined
+        const pairingInfo = await KioskDeviceService.verifyPairingCode(kioskSecret, terminalId)
         if (!pairingInfo) {
             return NextResponse.json({ error: 'INVALID_PAIRING_CODE', message: 'This kiosk pairing is invalid or inactive.' }, { status: 401 })
         }
