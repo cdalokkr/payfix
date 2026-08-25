@@ -577,6 +577,8 @@ export function ExpressKioskApp() {
                         error: serverResult.error || 'Face is not recognized. Please try again.',
                         duration: getDurationStr(),
                         snapshotUrl,
+                        similarity: `${(Number(serverResult.similarity || 0) * 100).toFixed(1)}%`,
+                        threshold: Number(serverResult.threshold || 0.8),
                         faceCount: serverResult.verification?.faceCount,
                         embeddingDimensions: serverResult.verification?.embeddingDimensions,
                         livenessPassed: serverResult.verification?.livenessPassed,
@@ -1225,6 +1227,9 @@ export function ExpressKioskApp() {
                                                 Duration: {verificationResult.duration}
                                             </div>
                                         )}
+                                        <div className="text-[11px] font-mono text-rose-200/90">
+                                            Match: {verificationResult.similarity || '0.0%'} · Required: {verificationResult.threshold ? `${(verificationResult.threshold * 100).toFixed(1)}%` : '80.0%'}
+                                        </div>
                                         <div className="border-t border-rose-500/20 pt-2 text-[10px] font-mono text-rose-100/80">
                                             <div>Faces: {verificationResult.faceCount ?? '—'} · Template: {verificationResult.embeddingDimensions ?? '—'}-d · Liveness: {verificationResult.livenessPassed ? 'Passed' : 'Failed'}</div>
                                             <div className="mt-0.5 truncate">Python service: {verificationResult.serverBackend || 'Not reported'} · AI: {verificationResult.serverProcessingMs ? `${(verificationResult.serverProcessingMs / 1000).toFixed(1)}s` : '—'} · Canonical: 3:4</div>
