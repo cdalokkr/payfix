@@ -584,7 +584,6 @@ export function ExpressKioskApp() {
                         livenessPassed: serverResult.verification?.livenessPassed,
                         serverBackend: serverResult.verification?.backend,
                         serverProcessingMs: serverResult.verification?.processingMs,
-                        threshold: serverResult.threshold,
                     });
                     setTimeout(() => {
                         setVerificationResult(null);
