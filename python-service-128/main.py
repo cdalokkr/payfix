@@ -84,6 +84,8 @@ class CompareResponse(BaseModel):
     similarity: float
     dimensions: int
     threshold_used: float
+    error: Optional[str] = None
+    error_code: Optional[str] = None
 
 
 def _error(
@@ -215,6 +217,8 @@ def compare_face_vectors(payload: CompareRequest) -> CompareResponse:
         similarity=round(similarity, 6),
         dimensions=128,
         threshold_used=threshold,
+        error=None,
+        error_code=None,
     )
 
 
@@ -247,14 +251,16 @@ def compare_endpoint(payload: CompareRequest):
     try:
         return compare_face_vectors(payload)
     except ValueError:
-        # Do not return a misleading comparison for malformed or mismatched
-        # vectors. Keep the endpoint's legacy HTTP shape but reject the input.
+        # Keep the endpoint's legacy JSON shape but make invalid vectors
+        # explicit; never fabricate a comparison score.
         return CompareResponse(
             matched=False,
-            distance=float("inf"),
+            distance=0.0,
             similarity=0.0,
             dimensions=0,
             threshold_used=float(payload.threshold if payload.threshold is not None else 0.5),
+            error="Embeddings must be finite 128-dimensional vectors.",
+            error_code="INVALID_EMBEDDING",
         )
 
 
