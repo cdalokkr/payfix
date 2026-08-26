@@ -47,13 +47,14 @@ export interface FaceCompareResult {
 
 export class FaceServiceClient {
     private static getBaseUrl(): string {
-        // Keep the production/preview service isolated from the development
-        // service even when both variables exist in the same Vercel project.
-        // Vercel exposes exactly one of: production, preview, development.
+        // Vercel has Production and Preview environments, but no "Develop"
+        // environment. Select the service by Git branch so a Preview
+        // deployment of develop still uses the 512-d development service.
+        const gitBranch = process.env.VERCEL_GIT_COMMIT_REF
         const vercelEnvironment = process.env.VERCEL_ENV
-        const useDevelopmentService =
-            vercelEnvironment === 'development' ||
-            (!vercelEnvironment && process.env.NODE_ENV !== 'production')
+        const useDevelopmentService = gitBranch
+            ? gitBranch !== 'main'
+            : vercelEnvironment !== 'production' || process.env.NODE_ENV !== 'production'
         const configuredUrl = useDevelopmentService
             ? process.env.DEV_FACE_API_URL
             : process.env.FACE_API_URL
