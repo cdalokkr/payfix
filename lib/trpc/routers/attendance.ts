@@ -13,6 +13,128 @@ import { broadcastServerEvent } from '@/lib/events/server-broadcaster'
 import { getLocalDateIST } from '@/lib/utils/date-utils'
 import { SmartCache } from '@/lib/cache/smart-cache'
 
+const LEGACY_FACE_DIMENSIONS = 128
+const LEGACY_FACE_THRESHOLD = 0.5
+
+type LegacyFaceExtractResponse = {
+    success?: boolean
+    embedding?: unknown
+    error?: string
+    face_detected?: boolean
+    face_count?: number
+    dimensions?: number
+}
+
+type LegacyFaceCompareResponse = {
+    matched?: boolean
+    distance?: number
+    similarity?: number
+    dimensions?: number
+    error?: string
+}
+
+function getLegacyFaceApiUrl(): string {
+    const url = process.env.FACE_API_URL?.trim()
+    if (!url) {
+        throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Face verification service is not configured.'
+        })
+    }
+    return url.replace(/\/$/, '')
+}
+
+function isValidLegacyEmbedding(value: unknown): value is number[] {
+    return Array.isArray(value) &&
+        value.length === LEGACY_FACE_DIMENSIONS &&
+        value.every((item) => typeof item === 'number' && Number.isFinite(item))
+}
+
+async function extractLegacyFaceEmbedding(faceApiUrl: string, imageBase64: string, source: 'selfie' | 'profile photo'): Promise<number[]> {
+    let response: Response
+    try {
+        response = await fetch(`${faceApiUrl}/extract`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image_base64: imageBase64 }),
+            signal: AbortSignal.timeout(8000),
+        })
+    } catch {
+        throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Face verification service is unavailable. Please try again shortly.'
+        })
+    }
+
+    const result = await response.json().catch(() => null) as LegacyFaceExtractResponse | null
+    if (!response.ok || !result) {
+        throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Face verification service did not return a valid response.'
+        })
+    }
+
+    if (
+        result.success !== true ||
+        result.face_detected !== true ||
+        result.face_count !== 1 ||
+        result.dimensions !== LEGACY_FACE_DIMENSIONS ||
+        !isValidLegacyEmbedding(result.embedding)
+    ) {
+        throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: result.error || `A clear image with exactly one face is required for the ${source}.`
+        })
+    }
+
+    return result.embedding
+}
+
+async function compareLegacyFaceEmbeddings(faceApiUrl: string, embedding1: number[], embedding2: number[]): Promise<Required<Pick<LegacyFaceCompareResponse, 'matched' | 'distance' | 'similarity' | 'dimensions'>>> {
+    let response: Response
+    try {
+        response = await fetch(`${faceApiUrl}/compare`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                embedding1,
+                embedding2,
+                threshold: LEGACY_FACE_THRESHOLD,
+            }),
+            signal: AbortSignal.timeout(5000),
+        })
+    } catch {
+        throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Face verification service is unavailable. Please try again shortly.'
+        })
+    }
+
+    const result = await response.json().catch(() => null) as LegacyFaceCompareResponse | null
+    if (
+        !response.ok ||
+        !result ||
+        typeof result.matched !== 'boolean' ||
+        typeof result.distance !== 'number' ||
+        !Number.isFinite(result.distance) ||
+        typeof result.similarity !== 'number' ||
+        !Number.isFinite(result.similarity) ||
+        result.dimensions !== LEGACY_FACE_DIMENSIONS
+    ) {
+        throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: result?.error || 'Face verification service did not return a valid comparison.'
+        })
+    }
+
+    return {
+        matched: result.matched,
+        distance: result.distance,
+        similarity: result.similarity,
+        dimensions: result.dimensions,
+    }
+}
+
 export const attendanceRouter = router({
     // --- ATTENDANCE ---
 
@@ -587,9 +709,9 @@ export const attendanceRouter = router({
             selfieBase64: z.string(),
         }))
         .mutation(async ({ ctx, input }) => {
-            const FACE_API_URL = process.env.FACE_API_URL || 'http://localhost:8000'
-
             try {
+                const faceApiUrl = getLegacyFaceApiUrl()
+
                 // 1. Fetch user profile
                 const profile = await ctx.db.query.profiles.findFirst({
                     where: eq(profiles.id, ctx.profile.id),
@@ -603,59 +725,18 @@ export const attendanceRouter = router({
                     })
                 }
 
-                // 2. Extract selfie embedding via Python microservice
-                let selfieEmbedding: number[]
-                let mockFallbackUsed = false
-                try {
-                    const response = await fetch(`${FACE_API_URL}/extract`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ image_base64: input.selfieBase64 }),
-                    })
-
-                    if (!response.ok) {
-                        const errorData = await response.json().catch(() => ({}))
-                        throw new Error(errorData.detail || 'Failed to communicate with face service')
-                    }
-
-                    const result = await response.json()
-                    if (!result.success || !result.embedding) {
-                        throw new Error(result.error || 'No face detected in selfie')
-                    }
-                    selfieEmbedding = result.embedding
-                } catch (e: any) {
-                    const isNetworkError = 
-                        e.message?.includes('fetch failed') || 
-                        e.code === 'ECONNREFUSED' || 
-                        e.message?.includes('ECONNREFUSED') || 
-                        e.message?.includes('fetch') ||
-                        e.message?.includes('unreachable')
-                    
-                    if (isNetworkError || process.env.FACE_API_MOCK === 'true') {
-                        console.warn('⚠️ Python Face Service unreachable or mock mode active. Falling back to development mock matching.')
-                        mockFallbackUsed = true
-                        selfieEmbedding = []
-                    } else {
-                        throw new TRPCError({
-                            code: 'BAD_REQUEST',
-                            message: e.message || 'Face extraction failed on selfie'
-                        })
-                    }
-                }
-
-                if (mockFallbackUsed) {
-                    return {
-                        matched: true,
-                        similarity: 0.95,
-                        distance: 0.05,
-                        error: undefined
-                    }
-                }
+                // 2. The hosted service is authoritative. A failed extraction
+                // rejects the punch; there is no browser or mock fallback.
+                const selfieEmbedding = await extractLegacyFaceEmbedding(
+                    faceApiUrl,
+                    input.selfieBase64,
+                    'selfie'
+                )
 
                 // 3. Get profile face embedding (from DB or extract from avatar_url)
                 let profileEmbedding = profile.face_embedding as number[] | null
 
-                if (!profileEmbedding || profileEmbedding.length === 0) {
+                if (!isValidLegacyEmbedding(profileEmbedding)) {
                     if (!profile.avatar_url) {
                         throw new TRPCError({
                             code: 'BAD_REQUEST',
@@ -674,22 +755,11 @@ export const attendanceRouter = router({
                         const contentType = imgResponse.headers.get('content-type') || 'image/jpeg'
                         const base64DataUrl = `data:${contentType};base64,${base64}`
 
-                        const response = await fetch(`${FACE_API_URL}/extract`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ image_base64: base64DataUrl }),
-                        })
-
-                        if (!response.ok) {
-                            throw new Error('Failed to extract face vector from profile photo')
-                        }
-
-                        const result = await response.json()
-                        if (!result.success || !result.embedding) {
-                            throw new Error(result.error || 'No face detected in profile photo')
-                        }
-
-                        profileEmbedding = result.embedding
+                        profileEmbedding = await extractLegacyFaceEmbedding(
+                            faceApiUrl,
+                            base64DataUrl,
+                            'profile photo'
+                        )
                         
                         // Save vector back to DB for future speedups
                         await ctx.db.update(profiles)
@@ -704,31 +774,27 @@ export const attendanceRouter = router({
                     }
                 }
 
-                if (!profileEmbedding) {
+                if (!isValidLegacyEmbedding(profileEmbedding)) {
                     throw new TRPCError({
                         code: 'INTERNAL_SERVER_ERROR',
-                        message: 'Profile face embedding could not be loaded'
+                        message: 'Profile face embedding is invalid. Please upload a new profile photo.'
                     })
                 }
 
-                // 4. Calculate Euclidean Distance
-                let sum = 0
-                for (let i = 0; i < selfieEmbedding.length; i++) {
-                    const diff = selfieEmbedding[i] - profileEmbedding[i]
-                    sum += diff * diff
-                }
-                const distance = Math.sqrt(sum)
-                
-                // Euclidean distance threshold: distance < 0.5 = same person
-                const threshold = 0.5
-                const similarity = Math.max(0, 1 - distance)
-                const matched = distance < threshold
+                // 4. Vector validation and matching stay in the face service.
+                const comparison = await compareLegacyFaceEmbeddings(
+                    faceApiUrl,
+                    selfieEmbedding,
+                    profileEmbedding
+                )
 
                 return {
-                    matched,
-                    similarity,
-                    distance,
-                    error: matched ? undefined : `Face does not match profile photo (${(similarity * 100).toFixed(0)}% similarity).`
+                    matched: comparison.matched,
+                    similarity: comparison.similarity,
+                    distance: comparison.distance,
+                    error: comparison.matched
+                        ? undefined
+                        : `Face does not match profile photo (${(comparison.similarity * 100).toFixed(0)}% similarity).`
                 }
 
             } catch (err) {

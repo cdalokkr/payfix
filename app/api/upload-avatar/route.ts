@@ -2,6 +2,23 @@ import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 
+const LEGACY_FACE_DIMENSIONS = 128
+
+type LegacyFaceExtractResponse = {
+    success?: boolean
+    embedding?: unknown
+    error?: string
+    face_detected?: boolean
+    face_count?: number
+    dimensions?: number
+}
+
+function isValidLegacyEmbedding(value: unknown): value is number[] {
+    return Array.isArray(value) &&
+        value.length === LEGACY_FACE_DIMENSIONS &&
+        value.every((item) => typeof item === 'number' && Number.isFinite(item))
+}
+
 export async function POST(request: NextRequest) {
     try {
         // Verify user is authenticated
@@ -37,6 +54,55 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'File size must be less than 5MB' }, { status: 400 })
         }
 
+        if (!file.type.startsWith('image/')) {
+            return NextResponse.json({ error: 'Profile photo must be an image file' }, { status: 400 })
+        }
+
+        const faceApiUrl = process.env.FACE_API_URL?.trim().replace(/\/$/, '')
+        if (!faceApiUrl) {
+            console.error('[UPLOAD-API] FACE_API_URL is not configured')
+            return NextResponse.json({ error: 'Profile photo verification is temporarily unavailable' }, { status: 503 })
+        }
+
+        // Enrollment is server-authoritative: only store a photo after the
+        // face service confirms one valid 128-d descriptor.
+        const imageBase64 = Buffer.from(await file.arrayBuffer()).toString('base64')
+        let extraction: LegacyFaceExtractResponse | null = null
+        try {
+            const faceResponse = await fetch(`${faceApiUrl}/extract`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image_base64: imageBase64 }),
+                signal: AbortSignal.timeout(8000),
+            })
+            extraction = await faceResponse.json().catch(() => null) as LegacyFaceExtractResponse | null
+
+            if (!faceResponse.ok || !extraction) {
+                throw new Error('Face service returned an invalid response')
+            }
+        } catch (error) {
+            console.error('[UPLOAD-API] Face service unavailable:', error)
+            return NextResponse.json(
+                { error: 'Profile photo verification is temporarily unavailable. Please try again shortly.' },
+                { status: 503 }
+            )
+        }
+
+        if (
+            extraction.success !== true ||
+            extraction.face_detected !== true ||
+            extraction.face_count !== 1 ||
+            extraction.dimensions !== LEGACY_FACE_DIMENSIONS ||
+            !isValidLegacyEmbedding(extraction.embedding)
+        ) {
+            return NextResponse.json(
+                { error: extraction.error || 'Use a clear photo containing exactly one face.' },
+                { status: 400 }
+            )
+        }
+
+        const faceEmbedding = extraction.embedding
+
         // Create admin client with service role (bypasses RLS)
         const adminClient = createClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -69,6 +135,7 @@ export async function POST(request: NextRequest) {
             .update({
                 avatar_url: publicUrl,
                 avatar_status: 'custom',
+                face_embedding: faceEmbedding,
                 updated_at: new Date().toISOString()
             })
             .eq('id', profileId)
