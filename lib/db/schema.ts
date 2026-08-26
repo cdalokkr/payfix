@@ -1,5 +1,26 @@
-import { pgTable, uuid, text, timestamp, varchar, date, numeric, integer, boolean, pgEnum, jsonb, real } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, varchar, date, numeric, integer, boolean, pgEnum, jsonb, customType } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
+
+// pgvector is returned by postgres.js as "[n,n,...]". Keep vectors as numeric
+// arrays in application code while sending a valid pgvector literal to Postgres.
+const vector128 = customType<{ data: number[]; driverData: string }>({
+    dataType() {
+        return 'vector(128)';
+    },
+    toDriver(value) {
+        if (!Array.isArray(value) || value.length !== 128 || value.some((item) => !Number.isFinite(item))) {
+            throw new Error('Expected a finite 128-dimensional face embedding');
+        }
+        return `[${value.join(',')}]`;
+    },
+    fromDriver(value) {
+        const parsed = JSON.parse(value);
+        if (!Array.isArray(parsed) || parsed.length !== 128 || parsed.some((item) => typeof item !== 'number')) {
+            throw new Error('Database returned an invalid 128-dimensional face embedding');
+        }
+        return parsed;
+    },
+});
 
 // Enums
 export const userRoleEnum = pgEnum('user_role', ['admin', 'moderator', 'employee']);
@@ -40,7 +61,7 @@ export const profiles = pgTable('profiles', {
     status: text('status').default('active'),
     avatar_status: text('avatar_status').default('default'), // 'default' or 'custom'
     allowed_modules: text('allowed_modules').array(),
-    face_embedding: real('face_embedding').array(),
+    face_embedding: vector128('face_embedding'),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
@@ -216,10 +237,25 @@ export const profilePhotoRequests = pgTable('profile_photo_requests', {
     id: uuid('id').primaryKey().defaultRandom(),
     profile_id: uuid('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
     pending_photo_url: text('pending_photo_url').notNull(),
+    // This is verified at upload time and is promoted atomically with the
+    // approved portrait. Pending templates must never be used for attendance.
+    pending_face_embedding: vector128('pending_face_embedding'),
     status: text('status').notNull().default('pending'), // 'pending', 'approved', 'rejected'
     reviewed_by: uuid('reviewed_by').references(() => profiles.id, { onDelete: 'set null' }),
     reviewed_at: timestamp('reviewed_at', { withTimezone: true }),
     rejection_reason: text('rejection_reason'),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
+// One-time evidence that the server compared a live attendance selfie with an
+// approved template. A browser cannot mark attendance without consuming one.
+export const biometricVerificationTokens = pgTable('biometric_verification_tokens', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    profile_id: uuid('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+    action: text('action').notNull(), // 'clock_in' | 'clock_out'
+    token_hash: text('token_hash').notNull().unique(),
+    expires_at: timestamp('expires_at', { withTimezone: true }).notNull(),
+    used_at: timestamp('used_at', { withTimezone: true }),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 
@@ -491,6 +527,13 @@ export const profilePhotoRequestsRelations = relations(profilePhotoRequests, ({ 
     }),
     reviewer: one(profiles, {
         fields: [profilePhotoRequests.reviewed_by],
+        references: [profiles.id],
+    }),
+}));
+
+export const biometricVerificationTokensRelations = relations(biometricVerificationTokens, ({ one }) => ({
+    profile: one(profiles, {
+        fields: [biometricVerificationTokens.profile_id],
         references: [profiles.id],
     }),
 }));

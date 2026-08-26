@@ -2,16 +2,234 @@
 // lib/trpc/routers/attendance.ts
 // ============================================
 import { z } from 'zod'
+import { createHash, randomBytes } from 'crypto'
 import { router, protectedProcedure, adminProcedure, moderatorProcedure } from '../server'
 import { TRPCError } from '@trpc/server'
-import { attendance, profiles, leaves, officeSettings, officeClosures, activities, notifications } from '@/lib/db/schema'
-import { eq, and, gte, lte, desc, sql, inArray, or } from 'drizzle-orm'
+import { attendance, profiles, leaves, officeSettings, officeClosures, activities, notifications, biometricVerificationTokens } from '@/lib/db/schema'
+import { eq, and, gte, lte, desc, sql, inArray, isNull, or } from 'drizzle-orm'
 import { AttendanceService } from '@/lib/services/attendance.service'
 import { LeavesService } from '@/lib/services/leaves.service'
 import { invalidateDashboardCache } from './admin-dashboard-optimized'
 import { broadcastServerEvent } from '@/lib/events/server-broadcaster'
 import { getLocalDateIST } from '@/lib/utils/date-utils'
 import { SmartCache } from '@/lib/cache/smart-cache'
+
+const LEGACY_FACE_DIMENSIONS = 128
+const LEGACY_FACE_THRESHOLD = 0.5
+const BIOMETRIC_ATTENDANCE_ROLES = new Set(['employee', 'moderator'])
+
+type LegacyFaceExtractResponse = {
+    success?: boolean
+    embedding?: unknown
+    error?: string
+    face_detected?: boolean
+    face_count?: number
+    dimensions?: number
+}
+
+type LegacyFaceCompareResponse = {
+    matched?: boolean
+    distance?: number
+    similarity?: number
+    dimensions?: number
+    error?: string
+}
+
+function getLegacyFaceApiUrl(): string {
+    const url = process.env.FACE_API_URL?.trim()
+    if (!url) {
+        throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Face verification service is not configured.'
+        })
+    }
+    return url.replace(/\/$/, '')
+}
+
+function isValidLegacyEmbedding(value: unknown): value is number[] {
+    return Array.isArray(value) &&
+        value.length === LEGACY_FACE_DIMENSIONS &&
+        value.every((item) => typeof item === 'number' && Number.isFinite(item))
+}
+
+async function requireApprovedBiometricProfile(ctx: any) {
+    if (!BIOMETRIC_ATTENDANCE_ROLES.has(ctx.profile.role)) {
+        return
+    }
+
+    const profile = await ctx.db.query.profiles.findFirst({
+        where: eq(profiles.id, ctx.profile.id),
+        columns: {
+            avatar_url: true,
+            avatar_status: true,
+            face_embedding: true,
+        }
+    })
+
+    if (
+        !profile ||
+        profile.avatar_status !== 'custom' ||
+        !profile.avatar_url ||
+        !isValidLegacyEmbedding(profile.face_embedding)
+    ) {
+        throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'An approved profile photo is required before you can mark attendance.'
+        })
+    }
+}
+
+function hashVerificationToken(token: string) {
+    return createHash('sha256').update(token).digest('hex')
+}
+
+async function issueBiometricVerificationToken(
+    ctx: any,
+    action: 'clock_in' | 'clock_out'
+) {
+    const token = randomBytes(32).toString('base64url')
+    const now = new Date()
+    const expiresAt = new Date(now.getTime() + 2 * 60 * 1000)
+
+    await ctx.db.transaction(async (tx: any) => {
+        // A newer successful verification supersedes an unused prior one for
+        // the same action, keeping the capability single-purpose and short.
+        await tx.delete(biometricVerificationTokens)
+            .where(and(
+                eq(biometricVerificationTokens.profile_id, ctx.profile.id),
+                eq(biometricVerificationTokens.action, action),
+                isNull(biometricVerificationTokens.used_at)
+            ))
+
+        await tx.insert(biometricVerificationTokens).values({
+            profile_id: ctx.profile.id,
+            action,
+            token_hash: hashVerificationToken(token),
+            expires_at: expiresAt,
+        })
+    })
+
+    return token
+}
+
+async function consumeBiometricVerificationToken(
+    ctx: any,
+    action: 'clock_in' | 'clock_out',
+    token?: string
+) {
+    if (!BIOMETRIC_ATTENDANCE_ROLES.has(ctx.profile.role)) {
+        return
+    }
+    if (!token) {
+        throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Complete face verification before marking attendance.'
+        })
+    }
+
+    const [consumed] = await ctx.db.update(biometricVerificationTokens)
+        .set({ used_at: new Date() })
+        .where(and(
+            eq(biometricVerificationTokens.profile_id, ctx.profile.id),
+            eq(biometricVerificationTokens.action, action),
+            eq(biometricVerificationTokens.token_hash, hashVerificationToken(token)),
+            isNull(biometricVerificationTokens.used_at),
+            gte(biometricVerificationTokens.expires_at, new Date())
+        ))
+        .returning({ id: biometricVerificationTokens.id })
+
+    if (!consumed) {
+        throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Face verification expired or was already used. Please verify again.'
+        })
+    }
+}
+
+async function extractLegacyFaceEmbedding(faceApiUrl: string, imageBase64: string, source: 'selfie' | 'profile photo'): Promise<number[]> {
+    let response: Response
+    try {
+        response = await fetch(`${faceApiUrl}/extract`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image_base64: imageBase64 }),
+            signal: AbortSignal.timeout(8000),
+        })
+    } catch {
+        throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Face verification service is unavailable. Please try again shortly.'
+        })
+    }
+
+    const result = await response.json().catch(() => null) as LegacyFaceExtractResponse | null
+    if (!response.ok || !result) {
+        throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Face verification service did not return a valid response.'
+        })
+    }
+
+    if (
+        result.success !== true ||
+        result.face_detected !== true ||
+        result.face_count !== 1 ||
+        result.dimensions !== LEGACY_FACE_DIMENSIONS ||
+        !isValidLegacyEmbedding(result.embedding)
+    ) {
+        throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: result.error || `A clear image with exactly one face is required for the ${source}.`
+        })
+    }
+
+    return result.embedding
+}
+
+async function compareLegacyFaceEmbeddings(faceApiUrl: string, embedding1: number[], embedding2: number[]): Promise<Required<Pick<LegacyFaceCompareResponse, 'matched' | 'distance' | 'similarity' | 'dimensions'>>> {
+    let response: Response
+    try {
+        response = await fetch(`${faceApiUrl}/compare`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                embedding1,
+                embedding2,
+                threshold: LEGACY_FACE_THRESHOLD,
+            }),
+            signal: AbortSignal.timeout(5000),
+        })
+    } catch {
+        throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Face verification service is unavailable. Please try again shortly.'
+        })
+    }
+
+    const result = await response.json().catch(() => null) as LegacyFaceCompareResponse | null
+    if (
+        !response.ok ||
+        !result ||
+        typeof result.matched !== 'boolean' ||
+        typeof result.distance !== 'number' ||
+        !Number.isFinite(result.distance) ||
+        typeof result.similarity !== 'number' ||
+        !Number.isFinite(result.similarity) ||
+        result.dimensions !== LEGACY_FACE_DIMENSIONS
+    ) {
+        throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: result?.error || 'Face verification service did not return a valid comparison.'
+        })
+    }
+
+    return {
+        matched: result.matched,
+        distance: result.distance,
+        similarity: result.similarity,
+        dimensions: result.dimensions,
+    }
+}
 
 export const attendanceRouter = router({
     // --- ATTENDANCE ---
@@ -78,9 +296,13 @@ export const attendanceRouter = router({
             localDate: z.string().optional(),
             isExtraDay: z.boolean().optional(),
             latitude: z.number().optional(),
-            longitude: z.number().optional()
+            longitude: z.number().optional(),
+            verificationToken: z.string().min(1).optional(),
         }).optional())
         .mutation(async ({ ctx, input }) => {
+            await requireApprovedBiometricProfile(ctx)
+            await consumeBiometricVerificationToken(ctx, 'clock_in', input?.verificationToken)
+
             const result = await AttendanceService.clockIn({
                 profileId: ctx.profile.id,
                 fullName: ctx.profile.full_name || undefined,
@@ -145,9 +367,13 @@ export const attendanceRouter = router({
 
     clockOut: protectedProcedure
         .input(z.object({
-            localDate: z.string().optional()
+            localDate: z.string().optional(),
+            verificationToken: z.string().min(1).optional(),
         }).optional())
         .mutation(async ({ ctx, input }) => {
+            await requireApprovedBiometricProfile(ctx)
+            await consumeBiometricVerificationToken(ctx, 'clock_out', input?.verificationToken)
+
             const result = await AttendanceService.clockOut({
                 profileId: ctx.profile.id,
                 fullName: ctx.profile.full_name || undefined,
@@ -585,15 +811,22 @@ export const attendanceRouter = router({
     verifyFace: protectedProcedure
         .input(z.object({
             selfieBase64: z.string(),
+            action: z.enum(['clock_in', 'clock_out']).optional(),
         }))
         .mutation(async ({ ctx, input }) => {
-            const FACE_API_URL = process.env.FACE_API_URL || 'http://localhost:8000'
-
             try {
+                const faceApiUrl = getLegacyFaceApiUrl()
+
                 // 1. Fetch user profile
                 const profile = await ctx.db.query.profiles.findFirst({
                     where: eq(profiles.id, ctx.profile.id),
-                    columns: { id: true, face_embedding: true, avatar_url: true }
+                    columns: {
+                        id: true,
+                        role: true,
+                        avatar_status: true,
+                        face_embedding: true,
+                        avatar_url: true,
+                    }
                 })
 
                 if (!profile) {
@@ -603,59 +836,32 @@ export const attendanceRouter = router({
                     })
                 }
 
-                // 2. Extract selfie embedding via Python microservice
-                let selfieEmbedding: number[]
-                let mockFallbackUsed = false
-                try {
-                    const response = await fetch(`${FACE_API_URL}/extract`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ image_base64: input.selfieBase64 }),
+                if (
+                    BIOMETRIC_ATTENDANCE_ROLES.has(profile.role || 'employee') &&
+                    (
+                        profile.avatar_status !== 'custom' ||
+                        !profile.avatar_url ||
+                        !isValidLegacyEmbedding(profile.face_embedding)
+                    )
+                ) {
+                    throw new TRPCError({
+                        code: 'BAD_REQUEST',
+                        message: 'An approved profile photo is required before attendance verification.'
                     })
-
-                    if (!response.ok) {
-                        const errorData = await response.json().catch(() => ({}))
-                        throw new Error(errorData.detail || 'Failed to communicate with face service')
-                    }
-
-                    const result = await response.json()
-                    if (!result.success || !result.embedding) {
-                        throw new Error(result.error || 'No face detected in selfie')
-                    }
-                    selfieEmbedding = result.embedding
-                } catch (e: any) {
-                    const isNetworkError = 
-                        e.message?.includes('fetch failed') || 
-                        e.code === 'ECONNREFUSED' || 
-                        e.message?.includes('ECONNREFUSED') || 
-                        e.message?.includes('fetch') ||
-                        e.message?.includes('unreachable')
-                    
-                    if (isNetworkError || process.env.FACE_API_MOCK === 'true') {
-                        console.warn('⚠️ Python Face Service unreachable or mock mode active. Falling back to development mock matching.')
-                        mockFallbackUsed = true
-                        selfieEmbedding = []
-                    } else {
-                        throw new TRPCError({
-                            code: 'BAD_REQUEST',
-                            message: e.message || 'Face extraction failed on selfie'
-                        })
-                    }
                 }
 
-                if (mockFallbackUsed) {
-                    return {
-                        matched: true,
-                        similarity: 0.95,
-                        distance: 0.05,
-                        error: undefined
-                    }
-                }
+                // 2. The hosted service is authoritative. A failed extraction
+                // rejects the punch; there is no browser or mock fallback.
+                const selfieEmbedding = await extractLegacyFaceEmbedding(
+                    faceApiUrl,
+                    input.selfieBase64,
+                    'selfie'
+                )
 
                 // 3. Get profile face embedding (from DB or extract from avatar_url)
                 let profileEmbedding = profile.face_embedding as number[] | null
 
-                if (!profileEmbedding || profileEmbedding.length === 0) {
+                if (!isValidLegacyEmbedding(profileEmbedding)) {
                     if (!profile.avatar_url) {
                         throw new TRPCError({
                             code: 'BAD_REQUEST',
@@ -674,22 +880,11 @@ export const attendanceRouter = router({
                         const contentType = imgResponse.headers.get('content-type') || 'image/jpeg'
                         const base64DataUrl = `data:${contentType};base64,${base64}`
 
-                        const response = await fetch(`${FACE_API_URL}/extract`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ image_base64: base64DataUrl }),
-                        })
-
-                        if (!response.ok) {
-                            throw new Error('Failed to extract face vector from profile photo')
-                        }
-
-                        const result = await response.json()
-                        if (!result.success || !result.embedding) {
-                            throw new Error(result.error || 'No face detected in profile photo')
-                        }
-
-                        profileEmbedding = result.embedding
+                        profileEmbedding = await extractLegacyFaceEmbedding(
+                            faceApiUrl,
+                            base64DataUrl,
+                            'profile photo'
+                        )
                         
                         // Save vector back to DB for future speedups
                         await ctx.db.update(profiles)
@@ -704,31 +899,31 @@ export const attendanceRouter = router({
                     }
                 }
 
-                if (!profileEmbedding) {
+                if (!isValidLegacyEmbedding(profileEmbedding)) {
                     throw new TRPCError({
                         code: 'INTERNAL_SERVER_ERROR',
-                        message: 'Profile face embedding could not be loaded'
+                        message: 'Profile face embedding is invalid. Please upload a new profile photo.'
                     })
                 }
 
-                // 4. Calculate Euclidean Distance
-                let sum = 0
-                for (let i = 0; i < selfieEmbedding.length; i++) {
-                    const diff = selfieEmbedding[i] - profileEmbedding[i]
-                    sum += diff * diff
-                }
-                const distance = Math.sqrt(sum)
-                
-                // Euclidean distance threshold: distance < 0.5 = same person
-                const threshold = 0.5
-                const similarity = Math.max(0, 1 - distance)
-                const matched = distance < threshold
+                // 4. Vector validation and matching stay in the face service.
+                const comparison = await compareLegacyFaceEmbeddings(
+                    faceApiUrl,
+                    selfieEmbedding,
+                    profileEmbedding
+                )
+                const verificationToken = comparison.matched && input.action
+                    ? await issueBiometricVerificationToken(ctx, input.action)
+                    : undefined
 
                 return {
-                    matched,
-                    similarity,
-                    distance,
-                    error: matched ? undefined : `Face does not match profile photo (${(similarity * 100).toFixed(0)}% similarity).`
+                    matched: comparison.matched,
+                    similarity: comparison.similarity,
+                    distance: comparison.distance,
+                    verificationToken,
+                    error: comparison.matched
+                        ? undefined
+                        : `Face does not match profile photo (${(comparison.similarity * 100).toFixed(0)}% similarity).`
                 }
 
             } catch (err) {

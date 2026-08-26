@@ -46,11 +46,12 @@ export const profileRouter = router({
       avatarStatus: z.enum(['default', 'custom']).optional().default('custom'),
     }))
     .mutation(async ({ ctx, input }) => {
-      // Security check: only allow updating own profile picture
-      if (input.userId !== ctx.profile.id && ctx.profile.role !== 'admin') {
+      // Self-service photos must enter the verified approval workflow. This
+      // endpoint remains only for administrator-managed records.
+      if (input.userId === ctx.profile.id || ctx.profile.role !== 'admin') {
         throw new TRPCError({
-          code: 'UNAUTHORIZED',
-          message: 'Unauthorized to update this profile picture'
+          code: 'FORBIDDEN',
+          message: 'Submit your profile photo for admin or moderator approval.'
         })
       }
 
@@ -158,17 +159,13 @@ export const profileRouter = router({
       pendingPhotoUrl: z.string().min(1)
     }))
     .mutation(async ({ ctx, input }) => {
-      try {
-        return await ProfileService.createPhotoUpdateRequest({
-          profileId: ctx.profile.id,
-          pendingPhotoUrl: input.pendingPhotoUrl
-        })
-      } catch (err: any) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: err.message || 'Failed to request profile photo update'
-        })
-      }
+      // Candidate images and templates must be created together by the
+      // server-owned upload endpoint. Accepting a URL here would permit an
+      // unverified pending candidate.
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'Submit photos through the verified upload flow.'
+      })
     }),
 
   getPendingPhotoRequests: protectedProcedure.query(async ({ ctx }) => {

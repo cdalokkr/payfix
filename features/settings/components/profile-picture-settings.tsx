@@ -26,6 +26,7 @@ export function ProfilePictureSettings({ user }: ProfilePictureSettingsProps) {
     const fileInputRef = useRef<HTMLInputElement>(null)
 
     const utils = trpc.useUtils()
+    const { data: pendingRequest } = trpc.profile.getMyPendingPhotoRequest.useQuery()
 
     // Dashboard prefetch hook for cache management
     const { prefetch: prefetchDashboard, clearPrefetch } = useDashboardPrefetch()
@@ -136,6 +137,10 @@ export function ProfilePictureSettings({ user }: ProfilePictureSettingsProps) {
     })
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (pendingRequest) {
+            toast.error("A profile photo is already pending approval")
+            return
+        }
         const file = e.target.files?.[0]
         if (!file) return
 
@@ -161,6 +166,10 @@ export function ProfilePictureSettings({ user }: ProfilePictureSettingsProps) {
     }
 
     const handleSavePhoto = async () => {
+        if (pendingRequest) {
+            toast.error("A profile photo is already pending approval")
+            return
+        }
         if (!pendingAvatarUrl) return
 
         // Get the file from the input
@@ -177,7 +186,7 @@ export function ProfilePictureSettings({ user }: ProfilePictureSettingsProps) {
             // Upload to public folder via API route
             const formData = new FormData()
             formData.append('file', file)
-            formData.append('userId', user.id)
+            formData.append('profileId', user.id)
 
             console.log('[ProfilePicture] Uploading file to public folder...')
             const response = await fetch('/api/upload-avatar', {
@@ -190,14 +199,15 @@ export function ProfilePictureSettings({ user }: ProfilePictureSettingsProps) {
                 throw new Error(error.error || 'Upload failed')
             }
 
-            const { path: publicPath } = await response.json()
-            console.log('[ProfilePicture] File uploaded, path:', publicPath)
+            await response.json()
+            console.log('[ProfilePicture] Photo submitted for approval')
 
-            // Update profile with public folder path
-            await updateProfilePictureMutation.mutateAsync({
-                userId: user.id,
-                avatarUrl: publicPath
-            })
+            // A local browser preview is not an approved avatar. Restore the
+            // currently live portrait until a reviewer accepts the request.
+            setAvatarUrl(user.avatar_url || getDefaultAvatarUrl(user.sex))
+            setPendingAvatarUrl(null)
+            toast.success('Photo submitted for admin or moderator approval')
+            setSaveStatus('success')
 
             // Clear the file input
             if (fileInputRef.current) {
@@ -212,7 +222,7 @@ export function ProfilePictureSettings({ user }: ProfilePictureSettingsProps) {
                 setSaveStatus('idle')
             }, 3000)
         } finally {
-            // No cleanup needed
+            setTimeout(() => setSaveStatus('idle'), 3000)
         }
     }
 
@@ -262,7 +272,7 @@ export function ProfilePictureSettings({ user }: ProfilePictureSettingsProps) {
                         size="lg"
                         className="w-full"
                         onClick={() => fileInputRef.current?.click()}
-                        disabled={saveStatus === 'loading'}
+                        disabled={saveStatus === 'loading' || !!pendingRequest}
                         icon={Camera}
                     >
                         Change Photo
@@ -272,7 +282,7 @@ export function ProfilePictureSettings({ user }: ProfilePictureSettingsProps) {
                         className="w-full"
                         onClick={handleSavePhoto}
                         asyncState={saveStatus}
-                        disabled={!hasPendingChanges}
+                        disabled={!hasPendingChanges || !!pendingRequest}
                         mode="edit"
                         loadingText="Saving Photo..."
                         successText="Photo Saved!"
