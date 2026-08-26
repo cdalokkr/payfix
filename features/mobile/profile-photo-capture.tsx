@@ -19,7 +19,6 @@ import {
     Clock as IconClock,
     Phone as IconPhone,
 } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
 
 interface ProfileData {
     fullName: string
@@ -40,15 +39,10 @@ interface ProfilePhotoCaptureProps {
 
 export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: ProfilePhotoCaptureProps) {
     const router = useRouter()
-    const supabase = createClient()
-    const updateProfilePicture = trpc.profile.updateProfilePicture.useMutation()
-    const createPhotoRequest = trpc.profile.createPhotoUpdateRequest.useMutation()
 
     // Check if there's a pending photo request
     const { data: pendingRequest, isLoading: pendingLoading } = trpc.profile.getMyPendingPhotoRequest.useQuery()
 
-    // Check if this is first-time upload or update request
-    const isFirstTimeUpload = profileData.avatarStatus !== 'custom'
     const hasPendingRequest = !!pendingRequest
 
     const [status, setStatus] = useState<'idle' | 'streaming' | 'captured' | 'uploading' | 'success' | 'error'>('idle')
@@ -270,10 +264,6 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
             const formData = new FormData()
             formData.append('file', blob, 'avatar.jpg')
             formData.append('profileId', profileId)
-            // Use different path for pending photos
-            if (!isFirstTimeUpload) {
-                formData.append('isPending', 'true')
-            }
 
             const response = await fetch('/api/upload-avatar', {
                 method: 'POST',
@@ -290,33 +280,16 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
             addLog('Upload complete!')
             addLog(`URL: ${result.path?.slice(0, 40)}...`)
 
-            // Handle differently based on first-time vs update
-            if (isFirstTimeUpload) {
-                // First-time: Direct update (current behavior)
-                setStatus('success')
-                toast.success('Profile photo updated successfully!')
+            // Every enrollment and update remains pending. The live avatar
+            // and attendance template change only after reviewer approval.
+            setStatus('success')
+            toast.success('Photo submitted for admin or moderator approval!')
 
-                setTimeout(() => {
-                    onSuccess?.()
-                    router.push('/mobile')
-                    router.refresh()
-                }, 1500)
-            } else {
-                // Subsequent update: Create pending request
-                addLog('Creating approval request...')
-                await createPhotoRequest.mutateAsync({
-                    pendingPhotoUrl: result.path
-                })
-
-                setStatus('success')
-                toast.success('Photo submitted for admin approval!')
-
-                setTimeout(() => {
-                    onSuccess?.()
-                    router.push('/mobile')
-                    router.refresh()
-                }, 1500)
-            }
+            setTimeout(() => {
+                onSuccess?.()
+                router.push('/mobile/profile')
+                router.refresh()
+            }, 1500)
         } catch (error: any) {
             const errMsg = error?.message || 'Unknown error'
             addLog(`ERROR: ${errMsg}`)
@@ -326,7 +299,7 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         } finally {
             setIsUploading(false)
         }
-    }, [capturedImage, profileId, router, onSuccess, addLog, isFirstTimeUpload, createPhotoRequest])
+    }, [capturedImage, profileId, router, onSuccess, addLog])
 
     // Handle back button
     const handleBack = useCallback(() => {
@@ -355,13 +328,13 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                         >
                             <img src={capturedImage} alt="Captured" className="w-full h-full object-cover" />
                             {status === 'success' && (
-                                <div className="absolute inset-0 bg-green-500/40 backdrop-blur-sm flex items-center justify-center">
+                                <div className="absolute inset-0 bg-amber-500/40 backdrop-blur-sm flex items-center justify-center">
                                     <motion.div
                                         initial={{ scale: 0 }}
                                         animate={{ scale: 1 }}
                                         className="bg-white rounded-full p-6 shadow-2xl"
                                     >
-                                        <IconCheck className="w-16 h-16 text-green-500" />
+                                        <IconClock className="w-16 h-16 text-amber-500" />
                                     </motion.div>
                                 </div>
                             )}
@@ -622,14 +595,14 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                                             initial={{ scale: 0 }}
                                             animate={{ scale: 1 }}
                                             transition={{ type: 'spring', stiffness: 300, damping: 15 }}
-                                            className="w-14 h-14 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0"
+                                            className="w-14 h-14 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0"
                                         >
                                             <motion.div
                                                 initial={{ scale: 0 }}
                                                 animate={{ scale: 1 }}
                                                 transition={{ type: 'spring', delay: 0.15, stiffness: 400, damping: 10 }}
                                             >
-                                                <IconCheck className="w-7 h-7 text-green-500" />
+                                                <IconClock className="w-7 h-7 text-amber-500" />
                                             </motion.div>
                                         </motion.div>
                                         <div className="flex-1">
@@ -639,7 +612,7 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                                                 transition={{ delay: 0.1 }}
                                                 className="text-white font-bold text-base"
                                             >
-                                                {isFirstTimeUpload ? 'Photo Updated!' : 'Photo Submitted for Approval!'}
+                                                Photo Submitted for Approval
                                             </motion.p>
                                             <motion.p
                                                 initial={{ opacity: 0, x: -10 }}
@@ -647,18 +620,16 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
                                                 transition={{ delay: 0.2 }}
                                                 className="text-slate-400 text-sm mt-0.5"
                                             >
-                                                {isFirstTimeUpload
-                                                    ? 'Redirecting to dashboard...'
-                                                    : 'An admin will review your request soon.'}
+                                                An admin or moderator will review your request soon.
                                             </motion.p>
                                         </div>
                                         <motion.div
                                             initial={{ scale: 0, rotate: -180 }}
                                             animate={{ scale: 1, rotate: 0 }}
                                             transition={{ type: 'spring', delay: 0.25, stiffness: 300, damping: 15 }}
-                                            className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center"
+                                            className="w-10 h-10 rounded-full bg-amber-500 flex items-center justify-center"
                                         >
-                                            <IconCheck className="w-5 h-5 text-white" />
+                                            <IconClock className="w-5 h-5 text-white" />
                                         </motion.div>
                                     </div>
                                 </motion.div>

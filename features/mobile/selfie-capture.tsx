@@ -23,9 +23,10 @@ import { FaceVerificationService } from "@/lib/services/face-verification.servic
 
 interface SelfieCaptureProps {
     profileImageUrl: string | null
+    action: 'clock_in' | 'clock_out'
     onCaptured: (result: SelfieResult) => void
     onVerified: (result: { matched: boolean; similarity: number }) => void
-    onSubmitAttendance: (selfie?: string) => Promise<void>
+    onSubmitAttendance: (selfie?: string, verificationToken?: string) => Promise<void>
     onBack?: () => void
     warmedStream?: MediaStream | null
     clearWarmedStream?: () => void
@@ -43,6 +44,7 @@ export interface SelfieResult {
 
 export function SelfieCapture({
     profileImageUrl,
+    action,
     onCaptured,
     onVerified,
     onSubmitAttendance,
@@ -301,7 +303,7 @@ export function SelfieCapture({
         try {
             // Hard timeout — 45s allows for model loading + inference on slow mobile devices
             const result = await Promise.race([
-                FaceVerificationService.compareFaces(capturedImage, profileImageUrl),
+                FaceVerificationService.compareFaces(capturedImage, profileImageUrl, action),
                 new Promise<never>((_, reject) =>
                     setTimeout(() => reject(new Error('TIMEOUT')), 45000)
                 ),
@@ -314,13 +316,18 @@ export function SelfieCapture({
                 setErrorMessage(result.error || 'Face does not match profile photo')
                 return
             }
+            if (!result.verificationToken) {
+                setStatus('verify_failed')
+                setErrorMessage('Verification receipt was not issued. Please try again.')
+                return
+            }
 
             // Verification passed — now submit attendance
             setStatus('verified')
             setApiStatus('pending')
 
             try {
-                await onSubmitAttendance(capturedImage)
+                await onSubmitAttendance(capturedImage, result.verificationToken)
                 setApiStatus('success')
             } catch (error) {
                 setApiStatus('error')
@@ -333,7 +340,7 @@ export function SelfieCapture({
                 : 'Verification failed. Please try again.'
             setErrorMessage(msg)
         }
-    }, [capturedImage, capturedAt, profileImageUrl, onSubmitAttendance, onVerified])
+    }, [capturedImage, capturedAt, profileImageUrl, action, onSubmitAttendance, onVerified])
 
     const handleComplete = useCallback(() => {
         if (apiStatus === 'success') {

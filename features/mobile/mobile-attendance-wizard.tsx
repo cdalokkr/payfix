@@ -19,7 +19,6 @@ import { trpc } from "@/lib/trpc/client"
 import { SelfieCapture, type SelfieResult } from "./selfie-capture"
 import { format } from "date-fns"
 import { usePwaCheck } from "@/hooks/use-pwa-check"
-import { OfflineSyncService } from "@/lib/services/offline-sync.service"
 
 type WizardStep = 'selfie' | 'submitting' | 'complete' | 'error'
 
@@ -55,8 +54,8 @@ export function MobileAttendanceWizard({
                 const stream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: 'user',
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 },
+                        width: { ideal: 1280, min: 640 },
+                        height: { ideal: 960, min: 480 },
                     },
                     audio: false,
                 })
@@ -106,7 +105,10 @@ export function MobileAttendanceWizard({
     }, [])
 
     // This is called by SelfieCapture to submit attendance in parallel with verification
-    const handleSubmitAttendance = useCallback(async (selfie?: string) => {
+    const handleSubmitAttendance = useCallback(async (selfie?: string, verificationToken?: string) => {
+        if (!verificationToken) {
+            throw new Error('Face verification receipt is missing. Please try again.')
+        }
         const localDate = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Kolkata' })
 
         let coords: { latitude: number | null; longitude: number | null } = { latitude: null, longitude: null }
@@ -152,43 +154,24 @@ export function MobileAttendanceWizard({
             }
         }
 
-        const isOffline = OfflineSyncService.isOffline()
-        if (isOffline) {
-            console.log('[WIZARD] Client is offline, queuing punch directly in IndexedDB')
-            await OfflineSyncService.queuePunch({
-                action,
-                localDate,
-                latitude: coords.latitude,
-                longitude: coords.longitude,
-                selfie: selfie || null
-            })
-            toast.success("Connection unavailable. Punched successfully offline!")
-            return
-        }
-
         try {
             if (action === 'clock_in') {
                 await clockIn.mutateAsync({
                     localDate,
                     isExtraDay: false,
                     latitude: coords.latitude || undefined,
-                    longitude: coords.longitude || undefined
+                    longitude: coords.longitude || undefined,
+                    verificationToken,
                 })
             } else {
                 await clockOut.mutateAsync({
                     localDate,
+                    verificationToken,
                 })
             }
         } catch (err) {
-            console.warn('[WIZARD] Server post failed, falling back to IndexedDB local queue:', err)
-            await OfflineSyncService.queuePunch({
-                action,
-                localDate,
-                latitude: coords.latitude,
-                longitude: coords.longitude,
-                selfie: selfie || null
-            })
-            toast.success("Server connection lost. Saved offline successfully!")
+            console.warn('[WIZARD] Server attendance post failed:', err)
+            throw err
         }
 
         // Invalidate cache for real-time update
@@ -260,6 +243,7 @@ export function MobileAttendanceWizard({
                 {currentStep === 'selfie' && (
                     <SelfieCapture
                         profileImageUrl={profileImageUrl}
+                    action={action}
                         onCaptured={handleSelfieCaptured}
                         onVerified={handleVerified}
                         onSubmitAttendance={handleSubmitAttendance}

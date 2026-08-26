@@ -86,6 +86,7 @@ export function FaceVerification({
             const result = await FaceVerificationService.compareFaces(
                 selfieDataUrl,
                 profileImageUrl,
+                undefined,
                 addDebugLog
             )
 

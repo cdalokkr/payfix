@@ -48,7 +48,7 @@ if FACE_MODEL not in {"hog", "cnn"}:
 app = FastAPI(
     title="PayFix Legacy 128-d Face Vector Service",
     description="Fail-closed compatibility service for legacy 128-d face descriptors",
-    version="1.1.0",
+    version="1.2.0",
 )
 
 allowed_origins = [
@@ -194,6 +194,20 @@ def face_quality_metrics(
     }
 
 
+def normalized_face_box(
+    location: tuple[int, int, int, int],
+    image: np.ndarray,
+) -> Dict[str, float]:
+    top, right, bottom, left = location
+    height, width = image.shape[:2]
+    return {
+        "x": round(max(0, left) / width, 6),
+        "y": round(max(0, top) / height, 6),
+        "width": round((right - left) / width, 6),
+        "height": round((bottom - top) / height, 6),
+    }
+
+
 def quality_error(metrics: Dict[str, float]) -> Optional[tuple[str, str]]:
     if (
         metrics["face_width_px"] < MIN_FACE_EDGE_PX
@@ -292,6 +306,7 @@ def extract_face_vector(payload: ExtractRequest) -> ExtractResponse:
         dimensions=128,
         diagnostics={
             "quality": metrics,
+            "face_box": normalized_face_box(locations[0], image_np),
             "timings_ms": {
                 "decode": round(decode_ms, 2),
                 "detect": round(detection_ms - decode_ms, 2),
@@ -334,13 +349,13 @@ def health_check():
             "backend": "face_recognition (dlib)",
             "dimensions": 128,
             "model": FACE_MODEL,
-            "version": "1.1.0",
+            "version": "1.2.0",
         }
     return {
         "status": "unhealthy",
         "backend": "unavailable",
         "dimensions": 128,
-        "version": "1.1.0",
+        "version": "1.2.0",
         "error_code": "MODEL_UNAVAILABLE",
     }
 

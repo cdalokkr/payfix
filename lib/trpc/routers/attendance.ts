@@ -2,10 +2,11 @@
 // lib/trpc/routers/attendance.ts
 // ============================================
 import { z } from 'zod'
+import { createHash, randomBytes } from 'crypto'
 import { router, protectedProcedure, adminProcedure, moderatorProcedure } from '../server'
 import { TRPCError } from '@trpc/server'
-import { attendance, profiles, leaves, officeSettings, officeClosures, activities, notifications } from '@/lib/db/schema'
-import { eq, and, gte, lte, desc, sql, inArray, or } from 'drizzle-orm'
+import { attendance, profiles, leaves, officeSettings, officeClosures, activities, notifications, biometricVerificationTokens } from '@/lib/db/schema'
+import { eq, and, gte, lte, desc, sql, inArray, isNull, or } from 'drizzle-orm'
 import { AttendanceService } from '@/lib/services/attendance.service'
 import { LeavesService } from '@/lib/services/leaves.service'
 import { invalidateDashboardCache } from './admin-dashboard-optimized'
@@ -15,6 +16,7 @@ import { SmartCache } from '@/lib/cache/smart-cache'
 
 const LEGACY_FACE_DIMENSIONS = 128
 const LEGACY_FACE_THRESHOLD = 0.5
+const BIOMETRIC_ATTENDANCE_ROLES = new Set(['employee', 'moderator'])
 
 type LegacyFaceExtractResponse = {
     success?: boolean
@@ -48,6 +50,100 @@ function isValidLegacyEmbedding(value: unknown): value is number[] {
     return Array.isArray(value) &&
         value.length === LEGACY_FACE_DIMENSIONS &&
         value.every((item) => typeof item === 'number' && Number.isFinite(item))
+}
+
+async function requireApprovedBiometricProfile(ctx: any) {
+    if (!BIOMETRIC_ATTENDANCE_ROLES.has(ctx.profile.role)) {
+        return
+    }
+
+    const profile = await ctx.db.query.profiles.findFirst({
+        where: eq(profiles.id, ctx.profile.id),
+        columns: {
+            avatar_url: true,
+            avatar_status: true,
+            face_embedding: true,
+        }
+    })
+
+    if (
+        !profile ||
+        profile.avatar_status !== 'custom' ||
+        !profile.avatar_url ||
+        !isValidLegacyEmbedding(profile.face_embedding)
+    ) {
+        throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'An approved profile photo is required before you can mark attendance.'
+        })
+    }
+}
+
+function hashVerificationToken(token: string) {
+    return createHash('sha256').update(token).digest('hex')
+}
+
+async function issueBiometricVerificationToken(
+    ctx: any,
+    action: 'clock_in' | 'clock_out'
+) {
+    const token = randomBytes(32).toString('base64url')
+    const now = new Date()
+    const expiresAt = new Date(now.getTime() + 2 * 60 * 1000)
+
+    await ctx.db.transaction(async (tx: any) => {
+        // A newer successful verification supersedes an unused prior one for
+        // the same action, keeping the capability single-purpose and short.
+        await tx.delete(biometricVerificationTokens)
+            .where(and(
+                eq(biometricVerificationTokens.profile_id, ctx.profile.id),
+                eq(biometricVerificationTokens.action, action),
+                isNull(biometricVerificationTokens.used_at)
+            ))
+
+        await tx.insert(biometricVerificationTokens).values({
+            profile_id: ctx.profile.id,
+            action,
+            token_hash: hashVerificationToken(token),
+            expires_at: expiresAt,
+        })
+    })
+
+    return token
+}
+
+async function consumeBiometricVerificationToken(
+    ctx: any,
+    action: 'clock_in' | 'clock_out',
+    token?: string
+) {
+    if (!BIOMETRIC_ATTENDANCE_ROLES.has(ctx.profile.role)) {
+        return
+    }
+    if (!token) {
+        throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Complete face verification before marking attendance.'
+        })
+    }
+
+    const [consumed] = await ctx.db.update(biometricVerificationTokens)
+        .set({ used_at: new Date() })
+        .where(and(
+            eq(biometricVerificationTokens.profile_id, ctx.profile.id),
+            eq(biometricVerificationTokens.action, action),
+            eq(biometricVerificationTokens.token_hash, hashVerificationToken(token)),
+            isNull(biometricVerificationTokens.used_at),
+            gte(biometricVerificationTokens.expires_at, new Date())
+        ))
+        .returning({ id: biometricVerificationTokens.id })
+
+    if (!consumed) {
+        throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Face verification expired or was already used. Please verify again.'
+        })
+    }
 }
 
 async function extractLegacyFaceEmbedding(faceApiUrl: string, imageBase64: string, source: 'selfie' | 'profile photo'): Promise<number[]> {
@@ -200,9 +296,13 @@ export const attendanceRouter = router({
             localDate: z.string().optional(),
             isExtraDay: z.boolean().optional(),
             latitude: z.number().optional(),
-            longitude: z.number().optional()
+            longitude: z.number().optional(),
+            verificationToken: z.string().min(1).optional(),
         }).optional())
         .mutation(async ({ ctx, input }) => {
+            await requireApprovedBiometricProfile(ctx)
+            await consumeBiometricVerificationToken(ctx, 'clock_in', input?.verificationToken)
+
             const result = await AttendanceService.clockIn({
                 profileId: ctx.profile.id,
                 fullName: ctx.profile.full_name || undefined,
@@ -267,9 +367,13 @@ export const attendanceRouter = router({
 
     clockOut: protectedProcedure
         .input(z.object({
-            localDate: z.string().optional()
+            localDate: z.string().optional(),
+            verificationToken: z.string().min(1).optional(),
         }).optional())
         .mutation(async ({ ctx, input }) => {
+            await requireApprovedBiometricProfile(ctx)
+            await consumeBiometricVerificationToken(ctx, 'clock_out', input?.verificationToken)
+
             const result = await AttendanceService.clockOut({
                 profileId: ctx.profile.id,
                 fullName: ctx.profile.full_name || undefined,
@@ -707,6 +811,7 @@ export const attendanceRouter = router({
     verifyFace: protectedProcedure
         .input(z.object({
             selfieBase64: z.string(),
+            action: z.enum(['clock_in', 'clock_out']).optional(),
         }))
         .mutation(async ({ ctx, input }) => {
             try {
@@ -715,13 +820,33 @@ export const attendanceRouter = router({
                 // 1. Fetch user profile
                 const profile = await ctx.db.query.profiles.findFirst({
                     where: eq(profiles.id, ctx.profile.id),
-                    columns: { id: true, face_embedding: true, avatar_url: true }
+                    columns: {
+                        id: true,
+                        role: true,
+                        avatar_status: true,
+                        face_embedding: true,
+                        avatar_url: true,
+                    }
                 })
 
                 if (!profile) {
                     throw new TRPCError({
                         code: 'NOT_FOUND',
                         message: 'Employee profile not found'
+                    })
+                }
+
+                if (
+                    BIOMETRIC_ATTENDANCE_ROLES.has(profile.role || 'employee') &&
+                    (
+                        profile.avatar_status !== 'custom' ||
+                        !profile.avatar_url ||
+                        !isValidLegacyEmbedding(profile.face_embedding)
+                    )
+                ) {
+                    throw new TRPCError({
+                        code: 'BAD_REQUEST',
+                        message: 'An approved profile photo is required before attendance verification.'
                     })
                 }
 
@@ -787,11 +912,15 @@ export const attendanceRouter = router({
                     selfieEmbedding,
                     profileEmbedding
                 )
+                const verificationToken = comparison.matched && input.action
+                    ? await issueBiometricVerificationToken(ctx, input.action)
+                    : undefined
 
                 return {
                     matched: comparison.matched,
                     similarity: comparison.similarity,
                     distance: comparison.distance,
+                    verificationToken,
                     error: comparison.matched
                         ? undefined
                         : `Face does not match profile photo (${(comparison.similarity * 100).toFixed(0)}% similarity).`

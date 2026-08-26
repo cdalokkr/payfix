@@ -284,43 +284,72 @@ export class ProfileService {
         if (!request) throwAppError('NOT_FOUND', 'Photo request not found')
         if (request.status !== 'pending') throwAppError('FORBIDDEN', 'This request has already been reviewed')
 
+        const pendingEmbedding = request.pending_face_embedding
+        const hasValidPendingEmbedding = Array.isArray(pendingEmbedding) &&
+            pendingEmbedding.length === 128 &&
+            pendingEmbedding.every((value) => typeof value === 'number' && Number.isFinite(value))
+
+        if (action === 'approve' && !hasValidPendingEmbedding) {
+            throwAppError(
+                'FORBIDDEN',
+                'This pending photo has no valid verified face template. Reject it and ask the user to submit a new photo.'
+            )
+        }
+
         if (action === 'approve') {
-            await db.update(profiles)
-                .set({
-                    avatar_url: request.pending_photo_url,
-                    avatar_status: 'custom',
-                    updated_at: new Date()
-                })
-                .where(eq(profiles.id, request.profile_id))
+            await db.transaction(async (tx) => {
+                // Claim the request first. The status predicate protects this
+                // flow when two reviewers act at the same time.
+                const [claimedRequest] = await tx.update(profilePhotoRequests)
+                    .set({
+                        status: 'approved',
+                        reviewed_by: reviewerId,
+                        reviewed_at: new Date()
+                    })
+                    .where(and(
+                        eq(profilePhotoRequests.id, requestId),
+                        eq(profilePhotoRequests.status, 'pending')
+                    ))
+                    .returning({ id: profilePhotoRequests.id })
 
-            await db.update(profilePhotoRequests)
-                .set({
-                    status: 'approved',
-                    reviewed_by: reviewerId,
-                    reviewed_at: new Date()
-                })
-                .where(eq(profilePhotoRequests.id, requestId))
+                if (!claimedRequest) {
+                    throwAppError('FORBIDDEN', 'This request has already been reviewed')
+                }
 
-            await db.insert(activities).values({
-                user_id: request.profile_id,
-                activity_type: 'profile_update',
-                module: 'profile',
-                description: 'Profile photo update approved'
+                // Promote the portrait and the exact validated 128-d template
+                // together. Nothing from a pending request is available to
+                // profile UI or attendance before this point.
+                await tx.update(profiles)
+                    .set({
+                        avatar_url: request.pending_photo_url,
+                        avatar_status: 'custom',
+                        face_embedding: pendingEmbedding!,
+                        updated_at: new Date()
+                    })
+                    .where(eq(profiles.id, request.profile_id))
+
+                await tx.insert(activities).values([
+                    {
+                        user_id: request.profile_id,
+                        activity_type: 'profile_update',
+                        module: 'profile',
+                        description: 'Profile photo update approved'
+                    },
+                    {
+                        user_id: reviewerId,
+                        activity_type: 'data_edit',
+                        module: 'profile',
+                        description: `Approved photo update for ${request.profile?.full_name || request.profile?.email || 'employee'}`,
+                        metadata: {
+                            request_id: requestId,
+                            employee_id: request.profile_id,
+                            timestamp: new Date().toISOString()
+                        }
+                    }
+                ])
             })
 
             invalidateUserSession(request.profile_id)
-
-            await db.insert(activities).values({
-                user_id: reviewerId,
-                activity_type: 'data_edit',
-                module: 'profile',
-                description: `Approved photo update for ${request.profile?.full_name || request.profile?.email || 'employee'}`,
-                metadata: {
-                    request_id: requestId,
-                    employee_id: request.profile_id,
-                    timestamp: new Date().toISOString()
-                }
-            })
         } else {
             await db.update(profilePhotoRequests)
                 .set({

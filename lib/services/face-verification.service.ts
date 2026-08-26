@@ -13,6 +13,7 @@ export interface FaceVerificationResult {
     method: 'face-api'
     debugLog: string[]
     error?: string
+    verificationToken?: string
 }
 
 // State
@@ -55,6 +56,7 @@ export const FaceVerificationService = {
     async compareFaces(
         selfieDataUrl: string,
         profileImageUrl: string,
+        action?: 'clock_in' | 'clock_out',
         onDebugLog?: (log: string) => void
     ): Promise<FaceVerificationResult> {
         const debugLog: string[] = []
@@ -81,6 +83,7 @@ export const FaceVerificationService = {
                 body: JSON.stringify({
                     "0": {
                         selfieBase64: selfieDataUrl,
+                        action,
                     }
                 }),
             })
@@ -107,6 +110,9 @@ export const FaceVerificationService = {
             const similarity = typeof resultData.similarity === 'number' ? resultData.similarity : 0
             const distance = typeof resultData.distance === 'number' ? resultData.distance : 0.5
             const error = resultData.error || (matched ? undefined : 'Face does not match profile photo.')
+            const verificationToken = typeof resultData.verificationToken === 'string'
+                ? resultData.verificationToken
+                : undefined
 
             log(`📊 Distance: ${distance.toFixed(3)} | Similarity: ${(similarity * 100).toFixed(1)}% (threshold: <0.500)`)
             log(`⏱️ Total round-trip time: ${ms()}`)
@@ -118,6 +124,7 @@ export const FaceVerificationService = {
                 method: 'face-api',
                 debugLog,
                 error: matched ? undefined : error,
+                verificationToken,
             }
         } catch (error) {
             const msg = error instanceof Error ? error.message : 'Unknown error'

@@ -216,10 +216,25 @@ export const profilePhotoRequests = pgTable('profile_photo_requests', {
     id: uuid('id').primaryKey().defaultRandom(),
     profile_id: uuid('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
     pending_photo_url: text('pending_photo_url').notNull(),
+    // This is verified at upload time and is promoted atomically with the
+    // approved portrait. Pending templates must never be used for attendance.
+    pending_face_embedding: real('pending_face_embedding').array(),
     status: text('status').notNull().default('pending'), // 'pending', 'approved', 'rejected'
     reviewed_by: uuid('reviewed_by').references(() => profiles.id, { onDelete: 'set null' }),
     reviewed_at: timestamp('reviewed_at', { withTimezone: true }),
     rejection_reason: text('rejection_reason'),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
+// One-time evidence that the server compared a live attendance selfie with an
+// approved template. A browser cannot mark attendance without consuming one.
+export const biometricVerificationTokens = pgTable('biometric_verification_tokens', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    profile_id: uuid('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+    action: text('action').notNull(), // 'clock_in' | 'clock_out'
+    token_hash: text('token_hash').notNull().unique(),
+    expires_at: timestamp('expires_at', { withTimezone: true }).notNull(),
+    used_at: timestamp('used_at', { withTimezone: true }),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 
@@ -491,6 +506,13 @@ export const profilePhotoRequestsRelations = relations(profilePhotoRequests, ({ 
     }),
     reviewer: one(profiles, {
         fields: [profilePhotoRequests.reviewed_by],
+        references: [profiles.id],
+    }),
+}));
+
+export const biometricVerificationTokensRelations = relations(biometricVerificationTokens, ({ one }) => ({
+    profile: one(profiles, {
+        fields: [biometricVerificationTokens.profile_id],
         references: [profiles.id],
     }),
 }));
