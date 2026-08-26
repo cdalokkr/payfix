@@ -28,6 +28,10 @@ function isValidLegacyEmbedding(value: unknown): value is number[] {
         value.every((item) => typeof item === 'number' && Number.isFinite(item))
 }
 
+function toVectorLiteral(embedding: number[]) {
+    return `[${embedding.join(',')}]`
+}
+
 type NormalizedFaceBox = {
     x: number
     y: number
@@ -239,7 +243,9 @@ export async function POST(request: NextRequest) {
             .insert({
                 profile_id: profileId,
                 pending_photo_url: publicUrl,
-                pending_face_embedding: faceEmbedding,
+                // PostgREST expects a pgvector literal rather than a JSON
+                // array for vector(128) columns.
+                pending_face_embedding: toVectorLiteral(faceEmbedding),
                 status: 'pending',
             })
 

@@ -1,6 +1,6 @@
 -- Keep profile-photo candidates separate from the live biometric template.
 ALTER TABLE public.profile_photo_requests
-    ADD COLUMN IF NOT EXISTS pending_face_embedding REAL[];
+    ADD COLUMN IF NOT EXISTS pending_face_embedding vector(128);
 
 -- A profile can have one reviewable candidate at a time. This is enforced in
 -- the database as well as in the application so concurrent uploads cannot
