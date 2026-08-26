@@ -47,7 +47,16 @@ export interface FaceCompareResult {
 
 export class FaceServiceClient {
     private static getBaseUrl(): string {
-        const configuredUrl = process.env.DEV_FACE_API_URL || process.env.FACE_API_URL
+        // Keep the production/preview service isolated from the development
+        // service even when both variables exist in the same Vercel project.
+        // Vercel exposes exactly one of: production, preview, development.
+        const vercelEnvironment = process.env.VERCEL_ENV
+        const useDevelopmentService =
+            vercelEnvironment === 'development' ||
+            (!vercelEnvironment && process.env.NODE_ENV !== 'production')
+        const configuredUrl = useDevelopmentService
+            ? process.env.DEV_FACE_API_URL
+            : process.env.FACE_API_URL
         if (!configuredUrl) throw new Error('FACE_SERVICE_NOT_CONFIGURED')
         return configuredUrl
     }
