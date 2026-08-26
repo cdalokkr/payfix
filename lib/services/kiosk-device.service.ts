@@ -48,6 +48,11 @@ export class KioskDeviceService {
                 );
             `)
             await db.execute(sql`ALTER TABLE "kiosk_devices" ADD COLUMN IF NOT EXISTS "terminal_id" text;`)
+            await db.execute(sql`
+                CREATE INDEX IF NOT EXISTS "kiosk_devices_terminal_id_idx"
+                ON "kiosk_devices" ("terminal_id")
+                WHERE "terminal_id" IS NOT NULL;
+            `)
             _kioskSchemaEnsured.add(schemaKey)
         } catch (e) {
             // Table already exists or concurrent creation

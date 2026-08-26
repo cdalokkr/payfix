@@ -149,6 +149,7 @@ export async function provisionTenant(
                 "id"            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
                 "name"          text NOT NULL,
                 "pairing_code"  text NOT NULL UNIQUE,
+                "terminal_id"   text,
                 "location_id"   uuid REFERENCES ${sql.raw(schemaName)}.office_locations("id") ON DELETE SET NULL,
                 "is_active"     boolean DEFAULT true,
                 "last_seen_at"  timestamp with time zone,
@@ -156,6 +157,10 @@ export async function provisionTenant(
                 "created_at"    timestamp with time zone DEFAULT now(),
                 "updated_at"    timestamp with time zone DEFAULT now()
             );
+
+            CREATE INDEX IF NOT EXISTS "kiosk_devices_terminal_id_idx"
+                ON ${sql.raw(schemaName)}.kiosk_devices ("terminal_id")
+                WHERE "terminal_id" IS NOT NULL;
 
             CREATE EXTENSION IF NOT EXISTS vector;
 
