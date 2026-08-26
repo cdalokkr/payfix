@@ -113,12 +113,13 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         }
 
         try {
-            // Full HD for clearer selfies with better visibility
+            // Keep the camera request light while retaining enough detail for
+            // the shared 480 × 480 server-verified enrollment contract.
             const constraints: MediaStreamConstraints = retryCount === 0 ? {
                 video: {
                     facingMode: 'user',
-                    width: { ideal: 1920, min: 1280 },
-                    height: { ideal: 1080, min: 720 },
+                    width: { ideal: 1280, min: 640 },
+                    height: { ideal: 960, min: 480 },
                 },
                 audio: false,
             } : {
@@ -208,9 +209,11 @@ export function ProfilePhotoCapture({ profileId, profileData, onSuccess }: Profi
         const ctx = canvas.getContext('2d')
         if (!ctx) return
 
-        // Higher resolution for clearer photos (720x720 for quality)
-        canvas.width = 720
-        canvas.height = 720
+        // The browser only creates a transport crop. The server remains the
+        // authority for face detection and accepts the same 480 × 480 frame
+        // contract used by daily attendance.
+        canvas.width = 480
+        canvas.height = 480
 
         // Source dimensions
         const vw = video.videoWidth

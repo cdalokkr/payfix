@@ -12,10 +12,11 @@ import io
 import math
 import os
 import sys
-from typing import List, Optional
+import time
+from typing import Dict, List, Optional
 
 import numpy as np
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 try:
     import face_recognition
@@ -33,6 +34,13 @@ from pydantic import BaseModel, Field
 
 MAX_IMAGE_BYTES = int(os.getenv("FACE_MAX_IMAGE_BYTES", str(8 * 1024 * 1024)))
 MAX_IMAGE_PIXELS = int(os.getenv("FACE_MAX_IMAGE_PIXELS", "12000000"))
+MAX_PROCESSING_EDGE = int(os.getenv("FACE_MAX_PROCESSING_EDGE", "640"))
+MIN_FACE_COVERAGE_PCT = float(os.getenv("FACE_MIN_COVERAGE_PCT", "5.0"))
+MIN_FACE_EDGE_PX = int(os.getenv("FACE_MIN_EDGE_PX", "64"))
+MIN_FACE_BRIGHTNESS = float(os.getenv("FACE_MIN_BRIGHTNESS", "42"))
+MAX_FACE_BRIGHTNESS = float(os.getenv("FACE_MAX_BRIGHTNESS", "225"))
+MIN_FACE_CONTRAST = float(os.getenv("FACE_MIN_CONTRAST", "16"))
+MIN_FACE_SHARPNESS = float(os.getenv("FACE_MIN_SHARPNESS", "3.0"))
 FACE_MODEL = os.getenv("FACE_RECOGNITION_MODEL", "hog").strip().lower()
 if FACE_MODEL not in {"hog", "cnn"}:
     FACE_MODEL = "hog"
@@ -69,6 +77,7 @@ class ExtractResponse(BaseModel):
     face_detected: bool
     face_count: int = 0
     dimensions: int = 0
+    diagnostics: Optional[Dict[str, object]] = None
 
 
 class CompareRequest(BaseModel):
@@ -86,6 +95,7 @@ class CompareResponse(BaseModel):
     threshold_used: float
     error: Optional[str] = None
     error_code: Optional[str] = None
+    timings_ms: Optional[Dict[str, float]] = None
 
 
 def _error(
@@ -94,6 +104,7 @@ def _error(
     *,
     face_detected: bool = False,
     face_count: int = 0,
+    diagnostics: Optional[Dict[str, object]] = None,
 ) -> ExtractResponse:
     return ExtractResponse(
         success=False,
@@ -103,6 +114,7 @@ def _error(
         face_detected=face_detected,
         face_count=face_count,
         dimensions=0,
+        diagnostics=diagnostics,
     )
 
 
@@ -119,6 +131,7 @@ def decode_base64_image(base64_str: str) -> Image.Image:
 
     try:
         image = Image.open(io.BytesIO(image_data))
+        image = ImageOps.exif_transpose(image)
         image.load()
     except (UnidentifiedImageError, OSError) as exc:
         raise ValueError("Image format could not be decoded") from exc
@@ -127,6 +140,18 @@ def decode_base64_image(base64_str: str) -> Image.Image:
         raise ValueError("Image dimensions exceed the maximum allowed size")
 
     return image.convert("RGB") if image.mode != "RGB" else image
+
+
+def cap_processing_image(image: Image.Image) -> Image.Image:
+    longest_edge = max(image.width, image.height)
+    if longest_edge <= MAX_PROCESSING_EDGE:
+        return image
+    scale = MAX_PROCESSING_EDGE / longest_edge
+    size = (
+        max(1, round(image.width * scale)),
+        max(1, round(image.height * scale)),
+    )
+    return image.resize(size, Image.Resampling.LANCZOS)
 
 
 def normalize_128d(vector: np.ndarray) -> np.ndarray:
@@ -139,7 +164,59 @@ def normalize_128d(vector: np.ndarray) -> np.ndarray:
     return values / norm
 
 
+def face_quality_metrics(
+    image: np.ndarray,
+    location: tuple[int, int, int, int],
+) -> Dict[str, float]:
+    top, right, bottom, left = location
+    height, width = image.shape[:2]
+    top, bottom = max(0, top), min(height, bottom)
+    left, right = max(0, left), min(width, right)
+    face = image[top:bottom, left:right]
+    if face.size == 0:
+        raise ValueError("Detected face bounds are invalid")
+
+    gray = np.dot(face[..., :3], [0.299, 0.587, 0.114]).astype(np.float32)
+    grad_y, grad_x = np.gradient(gray)
+    face_width = right - left
+    face_height = bottom - top
+    coverage_pct = 100.0 * (face_width * face_height) / (width * height)
+
+    return {
+        "face_width_px": float(face_width),
+        "face_height_px": float(face_height),
+        "face_coverage_pct": round(coverage_pct, 3),
+        "brightness_score": round(float(np.mean(gray)), 3),
+        "contrast_score": round(float(np.std(gray)), 3),
+        "sharpness_score": round(float(np.mean(grad_x ** 2 + grad_y ** 2)), 3),
+        "processing_width": float(width),
+        "processing_height": float(height),
+    }
+
+
+def quality_error(metrics: Dict[str, float]) -> Optional[tuple[str, str]]:
+    if (
+        metrics["face_width_px"] < MIN_FACE_EDGE_PX
+        or metrics["face_height_px"] < MIN_FACE_EDGE_PX
+        or metrics["face_coverage_pct"] < MIN_FACE_COVERAGE_PCT
+    ):
+        return (
+            "Move closer so your face fills more of the guide.",
+            "FACE_TOO_SMALL",
+        )
+    if metrics["brightness_score"] < MIN_FACE_BRIGHTNESS:
+        return ("Improve the lighting on your face.", "IMAGE_TOO_DARK")
+    if metrics["brightness_score"] > MAX_FACE_BRIGHTNESS:
+        return ("Avoid strong backlight or glare on your face.", "IMAGE_TOO_BRIGHT")
+    if metrics["contrast_score"] < MIN_FACE_CONTRAST:
+        return ("Use clearer, more even lighting.", "LOW_CONTRAST")
+    if metrics["sharpness_score"] < MIN_FACE_SHARPNESS:
+        return ("Hold the camera steady and retake the photo.", "IMAGE_TOO_BLURRY")
+    return None
+
+
 def extract_face_vector(payload: ExtractRequest) -> ExtractResponse:
+    started_at = time.perf_counter()
     if not FACE_REC_SUPPORT or face_recognition is None:
         return _error(
             "Face recognition model is unavailable.",
@@ -148,6 +225,8 @@ def extract_face_vector(payload: ExtractRequest) -> ExtractResponse:
 
     try:
         pil_image = decode_base64_image(payload.image_base64)
+        decode_ms = (time.perf_counter() - started_at) * 1000
+        pil_image = cap_processing_image(pil_image)
         image_np = np.asarray(pil_image)
         locations = face_recognition.face_locations(image_np, model=FACE_MODEL)
     except ValueError as exc:
@@ -156,6 +235,7 @@ def extract_face_vector(payload: ExtractRequest) -> ExtractResponse:
         return _error("Face detection failed.", "DETECTION_ERROR")
 
     face_count = len(locations)
+    detection_ms = (time.perf_counter() - started_at) * 1000
     if face_count == 0:
         return _error("No face detected in the image.", "NO_FACE_DETECTED")
     if face_count > 1:
@@ -167,6 +247,18 @@ def extract_face_vector(payload: ExtractRequest) -> ExtractResponse:
         )
 
     try:
+        metrics = face_quality_metrics(image_np, locations[0])
+        quality_failure = quality_error(metrics)
+        if quality_failure:
+            message, code = quality_failure
+            return _error(
+                message,
+                code,
+                face_detected=True,
+                face_count=1,
+                diagnostics={"quality": metrics},
+            )
+
         encodings = face_recognition.face_encodings(
             image_np,
             known_face_locations=locations,
@@ -189,6 +281,7 @@ def extract_face_vector(payload: ExtractRequest) -> ExtractResponse:
             face_count=face_count,
         )
 
+    total_ms = (time.perf_counter() - started_at) * 1000
     return ExtractResponse(
         success=True,
         embedding=embedding,
@@ -197,10 +290,20 @@ def extract_face_vector(payload: ExtractRequest) -> ExtractResponse:
         face_detected=True,
         face_count=1,
         dimensions=128,
+        diagnostics={
+            "quality": metrics,
+            "timings_ms": {
+                "decode": round(decode_ms, 2),
+                "detect": round(detection_ms - decode_ms, 2),
+                "encode": round(total_ms - detection_ms, 2),
+                "total": round(total_ms, 2),
+            },
+        },
     )
 
 
 def compare_face_vectors(payload: CompareRequest) -> CompareResponse:
+    started_at = time.perf_counter()
     try:
         emb1 = normalize_128d(np.asarray(payload.embedding1, dtype=np.float32))
         emb2 = normalize_128d(np.asarray(payload.embedding2, dtype=np.float32))
@@ -219,6 +322,7 @@ def compare_face_vectors(payload: CompareRequest) -> CompareResponse:
         threshold_used=threshold,
         error=None,
         error_code=None,
+        timings_ms={"total": round((time.perf_counter() - started_at) * 1000, 2)},
     )
 
 
@@ -261,6 +365,7 @@ def compare_endpoint(payload: CompareRequest):
             threshold_used=float(payload.threshold if payload.threshold is not None else 0.5),
             error="Embeddings must be finite 128-dimensional vectors.",
             error_code="INVALID_EMBEDDING",
+            timings_ms={"total": 0.0},
         )
 
 

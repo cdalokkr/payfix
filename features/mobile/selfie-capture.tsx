@@ -18,10 +18,8 @@ import {
     ScanFace as IconScanFace,
     AlertTriangle as IconAlertTriangle
 } from "lucide-react"
-import { format } from "date-fns"
 import { Slider } from "@/components/ui/slider"
 import { FaceVerificationService } from "@/lib/services/face-verification.service"
-import { OfflineSyncService } from "@/lib/services/offline-sync.service"
 
 interface SelfieCaptureProps {
     profileImageUrl: string | null
@@ -143,12 +141,13 @@ export function SelfieCapture({
         }
 
         try {
-            // Request Full HD (1080p) for clearer selfies, fallback to basic video on retry
+            // Match profile enrollment: request a practical portrait source,
+            // then submit one square 480 × 480 frame to the server.
             const constraints: MediaStreamConstraints = retryCount === 0 ? {
                 video: {
                     facingMode: 'user',
-                    width: { ideal: 1920 },
-                    height: { ideal: 1080 },
+                    width: { ideal: 1280, min: 640 },
+                    height: { ideal: 960, min: 480 },
                 },
                 audio: false,
             } : {
@@ -246,9 +245,10 @@ export function SelfieCapture({
         const ctx = canvas.getContext('2d')
         if (!ctx) return
 
-        // 320×320: optimized for fast server-side processing on mobile
-        canvas.width = 320
-        canvas.height = 320
+        // Keep daily attendance identical to profile enrollment. This is a
+        // transport crop only; the server performs trusted face validation.
+        canvas.width = 480
+        canvas.height = 480
 
         const vw = video.videoWidth
         const vh = video.videoHeight
@@ -262,28 +262,10 @@ export function SelfieCapture({
         ctx.drawImage(video, sx, sy, size, size, 0, 0, canvas.width, canvas.height)
         ctx.restore()
 
+        // Do not burn a browser timestamp into the biometric frame. The
+        // attendance API is the trusted source of the punch timestamp.
         const now = new Date()
-        const timestamp = format(now, "dd MMM yyyy, hh:mm:ss a")
-
-        // Draw modern timestamp pill (scaled to 320px canvas)
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
-        const pillWidth = 200
-        const pillHeight = 28
-        const pillX = (canvas.width - pillWidth) / 2
-        const pillY = canvas.height - 42
-
-        // Rounded rect for pill
-        ctx.beginPath()
-        ctx.roundRect(pillX, pillY, pillWidth, pillHeight, 14)
-        ctx.fill()
-
-        ctx.fillStyle = '#ffffff'
-        ctx.font = 'bold 12px Inter, system-ui'
-        ctx.textAlign = 'center'
-        ctx.fillText(timestamp, canvas.width / 2, pillY + 19)
-
-        // Compress image to quality 0.7 for tiny payload size
-        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.7)
+        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.85)
         setCapturedImage(imageDataUrl)
         setCapturedAt(now)
         setStatus('captured')
@@ -302,26 +284,11 @@ export function SelfieCapture({
         // Start verification
         setStatus('verifying')
 
-        // Check if offline
-        const isOffline = OfflineSyncService.isOffline()
-        if (isOffline) {
-            console.log('[SELFIE] Client is offline, bypassing server verification and saving locally')
-            setSimilarity(1.0)
-            setStatus('verified')
-            setApiStatus('pending')
-            try {
-                await onSubmitAttendance(capturedImage)
-                setApiStatus('success')
-                // Optimistically succeed after a tiny visual delay
-                setTimeout(() => {
-                    if (isMounted.current) {
-                        onVerified({ matched: true, similarity: 1.0 })
-                    }
-                }, 500)
-            } catch (error) {
-                setApiStatus('error')
-                setApiError('Failed to record attendance locally')
-            }
+        // Biometric attendance is online and server-authoritative. A queued
+        // offline frame must never be presented as a successful verification.
+        if (!navigator.onLine) {
+            setStatus('verify_failed')
+            setErrorMessage('An internet connection is required to verify attendance.')
             return
         }
 
