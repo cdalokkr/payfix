@@ -34,7 +34,10 @@ export async function POST(request: NextRequest) {
         }
         const challengeResult = consumeLivenessChallenge(challenge, user.id, 'enrollment')
         if (!challengeResult.ok) return NextResponse.json({ error: 'Liveness challenge failed or expired.', code: challengeResult.code }, { status: 403 })
-        const extractions = await Promise.all(submittedFrames.map(frame => FaceServiceClient.extract(frame.replace(/^data:image\/(?:jpeg|png|webp);base64,/, ''))))
+        const extractions = await Promise.all(submittedFrames.map(frame => FaceServiceClient.extract(
+            frame.replace(/^data:image\/(?:jpeg|png|webp);base64,/, ''),
+            { includeCroppedFace: false }
+        )))
         const frameFailure = findFrameFailure(extractions)
         if (frameFailure) {
             return NextResponse.json({

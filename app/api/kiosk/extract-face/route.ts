@@ -19,7 +19,10 @@ export async function POST(req: NextRequest) {
             }, { status: 400 });
         }
 
-        const extractRes = await FaceServiceClient.extract(imageBase64);
+        // This legacy diagnostic endpoint still returns the cropped preview.
+        // Attendance and enrollment omit it to avoid transporting an unused
+        // second base64 image for each of the three liveness frames.
+        const extractRes = await FaceServiceClient.extract(imageBase64, { includeCroppedFace: true });
 
         if (!extractRes.success || !extractRes.face_detected) {
             return NextResponse.json({

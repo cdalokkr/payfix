@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Your approved profile has no valid biometric template. Please submit a new profile photo.' }, { status: 400 })
         }
 
-        const extractions = await Promise.all(submittedFrames.map(frame => FaceServiceClient.extract(frame)))
+        const extractions = await Promise.all(submittedFrames.map(frame => FaceServiceClient.extract(frame, { includeCroppedFace: false })))
         const frameFailure = findFrameFailure(extractions)
         if (frameFailure) {
             const failedFrame = frameFailure.result
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
             }, { status: 502 })
         }
 
-        const threshold = Number(process.env.FACE_MATCH_COSINE_THRESHOLD ?? '0.88')
+        const threshold = Number(process.env.FACE_MATCH_COSINE_THRESHOLD ?? '0.80')
         if (!Number.isFinite(threshold) || threshold <= 0 || threshold >= 1) throw new Error('Invalid face-match threshold')
         const dot = selfie.reduce((sum, value, index) => sum + value * stored[index], 0)
         const selfieNorm = Math.sqrt(selfie.reduce((sum, value) => sum + value * value, 0))

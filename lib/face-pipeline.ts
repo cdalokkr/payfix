@@ -12,10 +12,15 @@ import {
 
 /** Shared camera configuration for enrollment, attendance, and kiosk capture. */
 export const BIOMETRIC_CAMERA_CONFIG = {
-  // Ask for a high-resolution 3:4 front-camera stream. These are ideals rather
-  // than exact constraints: each phone keeps control of its best supported mode.
-  width: 1920,
-  height: 2560,
+  // A 960 × 1280 front-camera stream gives the browser exactly the detail needed
+  // for a 720 × 960 natural capture without asking lower-end phones and kiosk
+  // webcams to continuously decode a 5 MP stream.
+  //
+  // These are ideals rather than exact constraints: each device still selects its
+  // nearest supported front-camera mode. The server remains the authority for
+  // detection, canonicalization, liveness, and matching.
+  width: 960,
+  height: 1280,
   minWidth: 480,
   minHeight: 640,
   aspectRatio: 0.75, // Portrait-first 3:4 preference; hardware may report another native ratio, while the server generates the canonical 3:4 portrait.
@@ -25,6 +30,12 @@ export const BIOMETRIC_CAMERA_CONFIG = {
   // This keeps a slow terminal responsive without weakening the server checks.
   captureMaxDimension: 960,
   captureJpegQuality: 0.86,
+  // Client-only face/eye guidance always runs from a tiny transient canvas. It
+  // never produces an embedding, crop, authorization decision, or upload.
+  guidanceCanvasWidth: 256,
+  guidanceIntervalMs: 125,
+  guidanceInputSize: 224 as const,
+  guidanceScoreThreshold: 0.45,
   // Biometric capture must never silently fall back to the rear camera.
   facingMode: { exact: 'user' } as const,
   inputSize: 416 as const,
@@ -36,7 +47,9 @@ export const BIOMETRIC_CAMERA_CONSTRAINTS: MediaTrackConstraints = {
   width: { ideal: BIOMETRIC_CAMERA_CONFIG.width, min: BIOMETRIC_CAMERA_CONFIG.minWidth },
   height: { ideal: BIOMETRIC_CAMERA_CONFIG.height, min: BIOMETRIC_CAMERA_CONFIG.minHeight },
   aspectRatio: { ideal: BIOMETRIC_CAMERA_CONFIG.aspectRatio },
-  frameRate: { ideal: 30, max: 30 },
+  // 24fps keeps blink guidance responsive while reducing decode, compositing,
+  // and battery pressure relative to a continuous 30fps high-resolution stream.
+  frameRate: { ideal: 24, max: 24 },
 };
 
 export function validateBiometricCameraFrame(width: number, height: number) {
@@ -53,6 +66,12 @@ export function validateBiometricCameraFrame(width: number, height: number) {
 export const FACE_DETECT_OPTIONS = {
   inputSize: BIOMETRIC_CAMERA_CONFIG.inputSize,
   scoreThreshold: BIOMETRIC_CAMERA_CONFIG.scoreThreshold,
+};
+
+/** Fast browser-only preflight options for the 256px guidance canvas. */
+export const LIVE_GUIDANCE_FACE_DETECT_OPTIONS = {
+  inputSize: BIOMETRIC_CAMERA_CONFIG.guidanceInputSize,
+  scoreThreshold: BIOMETRIC_CAMERA_CONFIG.guidanceScoreThreshold,
 };
 
 export interface ExtractedFace {

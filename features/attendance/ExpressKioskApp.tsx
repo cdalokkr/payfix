@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { KioskIndexedDBService } from '@/lib/services/kiosk-idb.service';
-import { captureNaturalBiometricFrame } from '@/lib/face-pipeline';
+import { BIOMETRIC_CAPTURE_PIPELINE_VERSION, captureNaturalBiometricFrame } from '@/lib/face-pipeline';
 import { trpc } from '@/lib/trpc/client';
 import { BiometricCameraModal } from '@/components/biometrics/BiometricCameraModal';
 import { format } from 'date-fns';
@@ -535,7 +535,7 @@ export function ExpressKioskApp() {
                     body: JSON.stringify({
                          frames,
                          challenge: challengeResult.challenge,
-                        biometricPipelineVersion: 'natural-portrait-v1',
+                         biometricPipelineVersion: BIOMETRIC_CAPTURE_PIPELINE_VERSION,
                         latitude: terminalGps.latitude,
                         longitude: terminalGps.longitude,
                     }),
@@ -1150,7 +1150,7 @@ export function ExpressKioskApp() {
                                         <span className="text-slate-500">Similarity</span>
                                         <span>{verificationResult.similarity || '—'}</span>
                                         <span className="text-slate-500">Required</span>
-                                        <span>{verificationResult.threshold ? `${(verificationResult.threshold * 100).toFixed(1)}%` : '88.0%'}</span>
+                                        <span>{verificationResult.threshold ? `${(verificationResult.threshold * 100).toFixed(1)}%` : '80.0%'}</span>
                                     </>}
                                     <span className="text-slate-500">Canonical</span>
                                     <span>{canonicalPortraitUrl ? '3:4 server portrait' : 'pending'}</span>

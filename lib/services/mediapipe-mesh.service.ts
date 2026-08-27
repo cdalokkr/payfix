@@ -12,7 +12,7 @@
 
 import { FilesetResolver, FaceLandmarker, FaceLandmarkerResult } from '@mediapipe/tasks-vision';
 import { FaceApiBrowserService } from './faceapi-browser.service';
-import { FACE_DETECT_OPTIONS } from '../face-pipeline';
+import { BIOMETRIC_CAMERA_CONFIG, FACE_DETECT_OPTIONS, LIVE_GUIDANCE_FACE_DETECT_OPTIONS } from '../face-pipeline';
 
 export interface AlignedFaceCropResult {
     canvas112: HTMLCanvasElement;
@@ -67,7 +67,7 @@ function getScanCanvas(video: HTMLVideoElement): HTMLCanvasElement | null {
     const vh = video.videoHeight || 640;
     if (vw === 0 || vh === 0) return null;
 
-    const targetW = 240;
+    const targetW = BIOMETRIC_CAMERA_CONFIG.guidanceCanvasWidth;
     const targetH = Math.round((vh / vw) * targetW);
 
     if (!_scanCanvas) {
@@ -225,7 +225,12 @@ export const MediaPipeMeshService = {
                 const faceapi = window.faceapi;
                 if (faceapi.nets.tinyFaceDetector.params && faceapi.nets.faceLandmark68Net.params) {
                     const detection = await faceapi
-                        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions(FACE_DETECT_OPTIONS))
+                        // The browser only supplies responsive framing and blink
+                        // guidance. Run it on the small transient canvas rather
+                        // than the full camera stream; no browser result is ever
+                        // used for server liveness, canonicalization, matching,
+                        // enrollment, or attendance.
+                        .detectSingleFace(scanEl, new faceapi.TinyFaceDetectorOptions(LIVE_GUIDANCE_FACE_DETECT_OPTIONS))
                         .withFaceLandmarks(true);
 
                     if (detection && detection.landmarks) {
@@ -257,7 +262,7 @@ export const MediaPipeMeshService = {
         // Path B: MediaPipe GPU Fallback
         if (!hasDetection && faceLandmarker) {
             try {
-                const result = faceLandmarker.detectForVideo(video, timestamp);
+                const result = faceLandmarker.detectForVideo(scanEl, timestamp);
                 if (result.faceLandmarks && result.faceLandmarks.length > 0) {
                     const rawLandmarks = result.faceLandmarks[0];
                     ear = this.computeEAR(rawLandmarks);
@@ -306,24 +311,6 @@ export const MediaPipeMeshService = {
         let blinkConfirmed = false;
         let prompt = 'Face Detected! Blink eyes to capture';
         let statusBadgeColor: 'blue' | 'amber' | 'emerald' | 'rose' = 'emerald';
-
-        // Auto-Timer Fallback: If genuine face is steadily aligned in mask for > 2.0 seconds, auto-confirm
-        const alignedDuration = timestamp - _alignedStartTimestamp;
-        if (alignedDuration > 2000) {
-            blinkConfirmed = true;
-            prompt = 'Face Verified! Capturing... 📸';
-            statusBadgeColor = 'emerald';
-            return {
-                isFaceDetected: true,
-                isAlignedInMask: true,
-                isBlinking: false,
-                blinkConfirmed: true,
-                prompt,
-                statusBadgeColor,
-                ear,
-                headPose,
-            };
-        }
 
         // Real-Time Blink State Machine (Only on genuine facial eye landmarks):
         if (isEyeOpen) {

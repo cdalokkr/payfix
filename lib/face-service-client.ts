@@ -45,21 +45,40 @@ export interface FaceCompareResult {
     confidence_level: 'HIGH' | 'MEDIUM' | 'LOW' | 'REJECTED'
 }
 
+export interface FaceExtractOptions {
+    /**
+     * The cropped square avatar is legacy/UI-only output. Attendance and profile
+     * approval use the server's canonical 3:4 portrait, so omitting this field
+     * saves a second large base64 image on every service response.
+     */
+    includeCroppedFace?: boolean
+}
+
 export class FaceServiceClient {
+    private static useDevelopmentService(): boolean {
+        const gitBranch = process.env.VERCEL_GIT_COMMIT_REF
+        const vercelEnvironment = process.env.VERCEL_ENV
+        return gitBranch
+            ? gitBranch !== 'main'
+            : vercelEnvironment !== 'production' || process.env.NODE_ENV !== 'production'
+    }
+
     private static getBaseUrl(): string {
         // Vercel has Production and Preview environments, but no "Develop"
         // environment. Select the service by Git branch so a Preview
         // deployment of develop still uses the 512-d development service.
-        const gitBranch = process.env.VERCEL_GIT_COMMIT_REF
-        const vercelEnvironment = process.env.VERCEL_ENV
-        const useDevelopmentService = gitBranch
-            ? gitBranch !== 'main'
-            : vercelEnvironment !== 'production' || process.env.NODE_ENV !== 'production'
-        const configuredUrl = useDevelopmentService
+        const configuredUrl = this.useDevelopmentService()
             ? process.env.DEV_FACE_API_URL
             : process.env.FACE_API_URL
         if (!configuredUrl) throw new Error('FACE_SERVICE_NOT_CONFIGURED')
         return configuredUrl
+    }
+
+    private static getAuthHeaders(): Record<string, string> {
+        const token = this.useDevelopmentService()
+            ? process.env.DEV_FACE_API_TOKEN
+            : process.env.FACE_API_TOKEN
+        return token ? { Authorization: `Bearer ${token}` } : {}
     }
 
     /**
@@ -82,7 +101,7 @@ export class FaceServiceClient {
     /**
      * Extracts 512-d ArcFace vector & liveness diagnostics from a base64 image.
      */
-    static async extract(imageBase64: string): Promise<FaceExtractResult> {
+    static async extract(imageBase64: string, options: FaceExtractOptions = {}): Promise<FaceExtractResult> {
         const baseUrl = this.getBaseUrl().replace(/\/$/, '')
         // The profile-enrollment route sends raw base64 while attendance sends
         // browser data URLs. Keep both flows identical at the service boundary:
@@ -94,14 +113,16 @@ export class FaceServiceClient {
         try {
             const resp = await fetch(`${baseUrl}/extract`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...this.getAuthHeaders() },
                 body: JSON.stringify({
                     image_base64: serviceImageBase64,
                     require_512: true,
                     require_128: true,
-                    check_liveness: true
+                    check_liveness: true,
+                    return_cropped_face: options.includeCroppedFace === true,
+                    return_canonical_portrait: true,
                 }),
-                signal: AbortSignal.timeout(8000)
+                signal: AbortSignal.timeout(12000)
             })
 
             if (resp.ok) {
@@ -116,7 +137,7 @@ export class FaceServiceClient {
             try {
                 const callResp = await fetch(`${baseUrl}/gradio_api/call/extract`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', ...this.getAuthHeaders() },
                     body: JSON.stringify({ data: [serviceImageBase64] }),
                     signal: AbortSignal.timeout(12000)
                 })
@@ -131,6 +152,7 @@ export class FaceServiceClient {
                 }
 
                 const sseResp = await fetch(`${baseUrl}/gradio_api/call/extract/${callData.event_id}`, {
+                    headers: this.getAuthHeaders(),
                     signal: AbortSignal.timeout(25000)
                 })
 
@@ -191,7 +213,7 @@ export class FaceServiceClient {
         try {
             const resp = await fetch(`${baseUrl}/compare`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...this.getAuthHeaders() },
                 body: JSON.stringify({
                     embedding1,
                     embedding2,
@@ -226,6 +248,7 @@ export class FaceServiceClient {
                 const callData = (await callResp.json()) as { event_id?: string }
                 if (callData.event_id) {
                     const sseResp = await fetch(`${baseUrl}/gradio_api/call/compare/${callData.event_id}`, {
+                        headers: this.getAuthHeaders(),
                         signal: AbortSignal.timeout(8000)
                     })
                     const sseText = await sseResp.text()

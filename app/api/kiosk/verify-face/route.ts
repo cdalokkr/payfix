@@ -9,7 +9,9 @@ import { getDistanceFromLatLonInMeters } from '@/lib/utils/geo-utils'
 import { getLocalDateIST } from '@/lib/utils/date-utils'
 import { consumeLivenessChallenge, LIVENESS_FRAME_COUNT } from '@/lib/liveness-challenge'
 
-const NATURAL_PORTRAIT_PIPELINE = 'natural-portrait-v1'
+// v1 remains accepted for already-installed kiosk terminals. New kiosk builds
+// send the shared v2 contract used by enrollment and PWA attendance.
+const NATURAL_PORTRAIT_PIPELINES = new Set(['natural-portrait-v1', 'natural-portrait-3x4-v2'])
 const SELFIE_DATA_URL = /^data:image\/(jpeg|png|webp);base64,/
 
 function cosineSimilarity(left: number[], right: number[]) {
@@ -39,7 +41,7 @@ export async function POST(request: NextRequest) {
         }
 
         const { frames, imageBase64, challenge, biometricPipelineVersion, latitude, longitude } = await request.json()
-        if (biometricPipelineVersion !== NATURAL_PORTRAIT_PIPELINE) {
+        if (!NATURAL_PORTRAIT_PIPELINES.has(String(biometricPipelineVersion))) {
             return NextResponse.json({ error: 'UNSUPPORTED_BIOMETRIC_PIPELINE', message: 'Submit a natural camera portrait frame.' }, { status: 400 })
         }
         const submittedFrames = Array.isArray(frames) ? frames : (typeof imageBase64 === 'string' ? [imageBase64] : [])
@@ -78,7 +80,7 @@ export async function POST(request: NextRequest) {
         }
 
         const extractionStartedAt = Date.now()
-        const extractions = await Promise.all(submittedFrames.map(frame => FaceServiceClient.extract(frame)))
+        const extractions = await Promise.all(submittedFrames.map(frame => FaceServiceClient.extract(frame, { includeCroppedFace: false })))
         const extractionDurationMs = Date.now() - extractionStartedAt
         const extraction = extractions[0]
         const earlyCanonicalPortrait = extraction?.canonical_portrait_base64 || null
@@ -134,7 +136,7 @@ export async function POST(request: NextRequest) {
             }, { status: 502 })
         }
 
-        const threshold = Number(process.env.FACE_MATCH_COSINE_THRESHOLD ?? '0.88')
+        const threshold = Number(process.env.FACE_MATCH_COSINE_THRESHOLD ?? '0.80')
         if (!Number.isFinite(threshold) || threshold <= 0 || threshold >= 1) {
             throw new Error('Invalid face-match threshold')
         }
@@ -247,7 +249,7 @@ export async function POST(request: NextRequest) {
                     embeddingDimensions: probe.length,
                     livenessPassed: true,
                     backend: extraction.diagnostics?.backend_engine || 'Not reported',
-                    capturePipeline: NATURAL_PORTRAIT_PIPELINE,
+                    capturePipeline: biometricPipelineVersion,
                     canonicalPortrait: true,
                     processingMs: extractionDurationMs,
                 },
