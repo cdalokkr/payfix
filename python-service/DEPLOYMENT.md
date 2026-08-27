@@ -173,3 +173,24 @@ check-in/out against the hardening branch before merging it into `develop`.
   must be re-enrolled and approved before they can be used for attendance.
 - The old kiosk v1 capture label remains accepted; the new kiosk sends the
   shared v2 label.
+
+## 7. Continuous deployment from GitHub
+
+The repository root contains `cloudbuild.yaml`, which builds and deploys only the
+CPU face service. Create a Cloud Build trigger with these settings:
+
+- Repository: `cdalokkr/payfix`
+- Event: push to a branch
+- Branch regex: `^hardening/develop-camera-performance$`
+- Configuration: `cloudbuild.yaml`
+- Region: `asia-south1`
+
+Grant the Cloud Build service account `roles/run.admin` to the project,
+`roles/artifactregistry.writer` to the `payfix-containers` repository,
+and `roles/iam.serviceAccountUser` on
+`payfix-face-runtime@payfix-develop.iam.gserviceaccount.com`. The deploy
+step reuses `payfix-face-api-token` from Secret Manager and does not read a
+token from GitHub.
+
+Keep this trigger on the hardening branch until enrollment, approval, PWA, kiosk,
+and rejection tests pass. Then change the branch filter to `^develop$`.
