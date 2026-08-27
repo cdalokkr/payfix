@@ -83,6 +83,7 @@ export const profiles = pgTable('profiles', {
     allowed_modules: text('allowed_modules').array(),
     face_embedding: vector128('face_embedding'),
     face_embedding_512: vector512('face_embedding_512'),
+    face_embedding_pipeline_version: text('face_embedding_pipeline_version'),
     face_quality_score: real('face_quality_score'),
     face_enrolled_at: timestamp('face_enrolled_at', { withTimezone: true }),
     face_photo_url: text('face_photo_url'),
@@ -328,6 +329,7 @@ export const profilePhotoRequests = pgTable('profile_photo_requests', {
     pending_photo_url: text('pending_photo_url').notNull(),
     pending_photo_sha256: text('pending_photo_sha256'),
     pending_face_embedding_512: vector512('pending_face_embedding_512'),
+    pending_face_embedding_pipeline_version: text('pending_face_embedding_pipeline_version'),
     pending_face_embedding: vector128('pending_face_embedding'),
     status: text('status').notNull().default('pending'), // 'pending', 'approved', 'rejected'
     reviewed_by: uuid('reviewed_by').references(() => profiles.id, { onDelete: 'set null' }),

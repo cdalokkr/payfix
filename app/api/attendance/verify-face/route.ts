@@ -8,6 +8,7 @@ import { findFrameFailure, hasDistinctNaturalFrames, selectBestValidatedFrame } 
 import { runWithRequestHeaders } from '@/lib/tenant/with-context'
 import { tenantStorage } from '@/lib/tenant/store'
 import { consumeLivenessChallenge, LIVENESS_FRAME_COUNT } from '@/lib/liveness-challenge'
+import { ProfileService } from '@/lib/services/profile.service'
 
 // Keep attendance aligned with the current shared capture contract. The
 // enrollment route accepts the migration alias as well, so an installed PWA
@@ -55,9 +56,12 @@ export async function POST(request: NextRequest) {
         const challengeResult = consumeLivenessChallenge(challenge, user.id, 'attendance')
         if (!challengeResult.ok) return NextResponse.json({ matched: false, is_live: false, error: 'Liveness challenge failed or expired.', code: challengeResult.code }, { status: 403 })
 
+        // Versioning was added after the first develop templates were created.
+        // Ensure the additive columns exist before requesting them from Drizzle.
+        await ProfileService.ensurePhotoRequestsSchema()
         const profile = await db.query.profiles.findFirst({
             where: eq(profiles.id, user.id),
-            columns: { face_embedding_512: true },
+            columns: { face_embedding_512: true, face_embedding_pipeline_version: true },
         })
         const stored = profile?.face_embedding_512 as number[] | null
         if (!stored || stored.length !== 512 || !stored.every(Number.isFinite)) {
@@ -90,6 +94,17 @@ export async function POST(request: NextRequest) {
                 diagnostics: extraction.diagnostics,
             })
         }
+        const embeddingPipelineVersion = extraction.embedding_pipeline_version
+        if (!embeddingPipelineVersion || profile?.face_embedding_pipeline_version !== embeddingPipelineVersion) {
+            return NextResponse.json({
+                matched: false,
+                similarity: 0,
+                is_live: false,
+                face_detected: true,
+                error: 'Your approved profile photo uses an older biometric format. Please submit a new profile photo for approval before checking in.',
+                code: 'BIOMETRIC_TEMPLATE_REENROLLMENT_REQUIRED',
+            }, { status: 409 })
+        }
         if (extraction.is_live !== true) {
             return NextResponse.json({
                 matched: false, similarity: 0, is_live: false, face_detected: true,
@@ -107,7 +122,11 @@ export async function POST(request: NextRequest) {
             }, { status: 502 })
         }
 
-        const threshold = Number(process.env.FACE_MATCH_COSINE_THRESHOLD ?? '0.80')
+        // Calibrated for normalized ArcFace embeddings generated from the
+        // server-side five-point aligned crop. This is intentionally owned by
+        // the server; set FACE_MATCH_COSINE_THRESHOLD to tighten it after
+        // collecting approved genuine/impostor validation samples.
+        const threshold = Number(process.env.FACE_MATCH_COSINE_THRESHOLD ?? '0.50')
         if (!Number.isFinite(threshold) || threshold <= 0 || threshold >= 1) throw new Error('Invalid face-match threshold')
         const dot = selfie.reduce((sum, value, index) => sum + value * stored[index], 0)
         const selfieNorm = Math.sqrt(selfie.reduce((sum, value) => sum + value * value, 0))

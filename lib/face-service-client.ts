@@ -10,6 +10,7 @@ export interface FaceExtractResult {
     embedding_512: number[] | null
     embedding_128: number[] | null
     embedding: number[] | null
+    embedding_pipeline_version?: string | null
     cropped_face_base64?: string | null
     canonical_portrait_base64?: string | null
     canonical_portrait_aspect_ratio?: string | null

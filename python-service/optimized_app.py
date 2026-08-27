@@ -23,8 +23,13 @@ from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, Field
 
 
-SERVICE_VERSION = "2.1.0"
+SERVICE_VERSION = "2.2.0"
+EMBEDDING_PIPELINE_VERSION = "arcface-512-yunet-5pt-v1"
 MODEL_PATH = Path(os.getenv("ARCFACE_MODEL_PATH", Path(__file__).with_name("w600k_mbf.onnx")))
+FACE_DETECTOR_MODEL_PATH = Path(os.getenv(
+    "FACE_DETECTOR_MODEL_PATH",
+    Path(__file__).with_name("face_detection_yunet_2023mar.onnx"),
+))
 MODEL_URLS = (
     "https://huggingface.co/WePrompt/buffalo_sc/resolve/main/w600k_mbf.onnx",
     "https://huggingface.co/deepghs/insightface/resolve/main/buffalo_s/w600k_mbf.onnx",
@@ -69,6 +74,7 @@ class ExtractResponse(BaseModel):
     embedding_512: Optional[List[float]] = None
     embedding_128: Optional[List[float]] = None
     embedding: Optional[List[float]] = None
+    embedding_pipeline_version: Optional[str] = None
     cropped_face_base64: Optional[str] = None
     canonical_portrait_base64: Optional[str] = None
     canonical_portrait_aspect_ratio: Optional[str] = None
@@ -118,10 +124,17 @@ class VerifyLiveResponse(BaseModel):
 
 
 app = FastAPI(title="PayFix Face AI Service", version=SERVICE_VERSION, docs_url=None, redoc_url=None)
-face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 arcface_session: Optional[ort.InferenceSession] = None
 session_lock = threading.Lock()
 inference_gate = threading.BoundedSemaphore(MAX_CONCURRENT_INFERENCES)
+face_detector = cv2.FaceDetectorYN.create(
+    str(FACE_DETECTOR_MODEL_PATH),
+    "",
+    (320, 320),
+    score_threshold=0.72,
+    nms_threshold=0.30,
+    top_k=5000,
+)
 
 
 def require_service_token(authorization: Optional[str] = Header(default=None)) -> None:
@@ -204,26 +217,40 @@ def l2_normalize(vector: np.ndarray) -> np.ndarray:
     return vector if norm == 0 else vector / norm
 
 
-def detect_faces(image: Image.Image) -> List[Dict[str, int]]:
+def detect_faces(image: Image.Image) -> List[Dict[str, Any]]:
+    """Detect faces and return five landmarks for ArcFace alignment.
+
+    Haar boxes are adequate for drawing a guide, but a direct resize of one is
+    not a valid ArcFace input. YuNet's landmarks make the biometric template
+    stable when an employee changes camera distance or has a slight rotation.
+    """
     image_np = np.asarray(image)
     height, width = image_np.shape[:2]
     scale = min(1.0, DETECTION_MAX_DIMENSION / max(width, height))
     detection_image = image_np if scale == 1.0 else cv2.resize(
         image_np, (round(width * scale), round(height * scale)), interpolation=cv2.INTER_AREA
     )
-    gray = cv2.cvtColor(detection_image, cv2.COLOR_RGB2GRAY)
-    min_size = max(48, round(70 * scale))
-    detected = face_cascade.detectMultiScale(gray, scaleFactor=1.12, minNeighbors=5, minSize=(min_size, min_size))
+    detection_height, detection_width = detection_image.shape[:2]
+    face_detector.setInputSize((detection_width, detection_height))
+    _, detected = face_detector.detect(cv2.cvtColor(detection_image, cv2.COLOR_RGB2BGR))
+    if detected is None:
+        return []
     inverse_scale = 1.0 / scale
-    return [
-        {
-            "top": round(int(y) * inverse_scale),
-            "left": round(int(x) * inverse_scale),
-            "width": round(int(w) * inverse_scale),
-            "height": round(int(h) * inverse_scale),
-        }
-        for x, y, w, h in detected
-    ]
+    faces: List[Dict[str, Any]] = []
+    for face in detected:
+        x, y, face_width, face_height = face[:4]
+        landmarks = [
+            {"x": round(float(face[4 + index * 2]) * inverse_scale), "y": round(float(face[5 + index * 2]) * inverse_scale)}
+            for index in range(5)
+        ]
+        faces.append({
+            "top": round(float(y) * inverse_scale),
+            "left": round(float(x) * inverse_scale),
+            "width": round(float(face_width) * inverse_scale),
+            "height": round(float(face_height) * inverse_scale),
+            "landmarks": landmarks,
+        })
+    return faces
 
 
 def assess_image_quality_and_liveness(image: Image.Image, face_box: Dict[str, int]) -> Dict[str, Any]:
@@ -261,7 +288,44 @@ def assess_image_quality_and_liveness(image: Image.Image, face_box: Dict[str, in
     }
 
 
-def crop_face_avatar(image: Image.Image, face_box: Dict[str, int]) -> tuple[Image.Image, Image.Image, Image.Image]:
+def aligned_arcface_crop(image: Image.Image, landmarks: List[Dict[str, int]]) -> Image.Image:
+    """Warp YuNet's five facial landmarks to ArcFace's canonical 112px pose."""
+    if len(landmarks) != 5:
+        raise ValueError("FIVE_POINT_ALIGNMENT_UNAVAILABLE")
+    # YuNet returns right eye, left eye, nose, right mouth corner, left mouth
+    # corner. Sorting the eye and mouth pairs also handles mirrored portrait
+    # camera frames.
+    eyes = sorted(landmarks[:2], key=lambda point: point["x"])
+    nose = landmarks[2]
+    mouth = sorted(landmarks[3:], key=lambda point: point["x"])
+    source = np.float32([
+        [eyes[0]["x"], eyes[0]["y"]],
+        [eyes[1]["x"], eyes[1]["y"]],
+        [nose["x"], nose["y"]],
+        [mouth[0]["x"], mouth[0]["y"]],
+        [mouth[1]["x"], mouth[1]["y"]],
+    ])
+    destination = np.float32([
+        [38.2946, 51.6963],
+        [73.5318, 51.5014],
+        [56.0252, 71.7366],
+        [41.5493, 92.3655],
+        [70.7299, 92.2041],
+    ])
+    transform, _ = cv2.estimateAffinePartial2D(source, destination, method=cv2.LMEDS)
+    if transform is None:
+        raise ValueError("FIVE_POINT_ALIGNMENT_FAILED")
+    aligned = cv2.warpAffine(
+        np.asarray(image),
+        transform,
+        (112, 112),
+        flags=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_REFLECT101,
+    )
+    return Image.fromarray(aligned, mode="RGB")
+
+
+def crop_face_avatar(image: Image.Image, face_box: Dict[str, Any]) -> tuple[Image.Image, Image.Image, Image.Image]:
     image_width, image_height = image.size
     left, top, width, height = (face_box[key] for key in ("left", "top", "width", "height"))
     center_x, center_y = left + width / 2, top + height / 2
@@ -276,13 +340,15 @@ def crop_face_avatar(image: Image.Image, face_box: Dict[str, int]) -> tuple[Imag
     # Cap the source window before positioning it so extreme close-ups still
     # preserve a real 3:4 portrait instead of stretching an edge-clamped crop.
     portrait_height = min(
-        max(height * 2.35, width * 2.0),
+        max(height * 2.70, width * 2.20),
         image_height,
         image_width / 0.75,
     )
     portrait_width = portrait_height * 0.75
     portrait_left = center_x - portrait_width / 2
-    portrait_top = top + height * 0.62 - portrait_height / 2
+    # Bias very slightly upward to leave consistent space around the hair
+    # while retaining ears and chin in the review portrait.
+    portrait_top = top + height * 0.56 - portrait_height / 2
     portrait_left = max(0, min(portrait_left, image_width - portrait_width))
     portrait_top = max(0, min(portrait_top, image_height - portrait_height))
     portrait = image.crop((
@@ -293,7 +359,7 @@ def crop_face_avatar(image: Image.Image, face_box: Dict[str, int]) -> tuple[Imag
     ))
     return (
         square.resize((512, 512), Image.Resampling.LANCZOS),
-        square.resize((112, 112), Image.Resampling.BILINEAR),
+        aligned_arcface_crop(image, face_box["landmarks"]),
         portrait.resize((480, 640), Image.Resampling.LANCZOS),
     )
 
@@ -359,7 +425,14 @@ def extract(payload: ExtractRequest) -> ExtractResponse:
 
     timings["total_ms"] = round((time.perf_counter() - started) * 1000, 2)
     diagnostics = DiagnosticsInfo(
-        face_box={**primary, "right": primary["left"] + primary["width"], "bottom": primary["top"] + primary["height"]},
+        face_box={
+            "top": primary["top"],
+            "left": primary["left"],
+            "width": primary["width"],
+            "height": primary["height"],
+            "right": primary["left"] + primary["width"],
+            "bottom": primary["top"] + primary["height"],
+        },
         face_coverage_pct=quality["coverage_pct"],
         brightness_score=quality["brightness"],
         contrast_score=quality["contrast"],
@@ -376,6 +449,7 @@ def extract(payload: ExtractRequest) -> ExtractResponse:
         embedding_512=embedding_512 if payload.require_512 else None,
         embedding_128=embedding_512[:128] if payload.require_128 else None,
         embedding=embedding_512 if payload.require_512 else embedding_512[:128],
+        embedding_pipeline_version=EMBEDDING_PIPELINE_VERSION,
         cropped_face_base64=encode_jpeg(crop_512, 90) if payload.return_cropped_face else None,
         canonical_portrait_base64=encode_jpeg(portrait, 90) if payload.return_canonical_portrait else None,
         canonical_portrait_aspect_ratio="3:4" if payload.return_canonical_portrait else None,
@@ -395,14 +469,14 @@ def compare(payload: CompareRequest) -> CompareResponse:
         return CompareResponse(matched=False, similarity=0, distance=0, dimensions=0, threshold_used=payload.threshold or 0, confidence_level="REJECTED")
     left, right = l2_normalize(left), l2_normalize(right)
     similarity = max(0.0, min(1.0, float(np.dot(left, right))))
-    threshold = payload.threshold if payload.threshold is not None else (0.65 if len(left) == 512 else 0.60)
+    threshold = payload.threshold if payload.threshold is not None else (0.50 if len(left) == 512 else 0.60)
     return CompareResponse(
         matched=similarity >= threshold,
         similarity=round(similarity, 4),
         distance=round(float(np.linalg.norm(left - right)), 4),
         dimensions=len(left),
         threshold_used=threshold,
-        confidence_level="HIGH" if similarity >= 0.80 else ("MEDIUM" if similarity >= 0.70 else ("LOW" if similarity >= threshold else "REJECTED")),
+        confidence_level="HIGH" if similarity >= 0.65 else ("MEDIUM" if similarity >= 0.55 else ("LOW" if similarity >= threshold else "REJECTED")),
     )
 
 

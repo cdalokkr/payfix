@@ -58,6 +58,10 @@ export async function POST(request: NextRequest) {
                 diagnostics: extraction.diagnostics,
             }, { status: 400 })
         }
+        const embeddingPipelineVersion = extraction.embedding_pipeline_version
+        if (!embeddingPipelineVersion) {
+            return NextResponse.json({ error: 'The biometric service did not report its embedding pipeline version. Please try again.', code: 'EMBEDDING_PIPELINE_UNAVAILABLE' }, { status: 502 })
+        }
         if (extraction.is_live !== true) {
             return NextResponse.json({ error: 'Liveness verification failed. Please capture a new selfie.', code: 'LIVENESS_FAILED', diagnostics: extraction.diagnostics }, { status: 400 })
         }
@@ -90,6 +94,7 @@ export async function POST(request: NextRequest) {
             portraitUrl: publicUrl,
             portraitSha256: sha256Hex(fileToUpload),
             embedding512: embedding,
+            embeddingPipelineVersion,
             qualityScore: extraction.quality_score || 0,
         })
         // Only the admin approval service can activate this image and its biometric template.
@@ -108,6 +113,7 @@ export async function POST(request: NextRequest) {
                 capturePipeline,
                 faceCount: extraction.face_count,
                 embeddingDimensions: embedding.length,
+                embeddingPipelineVersion,
                 livenessPassed: extraction.is_live === true,
                 backend: extraction.diagnostics?.backend_engine || 'Not reported',
             }

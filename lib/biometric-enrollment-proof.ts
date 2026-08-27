@@ -7,6 +7,7 @@ type EnrollmentProofPayload = {
   portraitUrl: string
   portraitSha256: string
   embedding512: number[]
+  embeddingPipelineVersion: string
   qualityScore: number
   exp: number
 }
@@ -52,6 +53,8 @@ export function consumeEnrollmentProof(
       !Array.isArray(parsed.embedding512) ||
       parsed.embedding512.length !== 512 ||
       !parsed.embedding512.every(Number.isFinite) ||
+      typeof parsed.embeddingPipelineVersion !== 'string' ||
+      !/^[a-z0-9-]{8,80}$/i.test(parsed.embeddingPipelineVersion) ||
       typeof parsed.portraitSha256 !== 'string' ||
       !/^[a-f0-9]{64}$/i.test(parsed.portraitSha256)
     ) return null
@@ -60,6 +63,7 @@ export function consumeEnrollmentProof(
       portraitUrl: parsed.portraitUrl,
       portraitSha256: parsed.portraitSha256,
       embedding512: parsed.embedding512,
+      embeddingPipelineVersion: parsed.embeddingPipelineVersion,
       qualityScore: Number.isFinite(parsed.qualityScore) ? parsed.qualityScore : 0,
     }
   } catch {

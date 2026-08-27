@@ -8,6 +8,7 @@ import { KioskDeviceService } from '@/lib/services/kiosk-device.service'
 import { getDistanceFromLatLonInMeters } from '@/lib/utils/geo-utils'
 import { getLocalDateIST } from '@/lib/utils/date-utils'
 import { consumeLivenessChallenge, LIVENESS_FRAME_COUNT } from '@/lib/liveness-challenge'
+import { ProfileService } from '@/lib/services/profile.service'
 
 // v1 remains accepted for already-installed kiosk terminals. New kiosk builds
 // send the shared v2 contract used by enrollment and PWA attendance.
@@ -136,12 +137,13 @@ export async function POST(request: NextRequest) {
             }, { status: 502 })
         }
 
-        const threshold = Number(process.env.FACE_MATCH_COSINE_THRESHOLD ?? '0.80')
+        const threshold = Number(process.env.FACE_MATCH_COSINE_THRESHOLD ?? '0.50')
         if (!Number.isFinite(threshold) || threshold <= 0 || threshold >= 1) {
             throw new Error('Invalid face-match threshold')
         }
 
         return await runWithTenantSchema(pairingInfo.tenantSchema, async () => {
+            await ProfileService.ensurePhotoRequestsSchema()
             const candidates = await db.query.profiles.findMany({
                 where: eq(profiles.status, 'active'),
                 columns: {
@@ -150,12 +152,14 @@ export async function POST(request: NextRequest) {
                     email: true,
                     avatar_url: true,
                     face_embedding_512: true,
+                    face_embedding_pipeline_version: true,
                 },
             })
             const matches = candidates
                 .map(profile => {
                     const template = profile.face_embedding_512 as number[] | null
-                    return template && template.length === 512 && template.every(Number.isFinite)
+                    return profile.face_embedding_pipeline_version === extraction.embedding_pipeline_version
+                        && template && template.length === 512 && template.every(Number.isFinite)
                         ? { profile, similarity: cosineSimilarity(probe, template) }
                         : null
                 })

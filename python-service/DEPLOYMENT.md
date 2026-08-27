@@ -47,7 +47,8 @@ gcloud artifacts repositories create "${REPOSITORY}" \
 ```
 
 Build from this directory. The build uses `Dockerfile`, downloads the pinned
-ArcFace model during the image build, and does not require the model at runtime:
+ArcFace and YuNet landmark models during the image build, and does not require
+models to download at runtime:
 
 ```bash
 gcloud builds submit . --tag "${IMAGE}"
@@ -128,7 +129,7 @@ Check model readiness:
 curl --fail "${FACE_API_URL}/health"
 ```
 
-The response should report `status: "healthy"`, `version: "2.1.0"`, and
+The response should report `status: "healthy"`, `version: "2.2.0"`, and
 `model_ready: true`.
 
 Confirm biometric routes reject missing authentication:
@@ -164,7 +165,11 @@ check-in/out against the hardening branch before merging it into `develop`.
   trigger capture after a real eye blink. It never authorizes attendance.
 - Uploads remain three natural 720 × 960 maximum JPEG frames.
 - The server still requires one face and valid passive liveness on every frame,
-  returns the server-created canonical 480 × 640 portrait, and compares 512-d
+  uses five server-side facial landmarks to align the ArcFace input, returns
+  the server-created canonical 480 × 640 portrait, and compares 512-d
   normalized embeddings at the configured threshold.
+- This alignment upgrade introduces the
+  `arcface-512-yunet-5pt-v1` template format. Existing unversioned templates
+  must be re-enrolled and approved before they can be used for attendance.
 - The old kiosk v1 capture label remains accepted; the new kiosk sends the
   shared v2 label.
