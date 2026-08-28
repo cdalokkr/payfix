@@ -183,6 +183,11 @@ export const adminDashboardRouter = router({
         return result
 
       } catch (error) {
+        // Never retain a rejected query promise. A transient database/schema
+        // failure would otherwise poison this user's dashboard cache for the
+        // lifetime of the warm server process, making Retry fail repeatedly
+        // even after the underlying issue has been repaired.
+        requestCache.delete(cacheKey)
         console.error('[DASHBOARD-PERF] Unified dashboard data failed:', error)
         throw error
       }
