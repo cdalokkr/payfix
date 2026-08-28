@@ -172,6 +172,28 @@ export const biometricRawLogs = pgTable('biometric_raw_logs', {
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 
+// Tenant-local metadata for every server-side face verification attempt.
+export const biometricVerificationAttempts = pgTable('biometric_verification_attempts', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    profile_id: uuid('profile_id').references(() => profiles.id, { onDelete: 'set null' }),
+    source: text('source').notNull(),
+    outcome: text('outcome').notNull(),
+    similarity: numeric('similarity', { precision: 6, scale: 5 }),
+    threshold: numeric('threshold', { precision: 6, scale: 5 }),
+    reason_code: text('reason_code'),
+    face_count: integer('face_count'),
+    frame_count: integer('frame_count'),
+    liveness_passed: boolean('liveness_passed'),
+    quality_score: real('quality_score'),
+    quality_diagnostics: jsonb('quality_diagnostics'),
+    capture_pipeline_version: text('capture_pipeline_version'),
+    embedding_pipeline_version: text('embedding_pipeline_version'),
+    backend_engine: text('backend_engine'),
+    processing_ms: integer('processing_ms'),
+    request_id: text('request_id'),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
 
 // Leaves
 export const leaves = pgTable('leaves', {
@@ -786,5 +808,13 @@ export const biometricRawLogsRelations = relations(biometricRawLogs, ({ one }) =
     location: one(officeLocations, {
         fields: [biometricRawLogs.location_id],
         references: [officeLocations.id],
+    }),
+}));
+
+
+export const biometricVerificationAttemptsRelations = relations(biometricVerificationAttempts, ({ one }) => ({
+    profile: one(profiles, {
+        fields: [biometricVerificationAttempts.profile_id],
+        references: [profiles.id],
     }),
 }));

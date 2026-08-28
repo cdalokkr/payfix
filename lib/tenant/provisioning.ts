@@ -158,6 +158,33 @@ export async function provisionTenant(
                 "updated_at"    timestamp with time zone DEFAULT now()
             );
 
+            CREATE TABLE IF NOT EXISTS ${sql.raw(schemaName)}.biometric_verification_attempts (
+                "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                "profile_id" uuid REFERENCES ${sql.raw(schemaName)}.profiles("id") ON DELETE SET NULL,
+                "source" text NOT NULL,
+                "outcome" text NOT NULL,
+                "similarity" numeric(6, 5),
+                "threshold" numeric(6, 5),
+                "reason_code" text,
+                "face_count" integer,
+                "frame_count" integer,
+                "liveness_passed" boolean,
+                "quality_score" real,
+                "quality_diagnostics" jsonb,
+                "capture_pipeline_version" text,
+                "embedding_pipeline_version" text,
+                "backend_engine" text,
+                "processing_ms" integer,
+                "request_id" text,
+                "created_at" timestamp with time zone NOT NULL DEFAULT now()
+            );
+
+            CREATE INDEX IF NOT EXISTS "biometric_verification_attempts_profile_created_idx"
+                ON ${sql.raw(schemaName)}.biometric_verification_attempts ("profile_id", "created_at" DESC);
+
+            CREATE INDEX IF NOT EXISTS "biometric_verification_attempts_created_idx"
+                ON ${sql.raw(schemaName)}.biometric_verification_attempts ("created_at" DESC);
+
             CREATE INDEX IF NOT EXISTS "kiosk_devices_terminal_id_idx"
                 ON ${sql.raw(schemaName)}.kiosk_devices ("terminal_id")
                 WHERE "terminal_id" IS NOT NULL;

@@ -119,6 +119,7 @@ export function SelfieCapture({
         setApiStatus('idle')
         setApiError('')
         setVerificationDetails(null)
+        setSimilarity(0)
         setServerVerificationBackend(null)
         setVerificationDuration('')
         setLivenessChallenge(null)
@@ -211,7 +212,8 @@ export function SelfieCapture({
             const durStr = elapsed >= 1000 ? `${(elapsed / 1000).toFixed(2)}s` : `${elapsed}ms`
             setVerificationDuration(durStr)
 
-            setSimilarity(result.similarity)
+            const comparisonCompleted = Boolean(result.verification && typeof result.threshold === 'number')
+            setSimilarity(comparisonCompleted ? result.similarity : 0)
             setVerificationDetails(previous => previous ? {
                 ...previous,
                 similarity: result.similarity,
@@ -415,9 +417,9 @@ export function SelfieCapture({
                                             <dt className="text-slate-500">Liveness</dt><dd>{verificationDetails.server.livenessPassed ? 'Passed' : 'Failed'}</dd>
                                             <dt className="text-slate-500">Backend</dt><dd className="break-all">{verificationDetails.server.backend}</dd>
                                         </>}
-                                        {typeof verificationDetails.similarity === 'number' && <>
+                                        {typeof verificationDetails.similarity === 'number' && typeof verificationDetails.threshold === 'number' && verificationDetails.threshold > 0 && <>
                                             <dt className="text-slate-500">Similarity</dt><dd>{(verificationDetails.similarity * 100).toFixed(1)}%</dd>
-                                            <dt className="text-slate-500">Required</dt><dd>{((verificationDetails.threshold || 0) * 100).toFixed(1)}%</dd>
+                                            <dt className="text-slate-500">Required</dt><dd>{(verificationDetails.threshold * 100).toFixed(1)}%</dd>
                                         </>}
                                     </dl>
                                 </details>
@@ -507,6 +509,11 @@ export function SelfieCapture({
                                 <div className="text-xs font-bold text-rose-200">
                                     {errorMessage || 'Face verification failed'}
                                 </div>
+                                {typeof verificationDetails?.threshold === 'number' && verificationDetails.threshold > 0 && (
+                                    <div className="text-[11px] font-mono text-rose-200/90">
+                                        Similarity: {(similarity * 100).toFixed(1)}% • Required: {(verificationDetails.threshold * 100).toFixed(1)}%
+                                    </div>
+                                )}
                                 <Button
                                     onClick={retakePhoto}
                                     className="mt-1 h-9 px-4 rounded-xl bg-sky-500 hover:bg-sky-400 text-white font-bold text-xs shadow-md cursor-pointer"

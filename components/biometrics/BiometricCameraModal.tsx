@@ -429,7 +429,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   const OVAL_PATH = "M150 20 C236 20 290 70 290 178 C290 286 236 352 150 352 C64 352 10 286 10 178 C10 70 64 20 150 20 Z";
 
   return (
-    <div className="relative w-full h-full bg-slate-950 flex flex-col overflow-hidden rounded-3xl p-0 border border-slate-800 shadow-2xl">
+    <div className="relative w-full h-full bg-slate-950 flex flex-col overflow-y-auto overscroll-contain rounded-3xl p-0 border border-slate-800 shadow-2xl">
       {/* 1. Header Bar OUTSIDE Camera Viewport (Above camera screen area) */}
       <div className="w-full px-5 py-4 z-30 flex items-center justify-between bg-slate-900 border-b border-slate-800/80 shrink-0">
         <div className="flex items-center gap-3">
