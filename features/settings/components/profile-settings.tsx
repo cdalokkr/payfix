@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState } from "react"
 import { Profile } from "@/types"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { UserAvatarProfile } from "@/components/user-avatar-profile"
@@ -16,31 +17,9 @@ interface ProfileSettingsProps {
 }
 
 export function ProfileSettings({ user }: ProfileSettingsProps) {
-    const [isLoading, setIsLoading] = useState(false)
-    const [avatarUrl, setAvatarUrl] = useState<string | null>(user.avatar_url || getDefaultAvatarUrl(user.sex))
+    const router = useRouter()
+    const avatarUrl = user.avatar_url || getDefaultAvatarUrl(user.sex)
     const [isEditFormOpen, setIsEditFormOpen] = useState(false)
-    const fileInputRef = useRef<HTMLInputElement>(null)
-
-    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0]
-        if (!file) return
-
-        // Mock upload
-        setIsLoading(true)
-        try {
-            // Simulate network delay
-            await new Promise(resolve => setTimeout(resolve, 1500))
-
-            // Create local preview URL
-            const objectUrl = URL.createObjectURL(file)
-            setAvatarUrl(objectUrl)
-            toast.success("Profile picture updated successfully")
-        } catch (error) {
-            toast.error("Failed to update profile picture")
-        } finally {
-            setIsLoading(false)
-        }
-    }
 
     // Format date for display
     const formatDate = (dateString: string | null | undefined) => {
@@ -76,29 +55,22 @@ export function ProfileSettings({ user }: ProfileSettingsProps) {
                                 />
                                 <div
                                     className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                                    onClick={() => fileInputRef.current?.click()}
+                                    onClick={() => router.push("/mobile/update-photo")}
                                 >
                                     <Camera className="h-10 w-10 text-white" />
                                 </div>
                             </div>
-                            <input
-                                type="file"
-                                ref={fileInputRef}
-                                className="hidden"
-                                accept="image/*"
-                                onChange={handleFileChange}
-                            />
                         </div>
                         <Button
                             variant="outline"
                             size="lg"
                             className="w-full max-w-xs gap-2 hover:bg-primary/10 hover:border-primary/50 transition-colors"
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={isLoading}
+                            onClick={() => router.push("/mobile/update-photo")}
                         >
                             <Camera className="h-4 w-4" />
-                            {isLoading ? "Uploading..." : "Change Photo"}
+                            Change Photo
                         </Button>
+                         <p className="max-w-xs text-center text-xs text-muted-foreground">Live camera capture and admin approval are required for attendance verification.</p>
                     </CardContent>
                 </Card>
 
