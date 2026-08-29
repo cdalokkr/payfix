@@ -158,14 +158,11 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
         try {
             // Shared high-resolution 3:4 preference. The device may select its nearest
             // supported front-camera mode; capture then makes a centred 3:4 frame.
-            const constraints: MediaStreamConstraints = retryCount === 0 ? {
+            // Enrollment retries must use the exact same camera contract as the
+            // initial attempt, PWA attendance, and kiosk verification.
+            const constraints: MediaStreamConstraints = {
                 video: BIOMETRIC_CAMERA_CONSTRAINTS,
                 audio: false,
-            } : {
-                // Do not fall back to the rear camera: this flow requires a live
-                // front-camera selfie for enrollment.
-                video: { facingMode: { exact: 'user' } },
-                audio: false
             }
 
 

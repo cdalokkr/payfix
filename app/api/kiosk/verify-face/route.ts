@@ -50,10 +50,10 @@ export async function POST(request: NextRequest) {
                         ? 'pipeline_rejected'
                         : code?.includes('LIVENESS')
                             ? 'liveness_failed'
-                            : code?.includes('FACE_') || code?.includes('QUALITY')
-                                ? 'face_quality_failed'
-                                : similarity !== null && typeof body?.threshold === 'number'
-                                    ? 'similarity_rejected'
+                            : similarity !== null && typeof body?.threshold === 'number'
+                                ? 'similarity_rejected'
+                                : code?.includes('FACE_') || code?.includes('QUALITY')
+                                    ? 'face_quality_failed'
                                     : body?.error
                                         ? 'request_rejected'
                                         : 'request_failed'
@@ -67,10 +67,13 @@ export async function POST(request: NextRequest) {
                     faceCount: typeof verification.faceCount === 'number' ? verification.faceCount : null,
                     frameCount: auditFrameCount || null,
                     livenessPassed: typeof body?.is_live === 'boolean' ? body.is_live : (typeof verification.livenessPassed === 'boolean' ? verification.livenessPassed : null),
+                    qualityScore: typeof body?.quality_score === 'number' ? body.quality_score : null,
                     qualityDiagnostics: body?.diagnostics && typeof body.diagnostics === 'object' ? body.diagnostics : null,
                     capturePipelineVersion: auditCapturePipelineVersion,
                     embeddingPipelineVersion: typeof body?.embedding_pipeline_version === 'string' ? body.embedding_pipeline_version : null,
-                    backendEngine: typeof verification.backend === 'string' ? verification.backend : null,
+                    backendEngine: typeof verification.backend === 'string'
+                        ? verification.backend
+                        : (typeof body?.diagnostics?.backend_engine === 'string' ? body.diagnostics.backend_engine : null),
                     processingMs: Date.now() - auditStartedAt,
                     requestId,
                 }))
@@ -161,6 +164,7 @@ export async function POST(request: NextRequest) {
                 error: extraction.error_message || 'Exactly one clear face is required.',
                 code: extraction.error_code || 'FACE_EXTRACTION_FAILED',
                 diagnostics: extraction.diagnostics,
+                quality_score: extraction.quality_score ?? null,
                 canonical_portrait_base64: earlyCanonicalPortrait,
                 canonical_portrait_aspect_ratio: earlyCanonicalAspectRatio,
                 verification: serviceVerification,
@@ -231,6 +235,7 @@ export async function POST(request: NextRequest) {
                         : 'Face is not recognized.',
                     embedding_pipeline_version: extraction.embedding_pipeline_version,
                     diagnostics: extraction.diagnostics,
+                    quality_score: extraction.quality_score ?? null,
                     canonical_portrait_base64: canonicalPortrait,
                     canonical_portrait_aspect_ratio: extraction.canonical_portrait_aspect_ratio,
                     verification: { ...serviceVerification, canonicalPortrait: true },
@@ -294,6 +299,7 @@ export async function POST(request: NextRequest) {
                 threshold,
                 embedding_pipeline_version: extraction.embedding_pipeline_version,
                 diagnostics: extraction.diagnostics,
+                quality_score: extraction.quality_score ?? null,
                 is_live: true,
                 employee: {
                     id: best.profile.id,
