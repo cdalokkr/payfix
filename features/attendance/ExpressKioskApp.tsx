@@ -1212,10 +1212,6 @@ export function ExpressKioskApp() {
                                             <span>•</span>
                                             <span>Latency: {verificationResult.duration}</span>
                                         </div>
-                                        <div className="border-t border-emerald-500/20 pt-2 text-[10px] font-mono text-emerald-100/80">
-                                            <div>Faces: {verificationResult.faceCount ?? '—'} · Template: {verificationResult.embeddingDimensions ?? '—'}-d · Liveness: {verificationResult.livenessPassed ? 'Passed' : 'Failed'}</div>
-                                            <div className="mt-0.5 truncate">Python service: {verificationResult.serverBackend || 'Not reported'} · AI: {verificationResult.serverProcessingMs ? `${(verificationResult.serverProcessingMs / 1000).toFixed(1)}s` : '—'} · Canonical: 3:4</div>
-                                        </div>
                                     </div>
                                 ) : (
                                     <div className="w-full max-w-sm p-4 bg-slate-950/95 border-2 border-rose-500/70 rounded-2xl backdrop-blur-md shadow-2xl space-y-1 text-center">
@@ -1233,10 +1229,6 @@ export function ExpressKioskApp() {
                                                 Match: {verificationResult.similarity} · Required: {(verificationResult.threshold * 100).toFixed(1)}%
                                             </div>
                                         )}
-                                        <div className="border-t border-rose-500/20 pt-2 text-[10px] font-mono text-rose-100/80">
-                                            <div>Faces: {verificationResult.faceCount ?? '—'} · Template: {verificationResult.embeddingDimensions ?? '—'}-d · Liveness: {verificationResult.livenessPassed ? 'Passed' : 'Failed'}</div>
-                                            <div className="mt-0.5 truncate">Python service: {verificationResult.serverBackend || 'Not reported'} · AI: {verificationResult.serverProcessingMs ? `${(verificationResult.serverProcessingMs / 1000).toFixed(1)}s` : '—'} · Canonical: 3:4</div>
-                                        </div>
                                     </div>
                                 )}
                             </div>
