@@ -404,7 +404,7 @@ export function SelfieCapture({
                                 </div>
                             </div>
                             {verificationDetails && (
-                                <details open={status === 'verify_failed'} className="rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2.5 text-left">
+                                <details open={status === 'verify_failed'} className="max-h-[32vh] overflow-y-auto overscroll-contain rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2.5 text-left [scrollbar-gutter:stable]">
                                     <summary className="cursor-pointer text-xs font-bold text-sky-300">Daily biometric verification details</summary>
                                     <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-mono text-slate-300">
                                         <dt className="text-slate-500">Camera</dt><dd>{verificationDetails.cameraResolution}</dd>

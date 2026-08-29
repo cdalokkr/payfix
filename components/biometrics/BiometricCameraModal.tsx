@@ -525,7 +525,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-between p-4">
             {/* Single Spacious Oval Mask Reticle Container (w-[88%] max-w-[340px] aspect-[1/1.24]) */}
             <div
-              className={`relative mt-2 w-[88%] max-w-[340px] aspect-[1/1.24] rounded-full transition-all duration-300 flex items-center justify-center shadow-[0_0_0_9999px_rgba(2,6,23,0.70)]`}
+              className={`relative mt-8 w-[88%] max-w-[340px] aspect-[1/1.24] rounded-full transition-all duration-300 flex items-center justify-center shadow-[0_0_0_9999px_rgba(2,6,23,0.70)]`}
             >
               {/* Paytm / KYC Biometric Single Oval Face Mask SVG */}
               <svg

@@ -1122,7 +1122,7 @@ export function ExpressKioskApp() {
                         diagnosticsSlot={
                             <details
                                 open={Boolean(verificationResult)}
-                                className="rounded-2xl border border-sky-500/25 bg-slate-950/90 text-left shadow-xl"
+                                className="max-h-[32vh] overflow-y-auto overscroll-contain rounded-2xl border border-sky-500/25 bg-slate-950/90 text-left shadow-xl [scrollbar-gutter:stable]"
                             >
                                 <summary className="cursor-pointer list-none px-4 py-2.5 text-xs font-bold text-sky-300">
                                     {verificationResult ? '▼ Daily biometric verification details' : '▶ Biometric capture details'}
@@ -1184,9 +1184,9 @@ export function ExpressKioskApp() {
                                 </Button>
                             </div>
                         }
-                        resultSlot={
+                        children={
                             verificationResult && (
-                            <div className="w-full flex flex-col items-center justify-center animate-in zoom-in-95 fade-in duration-200">
+                            <div className="absolute bottom-4 inset-x-4 z-30 flex flex-col items-center justify-center animate-in zoom-in-95 fade-in duration-200">
                                 {verificationResult.matched ? (
                                     <div className="w-full max-w-sm p-4 bg-slate-950/95 border-2 border-emerald-500/70 rounded-2xl backdrop-blur-md shadow-2xl space-y-2 text-center">
                                         <div className="flex items-center justify-center gap-2 text-emerald-400 font-black text-sm">
