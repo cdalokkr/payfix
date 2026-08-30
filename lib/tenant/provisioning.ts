@@ -456,6 +456,7 @@ export async function provisionTenant(
     trialDurationDays = 14,
     adminUserId?: string,  // Optional: if auth user already created, pass ID to insert profile
     additionalData?: {
+        fullName?: string;
         firstName?: string;
         lastName?: string;
         phone?: string;
@@ -526,7 +527,8 @@ export async function provisionTenant(
             if (designationId) {
                 const firstName = additionalData?.firstName || '';
                 const lastName = additionalData?.lastName || '';
-                const fullName = firstName && lastName ? `${firstName} ${lastName}`.trim() : (firstName || lastName || 'Administrator');
+                const fullName = additionalData?.fullName
+                    || (firstName && lastName ? `${firstName} ${lastName}`.trim() : (firstName || lastName || 'Administrator'));
                 await centralDb.execute(sql`
                     INSERT INTO ${sql.raw(schemaName)}.profiles (
                         id, email, full_name, role, status, designation_id, first_name, last_name, mobile_no, created_at, updated_at

@@ -16,6 +16,7 @@
     "performance:validate:ci": "ts-node scripts/performance-validation.ts --continuous --output ci-results.json",
     "performance:test": "ts-node scripts/performance-validation.ts --url http://localhost:3000 --verbose",
     "seed:admin": "node scripts/seed-admin.js",
+    "repair:tenant-admins": "tsx scripts/repair-tenant-admins.ts",
     "db:setup:info": "echo 'To setup fresh DB, run SQL from supabase/setup-fresh-db.sql in Supabase Editor'",
     "db:pull": "drizzle-kit pull",
     "db:generate": "drizzle-kit generate",

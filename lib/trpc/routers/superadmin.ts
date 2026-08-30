@@ -5,6 +5,11 @@ import { tenants, tenantPlans, tenantBranding } from '@/lib/db/master-schema';
 import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
+import {
+  createSupabaseAdminClient,
+  ensureSuperAdminAuthUser,
+  SUPERADMIN_DEFAULT_ADMIN_PASSWORD,
+} from '@/lib/auth/supabase-admin';
 
 export const superadminRouter = router({
   // 1. List all tenants with plans, branding and profile counts
@@ -527,20 +532,32 @@ export const superadminRouter = router({
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Tenant schema not found' });
         }
 
-        // Fetch admin user ID from tenant schema profiles table
+        // Resolve by the control-plane email first. This keeps password reset
+        // working even when a legacy tenant profile was not created.
         const adminRes = await centralDb.execute(sql`
           SELECT id FROM ${sql.raw(tenant.tenant_schema)}.profiles
-          WHERE role = 'admin'
+          WHERE LOWER(email) = LOWER(${tenant.admin_email})
           LIMIT 1;
         `);
 
-        const adminUserId = adminRes[0]?.id as string | undefined;
+        let adminUserId = adminRes[0]?.id as string | undefined;
+
+        if (!adminUserId) {
+          const roleAdminRes = await centralDb.execute(sql`
+            SELECT id FROM ${sql.raw(tenant.tenant_schema)}.profiles
+            WHERE role = 'admin'
+            ORDER BY created_at ASC
+            LIMIT 1;
+          `);
+          adminUserId = roleAdminRes[0]?.id as string | undefined;
+        }
 
         if (!adminUserId) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Admin profile not found for tenant' });
         }
 
-        const { error: authError } = await ctx.supabase.auth.admin.updateUserById(
+        const supabaseAdmin = createSupabaseAdminClient();
+        const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
           adminUserId,
           { password: input.newPassword }
         );
@@ -576,6 +593,7 @@ export const superadminRouter = router({
       licenseExpiresAt: z.string().optional().nullable(),
     }))
     .mutation(async ({ input }) => {
+      let createdAuthUserId: string | undefined;
       try {
         const safeSlug = input.slug.toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -590,15 +608,30 @@ export const superadminRouter = router({
           });
         }
 
+        const supabaseAdmin = createSupabaseAdminClient();
+        // Reusing the identity makes retries safe and keeps the profile ID
+        // stable. The super-admin flow intentionally establishes the common
+        // temporary password for that workspace administrator.
+        const adminIdentity = await ensureSuperAdminAuthUser(supabaseAdmin, {
+          email: input.adminEmail,
+          fullName: input.adminName,
+          phone: input.adminPhone,
+        });
+        const adminUser = adminIdentity.user;
+        if (adminIdentity.created) createdAuthUserId = adminUser.id;
+
         const { provisionTenant } = await import('@/lib/tenant/provisioning');
+        const nameParts = input.adminName.trim().split(/\s+/);
         const result = await provisionTenant(
           safeSlug,
           input.companyName,
           input.adminEmail,
           14,
-          undefined,
+          adminUser.id,
           {
-            firstName: input.adminName,
+            fullName: input.adminName.trim(),
+            firstName: nameParts[0] || '',
+            lastName: nameParts.slice(1).join(' '),
             phone: input.adminPhone || undefined,
           }
         );
@@ -613,8 +646,21 @@ export const superadminRouter = router({
             .where(eq(tenants.id, result.tenantId));
         }
 
-        return { success: true, tenantId: result.tenantId };
+        return {
+          success: true,
+          tenantId: result.tenantId,
+          adminEmail: input.adminEmail,
+          temporaryPassword: SUPERADMIN_DEFAULT_ADMIN_PASSWORD,
+        };
       } catch (error) {
+        if (createdAuthUserId) {
+          try {
+            const supabaseAdmin = createSupabaseAdminClient();
+            await supabaseAdmin.auth.admin.deleteUser(createdAuthUserId);
+          } catch (rollbackError) {
+            console.error('[SUPERADMIN] Failed to roll back newly created auth user:', rollbackError);
+          }
+        }
         if (error instanceof TRPCError) throw error;
         console.error('[SUPERADMIN] createTenant error:', error);
         throw new TRPCError({
