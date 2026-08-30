@@ -8,19 +8,19 @@
 DO $$
 DECLARE
     tenant_schema record;
-    table_name text;
+    canonical_table_name text;
     source_schema text;
     fk record;
     attendance_date_type text;
-    column_name text;
-    column_type text;
+    source_column_name text;
+    source_column_type text;
 BEGIN
     FOR tenant_schema IN
         SELECT schema_name
         FROM information_schema.schemata
         WHERE schema_name ~ '^tenant_[a-z0-9_]+$'
     LOOP
-        FOREACH table_name IN ARRAY ARRAY[
+        FOREACH canonical_table_name IN ARRAY ARRAY[
             'designations', 'profiles', 'activities', 'attendance', 'leaves',
             'notifications', 'user_status_history', 'analytics_metrics',
             'office_settings', 'office_closures', 'employee_settings',
@@ -33,41 +33,41 @@ BEGIN
         ]
         LOOP
             source_schema := NULL;
-            IF to_regclass(format('%I.%I', 'tenant_primary', table_name)) IS NOT NULL THEN
+            IF to_regclass(format('%I.%I', 'tenant_primary', canonical_table_name)) IS NOT NULL THEN
                 source_schema := 'tenant_primary';
-            ELSIF to_regclass(format('%I.%I', 'public', table_name)) IS NOT NULL THEN
+            ELSIF to_regclass(format('%I.%I', 'public', canonical_table_name)) IS NOT NULL THEN
                 source_schema := 'public';
             END IF;
 
             IF source_schema IS NULL THEN
-                RAISE EXCEPTION 'Canonical tenant source table is missing: %', table_name;
+                RAISE EXCEPTION 'Canonical tenant source table is missing: %', canonical_table_name;
             END IF;
 
             EXECUTE format(
                 'CREATE TABLE IF NOT EXISTS %I.%I (LIKE %I.%I INCLUDING ALL)',
-                tenant_schema.schema_name, table_name, source_schema, table_name
+                tenant_schema.schema_name, canonical_table_name, source_schema, canonical_table_name
             );
 
-            FOR column_name, column_type IN
+            FOR source_column_name, source_column_type IN
                 SELECT source_attribute.attname,
                        format_type(source_attribute.atttypid, source_attribute.atttypmod)
                 FROM pg_attribute source_attribute
                 JOIN pg_class source_table ON source_table.oid = source_attribute.attrelid
                 JOIN pg_namespace source_namespace ON source_namespace.oid = source_table.relnamespace
                 WHERE source_namespace.nspname = source_schema
-                  AND source_table.relname = table_name
+                  AND source_table.relname = canonical_table_name
                   AND source_attribute.attnum > 0
                   AND NOT source_attribute.attisdropped
             LOOP
                 IF NOT EXISTS (
                     SELECT 1 FROM information_schema.columns
                     WHERE table_schema = tenant_schema.schema_name
-                      AND information_schema.columns.table_name = table_name
-                      AND information_schema.columns.column_name = column_name
+                      AND information_schema.columns.table_name = canonical_table_name
+                      AND information_schema.columns.column_name = source_column_name
                 ) THEN
                     EXECUTE format(
                         'ALTER TABLE %I.%I ADD COLUMN %I %s',
-                        tenant_schema.schema_name, table_name, column_name, column_type
+                        tenant_schema.schema_name, canonical_table_name, source_column_name, source_column_type
                     );
                 END IF;
             END LOOP;
@@ -312,7 +312,7 @@ BEGIN
                   AND array_length(c.confkey, 1) = 1
             ) THEN
                 EXECUTE format(
-                    'ALTER TABLE %I.%I ADD CONSTRAINT %I FOREIGN KEY (%I) REFERENCES %I.%I(%I) ON DELETE %s',
+                    'ALTER TABLE %I.%I ADD CONSTRAINT %I FOREIGN KEY (%I) REFERENCES %I.%I(%I) ON DELETE %s NOT VALID',
                     tenant_schema.schema_name,
                     fk.child_table,
                     fk.child_table || '_' || fk.child_column || '_fk',
