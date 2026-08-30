@@ -7,6 +7,10 @@ import { db, centralDb } from '@/lib/db'
 import { profiles, designations } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { decodeJwt } from 'jose'
+import {
+  hasValidTenantHealthProbeToken,
+  isTenantHealthOperator,
+} from '@/lib/auth/tenant-health-policy'
 
 // Helper to decode Supabase JWT locally to avoid network calls
 function decodeSupabaseToken(token: string): string | null {
@@ -731,6 +735,24 @@ export async function createOptimizedContext(req?: Request) {
       profile: null,
       metrics: finalMetrics
     }
+  }
+}
+
+/**
+ * Defense-in-depth authorization for the tenant health diagnostics. The
+ * proxy performs the same policy check, but route handlers must not rely on
+ * middleware ordering to keep diagnostic data private.
+ */
+export async function canAccessTenantHealthDiagnostics(req?: Request): Promise<boolean> {
+  if (hasValidTenantHealthProbeToken(req)) {
+    return true;
+  }
+
+  try {
+    const context = await createOptimizedContext(req);
+    return isTenantHealthOperator(context.profile);
+  } catch {
+    return false;
   }
 }
 
