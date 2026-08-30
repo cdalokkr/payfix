@@ -6,6 +6,7 @@ export interface TenantContext {
     databaseUrl: string | null;
     tenantSchema: string | null;
     brandName: string;
+    trusted: true;
 }
 
 // Global store for the tenant context of the active request

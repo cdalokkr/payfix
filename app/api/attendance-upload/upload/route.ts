@@ -6,8 +6,10 @@ import { eq } from 'drizzle-orm'
 import * as XLSX from 'xlsx'
 import { AttendanceService } from '@/lib/services/attendance.service'
 import { SalaryService } from '@/lib/services/salary.service'
+import { runWithRequestHeaders } from '@/lib/tenant/with-context'
 
 export async function POST(request: NextRequest) {
+    return runWithRequestHeaders(async () => {
     try {
         // Verify user is authenticated
         const supabase = await createServerSupabaseClient()
@@ -93,6 +95,7 @@ export async function POST(request: NextRequest) {
             { status: 500 }
         )
     }
+    })
 }
 
 /**
