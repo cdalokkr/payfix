@@ -91,17 +91,17 @@ export async function ensureCanonicalTenantSchema(
     await database.execute(sql`
         DO $$
         DECLARE
-            table_name text;
+            target_table_name text;
             source_schema text;
-            column_name text;
+            target_column_name text;
             column_type text;
         BEGIN
-            FOR table_name IN SELECT unnest(ARRAY[${sql.raw(sourceTables)}])
+            FOR target_table_name IN SELECT unnest(ARRAY[${sql.raw(sourceTables)}])
             LOOP
                 source_schema := NULL;
-                IF to_regclass(format('%I.%I', ${TENANT_SCHEMA_TEMPLATE}, table_name)) IS NOT NULL THEN
-                    source_schema := ${TENANT_SCHEMA_TEMPLATE};
-                ELSIF to_regclass(format('%I.%I', 'public', table_name)) IS NOT NULL THEN
+                IF to_regclass(format('%I.%I', ${sql.raw(`'${TENANT_SCHEMA_TEMPLATE}'`)}, target_table_name)) IS NOT NULL THEN
+                    source_schema := ${sql.raw(`'${TENANT_SCHEMA_TEMPLATE}'`)};
+                ELSIF to_regclass(format('%I.%I', 'public', target_table_name)) IS NOT NULL THEN
                     -- public is a read-only compatibility source for tables not
                     -- present in the evolved tenant-primary template.
                     source_schema := 'public';
@@ -110,34 +110,34 @@ export async function ensureCanonicalTenantSchema(
                 IF source_schema IS NULL THEN
                     RAISE EXCEPTION
                         'Canonical tenant source table is missing: %',
-                        table_name;
+                        target_table_name;
                 END IF;
 
                 EXECUTE format(
                     'CREATE TABLE IF NOT EXISTS %I.%I (LIKE %I.%I INCLUDING ALL)',
-                    ${schemaName}, table_name, source_schema, table_name
+                    ${sql.raw(`'${schemaName}'`)}, target_table_name, source_schema, target_table_name
                 );
 
-                FOR column_name, column_type IN
+                FOR target_column_name, column_type IN
                     SELECT attribute.attname, format_type(attribute.atttypid, attribute.atttypmod)
                     FROM pg_attribute attribute
                     JOIN pg_class source_table ON source_table.oid = attribute.attrelid
                     JOIN pg_namespace source_namespace ON source_namespace.oid = source_table.relnamespace
                     WHERE source_namespace.nspname = source_schema
-                      AND source_table.relname = table_name
+                      AND source_table.relname = target_table_name
                       AND attribute.attnum > 0
                       AND NOT attribute.attisdropped
                 LOOP
                     IF NOT EXISTS (
                         SELECT 1
-                        FROM information_schema.columns
-                        WHERE table_schema = ${schemaName}
-                          AND information_schema.columns.table_name = table_name
-                          AND information_schema.columns.column_name = column_name
+                        FROM information_schema.columns AS target_column
+                        WHERE target_column.table_schema = ${sql.raw(`'${schemaName}'`)}
+                          AND target_column.table_name = target_table_name
+                          AND target_column.column_name = target_column_name
                     ) THEN
                         EXECUTE format(
                             'ALTER TABLE %I.%I ADD COLUMN %I %s',
-                            ${schemaName}, table_name, column_name, column_type
+                            ${sql.raw(`'${schemaName}'`)}, target_table_name, target_column_name, column_type
                         );
                     END IF;
                 END LOOP;
@@ -173,7 +173,9 @@ export async function ensureCanonicalTenantSchema(
             "value" text NOT NULL,
             "updated_at" timestamp with time zone NOT NULL DEFAULT now()
         );
+    `);
 
+    await database.execute(sql`
         INSERT INTO ${sql.raw(schemaName)}._tenant_schema_metadata ("key", "value")
         VALUES ('schema_version', ${TENANT_SCHEMA_VERSION}), ('template', ${TENANT_SCHEMA_TEMPLATE})
         ON CONFLICT ("key") DO UPDATE
@@ -243,12 +245,12 @@ export async function ensureCanonicalTenantSchema(
         BEGIN
             IF EXISTS (
                 SELECT 1 FROM information_schema.columns
-                WHERE table_schema = ${schemaName}
+                WHERE table_schema = ${sql.raw(`'${schemaName}'`)}
                   AND table_name = 'profile_photo_requests'
                   AND column_name = 'photo_url'
             ) AND EXISTS (
                 SELECT 1 FROM information_schema.columns
-                WHERE table_schema = ${schemaName}
+                WHERE table_schema = ${sql.raw(`'${schemaName}'`)}
                   AND table_name = 'profile_photo_requests'
                   AND column_name = 'pending_photo_url'
             ) THEN
@@ -256,18 +258,18 @@ export async function ensureCanonicalTenantSchema(
                     'UPDATE %I.profile_photo_requests
                      SET pending_photo_url = COALESCE(pending_photo_url, photo_url)
                      WHERE pending_photo_url IS NULL',
-                    ${schemaName}
+                    ${sql.raw(`'${schemaName}'`)}
                 );
             END IF;
 
             IF EXISTS (
                 SELECT 1 FROM information_schema.columns
-                WHERE table_schema = ${schemaName}
+                WHERE table_schema = ${sql.raw(`'${schemaName}'`)}
                   AND table_name = 'kiosk_devices'
                   AND column_name = 'device_name'
             ) AND EXISTS (
                 SELECT 1 FROM information_schema.columns
-                WHERE table_schema = ${schemaName}
+                WHERE table_schema = ${sql.raw(`'${schemaName}'`)}
                   AND table_name = 'kiosk_devices'
                   AND column_name = 'name'
             ) THEN
@@ -275,18 +277,18 @@ export async function ensureCanonicalTenantSchema(
                     'UPDATE %I.kiosk_devices
                      SET name = COALESCE(name, device_name)
                      WHERE name IS NULL',
-                    ${schemaName}
+                    ${sql.raw(`'${schemaName}'`)}
                 );
             END IF;
 
             IF EXISTS (
                 SELECT 1 FROM information_schema.columns
-                WHERE table_schema = ${schemaName}
+                WHERE table_schema = ${sql.raw(`'${schemaName}'`)}
                   AND table_name = 'kiosk_devices'
                   AND column_name = 'last_active_at'
             ) AND EXISTS (
                 SELECT 1 FROM information_schema.columns
-                WHERE table_schema = ${schemaName}
+                WHERE table_schema = ${sql.raw(`'${schemaName}'`)}
                   AND table_name = 'kiosk_devices'
                   AND column_name = 'last_seen_at'
             ) THEN
@@ -294,7 +296,7 @@ export async function ensureCanonicalTenantSchema(
                     'UPDATE %I.kiosk_devices
                      SET last_seen_at = COALESCE(last_seen_at, last_active_at)
                      WHERE last_seen_at IS NULL',
-                    ${schemaName}
+                    ${sql.raw(`'${schemaName}'`)}
                 );
             END IF;
         END
@@ -311,14 +313,14 @@ export async function ensureCanonicalTenantSchema(
         BEGIN
             SELECT data_type INTO current_type
             FROM information_schema.columns
-            WHERE table_schema = ${schemaName}
+            WHERE table_schema = ${sql.raw(`'${schemaName}'`)}
               AND table_name = 'attendance_sessions'
               AND column_name = 'date';
 
             IF current_type IS NOT NULL AND current_type <> 'date' THEN
                 EXECUTE format(
                     'ALTER TABLE %I.attendance_sessions ALTER COLUMN "date" TYPE date USING NULLIF(trim("date"::text), '''')::date',
-                    ${schemaName}
+                    ${sql.raw(`'${schemaName}'`)}
                 );
             END IF;
         END
@@ -326,10 +328,24 @@ export async function ensureCanonicalTenantSchema(
     `);
 
     await database.execute(sql`
-        CREATE INDEX IF NOT EXISTS "profiles_face_embedding_hnsw_idx"
-            ON ${sql.raw(schemaName)}.profiles
-            USING hnsw ("face_embedding" vector_cosine_ops)
-            WITH (m = 16, ef_construction = 64);
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_class index_row
+                JOIN pg_namespace index_namespace ON index_namespace.oid = index_row.relnamespace
+                WHERE index_namespace.nspname = ${sql.raw(`'${schemaName}'`)}
+                  AND index_row.relname = 'profiles_face_embedding_hnsw_idx'
+                  AND index_row.relkind = 'i'
+            ) THEN
+                EXECUTE format(
+                    'CREATE INDEX %I ON %I.profiles USING hnsw ("face_embedding" vector_cosine_ops) WITH (m = 16, ef_construction = 64)',
+                    'profiles_face_embedding_hnsw_idx',
+                    ${sql.raw(`'${schemaName}'`)}
+                );
+            END IF;
+        END
+        $$;
 
         CREATE INDEX IF NOT EXISTS "attendance_sessions_attendance_id_idx"
             ON ${sql.raw(schemaName)}.attendance_sessions ("attendance_id");
@@ -388,8 +404,8 @@ export async function ensureCanonicalTenantSchema(
                       ON parent_attribute.attrelid = parent.oid
                      AND parent_attribute.attnum = constraint_row.confkey[1]
                     WHERE constraint_row.contype = 'f'
-                      AND child_namespace.nspname = ${schemaName}
-                      AND parent_namespace.nspname = ${schemaName}
+                      AND child_namespace.nspname = ${sql.raw(`'${schemaName}'`)}
+                      AND parent_namespace.nspname = ${sql.raw(`'${schemaName}'`)}
                       AND child.relname = fk.child_table
                       AND child_attribute.attname = fk.child_column
                       AND parent.relname = fk.parent_table
@@ -399,11 +415,11 @@ export async function ensureCanonicalTenantSchema(
                 ) THEN
                     EXECUTE format(
                         'ALTER TABLE %I.%I ADD CONSTRAINT %I FOREIGN KEY (%I) REFERENCES %I.%I(%I) ON DELETE %s',
-                        ${schemaName},
+                        ${sql.raw(`'${schemaName}'`)},
                         fk.child_table,
                         fk.child_table || '_' || fk.child_column || '_fk',
                         fk.child_column,
-                        ${schemaName},
+                        ${sql.raw(`'${schemaName}'`)},
                         fk.parent_table,
                         fk.parent_column,
                         fk.delete_action
