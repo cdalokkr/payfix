@@ -7,6 +7,12 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { resolveTenant, type TenantMetadata } from '@/lib/tenant/resolver'
 
 import { validateRequest, addSecurityHeaders } from '@/lib/proxy/security'
+import {
+    TENANT_HEALTH_PROBE_TOKEN_HEADER,
+    hasValidTenantHealthProbeToken,
+    isTenantHealthDiagnosticPath,
+    isTenantHealthOperator,
+} from '@/lib/auth/tenant-health-policy'
 
 // ============================================
 // Proxy Session Cache for Performance Optimization
@@ -63,6 +69,9 @@ function roleToDashboardPath(role: string): string {
 // ============================================
 export async function proxy(request: NextRequest) {
     const pathname = request.nextUrl.pathname
+    const isTenantHealthDiagnostic = isTenantHealthDiagnosticPath(pathname)
+    const isTrustedTenantHealthProbe =
+        isTenantHealthDiagnostic && hasValidTenantHealthProbeToken(request)
     const hostname = request.headers.get('host') || ''
     const url = request.nextUrl.clone()
 
@@ -232,10 +241,22 @@ export async function proxy(request: NextRequest) {
     requestHeaders.delete('x-tenant-brand')
     requestHeaders.delete('x-tenant-theme')
     requestHeaders.delete('x-tenant-license-expires-at')
+    requestHeaders.delete(TENANT_HEALTH_PROBE_TOKEN_HEADER)
+
+    // Only forward a probe token after this proxy has validated it. This
+    // keeps the handler's defense-in-depth check effective without exposing
+    // the token in the response or trusting a caller-controlled marker.
+    if (isTrustedTenantHealthProbe) {
+        requestHeaders.set(
+            TENANT_HEALTH_PROBE_TOKEN_HEADER,
+            request.headers.get(TENANT_HEALTH_PROBE_TOKEN_HEADER) || '',
+        )
+    }
 
     if (tenant) {
         requestHeaders.set('x-tenant-id', tenant.id);
         requestHeaders.set('x-tenant-slug', tenant.slug);
+        requestHeaders.set('x-tenant-db-url', tenant.database_url || '');
         requestHeaders.set('x-tenant-schema', tenant.tenant_schema || '');
         requestHeaders.set('x-tenant-brand', tenant.branding?.app_name || tenant.company_name);
         requestHeaders.set('x-tenant-license-expires-at', tenant.license_expires_at ? new Date(tenant.license_expires_at).toISOString() : '');
@@ -425,6 +446,7 @@ export async function proxy(request: NextRequest) {
                             // Update request headers so downstream tRPC handlers use correct tenant
                             requestHeaders.set('x-tenant-id', discoveredTenant.id);
                             requestHeaders.set('x-tenant-slug', discoveredTenant.slug);
+                            requestHeaders.set('x-tenant-db-url', discoveredTenant.database_url || '');
                             requestHeaders.set('x-tenant-schema', discoveredTenant.tenant_schema || '');
                             requestHeaders.set('x-tenant-brand', discoveredTenant.branding?.app_name || discoveredTenant.company_name);
                             requestHeaders.set('x-tenant-license-expires-at', discoveredTenant.license_expires_at ? new Date(discoveredTenant.license_expires_at).toISOString() : '');
@@ -526,6 +548,25 @@ export async function proxy(request: NextRequest) {
             // Clear it so future requests don't override to the wrong tenant.
             response.cookies.delete('tenant_fallback');
         }
+    }
+
+    // Tenant diagnostics are not public health checks. Return an API response
+    // rather than redirecting a browser request to the login page.
+    if (
+        isTenantHealthDiagnostic &&
+        !isTrustedTenantHealthProbe &&
+        !isTenantHealthOperator(profile)
+    ) {
+        return new NextResponse(
+            JSON.stringify({ error: user ? 'Forbidden' : 'Unauthorized' }),
+            {
+                status: user ? 403 : 401,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Cache-Control': 'no-store',
+                },
+            },
+        )
     }
 
     // Redirect to login if not authenticated on a protected route
