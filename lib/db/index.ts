@@ -3,6 +3,7 @@ import postgres from 'postgres';
 import * as schema from './schema';
 import { getTenantDb } from './tenant-connection';
 import { tenantStorage } from '../tenant/store';
+import { resolveTrustedTenantBySchema } from '../tenant/trusted-context';
 
 // Lazy singleton: connection is only created on first use at runtime,
 // NOT during module evaluation at build time (Vercel build has no DATABASE_URL).
@@ -45,7 +46,7 @@ let lastLoggedTenant = '';
 export const db = new Proxy({} as any, {
     get(target, prop, receiver) {
         const context = tenantStorage.getStore();
-        if (context && context.tenantId) {
+        if (context?.trusted && context.tenantId) {
             // Log routing decision (only on change to avoid spam)
             if (lastLoggedTenant !== context.tenantSchema) {
                 console.log(`[DB-PROXY] Routing to tenant DB: ${context.tenantSchema} (tenant: ${context.slug})`);
@@ -55,12 +56,14 @@ export const db = new Proxy({} as any, {
             return Reflect.get(tenantDb, prop, receiver);
         }
         
-        // Fallback context (build time, CLI seeding, migrations, or local admin scripts)
-        if (lastLoggedTenant !== 'centralDb') {
-            console.warn('[DB-PROXY] No tenant context — falling back to centralDb (public schema)');
-            lastLoggedTenant = 'centralDb';
+        if (process.env.NODE_ENV === 'test' || process.env.PAYFIX_ALLOW_PUBLIC_DB_FALLBACK === 'true') {
+            if (lastLoggedTenant !== 'centralDb') {
+                console.warn('[DB-PROXY] Explicit public database fallback is active.');
+                lastLoggedTenant = 'centralDb';
+            }
+            return Reflect.get(getCentralDb(), prop, receiver);
         }
-        return Reflect.get(getCentralDb(), prop, receiver);
+        throw new Error('Tenant database access requires trusted tenant context. Use centralDb explicitly for control-plane operations.');
     }
 });
 
@@ -68,14 +71,8 @@ export const db = new Proxy({} as any, {
  * Run a database callback explicitly inside a specified tenant schema.
  */
 export async function runWithTenantSchema<T>(tenantSchema: string, fn: () => Promise<T>): Promise<T> {
-    const slug = tenantSchema.replace(/^tenant_/, '');
-    return tenantStorage.run({
-        tenantId: `tenant_${slug}`,
-        slug,
-        tenantSchema,
-        databaseUrl: null,
-        brandName: slug
-    }, fn);
+    const context = await resolveTrustedTenantBySchema(tenantSchema);
+    return tenantStorage.run(context, fn);
 }
 
 

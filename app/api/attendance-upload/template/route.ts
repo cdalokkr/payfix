@@ -5,8 +5,10 @@ import { profiles, officeSettings, officeClosures } from '@/lib/db/schema'
 import { eq, and, gte, lte } from 'drizzle-orm'
 import * as XLSX from 'xlsx'
 import ExcelJS from 'exceljs'
+import { runWithRequestHeaders } from '@/lib/tenant/with-context'
 
 export async function GET(request: NextRequest) {
+    return runWithRequestHeaders(async () => {
     try {
         // Verify user is authenticated
         const supabase = await createServerSupabaseClient()
@@ -99,6 +101,7 @@ export async function GET(request: NextRequest) {
             { status: 500 }
         )
     }
+    })
 }
 
 async function generateDailyTemplateExcelJS(

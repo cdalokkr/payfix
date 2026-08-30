@@ -236,7 +236,6 @@ export async function proxy(request: NextRequest) {
     if (tenant) {
         requestHeaders.set('x-tenant-id', tenant.id);
         requestHeaders.set('x-tenant-slug', tenant.slug);
-        requestHeaders.set('x-tenant-db-url', tenant.database_url || '');
         requestHeaders.set('x-tenant-schema', tenant.tenant_schema || '');
         requestHeaders.set('x-tenant-brand', tenant.branding?.app_name || tenant.company_name);
         requestHeaders.set('x-tenant-license-expires-at', tenant.license_expires_at ? new Date(tenant.license_expires_at).toISOString() : '');
@@ -426,7 +425,6 @@ export async function proxy(request: NextRequest) {
                             // Update request headers so downstream tRPC handlers use correct tenant
                             requestHeaders.set('x-tenant-id', discoveredTenant.id);
                             requestHeaders.set('x-tenant-slug', discoveredTenant.slug);
-                            requestHeaders.set('x-tenant-db-url', discoveredTenant.database_url || '');
                             requestHeaders.set('x-tenant-schema', discoveredTenant.tenant_schema || '');
                             requestHeaders.set('x-tenant-brand', discoveredTenant.branding?.app_name || discoveredTenant.company_name);
                             requestHeaders.set('x-tenant-license-expires-at', discoveredTenant.license_expires_at ? new Date(discoveredTenant.license_expires_at).toISOString() : '');

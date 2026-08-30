@@ -2,6 +2,7 @@ import { sql, eq } from 'drizzle-orm';
 import { masterDb } from '@/lib/db/master-connection';
 import { tenants, tenantBranding, tenantPlans } from '@/lib/db/master-schema';
 import { centralDb } from '@/lib/db';
+import { configureTenantDatabaseSecurity } from '@/lib/db/tenant-security';
 
 /**
  * Automates the dynamic schema provisioning for a new tenant.
@@ -317,8 +318,18 @@ export async function provisionTenant(
             console.log(`[Provisioning] Tenant ${safeSlug} successfully registered in control plane.`);
         } else {
             onProgress?.('registering', 'Finalizing workspace...');
+            const existingTenant = await masterDb.query.tenants.findFirst({
+                where: eq(tenants.slug, safeSlug),
+            });
+            if (!existingTenant) {
+                throw new Error(`Cannot secure unregistered tenant schema ${schemaName}.`);
+            }
+            tenantId = existingTenant.id;
             console.log(`[Provisioning] Schema ${schemaName} provisioned (skipRegistration=true, tenant record already exists).`);
         }
+
+        onProgress?.('securing', 'Applying tenant database isolation...');
+        await configureTenantDatabaseSecurity(tenantId, schemaName);
         
         return {
             success: true,

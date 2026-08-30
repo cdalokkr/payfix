@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { masterDb } from '@/lib/db/master-connection';
 import { tenants } from '@/lib/db/master-schema';
+import { createTrustedTenantContext } from '@/lib/tenant/trusted-context';
 import { tenantStorage } from '@/lib/tenant/store';
 import { biometricDevices, employeeSettings, biometricRawLogs, attendanceSessions } from '@/lib/db/schema';
 import { AttendanceService } from '@/lib/services/attendance.service';
@@ -42,21 +43,11 @@ export async function POST(req: NextRequest) {
         }
 
         if (!tenant) {
-            // Fallback: Find tenant where biometricDevices has this serial_number
-            tenant = await masterDb.query.tenants.findFirst();
-        }
-
-        if (!tenant) {
+            console.warn(`[ICLOCK] Rejected unauthenticated device serial ${sn}`);
             return new NextResponse('OK', { headers: { 'Content-Type': 'text/plain' } });
         }
 
-        const tenantContext = {
-            tenantId: tenant.id,
-            slug: tenant.slug,
-            databaseUrl: tenant.database_url || null,
-            tenantSchema: tenant.tenant_schema || null,
-            brandName: tenant.company_name
-        };
+        const tenantContext = createTrustedTenantContext(tenant);
 
         return await tenantStorage.run(tenantContext, async () => {
             // Update device health status
