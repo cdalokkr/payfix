@@ -3,14 +3,35 @@ import { headers, cookies } from 'next/headers';
 import { tenantStorage } from '@/lib/tenant/store';
 import { centralDb, db } from '@/lib/db';
 import { sql } from 'drizzle-orm';
-import { profiles } from '@/lib/db/schema';
 import { createContext } from '@/lib/trpc/server';
+import { canAccessTenantHealthDiagnostics } from '@/lib/auth/optimized-context';
+
+type ProfileCount = number | null;
+
+function parseProfileCount(value: unknown): ProfileCount {
+    const count = Number(value);
+    return Number.isInteger(count) && count >= 0 ? count : null;
+}
+
+function countsMatch(proxyCount: ProfileCount, tenantSchemaCount: ProfileCount): boolean {
+    return proxyCount !== null && tenantSchemaCount !== null && proxyCount === tenantSchemaCount;
+}
 
 /**
  * Deep diagnostic endpoint — tests entire tenant context chain.
  * GET /api/health/tenant-deep
  */
 export async function GET(request: NextRequest) {
+    if (!await canAccessTenantHealthDiagnostics(request)) {
+        return NextResponse.json(
+            { error: 'Unauthorized' },
+            {
+                status: 401,
+                headers: { 'Cache-Control': 'no-store' },
+            },
+        );
+    }
+
     const results: Record<string, any> = {
         timestamp: new Date().toISOString(),
         tests: {},
@@ -38,7 +59,7 @@ export async function GET(request: NextRequest) {
         const fallbackCookie = cookieStore.get('tenant_fallback')?.value;
         results.tests['2_cookie'] = {
             status: fallbackCookie ? '✅ PASS' : '❌ FAIL',
-            tenant_fallback: fallbackCookie,
+            hasTenantFallbackCookie: Boolean(fallbackCookie),
         };
 
         // ═══════════════════════════════════════════
@@ -54,13 +75,12 @@ export async function GET(request: NextRequest) {
                     tenantId: ctxTenant.tenantId,
                     slug: ctxTenant.slug,
                     tenantSchema: ctxTenant.tenantSchema,
-                    databaseUrl: ctxTenant.databaseUrl ? '[SET]' : null,
                 } : null,
             };
         } catch (err: any) {
             results.tests['3_trpc_context'] = {
                 status: '❌ ERROR',
-                error: err.message,
+                error: 'Unable to create tenant context',
             };
         }
 
@@ -79,7 +99,7 @@ export async function GET(request: NextRequest) {
         if (ctxTenant) {
             let insideValue: any = null;
             let dbProxyTarget: string = 'unknown';
-            let profileCount: number = -1;
+            let profileCount: ProfileCount = null;
 
             await tenantStorage.run(ctxTenant, async () => {
                 // Check 5a: Is getStore() non-null inside run()?
@@ -90,16 +110,16 @@ export async function GET(request: NextRequest) {
                 try {
                     const result = await db.execute(sql`SELECT current_schema(), current_setting('search_path') as search_path`);
                     dbProxyTarget = JSON.stringify(result[0]);
-                } catch (err: any) {
-                    dbProxyTarget = `ERROR: ${err.message}`;
+                } catch {
+                    dbProxyTarget = 'unavailable';
                 }
 
                 // Check 5c: Count profiles via db Proxy
                 try {
                     const result = await db.execute(sql`SELECT COUNT(*) as cnt FROM profiles`);
-                    profileCount = parseInt(result[0]?.cnt || '0');
-                } catch (err: any) {
-                    dbProxyTarget += ` | Profile count error: ${err.message}`;
+                    profileCount = parseProfileCount(result[0]?.cnt);
+                } catch {
+                    profileCount = null;
                 }
             });
 
@@ -108,11 +128,9 @@ export async function GET(request: NextRequest) {
                 storeSlug: insideValue,
                 dbProxyRoutedTo: dbProxyTarget,
                 profileCountViaProxy: profileCount,
-                interpretation: profileCount === 1
-                    ? '✅ Correct — 1 profile (alpha admin only)'
-                    : profileCount === 15
-                        ? '❌ WRONG — 15 profiles = old tenant public schema!'
-                        : `⚠️ Unexpected count: ${profileCount}`,
+                interpretation: profileCount === null
+                    ? '⚠️ Unable to read the tenant profile count'
+                    : '✅ Profile count read through the tenant database route',
             };
         } else {
             results.tests['5_asynclocalstorage_inside_run'] = {
@@ -123,26 +141,37 @@ export async function GET(request: NextRequest) {
         // ═══════════════════════════════════════════
         // TEST 6: Direct schema query comparison
         // ═══════════════════════════════════════════
-        let publicCount = 0;
-        let tenantCount = 0;
+        let publicCount: ProfileCount = null;
+        let tenantCount: ProfileCount = null;
         try {
             const pub = await centralDb.execute(sql`SELECT COUNT(*) as cnt FROM public.profiles`);
-            publicCount = parseInt(pub[0]?.cnt || '0');
-        } catch {}
+            publicCount = parseProfileCount(pub[0]?.cnt);
+        } catch {
+            // Keep the optional public comparison unavailable without exposing DB errors.
+        }
 
         if (tenantSchema) {
             try {
                 const ten = await centralDb.execute(
                     sql`SELECT COUNT(*) as cnt FROM ${sql.raw(tenantSchema)}.profiles`
                 );
-                tenantCount = parseInt(ten[0]?.cnt || '0');
-            } catch {}
+                tenantCount = parseProfileCount(ten[0]?.cnt);
+            } catch {
+                tenantCount = null;
+            }
         }
 
+        const proxyCount = results.tests['5_asynclocalstorage_inside_run']?.profileCountViaProxy ?? null;
+        const profileCountsMatch = countsMatch(proxyCount, tenantCount);
         results.tests['6_direct_schema_comparison'] = {
+            status: profileCountsMatch
+                ? '✅ PASS — database route matches selected tenant schema'
+                : '❌ FAIL — database route does not match selected tenant schema',
+            proxyProfiles: proxyCount,
             publicProfiles: publicCount,
             tenantProfiles: tenantCount,
             tenantSchemaUsed: tenantSchema,
+            profileCountsMatch,
         };
 
         // ═══════════════════════════════════════════
@@ -150,7 +179,7 @@ export async function GET(request: NextRequest) {
         // ═══════════════════════════════════════════
         const test3Pass = results.tests['3_trpc_context'].status.includes('PASS');
         const test5Pass = results.tests['5_asynclocalstorage_inside_run']?.status?.includes('PASS');
-        const correctData = results.tests['5_asynclocalstorage_inside_run']?.profileCountViaProxy === tenantCount;
+        const correctData = profileCountsMatch;
 
         if (test3Pass && test5Pass && correctData) {
             results.verdict = '✅ ALL PASSED — tenant context propagation is working correctly';
@@ -170,9 +199,9 @@ export async function GET(request: NextRequest) {
             headers: { 'Cache-Control': 'no-store' },
         });
     } catch (error: any) {
+        console.error('[TENANT-DEEP-HEALTH] Diagnostic failed:', error);
         return NextResponse.json({
-            error: error.message,
-            stack: error.stack?.split('\n').slice(0, 5),
+            error: 'Tenant health diagnostic failed',
         }, { status: 500 });
     }
 }
