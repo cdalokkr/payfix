@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "test:watch": "jest --watch",
+    "validate:saas-migrations": "node scripts/validate-saas-migrations.mjs",
     "performance:validate": "ts-node scripts/performance-validation.ts",
     "performance:validate:ci": "ts-node scripts/performance-validation.ts --continuous --output ci-results.json",
     "performance:test": "ts-node scripts/performance-validation.ts --url http://localhost:3000 --verbose",

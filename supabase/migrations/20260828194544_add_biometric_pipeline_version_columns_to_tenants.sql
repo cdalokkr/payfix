@@ -1,12 +1,6 @@
--- Version biometric templates so incompatible embedding pipelines are never
--- compared. Keep the central/public schema and every existing tenant schema
--- aligned; all additions are nullable to preserve existing enrollment data.
-
-ALTER TABLE IF EXISTS public.profiles
-    ADD COLUMN IF NOT EXISTS face_embedding_pipeline_version text;
-
-ALTER TABLE IF EXISTS public.profile_photo_requests
-    ADD COLUMN IF NOT EXISTS pending_face_embedding_pipeline_version text;
+-- Historical migration reconciled with the version already applied in Supabase.
+-- Tenant schemas only; public schema changes are intentionally kept in the
+-- preceding already-applied migration.
 
 DO $$
 DECLARE
