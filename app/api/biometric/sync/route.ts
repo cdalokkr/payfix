@@ -3,7 +3,6 @@ import { db } from '@/lib/db';
 import { masterDb } from '@/lib/db/master-connection';
 import { tenants } from '@/lib/db/master-schema';
 import { tenantStorage } from '@/lib/tenant/store';
-import { createTrustedTenantContext } from '@/lib/tenant/trusted-context';
 import { employeeSettings, biometricDevices, biometricRawLogs, attendanceSessions } from '@/lib/db/schema';
 import { AttendanceService } from '@/lib/services/attendance.service';
 import { eq, and } from 'drizzle-orm';
@@ -48,7 +47,13 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Invalid payload format' }, { status: 400 });
         }
 
-        const tenantContext = createTrustedTenantContext(tenant);
+        const tenantContext = {
+            tenantId: tenant.id,
+            slug: tenant.slug,
+            databaseUrl: tenant.database_url || null,
+            tenantSchema: tenant.tenant_schema || null,
+            brandName: tenant.company_name
+        };
 
         // 3. Process logs inside the resolved tenant context
         return await tenantStorage.run(tenantContext, async () => {
