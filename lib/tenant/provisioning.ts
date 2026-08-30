@@ -189,6 +189,30 @@ export async function provisionTenant(
                 ON ${sql.raw(schemaName)}.kiosk_devices ("terminal_id")
                 WHERE "terminal_id" IS NOT NULL;
 
+            CREATE INDEX IF NOT EXISTS "attendance_sessions_attendance_id_idx"
+                ON ${sql.raw(schemaName)}.attendance_sessions ("attendance_id");
+
+            CREATE INDEX IF NOT EXISTS "attendance_sessions_profile_date_checkin_idx"
+                ON ${sql.raw(schemaName)}.attendance_sessions ("profile_id", "date", "check_in" DESC);
+
+            CREATE INDEX IF NOT EXISTS "biometric_raw_logs_profile_id_idx"
+                ON ${sql.raw(schemaName)}.biometric_raw_logs ("profile_id");
+
+            CREATE INDEX IF NOT EXISTS "kiosk_devices_created_by_idx"
+                ON ${sql.raw(schemaName)}.kiosk_devices ("created_by");
+
+            CREATE INDEX IF NOT EXISTS "kiosk_devices_location_id_idx"
+                ON ${sql.raw(schemaName)}.kiosk_devices ("location_id");
+
+            CREATE INDEX IF NOT EXISTS "office_locations_created_by_idx"
+                ON ${sql.raw(schemaName)}.office_locations ("created_by");
+
+            CREATE INDEX IF NOT EXISTS "profile_photo_requests_profile_status_created_idx"
+                ON ${sql.raw(schemaName)}.profile_photo_requests ("profile_id", "status", "created_at" DESC);
+
+            CREATE INDEX IF NOT EXISTS "profile_photo_requests_reviewed_by_idx"
+                ON ${sql.raw(schemaName)}.profile_photo_requests ("reviewed_by");
+
             CREATE EXTENSION IF NOT EXISTS vector;
 
             ALTER TABLE IF EXISTS ${sql.raw(schemaName)}.profiles
