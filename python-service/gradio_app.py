@@ -13,6 +13,19 @@ import gradio as gr
 import uvicorn
 from fastapi import Depends, FastAPI, Header, HTTPException
 
+from warm_model import MODELS, warm_model
+
+
+# Hugging Face Spaces does not execute the Docker build-time warmup. Download
+# and verify both models before importing optimized_app, which constructs the
+# YuNet detector at module import time.
+for model_name, model_source in MODELS.items():
+    warm_model(
+        model_name,
+        model_source["minimum_size"],
+        model_source["urls"],
+    )
+
 import optimized_app as service
 
 
