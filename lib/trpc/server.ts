@@ -11,7 +11,6 @@ import { cache } from 'react'
 
 import { headers, cookies } from 'next/headers'
 import { tenantStorage } from '@/lib/tenant/store'
-import { resolveTrustedTenantContext } from '@/lib/tenant/trusted-context'
 
 let createContextCallCount = 0
 const authCallTimes: number[] = []
@@ -24,13 +23,36 @@ export const createContext = async (opts?: { req: Request }) => {
   try {
     const context = await createOptimizedContext(opts?.req)
 
-    // Resolve the forwarded tuple against the control-plane registry. Raw
-    // request values never become database connection parameters.
+    // Extract tenant context from headers
     const reqHeaders = opts?.req ? new Headers(opts.req.headers) : await headers();
-    const storedTenant = tenantStorage.getStore();
-    const trustedTenant = storedTenant?.trusted
-      ? storedTenant
-      : await resolveTrustedTenantContext(reqHeaders);
+    let tenantId = reqHeaders.get('x-tenant-id');
+    let tenantSlug = reqHeaders.get('x-tenant-slug');
+    let tenantDbUrl = reqHeaders.get('x-tenant-db-url') || null;
+    let tenantSchema = reqHeaders.get('x-tenant-schema') || null;
+    let tenantBrand = reqHeaders.get('x-tenant-brand') || 'PayFix';
+    let tenantLicenseExpiresAt = reqHeaders.get('x-tenant-license-expires-at') || null;
+
+    // Fail-safe fallback: If headers are missing (e.g. during Next.js server component rendering), resolve from cookie
+    if (!tenantSlug) {
+      try {
+        const cookieStore = await cookies();
+        const fallbackSlug = cookieStore.get('tenant_fallback')?.value;
+        if (fallbackSlug) {
+          const { resolveTenant } = await import('@/lib/tenant/resolver');
+          const tenant = await resolveTenant(fallbackSlug);
+          if (tenant) {
+            tenantId = tenant.id;
+            tenantSlug = tenant.slug;
+            tenantDbUrl = tenant.database_url || null;
+            tenantSchema = tenant.tenant_schema || null;
+            tenantBrand = tenant.branding?.app_name || tenant.company_name;
+            tenantLicenseExpiresAt = tenant.license_expires_at ? new Date(tenant.license_expires_at).toISOString() : null;
+          }
+        }
+      } catch (cookieErr) {
+        console.error('[TRPC-CONTEXT] Error reading fallback cookie:', cookieErr);
+      }
+    }
 
 
     // Record timing for performance monitoring
@@ -56,7 +78,14 @@ export const createContext = async (opts?: { req: Request }) => {
       db: db,
       user: context.user,
       profile: context.profile,
-      tenant: trustedTenant,
+      tenant: tenantId && tenantSlug ? {
+        tenantId,
+        slug: tenantSlug,
+        databaseUrl: tenantDbUrl,
+        tenantSchema,
+        brandName: tenantBrand,
+        licenseExpiresAt: tenantLicenseExpiresAt
+      } : null,
       performance: {
         contextCreationTime: duration,
         cacheHit: context.metrics.cacheHit,
