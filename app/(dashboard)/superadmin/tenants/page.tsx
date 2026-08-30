@@ -1,4 +1,630 @@
-edBy: "System",
+"use client";
+
+import { useState, useEffect } from "react";
+import { format } from "date-fns";
+import { trpc } from "@/lib/trpc/client";
+import { 
+  Building2, Users, Search, Edit2, Loader2, Trash2, Mail, Phone, Clock,
+  Calendar, Power, Check, ChevronDown, Eye, ShieldCheck,
+  CreditCard, DollarSign, UserCheck, Lock, Key, Activity, Plus, Gift, X,
+  CheckCircle2, XCircle, AlertCircle, MoreHorizontal, Briefcase, RefreshCw, ArrowUpDown
+} from "lucide-react";
+import { toast } from "sonner";
+import { z } from "zod";
+import { cn } from "@/lib/utils";
+import { Combobox } from "@/components/ui/combobox";
+import { DatePicker } from "@/components/ui/date-picker";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { AppButton } from "@/components/ui/button-system";
+import { FormInput } from "@/components/ui/form-input";
+import { FormPasswordInput, getPasswordStrength } from "@/components/ui/form-password-input";
+import PhoneInput from "@/components/auth/ui/phone-input";
+import CreateUserButton, { AsyncState } from "@/components/ui/create-user-button";
+import { CancelButton } from "@/components/ui/action-button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import ModalDialog from "@/components/ui/modal-dialog";
+
+// Zod schema for Add Tenant Single Form Layout
+const addTenantFullSchema = z.object({
+  companyName: z.string().trim().min(2, "Company name must be at least 2 characters"),
+  workspaceName: z.string().trim().min(2, "Workspace name must be at least 2 characters"),
+  slug: z.string().trim().min(2, "Workspace slug must be at least 2 characters").regex(/^[a-z0-9-]+$/i, "Slug can only contain letters, numbers, and hyphens"),
+  adminName: z.string().trim().min(2, "Contact name must be at least 2 characters"),
+  adminEmail: z.string().trim().email("Please enter a valid email address"),
+  adminPhone: z.string().trim().min(8, "Phone number must be at least 8 digits"),
+});
+
+// Zod schemas for card validations
+const adminInfoSchema = z.object({
+  adminName: z.string().trim().min(2, "Contact name must be at least 2 characters"),
+  adminEmail: z.string().trim().email("Please enter a valid email address"),
+  adminPhone: z.string().trim().regex(/^(\+\d{1,3}[- ]?)?\d{10}$/, "Phone number must be a valid 10-digit number (e.g. 9876543210 or +919876543210)"),
+});
+
+const securitySchema = z.object({
+  newPassword: z.string().min(8, "Password must be at least 8 characters")
+    .regex(/[A-Z]/, "Must contain at least 1 uppercase letter")
+    .regex(/[a-z]/, "Must contain at least 1 lowercase letter")
+    .regex(/[0-9]/, "Must contain at least 1 number")
+    .regex(/[^A-Za-z0-9]/, "Must contain at least 1 special character"),
+  confirmPassword: z.string().min(1, "Please confirm your password"),
+}).refine((data) => data.newPassword === data.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"],
+});
+
+export default function TenantsPage() {
+  const utils = trpc.useUtils();
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"payments" | "logs">("payments");
+
+  // Status, Plan & Sort Filter States
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [planFilter, setPlanFilter] = useState("all");
+  const [sortOrder, setSortOrder] = useState<"name-asc" | "name-desc" | "newest" | "expiry">("name-asc");
+  const [baseDomain, setBaseDomain] = useState("payfix.com");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const host = window.location.hostname;
+      if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".localhost")) {
+        const port = window.location.port ? `:${window.location.port}` : "";
+        setBaseDomain(`localhost${port}`);
+      } else {
+        const parts = host.split(".");
+        if (parts.length >= 2) {
+          setBaseDomain(parts.slice(-2).join("."));
+        } else {
+          setBaseDomain(host);
+        }
+      }
+    }
+  }, []);
+
+  // Modals & Popovers state
+  const [isActionsOpen, setIsActionsOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isAddTenantModalOpen, setIsAddTenantModalOpen] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
+
+  // Dedicated Modal Popup States for Cards
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+  const [isSubModalOpen, setIsSubModalOpen] = useState(false);
+  const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
+  const [isRenewModalOpen, setIsRenewModalOpen] = useState(false);
+
+  // Renewal form states
+  const [renewPlanId, setRenewPlanId] = useState<string>("");
+  const [renewExpiryDate, setRenewExpiryDate] = useState<Date | undefined>(undefined);
+  const [renewEmpOverride, setRenewEmpOverride] = useState("");
+  const [renewModOverride, setRenewModOverride] = useState("");
+  const [renewPeriod, setRenewPeriod] = useState<string>("1m");
+  const [renewAsyncState, setRenewAsyncState] = useState<AsyncState>('idle');
+
+  // New tenant single form states & validation errors
+  const [newCompanyName, setNewCompanyName] = useState("");
+  const [newWorkspaceName, setNewWorkspaceName] = useState("");
+  const [newSlug, setNewSlug] = useState("");
+  const [newAdminName, setNewAdminName] = useState("");
+  const [newAdminEmail, setNewAdminEmail] = useState("");
+  const [newAdminPhone, setNewAdminPhone] = useState("");
+  const [newAdminCountryCode, setNewAdminCountryCode] = useState("+91");
+  const [newAddTenantPlanId, setNewAddTenantPlanId] = useState<string>("");
+  const [newAddTenantExpiryDate, setNewAddTenantExpiryDate] = useState<Date | undefined>(undefined);
+  const [addTenantAsyncState, setAddTenantAsyncState] = useState<AsyncState>('idle');
+  const [addTenantErrors, setAddTenantErrors] = useState<{
+    companyName?: string;
+    workspaceName?: string;
+    slug?: string;
+    adminName?: string;
+    adminEmail?: string;
+    adminPhone?: string;
+  }>({});
+
+  const handleResetAddTenantModal = (open: boolean) => {
+    setIsAddTenantModalOpen(open);
+    setNewCompanyName("");
+    setNewWorkspaceName("");
+    setNewSlug("");
+    setNewAdminName("");
+    setNewAdminEmail("");
+    setNewAdminPhone("");
+    setNewAdminCountryCode("+91");
+    setNewAddTenantPlanId("");
+    setNewAddTenantExpiryDate(undefined);
+    setAddTenantErrors({});
+    setAddTenantAsyncState('idle');
+  };
+
+  // Plan editing states
+  const [selectedPlanId, setSelectedPlanId] = useState<string>("");
+  const [empOverride, setEmpOverride] = useState<string>("");
+  const [modOverride, setModOverride] = useState<string>("");
+  const [expiryDate, setExpiryDate] = useState<Date | undefined>(undefined);
+
+  // Delete tenant states
+  const [deletingTenant, setDeletingTenant] = useState<any | null>(null);
+  const [deleteConfirmSlug, setDeleteConfirmSlug] = useState("");
+
+  // Middle Cards Form States & Errors
+  const [adminNameInput, setAdminNameInput] = useState("");
+  const [adminEmailInput, setAdminEmailInput] = useState("");
+  const [adminPhoneInput, setAdminPhoneInput] = useState("");
+  const [isAdminSaving, setIsAdminSaving] = useState(false);
+  const [adminAsyncState, setAdminAsyncState] = useState<AsyncState>('idle');
+  const [adminErrors, setAdminErrors] = useState<{ adminName?: string; adminEmail?: string; adminPhone?: string }>({});
+
+  const [isSubSaving, setIsSubSaving] = useState(false);
+  const [subAsyncState, setSubAsyncState] = useState<AsyncState>('idle');
+
+  const [newSecPassword, setNewSecPassword] = useState("");
+  const [confirmSecPassword, setConfirmSecPassword] = useState("");
+  const [isSecuritySaving, setIsSecuritySaving] = useState(false);
+  const [securityAsyncState, setSecurityAsyncState] = useState<AsyncState>('idle');
+  const [securityErrors, setSecurityErrors] = useState<{ newPassword?: string; confirmPassword?: string }>({});
+
+  // Queries
+  const { data: tenantsList, isLoading: loadingTenants } = trpc.superadmin.listTenants.useQuery();
+  const { data: plansList } = trpc.superadmin.listPlans.useQuery();
+
+  // Helper variables for plans
+  const freeDbPlan = plansList?.find((p: any) => p.name === 'free' || p.displayName?.toLowerCase() === 'free plan');
+  const freeDbPlanId = freeDbPlan?.id;
+  const paidPlansList = plansList?.filter((p: any) => p.name !== 'free' && p.displayName?.toLowerCase() !== 'free plan') || [];
+
+  // Mutations
+  const createTenantMutation = trpc.superadmin.createTenant.useMutation({
+    onSuccess: () => {
+      utils.superadmin.listTenants.invalidate();
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to provision tenant workspace");
+    }
+  });
+
+  const updateStatusMutation = trpc.superadmin.updateTenantStatus.useMutation({
+    onSuccess: () => {
+      toast.success("Tenant status updated successfully!");
+      utils.superadmin.listTenants.invalidate();
+      setIsActionsOpen(false);
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to update tenant status");
+    }
+  });
+
+  const updatePlanMutation = trpc.superadmin.updateTenantPlan.useMutation({
+    onSuccess: () => {
+      utils.superadmin.listTenants.invalidate();
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to update tenant plan");
+    }
+  });
+
+  const renewTenantSubscriptionMutation = trpc.superadmin.renewTenantSubscription.useMutation({
+    onSuccess: () => {
+      utils.superadmin.listTenants.invalidate();
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to renew subscription");
+    }
+  });
+
+  const updateAdminInfoMutation = trpc.superadmin.updateAdminInfo.useMutation({
+    onSuccess: () => {
+      utils.superadmin.listTenants.invalidate();
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to update admin info");
+    }
+  });
+
+  const resetAdminPasswordMutation = trpc.superadmin.resetAdminPassword.useMutation({
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to reset admin password");
+    }
+  });
+
+  const deleteTenantMutation = trpc.superadmin.deleteTenant.useMutation({
+    onSuccess: (data: any) => {
+      toast.success(`Tenant deleted successfully! ${data.deletedUsers} auth users removed.`);
+      if (data.warnings && data.warnings.length > 0) {
+        data.warnings.forEach((w: string) => toast.warning(w));
+      }
+      setDeletingTenant(null);
+      setDeleteConfirmSlug("");
+      setSelectedTenantId(null);
+      setIsActionsOpen(false);
+      utils.superadmin.listTenants.invalidate();
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to delete tenant");
+    }
+  });
+
+  // Action handlers
+  const handleToggleStatus = async (tenantId: string, currentStatus: string) => {
+    const nextStatus = currentStatus === "suspended" ? "active" : "suspended";
+    await updateStatusMutation.mutateAsync({ tenantId, status: nextStatus });
+  };
+
+  const handleSaveTenantPlan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTenant) return;
+
+    try {
+      const targetPlanId = selectedPlanId === "" ? (freeDbPlanId || null) : selectedPlanId;
+      await updatePlanMutation.mutateAsync({
+        tenantId: selectedTenant.id,
+        planId: targetPlanId,
+        maxEmployeesOverride: empOverride.trim() !== "" ? parseInt(empOverride) : null,
+        maxModeratorsOverride: modOverride.trim() !== "" ? parseInt(modOverride) : null,
+        licenseExpiresAt: expiryDate ? expiryDate.toISOString() : new Date().toISOString(),
+      });
+    } catch (err) {
+      // Handled in mutation
+    }
+  };
+
+  const handleAddTenantSubmit = async () => {
+    setAddTenantErrors({});
+    const validation = addTenantFullSchema.safeParse({
+      companyName: newCompanyName,
+      workspaceName: newWorkspaceName || newCompanyName,
+      slug: newSlug,
+      adminName: newAdminName,
+      adminEmail: newAdminEmail,
+      adminPhone: newAdminPhone,
+    });
+
+    if (!validation.success) {
+      const errs: { [key: string]: string } = {};
+      validation.error.issues.forEach((issue) => {
+        if (issue.path[0]) errs[issue.path[0].toString()] = issue.message;
+      });
+      setAddTenantErrors(errs);
+      return;
+    }
+
+    setAddTenantAsyncState('loading');
+    try {
+      // 14-day default trial period assigned internally
+      const trialExpiryDate = new Date();
+      trialExpiryDate.setDate(trialExpiryDate.getDate() + 14);
+
+      const fullPhone = newAdminPhone.startsWith('+') ? newAdminPhone : `${newAdminCountryCode}${newAdminPhone}`;
+
+      const result = await createTenantMutation.mutateAsync({
+        companyName: newWorkspaceName || newCompanyName,
+        slug: newSlug,
+        adminName: newAdminName || newCompanyName + " Admin",
+        adminEmail: newAdminEmail,
+        adminPhone: fullPhone,
+        planId: null, // Assigned default trial plan internally
+        licenseExpiresAt: trialExpiryDate.toISOString(),
+      });
+      toast.success("Tenant workspace provisioned successfully!", {
+        description: `Primary admin: ${result.adminEmail}. Temporary password: ${result.temporaryPassword}. Ask the admin to reset it after first login.`,
+        duration: 10000,
+      });
+      setAddTenantAsyncState('success');
+      await new Promise(r => setTimeout(r, 2000));
+      handleResetAddTenantModal(false);
+    } catch (err) {
+      setAddTenantAsyncState('error');
+      setTimeout(() => setAddTenantAsyncState('idle'), 3000);
+    }
+  };
+
+  // Filter & Sort Tenants for List (Ascending A-Z by default)
+  const filteredTenants = (tenantsList?.filter((t: any) => {
+    const matchesSearch = 
+      t.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      t.slug.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      t.adminEmail.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = statusFilter === "all" || t.status === statusFilter || (statusFilter === "active" && t.status === "trial");
+    const matchesPlan = planFilter === "all" 
+      || (planFilter === "free" && (!t.plan || t.plan.id === freeDbPlanId || t.plan.id === "free" || t.plan.name === "free" || t.plan.displayName?.toLowerCase() === "free plan"))
+      || (t.plan?.id === planFilter || t.plan?.displayName === planFilter || t.plan?.name === planFilter);
+
+    return matchesSearch && matchesStatus && matchesPlan;
+  }) || []).sort((a: any, b: any) => {
+    if (sortOrder === "name-asc") {
+      return a.companyName.localeCompare(b.companyName);
+    }
+    if (sortOrder === "name-desc") {
+      return b.companyName.localeCompare(a.companyName);
+    }
+    if (sortOrder === "expiry") {
+      const dateA = a.licenseExpiresAt ? new Date(a.licenseExpiresAt).getTime() : 0;
+      const dateB = b.licenseExpiresAt ? new Date(b.licenseExpiresAt).getTime() : 0;
+      return dateA - dateB;
+    }
+    if (sortOrder === "newest") {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return dateB - dateA;
+    }
+    return a.companyName.localeCompare(b.companyName);
+  });
+
+  // Selected tenant from dropdown/list
+  const selectedTenant = selectedTenantId ? (tenantsList?.find((t: any) => t.id === selectedTenantId) || null) : null;
+
+  const handleOpenRenewModal = (tenant: any) => {
+    const currentExpiry = tenant.licenseExpiresAt ? new Date(tenant.licenseExpiresAt) : new Date();
+    const baseDate = currentExpiry > new Date() ? currentExpiry : new Date();
+    const nextDate = new Date(baseDate);
+    nextDate.setDate(nextDate.getDate() + 30);
+
+    setRenewPlanId(tenant.plan?.id || "");
+    setRenewExpiryDate(nextDate);
+    setRenewPeriod("1m");
+    setRenewEmpOverride(tenant.maxEmployeesOverride ? tenant.maxEmployeesOverride.toString() : "");
+    setRenewModOverride(tenant.maxModeratorsOverride ? tenant.maxModeratorsOverride.toString() : "");
+    setRenewAsyncState('idle');
+    setIsRenewModalOpen(true);
+  };
+
+  const handleRenewalPeriodChange = (val: string) => {
+    setRenewPeriod(val);
+    if (!selectedTenant) return;
+    const currentExp = selectedTenant.licenseExpiresAt ? new Date(selectedTenant.licenseExpiresAt) : new Date();
+    const baseDate = currentExp > new Date() ? currentExp : new Date();
+    const nextDate = new Date(baseDate);
+
+    if (val === "1m") {
+      nextDate.setDate(nextDate.getDate() + 30);
+      setRenewExpiryDate(nextDate);
+    } else if (val === "3m") {
+      nextDate.setDate(nextDate.getDate() + 90);
+      setRenewExpiryDate(nextDate);
+    } else if (val === "6m") {
+      nextDate.setDate(nextDate.getDate() + 180);
+      setRenewExpiryDate(nextDate);
+    } else if (val === "1y") {
+      nextDate.setDate(nextDate.getDate() + 365);
+      setRenewExpiryDate(nextDate);
+    }
+  };
+
+  // Dynamic Total Amount Calculation for Plan Renewal Modal
+  const selectedRenewPlan = plansList?.find((p: any) => p.id === renewPlanId);
+  const renewPlanMonthlyPrice = selectedRenewPlan?.priceMonthly ? parseFloat(selectedRenewPlan.priceMonthly) : 0;
+  const currentTenantExp = selectedTenant?.licenseExpiresAt ? new Date(selectedTenant.licenseExpiresAt) : new Date();
+  const baseRenewalDate = currentTenantExp > new Date() ? currentTenantExp : new Date();
+  const renewDaysDiff = renewExpiryDate 
+    ? Math.max(1, Math.round((renewExpiryDate.getTime() - baseRenewalDate.getTime()) / (1000 * 60 * 60 * 24)))
+    : 30;
+
+  let renewalTotalAmount = 0;
+  if (renewPeriod === "1m") renewalTotalAmount = renewPlanMonthlyPrice * 1;
+  else if (renewPeriod === "3m") renewalTotalAmount = renewPlanMonthlyPrice * 3;
+  else if (renewPeriod === "6m") renewalTotalAmount = renewPlanMonthlyPrice * 6;
+  else if (renewPeriod === "1y") renewalTotalAmount = renewPlanMonthlyPrice * 12;
+  else {
+    renewalTotalAmount = Math.round((renewPlanMonthlyPrice / 30) * renewDaysDiff);
+  }
+
+  const handleRenewSubscription = async () => {
+    if (!selectedTenant || !renewExpiryDate) {
+      toast.error("Please select a valid expiry date");
+      return;
+    }
+
+    setRenewAsyncState('loading');
+    try {
+      const targetPlanId = renewPlanId === "" ? (freeDbPlanId || null) : renewPlanId;
+      await renewTenantSubscriptionMutation.mutateAsync({
+        tenantId: selectedTenant.id,
+        planId: targetPlanId,
+        licenseExpiresAt: renewExpiryDate.toISOString(),
+        maxEmployeesOverride: renewEmpOverride.trim() !== "" ? parseInt(renewEmpOverride) : null,
+        maxModeratorsOverride: renewModOverride.trim() !== "" ? parseInt(renewModOverride) : null,
+      });
+
+      toast.success("Tenant plan renewed & license extended successfully!");
+      setRenewAsyncState('success');
+      await new Promise(r => setTimeout(r, 2000));
+      setIsRenewModalOpen(false);
+      setRenewAsyncState('idle');
+    } catch (err) {
+      setRenewAsyncState('error');
+      setTimeout(() => setRenewAsyncState('idle'), 3000);
+    }
+  };
+
+  const handleSaveAdminInfo = async () => {
+    if (!selectedTenant) return;
+    setAdminErrors({});
+    const validation = adminInfoSchema.safeParse({
+      adminName: adminNameInput,
+      adminEmail: adminEmailInput,
+      adminPhone: adminPhoneInput,
+    });
+
+    if (!validation.success) {
+      const errs: { [key: string]: string } = {};
+      validation.error.issues.forEach((issue) => {
+        if (issue.path[0]) errs[issue.path[0].toString()] = issue.message;
+      });
+      setAdminErrors(errs);
+      return;
+    }
+
+    setIsAdminSaving(true);
+    setAdminAsyncState('loading');
+    try {
+      await updateAdminInfoMutation.mutateAsync({
+        tenantId: selectedTenant.id,
+        adminName: adminNameInput,
+        adminEmail: adminEmailInput,
+        adminPhone: adminPhoneInput,
+      });
+      toast.success("Admin information updated successfully!");
+      setAdminAsyncState('success');
+      // 2-second delay showing emerald success state before auto-closing modal dialog
+      await new Promise(r => setTimeout(r, 2000));
+      setIsAdminModalOpen(false);
+      setAdminAsyncState('idle');
+      setAdminErrors({});
+    } catch (err) {
+      setAdminAsyncState('error');
+      setTimeout(() => setAdminAsyncState('idle'), 3000);
+    } finally {
+      setIsAdminSaving(false);
+    }
+  };
+
+  const handleSaveSubDetails = async () => {
+    if (!selectedTenant) return;
+    setIsSubSaving(true);
+    setSubAsyncState('loading');
+    try {
+      const targetPlanId = selectedPlanId === "" ? (freeDbPlanId || null) : selectedPlanId;
+      await updatePlanMutation.mutateAsync({
+        tenantId: selectedTenant.id,
+        planId: targetPlanId,
+        maxEmployeesOverride: empOverride.trim() !== "" ? parseInt(empOverride) : null,
+        maxModeratorsOverride: modOverride.trim() !== "" ? parseInt(modOverride) : null,
+        licenseExpiresAt: expiryDate ? expiryDate.toISOString() : new Date().toISOString(),
+      });
+      toast.success("Subscription details updated successfully!");
+      setSubAsyncState('success');
+      // 2-second delay showing emerald success state before auto-closing modal dialog
+      await new Promise(r => setTimeout(r, 2000));
+      setIsSubModalOpen(false);
+      setSubAsyncState('idle');
+    } catch (err) {
+      setSubAsyncState('error');
+      setTimeout(() => setSubAsyncState('idle'), 3000);
+    } finally {
+      setIsSubSaving(false);
+    }
+  };
+
+  const handleSaveSecurity = async () => {
+    if (!selectedTenant) return;
+    setSecurityErrors({});
+    const validation = securitySchema.safeParse({
+      newPassword: newSecPassword,
+      confirmPassword: confirmSecPassword,
+    });
+
+    if (!validation.success) {
+      const errs: { [key: string]: string } = {};
+      validation.error.issues.forEach((issue) => {
+        if (issue.path[0]) errs[issue.path[0].toString()] = issue.message;
+      });
+      setSecurityErrors(errs);
+      return;
+    }
+
+    setIsSecuritySaving(true);
+    setSecurityAsyncState('loading');
+    try {
+      await resetAdminPasswordMutation.mutateAsync({
+        tenantId: selectedTenant.id,
+        newPassword: newSecPassword,
+      });
+      toast.success("Admin password reset successfully!");
+      setSecurityAsyncState('success');
+      // 2-second delay showing emerald success state before auto-closing modal dialog
+      await new Promise(r => setTimeout(r, 2000));
+      setNewSecPassword("");
+      setConfirmSecPassword("");
+      setSecurityErrors({});
+      setIsSecurityModalOpen(false);
+      setSecurityAsyncState('idle');
+    } catch (err) {
+      setSecurityAsyncState('error');
+      setTimeout(() => setSecurityAsyncState('idle'), 3000);
+    } finally {
+      setIsSecuritySaving(false);
+    }
+  };
+
+  // Sync form states whenever selectedTenant changes
+  useEffect(() => {
+    if (selectedTenant) {
+      setAdminNameInput(selectedTenant.adminName || "");
+      setAdminEmailInput(selectedTenant.adminEmail || "");
+      setAdminPhoneInput(selectedTenant.adminPhone || "");
+      setNewSecPassword("");
+      setConfirmSecPassword("");
+
+      const isFree = !selectedTenant.plan || selectedTenant.plan.id === freeDbPlanId || selectedTenant.plan.name === 'free' || selectedTenant.plan.displayName?.toLowerCase() === 'free plan';
+      setSelectedPlanId(isFree ? "" : (selectedTenant.plan?.id || ""));
+      setEmpOverride(selectedTenant.maxEmployeesOverride !== null ? String(selectedTenant.maxEmployeesOverride) : "");
+      setModOverride(selectedTenant.maxModeratorsOverride !== null ? String(selectedTenant.maxModeratorsOverride) : "");
+      
+      if (selectedTenant.licenseExpiresAt) {
+        setExpiryDate(new Date(selectedTenant.licenseExpiresAt));
+      } else {
+        setExpiryDate(undefined);
+      }
+    }
+  }, [selectedTenant?.id, freeDbPlanId]);
+
+  // Metric counts
+  const totalTenantsCount = tenantsList?.length || 8;
+  const activeTenantsCount = tenantsList?.filter((t: any) => t.status === "active" || t.status === "trial").length || 6;
+  const suspendedTenantsCount = tenantsList?.filter((t: any) => t.status === "suspended").length || 2;
+  const freeTenantsCount = tenantsList?.filter((t: any) => !t.plan || t.plan.id === freeDbPlanId || t.plan.name === 'free').length || 5;
+
+  const formattedExpiry = selectedTenant ? format(new Date(selectedTenant.licenseExpiresAt), "dd/MM/yyyy") : "";
+
+  const formattedCreated = selectedTenant ? format(new Date(selectedTenant.createdAt || selectedTenant.trialStart), "dd/MM/yyyy") : "";
+
+  // Relative time helper
+  const getRelativeTime = (dateStr: string | null) => {
+    if (!dateStr) return "26 days ago";
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    return `${diffDays <= 0 ? 1 : diffDays} days ago`;
+  };
+
+  // Mock Invoice List for the active tenant
+  const getInvoicesList = (tenant: any) => {
+    if (!tenant) return [];
+    return [
+      { id: "INV-2026-0008", date: "Jun 21, 2026", amount: "₹0", status: "Paid" },
+      { id: "INV-2026-0007", date: "May 21, 2026", amount: "₹0", status: "Paid" },
+      { id: "INV-2026-0006", date: "Apr 21, 2026", amount: "₹0", status: "Paid" },
+      { id: "INV-2026-0005", date: "Mar 21, 2026", amount: "₹0", status: "Paid" },
+      { id: "INV-2026-0004", date: "Feb 21, 2026", amount: "₹0", status: "Paid" },
+    ];
+  };
+
+  // Mock Audit Logs List for the active tenant with category colors & Lucide icons
+  const getAuditLogsList = (tenant: any) => {
+    if (!tenant) return [];
+    const adminName = tenant.adminName || "SRP Admin";
+    return [
+      {
+        activity: "Plan Updated from Free Plan to Free Plan",
+        performedBy: adminName,
+        dateTime: "Jun 21, 2026 10:24 AM",
+        ip: "103.112.45.67",
+        bg: "bg-purple-100 text-purple-600",
+        icon: Lock
+      },
+      {
+        activity: "Invoice Generated INV-2026-0008",
+        performedBy: "System",
+        dateTime: "Jun 21, 2026 10:21 AM",
+        ip: "103.112.45.67",
+        bg: "bg-emerald-100 text-emerald-600",
+        icon: CreditCard
+      },
+      {
+        activity: "Payment Received for INV-2026-0008",
+        performedBy: "System",
         dateTime: "Jun 21, 2026 10:22 AM",
         ip: "103.112.45.67",
         bg: "bg-amber-100 text-amber-600",
