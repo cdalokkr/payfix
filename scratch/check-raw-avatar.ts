@@ -8,7 +8,8 @@ async function main() {
         slug: "alpha",
         databaseUrl: null,
         tenantSchema: "tenant_alpha",
-        brandName: "Alpha Corporation"
+        brandName: "Alpha Corporation",
+        trusted: true as const
     };
 
     await tenantStorage.run(alphaContext, async () => {

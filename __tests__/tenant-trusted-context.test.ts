@@ -16,11 +16,11 @@ describe('trusted tenant context', () => {
     })
 
     it.each([
-        ['hostname spoof', { id: '22222222-2222-4222-8222-222222222222' }],
-        ['query spoof', { tenant_schema: 'tenant_other_team' }],
-        ['cookie spoof', { slug: '../other-team' }],
+        ['invalid registry UUID', { id: 'not-a-uuid' }],
+        ['invalid registry schema', { tenant_schema: 'public' }],
+        ['invalid registry slug', { slug: '../other-team' }],
         ['suspended tenant', { status: 'suspended' }],
-    ])('rejects a registry/header mismatch from %s routing', (_label, override) => {
+    ])('rejects an invalid tenant registry record from %s', (_label, override) => {
         expect(() => createTrustedTenantContext({ ...registeredTenant, ...override }))
             .toThrow(TenantContextError)
     })

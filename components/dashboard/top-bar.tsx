@@ -31,7 +31,9 @@ function TopBarComponent({
   });
 
   const finalBrandName = tenantBrand || tenantInfo?.brandName;
-  const licenseExpiresAt = propLicenseExpiresAt || tenantInfo?.licenseExpiresAt;
+  // License metadata is forwarded by the trusted request middleware. Keep the
+  // tenant context used for database routing intentionally minimal.
+  const licenseExpiresAt = propLicenseExpiresAt;
 
   const getLicenseBadge = () => {
     if (!licenseExpiresAt || !user || user.role !== "admin") return null;
