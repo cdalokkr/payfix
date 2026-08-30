@@ -4,7 +4,6 @@ import * as schema from './schema'; // Standard business schema
 import { masterDb } from './master-connection';
 import { tenants } from './master-schema';
 import { eq, or } from 'drizzle-orm';
-import { tenantRuntimeRoleName } from '@/lib/tenant/trusted-context';
 
 
 interface CachedConnection {
@@ -92,12 +91,7 @@ export function getTenantDb(tenantId: string, databaseUrl: string | null, schema
 
     // 2. Resolve database connection pool
     const isCustomExternalDb = !!databaseUrl && databaseUrl !== process.env.DATABASE_URL;
-    const safeSchemaName = schemaName && /^tenant_[a-z0-9_]{3,40}$/.test(schemaName)
-        ? schemaName
-        : null;
-    if (!safeSchemaName) {
-        throw new Error('A registered tenant schema is required for tenant database access.');
-    }
+    const safeSchemaName = schemaName ? schemaName.replace(/[^a-zA-Z0-9_]/g, '') : null;
 
     // Cache key: If custom external DB -> tenantId; If shared DB -> shared_${safeSchemaName}
     const cacheKey = isCustomExternalDb ? tenantId : `shared_${safeSchemaName || 'public'}`;
@@ -115,14 +109,9 @@ export function getTenantDb(tenantId: string, databaseUrl: string | null, schema
 
     console.log(`[DB Router] Initializing new connection pool for: ${cacheKey} (search_path: ${safeSchemaName ? `${safeSchemaName}, public` : 'public'})`);
 
-    const connectionParams: Record<string, string> = {
-        search_path: `${safeSchemaName}, public`,
-        application_name: `payfix:${safeSchemaName}`,
-        'app.tenant_id': tenantId,
-        'app.tenant_schema': safeSchemaName,
-    };
-    if (!isCustomExternalDb) {
-        connectionParams.role = tenantRuntimeRoleName(tenantId);
+    const connectionParams: Record<string, any> = {};
+    if (safeSchemaName) {
+        connectionParams.search_path = `${safeSchemaName}, public`;
     }
 
     const client = postgres(targetDbUrl, {
