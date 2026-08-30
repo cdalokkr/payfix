@@ -5,25 +5,17 @@ import { profiles } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { withTenantContext } from '@/lib/tenant/with-context'
 
-function getSupabaseClient() {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-        throw new Error('Supabase authentication is not configured.')
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+        autoRefreshToken: false,
+        persistSession: false,
     }
-
-    return createClient(supabaseUrl, supabaseAnonKey, {
-        auth: {
-            autoRefreshToken: false,
-            persistSession: false,
-        }
-    })
-}
+})
 
 export const POST = withTenantContext(async (req: NextRequest) => {
     try {
-        const supabase = getSupabaseClient()
         const body = await req.json()
         const { email, password } = body
 
