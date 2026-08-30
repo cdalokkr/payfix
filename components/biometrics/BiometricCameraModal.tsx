@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { X, RefreshCw, AlertCircle } from 'lucide-react';
-import { BIOMETRIC_CAMERA_CONSTRAINTS, captureNaturalBiometricFrame, validateBiometricCameraFrame } from '@/lib/face-pipeline';
+import { BIOMETRIC_CAMERA_CONFIG, BIOMETRIC_CAMERA_CONSTRAINTS, captureNaturalBiometricFrame, validateBiometricCameraFrame } from '@/lib/face-pipeline';
 import { MediaPipeMeshService, InMaskLivenessStatus } from '@/lib/services/mediapipe-mesh.service';
 import { FaceApiBrowserService } from '@/lib/services/faceapi-browser.service';
 import { takePrewarmedBiometricCamera } from '@/lib/biometric-camera-prewarm';
@@ -347,8 +347,9 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
         !isProcessing &&
         !isEvaluatingRef.current
       ) {
-        // Run tracker every ~80ms for ultra-responsive blink capture
-        if (time - lastEvalTime >= 80) {
+        // Eight guidance checks per second is ample for a human eye blink and
+        // avoids competing with the live video compositor on budget devices.
+        if (time - lastEvalTime >= BIOMETRIC_CAMERA_CONFIG.guidanceIntervalMs) {
           lastEvalTime = time;
           isEvaluatingRef.current = true;
           try {
@@ -428,7 +429,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   const OVAL_PATH = "M150 20 C236 20 290 70 290 178 C290 286 236 352 150 352 C64 352 10 286 10 178 C10 70 64 20 150 20 Z";
 
   return (
-    <div className="relative w-full h-full bg-slate-950 flex flex-col overflow-hidden rounded-3xl p-0 border border-slate-800 shadow-2xl">
+    <div className="relative w-full h-full bg-slate-950 flex flex-col overflow-y-auto overscroll-contain rounded-3xl p-0 border border-slate-800 shadow-2xl">
       {/* 1. Header Bar OUTSIDE Camera Viewport (Above camera screen area) */}
       <div className="w-full px-5 py-4 z-30 flex items-center justify-between bg-slate-900 border-b border-slate-800/80 shrink-0">
         <div className="flex items-center gap-3">
@@ -480,8 +481,9 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
         </div>
       </div>
 
-      {/* Standardized Fixed 430px 3:4 Portrait Camera Viewport Container */}
-      <div className="relative w-full h-[430px] aspect-[3/4] max-w-[360px] mx-auto bg-slate-950 overflow-hidden shrink-0 flex items-center justify-center rounded-2xl border border-slate-800/60 my-1">
+      {/* A real 3:4 viewport: it matches the natural capture contract without
+          forcing a distorted 360 × 430 preview on phones or kiosk terminals. */}
+      <div className="relative w-full max-w-[360px] aspect-[3/4] mx-auto bg-slate-950 overflow-hidden shrink-0 flex items-center justify-center rounded-2xl border border-slate-800/60 my-1">
         {/* Instant HTML Video Element */}
         <video
           ref={videoRef}
@@ -523,7 +525,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-between p-4">
             {/* Single Spacious Oval Mask Reticle Container (w-[88%] max-w-[340px] aspect-[1/1.24]) */}
             <div
-              className={`relative mt-2 w-[88%] max-w-[340px] aspect-[1/1.24] rounded-full transition-all duration-300 flex items-center justify-center shadow-[0_0_0_9999px_rgba(2,6,23,0.70)]`}
+              className={`relative mt-8 w-[88%] max-w-[340px] aspect-[1/1.24] rounded-full transition-all duration-300 flex items-center justify-center shadow-[0_0_0_9999px_rgba(2,6,23,0.70)]`}
             >
               {/* Paytm / KYC Biometric Single Oval Face Mask SVG */}
               <svg

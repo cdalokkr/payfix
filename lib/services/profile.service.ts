@@ -30,10 +30,12 @@ export class ProfileService {
                 ALTER TABLE IF EXISTS "profile_photo_requests"
                     ADD COLUMN IF NOT EXISTS "pending_face_embedding_512" vector(512),
                     ADD COLUMN IF NOT EXISTS "pending_face_embedding" vector(128),
+                    ADD COLUMN IF NOT EXISTS "pending_face_embedding_pipeline_version" text,
                     ADD COLUMN IF NOT EXISTS "pending_photo_sha256" text;
 
                 ALTER TABLE IF EXISTS "profiles"
                     ADD COLUMN IF NOT EXISTS "face_embedding_512" vector(512),
+                    ADD COLUMN IF NOT EXISTS "face_embedding_pipeline_version" text,
                     ADD COLUMN IF NOT EXISTS "face_quality_score" real,
                     ADD COLUMN IF NOT EXISTS "face_enrolled_at" timestamp with time zone,
                     ADD COLUMN IF NOT EXISTS "face_photo_url" text;
@@ -238,6 +240,7 @@ export class ProfileService {
             pending_photo_url: pendingPhotoUrl,
             pending_photo_sha256: verifiedEnrollment.portraitSha256,
             pending_face_embedding_512: verifiedEnrollment.embedding512,
+            pending_face_embedding_pipeline_version: verifiedEnrollment.embeddingPipelineVersion,
             status: 'pending'
         }
 
@@ -380,11 +383,12 @@ export class ProfileService {
                 faceDetected: true,
                 faceCount: 1,
                 embeddingDimensions: serverEmbedding?.length || 0,
+                embeddingPipelineVersion: request.pending_face_embedding_pipeline_version || null,
                 livenessPassed: true,
                 portraitHashMatches: request.pending_photo_sha256 === portraitHash,
                 backend: 'signed server enrollment',
             }
-            if (!request.pending_photo_sha256 || request.pending_photo_sha256 !== portraitHash || !serverEmbedding || serverEmbedding.length !== 512 || !serverEmbedding.every(Number.isFinite)) {
+            if (!request.pending_photo_sha256 || request.pending_photo_sha256 !== portraitHash || !serverEmbedding || serverEmbedding.length !== 512 || !serverEmbedding.every(Number.isFinite) || !request.pending_face_embedding_pipeline_version) {
                 console.warn('[ProfileService] Pending selfie verification rejected', verificationLog)
                 throwAppError('VALIDATION_FAILED', 'The pending server portrait or its verified biometric template could not be validated. Please request a new profile photo.')
             }
@@ -395,9 +399,10 @@ export class ProfileService {
                 faceCount: 1,
                 embeddingDimensions: serverEmbedding.length,
                 livenessPassed: true,
-                backend: 'signed server enrollment',
+                backend: `signed server enrollment (${request.pending_face_embedding_pipeline_version})`,
             }
             updatePayload.face_embedding_512 = serverEmbedding
+            updatePayload.face_embedding_pipeline_version = request.pending_face_embedding_pipeline_version
             updatePayload.face_quality_score = 1.0
             updatePayload.face_enrolled_at = new Date()
 

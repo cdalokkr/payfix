@@ -158,14 +158,11 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
         try {
             // Shared high-resolution 3:4 preference. The device may select its nearest
             // supported front-camera mode; capture then makes a centred 3:4 frame.
-            const constraints: MediaStreamConstraints = retryCount === 0 ? {
+            // Enrollment retries must use the exact same camera contract as the
+            // initial attempt, PWA attendance, and kiosk verification.
+            const constraints: MediaStreamConstraints = {
                 video: BIOMETRIC_CAMERA_CONSTRAINTS,
                 audio: false,
-            } : {
-                // Do not fall back to the rear camera: this flow requires a live
-                // front-camera selfie for enrollment.
-                video: { facingMode: { exact: 'user' } },
-                audio: false
             }
 
 
@@ -440,7 +437,7 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
 
 
                     {captureDiagnostics && (
-                        <details open={status === 'error'} className="rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2.5 text-left">
+                        <details open={status === 'error'} className="max-h-[32vh] overflow-y-auto overscroll-contain rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2.5 text-left [scrollbar-gutter:stable]">
                             <summary className="cursor-pointer text-xs font-bold text-sky-300">Biometric capture details</summary>
                             <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-mono text-slate-300">
                                 <dt className="text-slate-500">Camera</dt><dd>{captureDiagnostics.cameraResolution}</dd>

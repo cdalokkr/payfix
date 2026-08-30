@@ -34,7 +34,10 @@ export async function POST(request: NextRequest) {
         }
         const challengeResult = consumeLivenessChallenge(challenge, user.id, 'enrollment')
         if (!challengeResult.ok) return NextResponse.json({ error: 'Liveness challenge failed or expired.', code: challengeResult.code }, { status: 403 })
-        const extractions = await Promise.all(submittedFrames.map(frame => FaceServiceClient.extract(frame.replace(/^data:image\/(?:jpeg|png|webp);base64,/, ''))))
+        const extractions = await Promise.all(submittedFrames.map(frame => FaceServiceClient.extract(
+            frame.replace(/^data:image\/(?:jpeg|png|webp);base64,/, ''),
+            { includeCroppedFace: false }
+        )))
         const frameFailure = findFrameFailure(extractions)
         if (frameFailure) {
             return NextResponse.json({
@@ -54,6 +57,10 @@ export async function POST(request: NextRequest) {
                 code: extraction.error_code || 'FACE_EXTRACTION_FAILED',
                 diagnostics: extraction.diagnostics,
             }, { status: 400 })
+        }
+        const embeddingPipelineVersion = extraction.embedding_pipeline_version
+        if (!embeddingPipelineVersion) {
+            return NextResponse.json({ error: 'The biometric service did not report its embedding pipeline version. Please try again.', code: 'EMBEDDING_PIPELINE_UNAVAILABLE' }, { status: 502 })
         }
         if (extraction.is_live !== true) {
             return NextResponse.json({ error: 'Liveness verification failed. Please capture a new selfie.', code: 'LIVENESS_FAILED', diagnostics: extraction.diagnostics }, { status: 400 })
@@ -87,6 +94,7 @@ export async function POST(request: NextRequest) {
             portraitUrl: publicUrl,
             portraitSha256: sha256Hex(fileToUpload),
             embedding512: embedding,
+            embeddingPipelineVersion,
             qualityScore: extraction.quality_score || 0,
         })
         // Only the admin approval service can activate this image and its biometric template.
@@ -105,6 +113,7 @@ export async function POST(request: NextRequest) {
                 capturePipeline,
                 faceCount: extraction.face_count,
                 embeddingDimensions: embedding.length,
+                embeddingPipelineVersion,
                 livenessPassed: extraction.is_live === true,
                 backend: extraction.diagnostics?.backend_engine || 'Not reported',
             }

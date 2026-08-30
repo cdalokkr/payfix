@@ -604,7 +604,7 @@ export const attendanceRouter = router({
     verifyFace: protectedProcedure
         .input(z.object({ selfieBase64: z.string().min(100).max(6_000_000).refine(value => /^data:image\/(jpeg|png|webp);base64,/.test(value), 'A camera image is required') }))
         .mutation(async ({ ctx, input }) => {
-            const threshold = Number(process.env.FACE_MATCH_COSINE_THRESHOLD ?? '0.88')
+            const threshold = Number(process.env.FACE_MATCH_COSINE_THRESHOLD ?? '0.80')
             if (!Number.isFinite(threshold) || threshold <= 0 || threshold >= 1) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Face verification threshold is invalid.' })
             try {
                 const profile = await ctx.db.query.profiles.findFirst({ where: eq(profiles.id, ctx.profile.id), columns: { id: true, face_embedding_512: true } })

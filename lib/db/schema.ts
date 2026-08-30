@@ -83,6 +83,7 @@ export const profiles = pgTable('profiles', {
     allowed_modules: text('allowed_modules').array(),
     face_embedding: vector128('face_embedding'),
     face_embedding_512: vector512('face_embedding_512'),
+    face_embedding_pipeline_version: text('face_embedding_pipeline_version'),
     face_quality_score: real('face_quality_score'),
     face_enrolled_at: timestamp('face_enrolled_at', { withTimezone: true }),
     face_photo_url: text('face_photo_url'),
@@ -168,6 +169,28 @@ export const biometricRawLogs = pgTable('biometric_raw_logs', {
     punch_time: timestamp('punch_time', { withTimezone: true }).notNull(),
     punch_type: integer('punch_type'), // 0: In, 1: Out, 2: Break In, 3: Break Out
     raw_payload: jsonb('raw_payload'),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
+// Tenant-local metadata for every server-side face verification attempt.
+export const biometricVerificationAttempts = pgTable('biometric_verification_attempts', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    profile_id: uuid('profile_id').references(() => profiles.id, { onDelete: 'set null' }),
+    source: text('source').notNull(),
+    outcome: text('outcome').notNull(),
+    similarity: numeric('similarity', { precision: 6, scale: 5 }),
+    threshold: numeric('threshold', { precision: 6, scale: 5 }),
+    reason_code: text('reason_code'),
+    face_count: integer('face_count'),
+    frame_count: integer('frame_count'),
+    liveness_passed: boolean('liveness_passed'),
+    quality_score: real('quality_score'),
+    quality_diagnostics: jsonb('quality_diagnostics'),
+    capture_pipeline_version: text('capture_pipeline_version'),
+    embedding_pipeline_version: text('embedding_pipeline_version'),
+    backend_engine: text('backend_engine'),
+    processing_ms: integer('processing_ms'),
+    request_id: text('request_id'),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 
@@ -328,6 +351,7 @@ export const profilePhotoRequests = pgTable('profile_photo_requests', {
     pending_photo_url: text('pending_photo_url').notNull(),
     pending_photo_sha256: text('pending_photo_sha256'),
     pending_face_embedding_512: vector512('pending_face_embedding_512'),
+    pending_face_embedding_pipeline_version: text('pending_face_embedding_pipeline_version'),
     pending_face_embedding: vector128('pending_face_embedding'),
     status: text('status').notNull().default('pending'), // 'pending', 'approved', 'rejected'
     reviewed_by: uuid('reviewed_by').references(() => profiles.id, { onDelete: 'set null' }),
@@ -784,5 +808,13 @@ export const biometricRawLogsRelations = relations(biometricRawLogs, ({ one }) =
     location: one(officeLocations, {
         fields: [biometricRawLogs.location_id],
         references: [officeLocations.id],
+    }),
+}));
+
+
+export const biometricVerificationAttemptsRelations = relations(biometricVerificationAttempts, ({ one }) => ({
+    profile: one(profiles, {
+        fields: [biometricVerificationAttempts.profile_id],
+        references: [profiles.id],
     }),
 }));

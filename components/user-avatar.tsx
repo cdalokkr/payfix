@@ -40,7 +40,7 @@ export function UserAvatar({ src, alt, initials, className }: UserAvatarProps) {
                     console.warn(`[UserAvatar] Failed to load image: ${src}. Falling back to initials.`);
                     setHasError(true);
                 }}
-                className="size-full object-cover rounded-full"
+                className="size-full object-cover object-[center_20%] rounded-full"
                 loading="eager"
             />
         </div>

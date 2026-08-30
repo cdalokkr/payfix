@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { KioskIndexedDBService } from '@/lib/services/kiosk-idb.service';
-import { captureNaturalBiometricFrame } from '@/lib/face-pipeline';
+import { BIOMETRIC_CAPTURE_PIPELINE_VERSION, captureNaturalBiometricFrame } from '@/lib/face-pipeline';
 import { trpc } from '@/lib/trpc/client';
 import { BiometricCameraModal } from '@/components/biometrics/BiometricCameraModal';
 import { format } from 'date-fns';
@@ -535,7 +535,7 @@ export function ExpressKioskApp() {
                     body: JSON.stringify({
                          frames,
                          challenge: challengeResult.challenge,
-                        biometricPipelineVersion: 'natural-portrait-v1',
+                         biometricPipelineVersion: BIOMETRIC_CAPTURE_PIPELINE_VERSION,
                         latitude: terminalGps.latitude,
                         longitude: terminalGps.longitude,
                     }),
@@ -577,8 +577,10 @@ export function ExpressKioskApp() {
                         error: serverResult.error || 'Face is not recognized. Please try again.',
                         duration: getDurationStr(),
                         snapshotUrl,
-                        similarity: `${(Number(serverResult.similarity || 0) * 100).toFixed(1)}%`,
-                        threshold: Number(serverResult.threshold || 0.8),
+                        similarity: typeof serverResult.similarity === 'number' && typeof serverResult.threshold === 'number'
+                            ? `${(serverResult.similarity * 100).toFixed(1)}%`
+                            : undefined,
+                        threshold: typeof serverResult.threshold === 'number' ? serverResult.threshold : undefined,
                         faceCount: serverResult.verification?.faceCount,
                         embeddingDimensions: serverResult.verification?.embeddingDimensions,
                         livenessPassed: serverResult.verification?.livenessPassed,
@@ -1120,7 +1122,7 @@ export function ExpressKioskApp() {
                         diagnosticsSlot={
                             <details
                                 open={Boolean(verificationResult)}
-                                className="rounded-2xl border border-sky-500/25 bg-slate-950/90 text-left shadow-xl"
+                                className="max-h-[32vh] overflow-y-auto overscroll-contain rounded-2xl border border-sky-500/25 bg-slate-950/90 text-left shadow-xl [scrollbar-gutter:stable]"
                             >
                                 <summary className="cursor-pointer list-none px-4 py-2.5 text-xs font-bold text-sky-300">
                                     {verificationResult ? '▼ Daily biometric verification details' : '▶ Biometric capture details'}
@@ -1146,11 +1148,11 @@ export function ExpressKioskApp() {
                                     <span className="max-w-[180px] truncate">{verificationResult?.serverBackend || (isScanning ? 'pending' : '—')}</span>
                                     <span className="text-slate-500">AI processing</span>
                                     <span>{verificationResult?.serverProcessingMs ? `${(verificationResult.serverProcessingMs / 1000).toFixed(1)}s` : 'pending'}</span>
-                                    {verificationResult && <>
+                                    {verificationResult?.similarity && typeof verificationResult.threshold === 'number' && <>
                                         <span className="text-slate-500">Similarity</span>
-                                        <span>{verificationResult.similarity || '—'}</span>
+                                        <span>{verificationResult.similarity}</span>
                                         <span className="text-slate-500">Required</span>
-                                        <span>{verificationResult.threshold ? `${(verificationResult.threshold * 100).toFixed(1)}%` : '88.0%'}</span>
+                                        <span>{(verificationResult.threshold * 100).toFixed(1)}%</span>
                                     </>}
                                     <span className="text-slate-500">Canonical</span>
                                     <span>{canonicalPortraitUrl ? '3:4 server portrait' : 'pending'}</span>
@@ -1182,9 +1184,9 @@ export function ExpressKioskApp() {
                                 </Button>
                             </div>
                         }
-                        resultSlot={
+                        children={
                             verificationResult && (
-                            <div className="w-full flex flex-col items-center justify-center animate-in zoom-in-95 fade-in duration-200">
+                            <div className="absolute bottom-4 inset-x-4 z-30 flex flex-col items-center justify-center animate-in zoom-in-95 fade-in duration-200">
                                 {verificationResult.matched ? (
                                     <div className="w-full max-w-sm p-4 bg-slate-950/95 border-2 border-emerald-500/70 rounded-2xl backdrop-blur-md shadow-2xl space-y-2 text-center">
                                         <div className="flex items-center justify-center gap-2 text-emerald-400 font-black text-sm">
@@ -1210,10 +1212,6 @@ export function ExpressKioskApp() {
                                             <span>•</span>
                                             <span>Latency: {verificationResult.duration}</span>
                                         </div>
-                                        <div className="border-t border-emerald-500/20 pt-2 text-[10px] font-mono text-emerald-100/80">
-                                            <div>Faces: {verificationResult.faceCount ?? '—'} · Template: {verificationResult.embeddingDimensions ?? '—'}-d · Liveness: {verificationResult.livenessPassed ? 'Passed' : 'Failed'}</div>
-                                            <div className="mt-0.5 truncate">Python service: {verificationResult.serverBackend || 'Not reported'} · AI: {verificationResult.serverProcessingMs ? `${(verificationResult.serverProcessingMs / 1000).toFixed(1)}s` : '—'} · Canonical: 3:4</div>
-                                        </div>
                                     </div>
                                 ) : (
                                     <div className="w-full max-w-sm p-4 bg-slate-950/95 border-2 border-rose-500/70 rounded-2xl backdrop-blur-md shadow-2xl space-y-1 text-center">
@@ -1226,13 +1224,11 @@ export function ExpressKioskApp() {
                                                 Duration: {verificationResult.duration}
                                             </div>
                                         )}
-                                        <div className="text-[11px] font-mono text-rose-200/90">
-                                            Match: {verificationResult.similarity || '0.0%'} · Required: {verificationResult.threshold ? `${(verificationResult.threshold * 100).toFixed(1)}%` : '80.0%'}
-                                        </div>
-                                        <div className="border-t border-rose-500/20 pt-2 text-[10px] font-mono text-rose-100/80">
-                                            <div>Faces: {verificationResult.faceCount ?? '—'} · Template: {verificationResult.embeddingDimensions ?? '—'}-d · Liveness: {verificationResult.livenessPassed ? 'Passed' : 'Failed'}</div>
-                                            <div className="mt-0.5 truncate">Python service: {verificationResult.serverBackend || 'Not reported'} · AI: {verificationResult.serverProcessingMs ? `${(verificationResult.serverProcessingMs / 1000).toFixed(1)}s` : '—'} · Canonical: 3:4</div>
-                                        </div>
+                                        {verificationResult.similarity && typeof verificationResult.threshold === 'number' && (
+                                            <div className="text-[11px] font-mono text-rose-200/90">
+                                                Match: {verificationResult.similarity} · Required: {(verificationResult.threshold * 100).toFixed(1)}%
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
