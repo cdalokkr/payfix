@@ -119,7 +119,8 @@ export const CANONICAL_TENANT_COLUMNS: Record<CanonicalTenantTable, readonly str
         'punch_time', 'punch_type', 'raw_payload', 'created_at',
     ],
     kiosk_devices: [
-        'id', 'name', 'pairing_code', 'terminal_id', 'location_id', 'is_active',
+        'id', 'name', 'pairing_code', 'terminal_id', 'credential_hash', 'credential_expires_at',
+        'location_id', 'is_active',
         'last_seen_at', 'created_by', 'created_at', 'updated_at',
     ],
     employee_salary_setup: [
