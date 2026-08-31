@@ -5,6 +5,7 @@ on:
     branches:
       - develop
       - hardening/develop-camera-performance
+      - hardening/canonical-tenant-schema
   pull_request:
     branches:
       - develop
