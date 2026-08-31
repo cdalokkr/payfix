@@ -42,15 +42,25 @@ for (const file of files) {
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/--.*$/gm, '');
 
+  const publicMutationPatterns = [
+    /\b(?:insert\s+into|update|delete\s+from|truncate(?:\s+table)?|alter\s+table|create\s+(?:table|index|view|materialized\s+view|function|trigger|type|sequence)|drop\s+(?:table|index|view|materialized\s+view|function|trigger|type|sequence))\s+(?:if\s+(?:not\s+)?exists\s+)?public\s*\./i,
+  ];
   const publicSchemaPatterns = [
     /\bpublic\s*\./i,
     /\b(?:alter|create|drop)\s+schema\s+(?:if\s+(?:not\s+)?exists\s+)?public\b/i,
     /\bset\s+search_path\s*=\s*public\b/i,
   ];
+  const withoutApprovedReadOnlyFallback = withoutComments.replace(
+    /\b(?:from|join)\s+public\s*\.\s*tenants\b/gi,
+    'tenant_registry',
+  );
 
-  if (publicSchemaPatterns.some((pattern) => pattern.test(withoutComments))) {
+  if (
+    publicMutationPatterns.some((pattern) => pattern.test(withoutComments)) ||
+    publicSchemaPatterns.some((pattern) => pattern.test(withoutApprovedReadOnlyFallback))
+  ) {
     failures.push(
-      `${file} targets the public schema. SaaS migrations after ${historicalPublicMigration} must be tenant-only.`,
+      `${file} targets the public schema outside the approved read-only tenant registry fallback. SaaS migrations after ${historicalPublicMigration} must be tenant-only.`,
     );
   }
 }
