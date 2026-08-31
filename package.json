@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "test:watch": "jest --watch",
+    "test:e2e:biometric": "tsx scripts/test-biometric-camera-e2e.ts",
     "validate:saas-migrations": "node scripts/validate-saas-migrations.mjs",
     "audit:tenant-schema": "tsx scripts/audit-tenant-schema-contract.ts",
     "performance:validate": "ts-node scripts/performance-validation.ts",
@@ -109,7 +110,7 @@
     "tailwindcss-animate": "^1.0.7",
     "ts-node": "^10.9.2",
     "tsx": "^4.23.1",
-    "typescript": "^7.0.2",
+    "typescript": "^6.0.2",
     "typescript-eslint": "^8.63.0",
     "ws": "^8.21.0"
   },
