@@ -233,6 +233,8 @@ export async function ensureCanonicalTenantSchema(
             ADD COLUMN IF NOT EXISTS "name" text,
             ADD COLUMN IF NOT EXISTS "pairing_code" text,
             ADD COLUMN IF NOT EXISTS "terminal_id" text,
+            ADD COLUMN IF NOT EXISTS "credential_hash" text,
+            ADD COLUMN IF NOT EXISTS "credential_expires_at" timestamp with time zone,
             ADD COLUMN IF NOT EXISTS "location_id" uuid,
             ADD COLUMN IF NOT EXISTS "is_active" boolean DEFAULT true,
             ADD COLUMN IF NOT EXISTS "last_seen_at" timestamp with time zone,
