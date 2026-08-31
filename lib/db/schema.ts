@@ -311,6 +311,8 @@ export const kioskDevices = pgTable('kiosk_devices', {
     name: text('name').notNull(),
     pairing_code: text('pairing_code').notNull().unique(),
     terminal_id: text('terminal_id'),
+    credential_hash: text('credential_hash'),
+    credential_expires_at: timestamp('credential_expires_at', { withTimezone: true }),
     location_id: uuid('location_id').references(() => officeLocations.id, { onDelete: 'set null' }),
     is_active: boolean('is_active').default(true),
     last_seen_at: timestamp('last_seen_at', { withTimezone: true }),
