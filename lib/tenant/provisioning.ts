@@ -82,6 +82,25 @@ export async function ensureCanonicalTenantSchema(
 ): Promise<TenantSchemaContractReport> {
     assertTenantSchemaName(schemaName);
 
+    // Schema alignment contains several DDL and compatibility statements. A
+    // lock around only CREATE SCHEMA is insufficient because concurrent
+    // alignments can otherwise observe partially-created tables/columns.
+    // Keep the lock and every alignment statement on the same transaction
+    // handle so only one invocation can reconcile a schema at a time.
+    return database.transaction(async (tx: any) => {
+        await tx.execute(sql`
+            SELECT pg_advisory_xact_lock(hashtextextended(${schemaName}, 0));
+        `);
+        return alignCanonicalTenantSchema(schemaName, tx);
+    });
+}
+
+async function alignCanonicalTenantSchema(
+    schemaName: string,
+    database: any,
+): Promise<TenantSchemaContractReport> {
+    assertTenantSchemaName(schemaName);
+
     const sourceTables = sqlTableList(CANONICAL_SOURCE_TABLES);
     const requiredIndexes = TENANT_REQUIRED_INDEXES;
     const requiredForeignKeys = TENANT_REQUIRED_FOREIGN_KEYS;
@@ -477,6 +496,8 @@ export async function provisionTenant(
 
     const schemaName = tenantSchemaNameFromSlug(slug);
     let schemaCreated = false;
+    let registeredTenantId: string | undefined;
+    let adminProfileCreated = false;
 
     try {
         // 2. Create or upgrade the schema
@@ -489,8 +510,20 @@ export async function provisionTenant(
                 WHERE schema_name = ${schemaName}
             ) AS exists;
         `);
-        schemaCreated = !Boolean(existingSchema[0]?.exists);
-        await centralDb.execute(sql`CREATE SCHEMA IF NOT EXISTS ${sql.raw(schemaName)};`);
+        if (!Boolean(existingSchema[0]?.exists)) {
+            try {
+                // Do not use CREATE SCHEMA IF NOT EXISTS here. A concurrent
+                // signup must not mistake a schema created by another
+                // invocation for one it owns and later drop it on rollback.
+                await centralDb.execute(sql`CREATE SCHEMA ${sql.raw(schemaName)};`);
+                schemaCreated = true;
+            } catch (schemaError: any) {
+                if (schemaError?.code !== '42P06') {
+                    throw schemaError;
+                }
+                console.log(`[Provisioning] Schema ${schemaName} was created concurrently; continuing without rollback ownership.`);
+            }
+        }
 
         onProgress?.('cloning_tables', `Setting up ${CANONICAL_TENANT_TABLES.length} business tables...`);
         console.log(`[Provisioning] Aligning canonical tables in ${schemaName}`);
@@ -531,15 +564,17 @@ export async function provisionTenant(
                 const lastName = additionalData?.lastName || '';
                 const fullName = additionalData?.fullName
                     || (firstName && lastName ? `${firstName} ${lastName}`.trim() : (firstName || lastName || 'Administrator'));
-                await centralDb.execute(sql`
+                const profileResult = await centralDb.execute(sql`
                     INSERT INTO ${sql.raw(schemaName)}.profiles (
                         id, email, full_name, role, status, designation_id, first_name, last_name, mobile_no, created_at, updated_at
                     ) VALUES (
                         ${adminUserId}, ${adminEmail}, ${fullName}, 'admin', 'active', 
                         ${designationId}, ${firstName || null}, ${lastName || null}, ${additionalData?.phone || null}, NOW(), NOW()
                     )
-                    ON CONFLICT (id) DO NOTHING;
+                    ON CONFLICT (id) DO NOTHING
+                    RETURNING id;
                 `);
+                adminProfileCreated = profileResult.length > 0;
                 console.log(`[Provisioning] Admin profile created in ${schemaName}.profiles`);
             } else {
                 console.warn(`[Provisioning] Admin designation not found in ${schemaName} — profile not created.`);
@@ -577,6 +612,10 @@ export async function provisionTenant(
                 industry: additionalData?.industry || null,
                 team_size: additionalData?.teamSize || null,
             }).returning();
+            if (!newTenant) {
+                throw new Error('Tenant registration did not return a control-plane record.');
+            }
+            registeredTenantId = newTenant.id;
 
             // Register default branding settings
             await masterDb.insert(tenantBranding).values({
@@ -606,6 +645,32 @@ export async function provisionTenant(
 
     } catch (err: any) {
         console.error(`[Provisioning] Failed to provision tenant ${safeSlug}:`, err);
+        // A concurrent loser can have inserted its admin profile into the
+        // winner's already-existing schema before the slug unique constraint
+        // rejects its control-plane insert. Remove only the row returned by
+        // this invocation; never delete an existing profile.
+        if (adminProfileCreated) {
+            try {
+                await centralDb.execute(sql`
+                    DELETE FROM ${sql.raw(schemaName)}.profiles
+                    WHERE id = ${adminUserId};
+                `);
+                console.log(`[Provisioning] Rolled back admin profile ${adminUserId}.`);
+            } catch (rollbackProfileErr) {
+                console.error('[Provisioning] Admin profile rollback failed:', rollbackProfileErr);
+            }
+        }
+        // If registration succeeded but a later step failed, remove only the
+        // control-plane row created by this invocation. Branding is deleted by
+        // its tenant foreign key cascade. Existing tenants are never touched.
+        if (registeredTenantId) {
+            try {
+                await masterDb.delete(tenants).where(eq(tenants.id, registeredTenantId));
+                console.log(`[Provisioning] Rolled back tenant registration ${registeredTenantId}.`);
+            } catch (rollbackRecordErr) {
+                console.error('[Provisioning] Tenant registration rollback failed:', rollbackRecordErr);
+            }
+        }
         // Only remove a schema created by this invocation. A failed contract
         // check or seed must never destroy an existing tenant's rows.
         if (shouldRollbackTenantSchema(schemaCreated)) {
