@@ -29,6 +29,18 @@ test('allows joining the tenant registry from a read-only query', () => {
   );
 });
 
+test('allows tenant privilege grants that mention DML keywords', () => {
+  assert.deepEqual(
+    failures(`
+      SELECT id, tenant_schema
+      FROM public.tenants;
+      GRANT SELECT, INSERT, UPDATE, DELETE
+      ON ALL TABLES IN SCHEMA tenant_primary TO payfix_tenant_role;
+    `),
+    [],
+  );
+});
+
 test('rejects writes that use the tenant registry fallback', () => {
   assert.equal(
     failures(`
