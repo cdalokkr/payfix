@@ -1,5 +1,8 @@
 "use client"
 
+/* Verification previews use camera/blob URLs that next/image cannot optimize. */
+/* eslint-disable @next/next/no-img-element */
+
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -119,7 +122,7 @@ export function FaceVerification({
             setErrorMessage('Verification service error. Please try again.')
             addDebugLog(`❌ Exception: ${errorMsg}`)
         }
-    }, [selfieDataUrl, profileImageUrl, onVerified, addDebugLog])
+    }, [selfieDataUrl, profileImageUrl, faceEmbedding, onVerified, addDebugLog])
 
     useEffect(() => {
         verifyFace()

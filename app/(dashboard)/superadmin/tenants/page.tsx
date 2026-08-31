@@ -567,7 +567,7 @@ export default function TenantsPage() {
         setExpiryDate(undefined);
       }
     }
-  }, [selectedTenant?.id, freeDbPlanId]);
+  }, [selectedTenant, freeDbPlanId]);
 
   // Metric counts
   const totalTenantsCount = tenantsList?.length || 8;

@@ -45,7 +45,7 @@ export function AttendanceDashboard() {
         'employee'
     )
 
-    const today = new Date()
+    const today = useMemo(() => new Date(), [])
     const [currentMonth, setCurrentMonth] = useState(startOfMonth(today))
     const [selectedDate, setSelectedDate] = useState<Date | undefined>(today)
 

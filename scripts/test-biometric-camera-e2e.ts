@@ -387,11 +387,41 @@ async function verifyAttendance(
     }
     const result = await postJson(request, baseUrl, '/api/attendance/verify-face', payload)
     assert(result.status === 200 && result.body.matched === true, `PWA ${expectedAction} failed: ${JSON.stringify(result)}`)
-    assert(result.body.punch?.action === expectedAction, `PWA expected ${expectedAction}, got ${JSON.stringify(result.body.punch)}`)
     assert(result.body.verification?.embeddingDimensions === 512, 'PWA verification did not use a 512-dimensional probe')
     assert(result.body.verification?.livenessPassed === true, 'PWA verification did not pass liveness')
     assert(result.body.canonical_portrait_aspect_ratio === '3:4', 'PWA verification did not return a canonical 3:4 portrait')
-    return { payload, result: result.body }
+
+    // The mobile PWA records attendance in a separate tRPC mutation after the
+    // server-only face verification succeeds. Kiosk verification is different:
+    // its route performs the punch itself and returns a punch object.
+    const punch = await recordPwaAttendance(request, baseUrl, expectedAction)
+    assert(punch.action === expectedAction, `PWA expected ${expectedAction}, got ${punch.action}`)
+    return { payload, result: result.body, punch }
+}
+
+async function recordPwaAttendance(
+    request: APIRequestContext,
+    baseUrl: string,
+    action: 'check_in' | 'check_out',
+) {
+    const localDate = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Kolkata' })
+    const procedure = action === 'check_in' ? 'attendance.clockIn' : 'attendance.clockOut'
+    const input = action === 'check_in'
+        ? { localDate, isExtraDay: false }
+        : { localDate }
+    const response = await postJson(request, baseUrl, `/api/trpc/${procedure}?batch=1`, {
+        0: input,
+    })
+    const envelope = Array.isArray(response.body) ? response.body[0] : response.body
+    const errorMessage = envelope?.error?.json?.message || envelope?.error?.message
+    assert(
+        response.status === 200 && !envelope?.error,
+        `PWA ${action} attendance mutation failed: ${JSON.stringify({ response, errorMessage })}`,
+    )
+
+    const record = envelope?.result?.data?.json ?? envelope?.result?.data
+    assert(record && typeof record === 'object', `PWA ${action} attendance mutation returned no record: ${JSON.stringify(response)}`)
+    return { action, record }
 }
 
 async function getDisposableAttendanceCounts(fixture: Fixture) {
@@ -427,6 +457,7 @@ async function run() {
         fixture = await createFixture()
         const browserArgs = [
             '--use-fake-ui-for-media-stream',
+            '--use-fake-device-for-media-stream',
             '--autoplay-policy=no-user-gesture-required',
         ]
         if (cameraY4m) browserArgs.push(`--use-file-for-fake-video-capture=${cameraY4m}`)
@@ -544,6 +575,27 @@ async function run() {
             details: { punch: kioskResult.body.punch, similarity: kioskResult.body.similarity },
         })
 
+        const kioskCheckOutChallenge = await postJson(context.request, baseUrl, '/api/biometric/challenge', { purpose: 'attendance' }, kioskHeaders)
+        assert(kioskCheckOutChallenge.status === 200, `Could not create kiosk check-out challenge: ${JSON.stringify(kioskCheckOutChallenge)}`)
+        const kioskCheckOutPayload = {
+            frames: await captureNaturalFrames(page),
+            challenge: kioskCheckOutChallenge.body.challenge,
+            biometricPipelineVersion: PIPELINE_VERSION,
+            latitude: TEST_LATITUDE,
+            longitude: TEST_LONGITUDE,
+        }
+        const kioskCheckOut = await postJson(context.request, baseUrl, '/api/kiosk/verify-face', kioskCheckOutPayload, kioskHeaders)
+        assert(kioskCheckOut.status === 200 && kioskCheckOut.body.matched === true, `Kiosk face check-out failed: ${JSON.stringify(kioskCheckOut)}`)
+        assert(kioskCheckOut.body.punch?.action === 'check_out', `Kiosk did not create the expected check-out: ${JSON.stringify(kioskCheckOut.body.punch)}`)
+        assert(kioskCheckOut.body.verification?.embeddingDimensions === 512, 'Kiosk check-out did not use a 512-dimensional probe')
+        assert(kioskCheckOut.body.verification?.livenessPassed === true, 'Kiosk check-out did not pass liveness')
+        assert(kioskCheckOut.body.canonical_portrait_aspect_ratio === '3:4', 'Kiosk check-out did not return a canonical 3:4 portrait')
+        checks.push({
+            name: 'kiosk check-out',
+            ok: true,
+            details: { punch: kioskCheckOut.body.punch, similarity: kioskCheckOut.body.similarity },
+        })
+
         const revoked = await deleteJson(context.request, baseUrl, '/api/kiosk/session', {
             'x-kiosk-installation-id': TERMINAL_ID,
         })
@@ -555,7 +607,7 @@ async function run() {
         checks.push({ name: 'kiosk credential revocation', ok: true })
 
         const finalCounts = await getDisposableAttendanceCounts(fixture)
-        assert(finalCounts.attendance === 2 && finalCounts.sessions === 2, `Unexpected disposable attendance counts: ${JSON.stringify(finalCounts)}`)
+        assert(finalCounts.attendance === 1 && finalCounts.sessions === 2, `Unexpected disposable attendance counts: ${JSON.stringify(finalCounts)}`)
         console.log(JSON.stringify({
             status: 'passed',
             tenant: fixture.tenantSlug,
@@ -609,7 +661,9 @@ async function run() {
     }
 }
 
-run().catch((error) => {
-    console.error(error instanceof Error ? error.message : String(error))
-    process.exitCode = 1
-})
+run()
+    .then(() => process.exit(0))
+    .catch((error) => {
+        console.error(error instanceof Error ? error.message : String(error))
+        process.exit(1)
+    })

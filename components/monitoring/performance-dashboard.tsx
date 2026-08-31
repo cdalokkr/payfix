@@ -11,19 +11,19 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { 
-  webVitalsMonitor, 
-  WebVitalRecord, 
-  getPerformanceRating, 
-  formatMetricValue, 
+import {
+  webVitalsMonitor,
+  WebVitalRecord,
+  getPerformanceRating,
+  formatMetricValue,
   getMetricColor,
   PERFORMANCE_THRESHOLDS
 } from '@/lib/monitoring/web-vitals';
-import { 
-  performanceAnalytics, 
-  PerformanceTestResult, 
+import {
+  performanceAnalytics,
+  PerformanceTestResult,
   PerformanceIssue,
-  getPerformanceSummary 
+  getPerformanceSummary
 } from '@/lib/monitoring/performance-analytics';
 
 // Performance dashboard props
@@ -71,61 +71,61 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
   // Real-time metrics tracking
   const [realTimeMetrics, setRealTimeMetrics] = useState<Record<string, RealTimeMetric[]>>({});
 
-  // Fetch and update data
-  const fetchData = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      
-      // Get current metrics from monitoring system
-      const currentMetrics = webVitalsMonitor.getMetrics();
-      const analyticsSummary = getPerformanceSummary();
-      
-      setMetrics(currentMetrics);
-      setIssues(analyticsSummary.activeIssues);
-      
-      // Update real-time metrics
-      if (realTimeMode) {
-        updateRealTimeMetrics(currentMetrics);
-      }
-      
-    } catch (error) {
-      console.error('Failed to fetch performance data:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [realTimeMode]);
-
   // Update real-time metrics
   const updateRealTimeMetrics = useCallback((currentMetrics: WebVitalRecord[]) => {
     setRealTimeMetrics(prev => {
       const updated = { ...prev };
-      
+
       currentMetrics.forEach(metric => {
         if (!updated[metric.metric]) {
           updated[metric.metric] = [];
         }
-        
+
         // Add new data point
         const newDataPoint: RealTimeMetric = {
           timestamp: metric.timestamp,
           value: metric.value,
           rating: metric.rating,
         };
-        
+
         updated[metric.metric] = [
           ...updated[metric.metric].slice(-49), // Keep last 50 points
           newDataPoint
         ];
       });
-      
+
       return updated;
     });
   }, []);
 
+  // Fetch and update data
+  const fetchData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+
+      // Get current metrics from monitoring system
+      const currentMetrics = webVitalsMonitor.getMetrics();
+      const analyticsSummary = getPerformanceSummary();
+
+      setMetrics(currentMetrics);
+      setIssues(analyticsSummary.activeIssues);
+
+      // Update real-time metrics
+      if (realTimeMode) {
+        updateRealTimeMetrics(currentMetrics);
+      }
+
+    } catch (error) {
+      console.error('Failed to fetch performance data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [realTimeMode, updateRealTimeMetrics]);
+
   // Run performance test
   const runPerformanceTest = useCallback(async () => {
     if (!enableTesting) return;
-    
+
     setIsTesting(true);
     try {
       const result = await performanceAnalytics.runPerformanceTest(window.location.href);
@@ -141,8 +141,8 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
   const exportData = useCallback(() => {
     try {
       const exportData = performanceAnalytics.exportData('json');
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], { 
-        type: 'application/json' 
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+        type: 'application/json'
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -164,7 +164,7 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
       const current = values[values.length - 1] || 0;
       const average = values.length > 0 ? values.reduce((sum, val) => sum + val, 0) / values.length : 0;
       const rating = getPerformanceRating(metric as keyof typeof PERFORMANCE_THRESHOLDS, current);
-      
+
       return {
         metric,
         data: dataPoints,
@@ -178,14 +178,14 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
   // Performance score calculation
   const overallScore = useMemo(() => {
     if (metrics.length === 0) return 0;
-    
+
     const latestByMetric = metrics.reduce((acc, metric) => {
       if (!acc[metric.metric] || metric.timestamp > acc[metric.metric].timestamp) {
         acc[metric.metric] = metric;
       }
       return acc;
     }, {} as Record<string, WebVitalRecord>);
-    
+
     const scores = Object.values(latestByMetric).map(metric => {
       switch (metric.rating) {
         case 'good': return 100;
@@ -194,7 +194,7 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
         default: return 0;
       }
     });
-    
+
     return Math.round(scores.reduce((sum: number, score: number) => sum + score, 0) / scores.length);
   }, [metrics]);
 
@@ -208,7 +208,7 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
       const interval = setInterval(() => {
         setRefreshKey(prev => prev + 1);
       }, autoRefreshInterval);
-      
+
       return () => clearInterval(interval);
     }
   }, [autoRefreshInterval]);
@@ -247,7 +247,7 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
             <div className="flex gap-2">
               {showControls && (
                 <>
-                  <Button 
+                  <Button
                     onClick={() => setRefreshKey(prev => prev + 1)}
                     variant="outline"
                     size="sm"
@@ -255,7 +255,7 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
                     Refresh
                   </Button>
                   {enableTesting && (
-                    <Button 
+                    <Button
                       onClick={runPerformanceTest}
                       disabled={isTesting}
                       size="sm"
@@ -351,7 +351,7 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
                     <div className="flex justify-between items-center">
                       <h4 className="font-medium">{trend.metric}</h4>
                       <Badge variant={
-                        trend.rating === 'good' ? 'default' : 
+                        trend.rating === 'good' ? 'default' :
                         trend.rating === 'needs-improvement' ? 'secondary' : 'destructive'
                       }>
                         {trend.rating}

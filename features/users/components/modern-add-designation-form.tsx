@@ -108,6 +108,9 @@ export function ModernAddDesignationForm({
     // Cleanup
     useEffect(() => {
         return () => clearTimeouts()
+        // Cleanup intentionally runs only on unmount; clearing timeouts when
+        // other state changes would cancel newly scheduled feedback.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     const createMutation = trpc.admin.designation.createDesignation.useMutation({

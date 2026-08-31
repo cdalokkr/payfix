@@ -99,7 +99,7 @@ export default function OfflinePage() {
           Connection Lost
         </h2>
         <p className="text-sm font-medium text-slate-500 dark:text-zinc-400 mb-8 leading-relaxed px-2">
-          Your device is currently offline. Don't worry—your local attendance punch records are saved securely and will sync automatically once connection is restored.
+          Your device is currently offline. Don&apos;t worry—your local attendance punch records are saved securely and will sync automatically once connection is restored.
         </p>
 
         {/* Action Controls */}

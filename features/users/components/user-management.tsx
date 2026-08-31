@@ -295,7 +295,8 @@ export default function UserManagement({ initialData }: UserManagementProps) {
     false
   ), [handleEditUser, handleDeleteUser, handleResetPassword, handleToggleStatus, updatedCells])
 
-  const users = usersData?.users || []
+  const usersFromQuery = usersData?.users
+  const users = useMemo(() => usersFromQuery || [], [usersFromQuery])
 
   const filteredUsers = useMemo(() => {
     let result = [...users]

@@ -138,6 +138,17 @@ export default function KioskAttendance({ tenantId }: Props) {
   // ============================================
   // 2. Mark Attendance
   // ============================================
+  const resetToReady = useCallback(() => {
+    setStatus('ready');
+    setMessage(
+      employeeCount > 0
+        ? `Ready • ${employeeCount} employees offline`
+        : 'Ready'
+    );
+    setMatchedName(null);
+    setSimilarity(null);
+  }, [employeeCount]);
+
   const handleMarkAttendance = useCallback(async () => {
     if (status !== 'ready' || !videoRef.current || !modelsReady.current) return;
 
@@ -215,18 +226,7 @@ export default function KioskAttendance({ tenantId }: Props) {
       setMessage(err?.message || 'Verification failed');
       setTimeout(() => resetToReady(), 2500);
     }
-  }, [status, tenantId]);
-
-  function resetToReady() {
-    setStatus('ready');
-    setMessage(
-      employeeCount > 0
-        ? `Ready • ${employeeCount} employees offline`
-        : 'Ready'
-    );
-    setMatchedName(null);
-    setSimilarity(null);
-  }
+  }, [status, tenantId, resetToReady]);
 
   // ============================================
   // 3. Manual re-sync

@@ -166,6 +166,13 @@ const NotificationItem: React.FC<NotificationProps> = ({
     const priorityStyle = PRIORITY_STYLES[notification.priority]
     const Icon = getNotificationIcon(notification.category, notification.type)
 
+    const handleDismiss = useCallback(() => {
+        setIsExiting(true)
+        setTimeout(() => {
+            onDismiss(notification.id)
+        }, 200) // Match exit animation duration
+    }, [notification.id, onDismiss])
+
     // Auto-dismiss functionality
     useEffect(() => {
         if (config.autoDismissTimeout > 0 && !notification.read) {
@@ -175,20 +182,13 @@ const NotificationItem: React.FC<NotificationProps> = ({
 
             return () => clearTimeout(timer)
         }
-    }, [config.autoDismissTimeout, notification.read, notification.id])
+    }, [config.autoDismissTimeout, notification.read, notification.id, handleDismiss])
 
     // Entrance animation
     useEffect(() => {
         const timer = setTimeout(() => setIsVisible(true), 10)
         return () => clearTimeout(timer)
     }, [])
-
-    const handleDismiss = useCallback(() => {
-        setIsExiting(true)
-        setTimeout(() => {
-            onDismiss(notification.id)
-        }, 200) // Match exit animation duration
-    }, [notification.id, onDismiss])
 
     const handleMarkAsRead = useCallback(() => {
         if (!notification.read) {
@@ -480,7 +480,7 @@ export const RealTimeNotifications: React.FC<RealTimeNotificationsProps> = ({
             })
             setChannels(new Map())
         }
-    }, [userRole, userId, getFilteredNotifications, createNotificationFromEvent, finalConfig.maxNotifications, finalConfig.enableSounds])
+    }, [userRole, userId, getFilteredNotifications, createNotificationFromEvent, finalConfig.maxNotifications, finalConfig.enableSounds, supabase])
 
     // Handle notification dismissal
     const handleDismiss = useCallback((notificationId: string) => {

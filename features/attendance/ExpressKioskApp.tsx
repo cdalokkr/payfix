@@ -219,7 +219,6 @@ export function ExpressKioskApp() {
 
         restorePairing();
         return () => { isMounted = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Watch terminal GPS position
@@ -339,13 +338,6 @@ export function ExpressKioskApp() {
         }
     };
 
-    const clearLocalPairing = () => {
-        void KioskIndexedDBService.clearPairingCredentials();
-        setPairedDevice(null);
-        setInputKey('');
-        closeVerificationModal();
-    };
-
     const handleKioskLogout = async () => {
         if (!terminalInstallationId) return;
         setIsKioskLoggingOut(true);
@@ -395,6 +387,9 @@ export function ExpressKioskApp() {
             isMounted = false;
             window.clearInterval(intervalId);
         };
+    // The pairing callback only updates refs/state and is intentionally not a
+    // trigger for recreating the periodic server validation timer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isPaired, terminalInstallationId]);
 
     // The browser only guides capture. It does not load recognition models,
@@ -447,7 +442,7 @@ export function ExpressKioskApp() {
     };
 
     // Close Verification Modal Flow
-    const closeVerificationModal = () => {
+    const closeVerificationModal = useCallback(() => {
         if (scanAbortControllerRef.current) {
             scanAbortControllerRef.current.abort();
             scanAbortControllerRef.current = null;
@@ -461,8 +456,14 @@ export function ExpressKioskApp() {
         setScanError(null);
         setVerificationStage('');
         setCameraActive(false);
-    };
+    }, []);
 
+    const clearLocalPairing = useCallback(() => {
+        void KioskIndexedDBService.clearPairingCredentials();
+        setPairedDevice(null);
+        setInputKey('');
+        closeVerificationModal();
+    }, [closeVerificationModal]);
 
 
     // Capture the complete natural camera frame. The server owns portrait
@@ -1222,8 +1223,8 @@ export function ExpressKioskApp() {
                                 </Button>
                             </div>
                         }
-                        children={
-                            verificationResult && (
+                        >
+                            {verificationResult && (
                             <div className="absolute bottom-4 inset-x-4 z-30 flex flex-col items-center justify-center animate-in zoom-in-95 fade-in duration-200">
                                 {verificationResult.matched ? (
                                     <div className="w-full max-w-sm p-4 bg-slate-950/95 border-2 border-emerald-500/70 rounded-2xl backdrop-blur-md shadow-2xl space-y-2 text-center">
@@ -1270,8 +1271,8 @@ export function ExpressKioskApp() {
                                     </div>
                                 )}
                             </div>
-                        )}
-                    />
+                            )}
+                        </BiometricCameraModal>
 
 
                 </DialogContent>

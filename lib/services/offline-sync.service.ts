@@ -74,12 +74,10 @@ export class OfflineSyncService {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               "0": {
-                "json": {
-                  localDate: punch.localDate,
-                  isExtraDay: false,
-                  latitude: punch.latitude || undefined,
-                  longitude: punch.longitude || undefined
-                }
+                localDate: punch.localDate,
+                isExtraDay: false,
+                latitude: punch.latitude || undefined,
+                longitude: punch.longitude || undefined
               }
             })
           });
@@ -89,9 +87,7 @@ export class OfflineSyncService {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               "0": {
-                "json": {
-                  localDate: punch.localDate
-                }
+                localDate: punch.localDate
               }
             })
           });

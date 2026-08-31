@@ -91,6 +91,11 @@ export function useUserFeedback() {
   // Generate unique IDs
   const generateId = useCallback(() => crypto.randomUUID(), [])
 
+  // Remove feedback message
+  const removeFeedback = useCallback((id: string) => {
+    setFeedbackMessages(prev => prev.filter(msg => msg.id !== id))
+  }, [])
+
   // Add a feedback message
   const addFeedback = useCallback((feedback: Omit<FeedbackMessage, 'id' | 'timestamp'>) => {
     const id = generateId()
@@ -110,12 +115,7 @@ export function useUserFeedback() {
     }
 
     return id
-  }, [generateId])
-
-  // Remove feedback message
-  const removeFeedback = useCallback((id: string) => {
-    setFeedbackMessages(prev => prev.filter(msg => msg.id !== id))
-  }, [])
+  }, [generateId, removeFeedback])
 
   // Clear all feedback
   const clearFeedback = useCallback((type?: FeedbackType) => {
@@ -458,7 +458,7 @@ export function useUserFeedback() {
       console.error(`Operation ${operationName} failed:`, error)
       return null
     }
-  }, [startLoading, updateLoadingState, startProgress, updateProgress, completeProgress, failProgress])
+  }, [startLoading, updateLoadingState, startProgress, completeProgress, failProgress])
 
   // Form submission with comprehensive feedback
   const submitFormWithFeedback = useCallback(async <T>(

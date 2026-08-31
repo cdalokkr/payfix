@@ -527,6 +527,9 @@ export function useLoadingPerformance(componentName: string) {
         endLoading()
       }
     }
+    // Cleanup intentionally runs only on unmount; including live metric state
+    // would end loading whenever the metric changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return {

@@ -1066,7 +1066,7 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
         }
       }, 100) // 100ms delay to handle Strict Mode double-mount
     }
-  }, [refetch, role, userId, channelRecreationTrigger, recreateChannel])
+  }, [refetch, role, userId, channelRecreationTrigger, recreateChannel, utils.attendance.getAttendance, utils.attendance.getLeaves])
 
   // Visibility change handler for channel reconnection on tab focus
   // PERFORMANCE FIX: Only refetch when channel is disconnected - trust realtime for connected channels

@@ -229,9 +229,23 @@ export class KioskDeviceService {
             const schemasRes = await centralDb.execute(sql`
                 SELECT schema_name FROM information_schema.schemata WHERE schema_name LIKE 'tenant_%';
             `)
+            const tenantRegistry = await centralDb.execute(sql`
+                SELECT slug, tenant_schema
+                FROM public.tenants
+                WHERE tenant_schema IS NOT NULL;
+            `)
+            const slugBySchema = new Map<string, string>(
+                tenantRegistry.map((row: any) => [String(row.tenant_schema), String(row.slug)]),
+            )
 
             for (const row of schemasRes) {
                 const schemaName = (row as any).schema_name
+                const tenantSlug = slugBySchema.get(schemaName)
+                // A tenant schema must be registered in the control plane before
+                // it can authorize a kiosk pairing. Do not infer a slug from the
+                // schema name: valid slugs may contain hyphens, while schema
+                // identifiers use underscores.
+                if (!tenantSlug) continue
                 try {
                     const devices = await centralDb.execute(sql`
                         SELECT id, name, pairing_code, terminal_id, location_id, is_active
@@ -245,8 +259,6 @@ export class KioskDeviceService {
                         if (device.terminal_id && device.terminal_id !== terminalId) {
                             return null
                         }
-                        const slug = schemaName.replace(/^tenant_/, '')
-
                         let locationName: string | null = null
                         let latitude: number | null = null
                         let longitude: number | null = null
@@ -292,7 +304,7 @@ export class KioskDeviceService {
                                 radiusMeters,
                             },
                             tenantSchema: schemaName,
-                            tenantSlug: slug
+                            tenantSlug
                         }
 
                         // ✅ Cache result for 5 minutes

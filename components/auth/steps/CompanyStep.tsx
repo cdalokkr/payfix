@@ -65,6 +65,8 @@ export default function CompanyStep({
     },
   });
 
+  // react-hook-form's watch API is intentionally live and is not React Compiler-memoizable.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const companyName = watch("companyName");
   const workspaceDisplayName = watch("workspaceDisplayName");
   const workspaceSlug = watch("workspaceName");

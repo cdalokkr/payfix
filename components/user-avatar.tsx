@@ -3,6 +3,9 @@ import { cn } from "@/lib/utils"
 
 import Image from "next/image"
 
+/* Avatar sources may be remote user uploads without a configured image loader. */
+/* eslint-disable @next/next/no-img-element */
+
 interface UserAvatarProps {
     src?: string | null
     alt?: string

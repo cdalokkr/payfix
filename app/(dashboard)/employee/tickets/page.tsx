@@ -38,7 +38,7 @@ export default function EmployeeTicketsPage() {
           <div className="text-center py-16 text-muted-foreground">
             <TicketCheck className="h-12 w-12 mx-auto mb-4 opacity-30" />
             <p className="font-medium">No tickets assigned</p>
-            <p className="text-sm">You'll see tickets here once they are assigned to you</p>
+            <p className="text-sm">You&apos;ll see tickets here once they are assigned to you</p>
           </div>
         ) : (
           myTickets.map((ticket: any, idx: number) => (

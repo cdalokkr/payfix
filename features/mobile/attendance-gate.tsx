@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -55,6 +56,7 @@ interface AttendanceGateProps {
 }
 
 export function AttendanceGate({ profileImageUrl, hasProfileImage }: AttendanceGateProps) {
+    const router = useRouter()
     const [showWizard, setShowWizard] = useState(false)
     const [wizardAction, setWizardAction] = useState<'clock_in' | 'clock_out'>('clock_in')
     const [hardwareInfo] = useState(() => getHardwareAccelerationInfo())
@@ -150,8 +152,8 @@ export function AttendanceGate({ profileImageUrl, hasProfileImage }: AttendanceG
                                 size="sm"
                                 className="ml-4"
                                 onClick={() => {
-                                    // Navigate to profile page
-                                    window.location.href = '/employee/profile'
+                                     // Navigate to profile page
+                                     router.push('/employee/profile')
                                 }}
                             >
                                 {blocker.action}
@@ -166,7 +168,7 @@ export function AttendanceGate({ profileImageUrl, hasProfileImage }: AttendanceG
                 <CardHeader>
                     <div className="flex items-center justify-between flex-wrap gap-2">
                         <div>
-                            <CardTitle>Today's Attendance</CardTitle>
+                             <CardTitle>Today&apos;s Attendance</CardTitle>
                             <CardDescription>
                                 {new Date().toLocaleDateString('en-IN', {
                                     weekday: 'long',
@@ -196,7 +198,7 @@ export function AttendanceGate({ profileImageUrl, hasProfileImage }: AttendanceG
                                 Attendance Marked ✓
                             </p>
                             <p className="text-sm text-muted-foreground">
-                                You have completed today's attendance
+                                 You have completed today&apos;s attendance
                             </p>
                         </div>
                     ) : (

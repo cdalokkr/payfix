@@ -377,7 +377,7 @@ export function AdminOfficeLocations() {
                         </Button>
 
                         <p className="text-xs text-muted-foreground text-center">
-                            💡 <strong>Tip:</strong> If location doesn't work, get coordinates from{' '}
+                            💡 <strong>Tip:</strong> If location doesn&apos;t work, get coordinates from{' '}
                             <a
                                 href="https://www.google.com/maps"
                                 target="_blank"

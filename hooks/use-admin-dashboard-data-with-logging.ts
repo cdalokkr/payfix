@@ -1,7 +1,7 @@
 'use client'
 
 import { trpc } from '@/lib/trpc/client'
-import { useMemo, useEffect } from 'react'
+import { useMemo, useEffect, useRef } from 'react'
 
 interface AdminDashboardData {
   stats: {
@@ -36,7 +36,8 @@ interface AdminDashboardDataState {
 }
 
 export function useAdminDashboardDataWithLogging(): AdminDashboardDataState {
-  const startTime = Date.now();
+  const startTimeRef = useRef(Date.now());
+  const startTime = startTimeRef.current;
   console.log('🚀 [AdminDashboard] Starting data fetch at:', new Date().toISOString());
 
   // Use tRPC hooks with custom stale times for parallel execution
@@ -112,7 +113,7 @@ export function useAdminDashboardDataWithLogging(): AdminDashboardDataState {
         });
       }
     }
-  }, [statsQuery.isLoading, analyticsQuery.isLoading, activitiesQuery.isLoading, statsQuery.data, analyticsQuery.data, activitiesQuery.data]);
+  }, [statsQuery.isLoading, analyticsQuery.isLoading, activitiesQuery.isLoading, statsQuery.data, analyticsQuery.data, activitiesQuery.data, startTime]);
 
   const isLoading = useMemo(() => {
     const loading = statsQuery.isLoading || analyticsQuery.isLoading || activitiesQuery.isLoading;
@@ -137,7 +138,7 @@ export function useAdminDashboardDataWithLogging(): AdminDashboardDataState {
       });
     }
     return error;
-  }, [statsQuery.isError, analyticsQuery.isError, activitiesQuery.isError])
+  }, [statsQuery.isError, analyticsQuery.isError, activitiesQuery.isError, statsQuery.error, analyticsQuery.error, activitiesQuery.error])
 
   const isFetching = useMemo(() =>
     statsQuery.isFetching || analyticsQuery.isFetching || activitiesQuery.isFetching,

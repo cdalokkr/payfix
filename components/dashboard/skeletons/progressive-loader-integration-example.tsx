@@ -199,7 +199,7 @@ export default function ProgressiveLoaderIntegrationExample() {
             ) : (
               /* Empty State */
               <div className="text-center py-8">
-                <p className="text-muted-foreground">Click "Simulate Data Load" to see the demo</p>
+                <p className="text-muted-foreground">Click &quot;Simulate Data Load&quot; to see the demo</p>
               </div>
             )}
           </ProgressiveLoader>

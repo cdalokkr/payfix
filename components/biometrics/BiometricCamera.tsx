@@ -135,6 +135,8 @@ export const BiometricCamera: React.FC<BiometricCameraProps> = ({
       isMountedRef.current = false;
       stopStream();
     };
+  // Camera setup is intentionally mount-only; callback refs keep parent handlers current.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Run ONCE on mount
 
   return (

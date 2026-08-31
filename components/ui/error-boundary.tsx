@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
+import Link from 'next/link'
 
 interface Props {
   children: ReactNode
@@ -138,14 +139,15 @@ export class ErrorBoundary extends Component<Props, State> {
                 Retry ({maxRetries - retryCount} left)
               </Button>
             )}
-            <Button 
-              onClick={() => window.location.href = '/'} 
-              variant="outline" 
-              size="sm"
-            >
-              <Home className="h-4 w-4 mr-2" />
-              Go Home
-            </Button>
+            <Link href="/">
+              <Button
+                variant="outline"
+                size="sm"
+              >
+                <Home className="h-4 w-4 mr-2" />
+                Go Home
+              </Button>
+            </Link>
           </div>
         </div>
       )

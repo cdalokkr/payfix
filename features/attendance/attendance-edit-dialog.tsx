@@ -62,6 +62,8 @@ export function AttendanceEditDialog({
         }
     })
 
+    // react-hook-form's watch API is intentionally live and is not React Compiler-memoizable.
+    // eslint-disable-next-line react-hooks/incompatible-library
     const status = watch('status')
     const dayType = watch('dayType')
 

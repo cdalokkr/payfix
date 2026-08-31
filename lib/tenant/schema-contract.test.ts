@@ -43,7 +43,14 @@ describe('tenant schema contract', () => {
             ]),
         );
         expect(CANONICAL_TENANT_COLUMNS.kiosk_devices).toEqual(
-            expect.arrayContaining(['name', 'terminal_id', 'location_id', 'last_seen_at']),
+            expect.arrayContaining([
+                'name',
+                'terminal_id',
+                'location_id',
+                'last_seen_at',
+                'credential_hash',
+                'credential_expires_at',
+            ]),
         );
         expect(TENANT_REQUIRED_INDEXES).toEqual(
             expect.arrayContaining([

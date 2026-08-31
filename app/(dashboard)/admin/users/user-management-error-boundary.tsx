@@ -79,10 +79,6 @@ export class UserManagementErrorBoundary extends Component<Props, State> {
         }, 1000)
     }
 
-    private handleGoHome = () => {
-        window.location.href = '/admin'
-    }
-
     public render() {
         if (this.state.hasError) {
             // Custom fallback UI
@@ -132,14 +128,15 @@ export class UserManagementErrorBoundary extends Component<Props, State> {
                         )}
 
                         {/* Go to Dashboard Button */}
-                        <Button
-                            onClick={this.handleGoHome}
-                            variant="outline"
-                            className="flex items-center gap-2"
-                        >
-                            <Home className="h-4 w-4" />
-                            Back to Dashboard
-                        </Button>
+                        <Link href="/admin">
+                            <Button
+                                variant="outline"
+                                className="flex items-center gap-2"
+                            >
+                                <Home className="h-4 w-4" />
+                                Back to Dashboard
+                            </Button>
+                        </Link>
 
                         {/* Refresh Page Button */}
                         <Button

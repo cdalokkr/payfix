@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-/* eslint-disable @typescript-eslint/no-require-imports */
-
 /**
  * Real-Time Multi-Browser Dashboard Validation Script
  *

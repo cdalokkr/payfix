@@ -1,5 +1,8 @@
 "use client"
 
+/* Selfie previews use camera/blob URLs that next/image cannot optimize. */
+/* eslint-disable @next/next/no-img-element */
+
 import React, { useState, useRef, useCallback, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"

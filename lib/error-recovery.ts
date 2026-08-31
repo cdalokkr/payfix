@@ -310,17 +310,20 @@ export function useErrorRecovery(config: RecoveryConfig = {}) {
   const circuitBreakerRef = useRef<CircuitBreaker | null>(null)
   const manualRetryRef = useRef<ManualRetryHandler | null>(null)
   const degradationManagerRef = useRef<GracefulDegradationManager | null>(null)
+  const configKey = JSON.stringify(config)
+  const configRef = useRef(config)
+  configRef.current = config
 
   // Initialize components
   useEffect(() => {
-    circuitBreakerRef.current = new CircuitBreaker(config)
-    manualRetryRef.current = new ManualRetryHandler(config)
+    circuitBreakerRef.current = new CircuitBreaker(configRef.current)
+    manualRetryRef.current = new ManualRetryHandler(configRef.current)
     degradationManagerRef.current = new GracefulDegradationManager()
 
     return () => {
       circuitBreakerRef.current?.reset()
     }
-  }, [JSON.stringify(config)])
+  }, [configKey])
 
   const { executeWithFeedback } = useUserFeedback()
 

@@ -103,7 +103,6 @@ describe('AdminOverview', () => {
       clearPrefetch: mockClearPrefetch,
       isPrefetching: false,
     })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ; (mockTrpc.useUtils as any).mockReturnValue({
         admin: {
           dashboard: {
@@ -111,7 +110,6 @@ describe('AdminOverview', () => {
           },
         },
       })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ; (mockTrpc.profile.get.useQuery as any).mockReturnValue({
         data: { user_id: 'test-user-id' },
       })

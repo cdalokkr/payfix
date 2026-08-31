@@ -1,5 +1,8 @@
 "use client"
 
+/* Attendance photo previews use dynamic user-uploaded URLs. */
+/* eslint-disable @next/next/no-img-element */
+
 import { Table } from "@tanstack/react-table"
 import { Input } from "@/components/ui/input"
 

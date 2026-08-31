@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
     metricsCollector,
     type RealTimeMetrics
@@ -67,7 +67,26 @@ const DEFAULT_CONFIG: MonitoringConfig = {
  * @returns Comprehensive monitoring data and controls
  */
 export function useRealTimeMonitoring(config: Partial<MonitoringConfig> = {}) {
-    const finalConfig = { ...DEFAULT_CONFIG, ...config }
+    const {
+        refreshInterval,
+        enableAutoRefresh,
+        enableAlerts,
+        enablePerformanceAnalysis,
+        enableHealthChecks,
+    } = config
+    const finalConfig = useMemo(() => ({
+        refreshInterval: refreshInterval ?? DEFAULT_CONFIG.refreshInterval,
+        enableAutoRefresh: enableAutoRefresh ?? DEFAULT_CONFIG.enableAutoRefresh,
+        enableAlerts: enableAlerts ?? DEFAULT_CONFIG.enableAlerts,
+        enablePerformanceAnalysis: enablePerformanceAnalysis ?? DEFAULT_CONFIG.enablePerformanceAnalysis,
+        enableHealthChecks: enableHealthChecks ?? DEFAULT_CONFIG.enableHealthChecks,
+    }), [
+        refreshInterval,
+        enableAutoRefresh,
+        enableAlerts,
+        enablePerformanceAnalysis,
+        enableHealthChecks,
+    ])
 
     // State
     const [monitoringData, setMonitoringData] = useState<MonitoringData>({

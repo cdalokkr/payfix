@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // The disposable browser proof runs against the local dev origin directly.
+  // Allow its loopback host so Next.js serves client chunks instead of
+  // rendering the login form as a non-interactive HTML fallback.
+  allowedDevOrigins: ['127.0.0.1', 'localhost'],
+
   // Security Headers Configuration
   async headers() {
     // Determine if we're in production for stricter CSP

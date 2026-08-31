@@ -347,7 +347,7 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
         if (isReady) {
             fetchLocation()
         }
-    }, [utils, isPwa, isReady, hasNoPhoto])
+    }, [utils, isPwa, isReady, hasNoPhoto, profile.role, userCoords])
 
     const isClockedIn = todayAttendance?.current_session_status === 'checked_in' || (todayAttendance?.check_in && !todayAttendance?.check_out)
     const hasAnyPunch = !!(todayAttendance?.check_in || todayAttendance?.first_check_in)
@@ -398,7 +398,7 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
                             {/* Today's Attendance Heading with CalendarClock icon */}
                             <div className="flex items-center gap-2">
                                 <CalendarClock className="w-4 h-4 text-white" />
-                                <span className="text-xs font-black uppercase tracking-[0.2em] opacity-90">Today's Attendance</span>
+                                <span className="text-xs font-black uppercase tracking-[0.2em] opacity-90">Today&apos;s Attendance</span>
                             </div>
 
                             {/* GPS Coordinates - Below heading (only when not loading and has coords) */}

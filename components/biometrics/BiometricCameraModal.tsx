@@ -1,5 +1,8 @@
 'use client';
 
+/* Camera previews can be blob/data URLs, so next/image cannot optimize them. */
+/* eslint-disable @next/next/no-img-element */
+
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { X, RefreshCw, AlertCircle } from 'lucide-react';
 import { BIOMETRIC_CAMERA_CONFIG, BIOMETRIC_CAMERA_CONSTRAINTS, captureNaturalBiometricFrame, validateBiometricCameraFrame } from '@/lib/face-pipeline';
@@ -417,7 +420,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
       cancelAnimationFrame(animId);
       isEvaluatingRef.current = false;
     };
-  }, [isOpen, enableAutoBlinkCapture, isProcessing, videoRef, isStreamPlaying]);
+  }, [isOpen, enableAutoBlinkCapture, isProcessing, videoRef, isStreamPlaying, stopStream]);
 
   if (!isOpen) return null;
 

@@ -55,7 +55,7 @@ function SetupWizard() {
   const provisionMutation = trpc.auth.provisionWorkspace.useMutation({
     onSuccess: (data) => {
       if (data.alreadyProvisioned) {
-        window.location.href = "/admin?setup_done=1";
+        router.push("/admin?setup_done=1");
         return;
       }
       // Complete all steps and show success
@@ -70,7 +70,7 @@ function SetupWizard() {
       
       // Hard redirect with setup_done=1 so proxy clears stale caches
       setTimeout(() => {
-        window.location.href = "/admin?setup_done=1";
+        router.push("/admin?setup_done=1");
       }, 3000);
     },
     onError: (err) => {

@@ -28,6 +28,9 @@ export function useOfflineAttendance(profileId?: string) {
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
     }
+    // The listener is intentionally registered once per profile; the handler
+    // uses the latest offline database state when the browser comes online.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profileId])
 
   const refreshPendingCount = async () => {

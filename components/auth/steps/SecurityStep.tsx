@@ -38,6 +38,8 @@ export default function SecurityStep({
     },
   });
 
+  // react-hook-form's watch API is intentionally live and is not React Compiler-memoizable.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const password = watch("password");
 
   const onFormSubmit = (formData: Step3Data) => {
