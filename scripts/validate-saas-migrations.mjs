@@ -30,7 +30,7 @@ const publicSchemaPatterns = [
 ];
 const writePatterns = [
   /\binsert\s+into\s+(?:"[^"]+"|[a-z_][a-z0-9_$]*)(?:\s*\.\s*(?:"[^"]+"|[a-z_][a-z0-9_$]*))?/i,
-  /\bupdate\s+(?:only\s+)?(?:"[^"]+"|[a-z_][a-z0-9_$]*)(?:\s*\.\s*(?:"[^"]+"|[a-z_][a-z0-9_$]*))?/i,
+  /\bupdate\s+(?:only\s+)?(?:"[^"]+"|[a-z_][a-z0-9_$]*)(?:\s*\.\s*(?:"[^"]+"|[a-z_][a-z0-9_$]*))?\s+set\b/i,
   /\bdelete\s+(?:from|using)\s+(?:"[^"]+"|[a-z_][a-z0-9_$]*)(?:\s*\.\s*(?:"[^"]+"|[a-z_][a-z0-9_$]*))?/i,
   /\bmerge\s+into\s+(?:"[^"]+"|[a-z_][a-z0-9_$]*)(?:\s*\.\s*(?:"[^"]+"|[a-z_][a-z0-9_$]*))?/i,
   /\btruncate(?:\s+table)?\s+(?:"[^"]+"|[a-z_][a-z0-9_$]*)(?:\s*\.\s*(?:"[^"]+"|[a-z_][a-z0-9_$]*))?/i,
