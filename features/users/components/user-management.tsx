@@ -295,14 +295,6 @@ export default function UserManagement({ initialData }: UserManagementProps) {
     false
   ), [handleEditUser, handleDeleteUser, handleResetPassword, handleToggleStatus, updatedCells])
 
-  if (error) {
-    return (
-      <div className="text-center text-destructive">
-        Error loading users: {error.message}
-      </div>
-    )
-  }
-
   const users = usersData?.users || []
 
   const filteredUsers = useMemo(() => {
@@ -352,6 +344,14 @@ export default function UserManagement({ initialData }: UserManagementProps) {
 
 
 
+
+  if (error) {
+    return (
+      <div className="text-center text-destructive">
+        Error loading users: {error.message}
+      </div>
+    )
+  }
 
   return (
     <DashboardPageLayout
