@@ -6,6 +6,7 @@ export interface TenantContext {
     databaseUrl: string | null;
     tenantSchema: string | null;
     brandName: string;
+    licenseExpiresAt?: string | null;
     trusted?: boolean;
 }
 

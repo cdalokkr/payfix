@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# nested checkouts and generated audit/build outputs
+/payfix/
+/payfix-rls/
+/artifacts/api-server/dist/
+/lib/api-client-react/dist/
+/lib/api-zod/dist/
+/lib/db/dist/

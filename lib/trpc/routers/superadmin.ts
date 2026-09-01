@@ -11,6 +11,35 @@ import {
   SUPERADMIN_DEFAULT_ADMIN_PASSWORD,
 } from '@/lib/auth/supabase-admin';
 
+const TENANT_SCHEMA_PATTERN = /^tenant_[a-z0-9_]{3,40}$/;
+type TenantListRow = {
+  tenants: typeof tenants.$inferSelect;
+  tenant_plans: typeof tenantPlans.$inferSelect | null;
+  tenant_branding: typeof tenantBranding.$inferSelect | null;
+};
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (true) {
+      const index = nextIndex++;
+      if (index >= items.length) return;
+      results[index] = await mapper(items[index]);
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, Math.max(items.length, 1)) }, () => worker()),
+  );
+  return results;
+}
+
 export const superadminRouter = router({
   // 1. List all tenants with plans, branding and profile counts
   listTenants: superAdminProcedure.query(async () => {
@@ -21,8 +50,10 @@ export const superadminRouter = router({
         .leftJoin(tenantPlans, eq(tenants.plan_id, tenantPlans.id))
         .leftJoin(tenantBranding, eq(tenants.id, tenantBranding.tenant_id));
 
-      const tenantsWithCounts = await Promise.all(
-        allTenants.map(async (row) => {
+      const tenantsWithCounts = await mapWithConcurrency(
+        allTenants as TenantListRow[],
+        4,
+        async (row) => {
           const tenant = row.tenants;
           const plan = row.tenant_plans;
           const branding = row.tenant_branding;
@@ -32,43 +63,41 @@ export const superadminRouter = router({
           let adminName = "Platform Admin";
           let adminPhone = "N/A";
 
-          if (tenant.tenant_schema) {
+          if (tenant.tenant_schema && TENANT_SCHEMA_PATTERN.test(tenant.tenant_schema)) {
             try {
-              // Fetch employee count from tenant-specific profiles table
-              const empRes = await centralDb.execute(sql`
-                SELECT COUNT(*)::integer as count 
-                FROM ${sql.raw(tenant.tenant_schema)}.profiles 
-                WHERE role = 'employee';
+              // Keep one bounded query per tenant. Schema identifiers come
+              // from the registry and are pattern-checked before interpolation.
+              const profileStats = await centralDb.execute(sql`
+                SELECT
+                  COUNT(*) FILTER (WHERE role = 'employee'::user_role)::integer AS employee_count,
+                  COUNT(*) FILTER (WHERE role = 'moderator'::user_role)::integer AS moderator_count,
+                  (
+                    SELECT json_build_object('full_name', p.full_name, 'mobile_no', p.mobile_no)
+                    FROM ${sql.raw(tenant.tenant_schema)}.profiles p
+                    WHERE LOWER(p.email) = LOWER(${tenant.admin_email})
+                    LIMIT 1
+                  ) AS primary_admin,
+                  (
+                    SELECT json_build_object('full_name', p.full_name, 'mobile_no', p.mobile_no)
+                    FROM ${sql.raw(tenant.tenant_schema)}.profiles p
+                    WHERE p.role = 'admin'
+                    ORDER BY p.created_at ASC
+                    LIMIT 1
+                  ) AS fallback_admin
+                FROM ${sql.raw(tenant.tenant_schema)}.profiles;
               `);
-              employeeCount = (empRes[0]?.count as number) || 0;
-
-              // Fetch moderator count
-              const modRes = await centralDb.execute(sql`
-                SELECT COUNT(*)::integer as count 
-                FROM ${sql.raw(tenant.tenant_schema)}.profiles 
-                WHERE role = 'moderator';
-              `);
-              moderatorCount = (modRes[0]?.count as number) || 0;
-
-              // Fetch primary admin details by matching tenant's admin_email
-              let adminRes = await centralDb.execute(sql`
-                SELECT full_name, mobile_no, email 
-                FROM ${sql.raw(tenant.tenant_schema)}.profiles 
-                WHERE LOWER(email) = LOWER(${tenant.admin_email})
-                LIMIT 1;
-              `);
-              if (!adminRes[0]) {
-                adminRes = await centralDb.execute(sql`
-                  SELECT full_name, mobile_no, email 
-                  FROM ${sql.raw(tenant.tenant_schema)}.profiles 
-                  WHERE role = 'admin' 
-                  ORDER BY created_at ASC 
-                  LIMIT 1;
-                `);
-              }
-              if (adminRes[0]) {
-                adminName = (adminRes[0].full_name as string) || tenant.company_name + " Admin";
-                adminPhone = (adminRes[0].mobile_no as string) || "N/A";
+              const stats = profileStats[0] as {
+                employee_count?: number | string;
+                moderator_count?: number | string;
+                primary_admin?: { full_name?: string | null; mobile_no?: string | null } | null;
+                fallback_admin?: { full_name?: string | null; mobile_no?: string | null } | null;
+              } | undefined;
+              employeeCount = Number(stats?.employee_count || 0);
+              moderatorCount = Number(stats?.moderator_count || 0);
+              const admin = stats?.primary_admin || stats?.fallback_admin;
+              if (admin) {
+                adminName = admin.full_name || `${tenant.company_name} Admin`;
+                adminPhone = admin.mobile_no || "N/A";
               }
             } catch (schemaErr) {
               // Table or schema does not exist yet (e.g. not provisioned)
@@ -98,7 +127,8 @@ export const superadminRouter = router({
               name: plan.name,
               displayName: plan.display_name,
               maxEmployees: plan.max_employees,
-              maxModerators: plan.max_moderators
+              maxModerators: plan.max_moderators,
+              priceMonthly: plan.price_monthly
             } : null,
             branding: branding ? {
               appName: branding.app_name,
@@ -110,7 +140,7 @@ export const superadminRouter = router({
             adminName,
             adminPhone
           };
-        })
+        },
       );
 
       return tenantsWithCounts;

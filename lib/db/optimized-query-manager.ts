@@ -25,6 +25,7 @@ interface QueryCache {
   timestamp: number
   ttl: number
   queryHash: string
+  tenantKey?: string
 }
 
 // Global query cache
@@ -97,7 +98,11 @@ function setCachedQuery<T>(queryHash: string, data: T, ttl: number = CACHE_TTL_D
     data,
     timestamp: Date.now(),
     ttl,
-    queryHash
+    queryHash,
+    tenantKey: (() => {
+      const { tenantStorage } = require('@/lib/tenant/store');
+      return tenantStorage.getStore()?.tenantSchema || undefined;
+    })()
   })
 
   // Clean up cache to prevent memory leaks
@@ -744,9 +749,19 @@ export function createOptimizedQueryManager(): OptimizedQueryManager {
 }
 
 // Clear all caches
-export function clearQueryCaches(): void {
-  queryCache.clear()
-  console.log('[DB-PERF] All query caches cleared')
+export function clearQueryCaches(tenantKey?: string): void {
+  if (!tenantKey) {
+    queryCache.clear()
+    console.log('[DB-PERF] All query caches cleared')
+    return
+  }
+
+  for (const [key, cached] of queryCache.entries()) {
+    if (cached.tenantKey === tenantKey) {
+      queryCache.delete(key)
+    }
+  }
+  console.log(`[DB-PERF] Query caches cleared for tenant: ${tenantKey}`)
 }
 
 // Singleton instance for use across the app

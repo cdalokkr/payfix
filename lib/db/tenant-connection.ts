@@ -66,9 +66,11 @@ async function refreshTenantLockoutState(tenantId: string): Promise<boolean> {
         return blocked;
     } catch (err) {
         console.error(`[DB Router] Error refreshing lockout state for tenant ${tenantId}:`, err);
-        // On connection errors, fallback to previous state if exists, otherwise do not block
+        // On control-plane errors, preserve a known state. A tenant with no
+        // known state must not be treated as active because that would turn a
+        // control-plane outage into an authorization bypass.
         const prev = tenantLockoutCache.get(tenantId);
-        return prev ? prev.blocked : false;
+        return prev ? prev.blocked : true;
     }
 }
 

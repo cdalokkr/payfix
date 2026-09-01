@@ -46,6 +46,9 @@ export const db = new Proxy({} as any, {
     get(target, prop, receiver) {
         const context = tenantStorage.getStore();
         if (context && context.tenantId) {
+            if (!context.trusted || !context.tenantSchema) {
+                throw new Error('Trusted tenant context is required for tenant database access.');
+            }
             // Log routing decision (only on change to avoid spam)
             if (lastLoggedTenant !== context.tenantSchema) {
                 console.log(`[DB-PROXY] Routing to tenant DB: ${context.tenantSchema} (tenant: ${context.slug})`);
@@ -55,7 +58,9 @@ export const db = new Proxy({} as any, {
             return Reflect.get(tenantDb, prop, receiver);
         }
         
-        // Fallback context (build time, CLI seeding, migrations, or local admin scripts)
+        // Central database access must be explicit through centralDb. Keeping
+        // this compatibility fallback allows build-time imports and scripts to
+        // load the proxy without silently routing an authenticated request.
         if (lastLoggedTenant !== 'centralDb') {
             console.warn('[DB-PROXY] No tenant context — falling back to centralDb (public schema)');
             lastLoggedTenant = 'centralDb';
