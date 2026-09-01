@@ -63,6 +63,8 @@ const mockedHeaders = jest.mocked(headers);
 const mockedCookies = jest.mocked(cookies);
 
 const PROBE_TOKEN = 'request-contract-probe-token';
+const TEST_SUPABASE_URL = 'https://request-contract.supabase.co';
+const TEST_SUPABASE_ANON_KEY = 'request-contract-anon-key';
 const diagnosticHandlers = {
     '/api/health/tenant': getTenantHealth,
     '/api/health/tenant-deep': getTenantDeepHealth,
@@ -73,6 +75,8 @@ type DiagnosticRole = 'admin' | 'super_admin';
 let currentRole: DiagnosticRole | null = null;
 let requestSequence = 0;
 const originalProbeToken = process.env.TENANT_HEALTH_PROBE_TOKEN;
+const originalSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const originalSupabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 function makeRequest(
     pathname: keyof typeof diagnosticHandlers,
@@ -118,6 +122,10 @@ function requestAfterProxy(
 beforeEach(() => {
     jest.clearAllMocks();
     process.env.TENANT_HEALTH_PROBE_TOKEN = PROBE_TOKEN;
+    // The Supabase client is mocked below, but its production constructor
+    // still requires both public configuration values before it can be called.
+    process.env.NEXT_PUBLIC_SUPABASE_URL = TEST_SUPABASE_URL;
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = TEST_SUPABASE_ANON_KEY;
     currentRole = null;
 
     mockedResolveTenant.mockResolvedValue(null);
@@ -185,6 +193,18 @@ afterAll(() => {
         delete process.env.TENANT_HEALTH_PROBE_TOKEN;
     } else {
         process.env.TENANT_HEALTH_PROBE_TOKEN = originalProbeToken;
+    }
+
+    if (originalSupabaseUrl === undefined) {
+        delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    } else {
+        process.env.NEXT_PUBLIC_SUPABASE_URL = originalSupabaseUrl;
+    }
+
+    if (originalSupabaseAnonKey === undefined) {
+        delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    } else {
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = originalSupabaseAnonKey;
     }
 });
 
