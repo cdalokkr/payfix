@@ -12,7 +12,6 @@
     "test:watch": "jest --watch",
     "test:saas-migrations": "node --test scripts/validate-saas-migrations.node-test.mjs",
     "test:e2e:biometric": "tsx scripts/test-biometric-camera-e2e.ts",
-    "test:e2e:kiosk-reload": "tsx scripts/test-kiosk-browser-reload.ts",
     "test:e2e:tenant-registration": "tsx scripts/test-tenant-registration-contract.ts",
     "validate:saas-migrations": "node scripts/validate-saas-migrations.mjs",
     "audit:tenant-schema": "tsx scripts/audit-tenant-schema-contract.ts",
