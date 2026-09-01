@@ -10,7 +10,12 @@ import type { Profile } from '@/types'
 import { cache } from 'react'
 
 import { headers, cookies } from 'next/headers'
-import { tenantStorage } from '@/lib/tenant/store'
+import { tenantStorage, type TenantContext } from '@/lib/tenant/store'
+import {
+  resolveTrustedTenantBySlug,
+  resolveTrustedTenantContext,
+  TenantContextError,
+} from '@/lib/tenant/trusted-context'
 
 let createContextCallCount = 0
 const authCallTimes: number[] = []
@@ -21,38 +26,32 @@ export const createContext = async (opts?: { req: Request }) => {
   const startTime = performance.now()
 
   try {
-    const context = await createOptimizedContext(opts?.req)
-
-    // Extract tenant context from headers
     const reqHeaders = opts?.req ? new Headers(opts.req.headers) : await headers();
-    let tenantId = reqHeaders.get('x-tenant-id');
-    let tenantSlug = reqHeaders.get('x-tenant-slug');
-    let tenantDbUrl = reqHeaders.get('x-tenant-db-url') || null;
-    let tenantSchema = reqHeaders.get('x-tenant-schema') || null;
-    let tenantBrand = reqHeaders.get('x-tenant-brand') || 'PayFix';
-    let tenantLicenseExpiresAt = reqHeaders.get('x-tenant-license-expires-at') || null;
+    let tenant: TenantContext | null = null;
+    const tenantId = reqHeaders.get('x-tenant-id');
+    const tenantSlug = reqHeaders.get('x-tenant-slug');
+    const tenantSchema = reqHeaders.get('x-tenant-schema');
 
-    // Fail-safe fallback: If headers are missing (e.g. during Next.js server component rendering), resolve from cookie
-    if (!tenantSlug) {
+    if (tenantId || tenantSlug || tenantSchema) {
+      if (!tenantId || !tenantSlug || !tenantSchema) {
+        throw new TenantContextError('Tenant headers are incomplete.');
+      }
+      tenant = await resolveTrustedTenantContext(reqHeaders);
+    } else {
       try {
         const cookieStore = await cookies();
         const fallbackSlug = cookieStore.get('tenant_fallback')?.value;
         if (fallbackSlug) {
-          const { resolveTenant } = await import('@/lib/tenant/resolver');
-          const tenant = await resolveTenant(fallbackSlug);
-          if (tenant) {
-            tenantId = tenant.id;
-            tenantSlug = tenant.slug;
-            tenantDbUrl = tenant.database_url || null;
-            tenantSchema = tenant.tenant_schema || null;
-            tenantBrand = tenant.branding?.app_name || tenant.company_name;
-            tenantLicenseExpiresAt = tenant.license_expires_at ? new Date(tenant.license_expires_at).toISOString() : null;
-          }
+          tenant = await resolveTrustedTenantBySlug(fallbackSlug);
         }
       } catch (cookieErr) {
         console.error('[TRPC-CONTEXT] Error reading fallback cookie:', cookieErr);
       }
     }
+
+    const context = tenant
+      ? await tenantStorage.run(tenant, () => createOptimizedContext(opts?.req))
+      : await createOptimizedContext(opts?.req)
 
 
     // Record timing for performance monitoring
@@ -78,14 +77,7 @@ export const createContext = async (opts?: { req: Request }) => {
       db: db,
       user: context.user,
       profile: context.profile,
-      tenant: tenantId && tenantSlug ? {
-        tenantId,
-        slug: tenantSlug,
-        databaseUrl: tenantDbUrl,
-        tenantSchema,
-        brandName: tenantBrand,
-        licenseExpiresAt: tenantLicenseExpiresAt
-      } : null,
+      tenant,
       performance: {
         contextCreationTime: duration,
         cacheHit: context.metrics.cacheHit,
@@ -169,7 +161,6 @@ const tenantContextMiddleware = t.middleware(async ({ ctx, next }) => {
       return next();
     });
   }
-  console.warn('[TENANT-MW] No tenant context — queries will use centralDb');
   return next();
 });
 
@@ -200,6 +191,14 @@ export const protectedProcedure = publicProcedure.use(async ({ ctx, next }) => {
       code: 'UNAUTHORIZED',
       message: ctx.user ? 'Profile temporarily unavailable - please try again' : undefined,
       cause: { performance: ctx.performance }
+    })
+  }
+
+  if (!ctx.tenant?.trusted || !ctx.tenant.tenantSchema) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'A trusted tenant context is required.',
+      cause: { performance: ctx.performance },
     })
   }
 

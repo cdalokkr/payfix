@@ -38,7 +38,7 @@ export function createTrustedTenantContext(tenant: TenantRecord): TenantContext 
         throw new TenantContextError('Tenant is not active.')
     }
 
-    return {
+    const context: TenantContext = {
         tenantId: tenant.id,
         slug: tenant.slug,
         databaseUrl: tenant.database_url || null,
@@ -46,6 +46,10 @@ export function createTrustedTenantContext(tenant: TenantRecord): TenantContext 
         brandName: tenant.company_name,
         trusted: true,
     }
+    if (tenant.license_expires_at) {
+        context.licenseExpiresAt = new Date(tenant.license_expires_at).toISOString()
+    }
+    return context
 }
 
 export async function resolveTrustedTenantContext(requestHeaders: Headers): Promise<TenantContext> {
@@ -82,6 +86,19 @@ export async function resolveTrustedTenantBySchema(tenantSchema: string): Promis
     })
     if (!tenant) {
         throw new TenantContextError('Tenant schema is not registered.')
+    }
+    return createTrustedTenantContext(tenant)
+}
+
+export async function resolveTrustedTenantBySlug(slug: string): Promise<TenantContext> {
+    if (!TENANT_SLUG_PATTERN.test(slug)) {
+        throw new TenantContextError('Tenant slug is invalid.')
+    }
+    const tenant = await masterDb.query.tenants.findFirst({
+        where: eq(tenants.slug, slug),
+    })
+    if (!tenant) {
+        throw new TenantContextError('Tenant slug is not registered.')
     }
     return createTrustedTenantContext(tenant)
 }

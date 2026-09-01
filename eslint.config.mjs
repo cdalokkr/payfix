@@ -26,6 +26,12 @@ export default defineConfig([
   },
   globalIgnores([
     '.next/**',
+    // payfix/ is a nested, unrelated checkout kept outside this repository's
+    // source tree; its generated build output must not be linted here.
+    'payfix/**',
+    // Generated bundles from the archived audit artifacts are not source.
+    'artifacts/api-server/dist/**',
+    'payfix-rls/**',
     'out/**',
     'build/**',
     'next-env.d.ts',

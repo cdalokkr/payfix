@@ -55,50 +55,51 @@ export class SalaryService {
         changeReason?: string
         createdBy: string
     }) {
-        // Deactivate current active record and set its effective_to
-        const currentActive = await db.query.employeeSalarySetup.findFirst({
-            where: and(
-                eq(employeeSalarySetup.profile_id, profileId),
-                eq(employeeSalarySetup.is_active, true)
-            )
-        })
+        return await db.transaction(async (tx) => {
+            // Deactivate current active record and set its effective_to in the
+            // same transaction as the replacement insert.
+            const currentActive = await tx.query.employeeSalarySetup.findFirst({
+                where: and(
+                    eq(employeeSalarySetup.profile_id, profileId),
+                    eq(employeeSalarySetup.is_active, true)
+                )
+            })
 
-        if (currentActive) {
-            // Calculate previous month for the effective_to
-            let toMonth = effectiveFromMonth - 1
-            let toYear = effectiveFromYear
-            if (toMonth < 1) {
-                toMonth = 12
-                toYear -= 1
+            if (currentActive) {
+                let toMonth = effectiveFromMonth - 1
+                let toYear = effectiveFromYear
+                if (toMonth < 1) {
+                    toMonth = 12
+                    toYear -= 1
+                }
+
+                await tx.update(employeeSalarySetup).set({
+                    is_active: false,
+                    effective_to_month: toMonth,
+                    effective_to_year: toYear,
+                    updated_at: new Date(),
+                }).where(eq(employeeSalarySetup.id, currentActive.id))
             }
 
-            await db.update(employeeSalarySetup).set({
-                is_active: false,
-                effective_to_month: toMonth,
-                effective_to_year: toYear,
-                updated_at: new Date(),
-            }).where(eq(employeeSalarySetup.id, currentActive.id))
-        }
+            const [newSetup] = await tx.insert(employeeSalarySetup).values({
+                profile_id: profileId,
+                basic_salary: basicSalary || '0',
+                hra: hra || '0',
+                da: da || '0',
+                ta: ta || '0',
+                special_allowance: specialAllowance || '0',
+                incentive: incentive || '0',
+                other_deductions: otherDeductions || '0',
+                deduction_remark: deductionRemark || null,
+                effective_from_month: effectiveFromMonth,
+                effective_from_year: effectiveFromYear,
+                change_reason: changeReason || 'Initial Setup',
+                is_active: true,
+                created_by: createdBy,
+            }).returning()
 
-        // Insert new active record — coalesce empty strings to '0' for numeric fields
-        const [newSetup] = await db.insert(employeeSalarySetup).values({
-            profile_id: profileId,
-            basic_salary: basicSalary || '0',
-            hra: hra || '0',
-            da: da || '0',
-            ta: ta || '0',
-            special_allowance: specialAllowance || '0',
-            incentive: incentive || '0',
-            other_deductions: otherDeductions || '0',
-            deduction_remark: deductionRemark || null,
-            effective_from_month: effectiveFromMonth,
-            effective_from_year: effectiveFromYear,
-            change_reason: changeReason || 'Initial Setup',
-            is_active: true,
-            created_by: createdBy,
-        }).returning()
-
-        return newSetup
+            return newSetup
+        })
     }
 
     /** Get all employees with their active salary setup */
@@ -143,30 +144,22 @@ export class SalaryService {
 
     /** Get applicable salary for a specific month/year */
     static async getActiveSalaryForPeriod(profileId: string, month: number, year: number) {
-        // Find the salary record that covers this period
-        // Active record where effective_from <= target period AND (effective_to is null OR effective_to >= target period)
-        const setups = await db.query.employeeSalarySetup.findMany({
-            where: eq(employeeSalarySetup.profile_id, profileId),
+        const targetValue = year * 100 + month
+
+        // Find the newest salary record that covers this period in SQL instead
+        // of loading the employee's full salary history into application memory.
+        return await db.query.employeeSalarySetup.findFirst({
+            where: and(
+                eq(employeeSalarySetup.profile_id, profileId),
+                sql`${employeeSalarySetup.effective_from_year} * 100 + ${employeeSalarySetup.effective_from_month} <= ${targetValue}`,
+                sql`(
+                    ${employeeSalarySetup.effective_to_year} IS NULL
+                    OR ${employeeSalarySetup.effective_to_month} IS NULL
+                    OR ${employeeSalarySetup.effective_to_year} * 100 + ${employeeSalarySetup.effective_to_month} >= ${targetValue}
+                )`,
+            ),
             orderBy: [desc(employeeSalarySetup.effective_from_year), desc(employeeSalarySetup.effective_from_month)],
         })
-
-        for (const setup of setups) {
-            const fromVal = setup.effective_from_year * 100 + setup.effective_from_month
-            const targetVal = year * 100 + month
-
-            if (fromVal > targetVal) continue
-
-            if (!setup.effective_to_month || !setup.effective_to_year) {
-                return setup // ongoing
-            }
-
-            const toVal = setup.effective_to_year * 100 + setup.effective_to_month
-            if (targetVal <= toVal) {
-                return setup
-            }
-        }
-
-        return null
     }
 
     // ==========================================
@@ -227,17 +220,19 @@ export class SalaryService {
             conditions.push(lte(employeeAdvances.date, endDate))
         }
 
-        const page = filters?.page || 1
-        const limit = filters?.limit || 10
+        const page = Math.max(1, filters?.page || 1)
+        const limit = Math.min(100, Math.max(1, filters?.limit || 10))
         const offset = (page - 1) * limit
 
         // Determine sorting
         let orderByClause = [desc(employeeAdvances.date)]
         if (filters?.sortBy === 'employee') {
-            // Sort by employee name - requires join logic or handled by ORM if supported directly
-            // Drizzle 'with' sorting can be tricky, defaulting to date for now if complex
-            // Awaiting complex sort implementation, defaulting to Date desc
-            orderByClause = filters.sortOrder === 'asc' ? [desc(employeeAdvances.date)] : [desc(employeeAdvances.date)]
+            // The relational query API cannot order by a nested relation here;
+            // keep a deterministic date tie-breaker until the joined query is
+            // introduced, rather than silently ignoring sort direction.
+            orderByClause = filters.sortOrder === 'asc'
+                ? [sql`${employeeAdvances.date} ASC`, sql`${employeeAdvances.id} ASC`]
+                : [desc(employeeAdvances.date), desc(employeeAdvances.id)]
         } else if (filters?.sortBy === 'date') {
             orderByClause = filters.sortOrder === 'asc' ? [sql`${employeeAdvances.date} ASC`] : [desc(employeeAdvances.date)]
         }

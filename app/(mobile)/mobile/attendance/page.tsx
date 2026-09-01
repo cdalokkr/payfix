@@ -20,7 +20,7 @@ function getLocalDateIST(): string {
 }
 
 interface PageProps {
-    searchParams?: Promise<{ action?: string }> | { action?: string }
+    searchParams?: Promise<{ action?: string }>
 }
 
 export default async function MobileAttendancePage({ searchParams }: PageProps) {

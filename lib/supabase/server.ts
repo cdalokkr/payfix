@@ -16,10 +16,10 @@ const SECURE_COOKIE_DEFAULTS = {
 
 // Synchronous version for use when cookie store is already available (optimizes createContext)
 export function createSupabaseClientSync(cookieStore: Awaited<ReturnType<typeof cookies>>) {
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    throw new Error('NEXT_PUBLIC_SUPABASE_URL is not configured')
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !supabaseKey) {
+    throw new Error('Supabase user-scoped environment variables are not configured')
   }
 
   return createServerClient(

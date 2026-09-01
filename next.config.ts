@@ -176,7 +176,7 @@ const nextConfig: NextConfig = {
     'fflate', // Compression library used by jspdf (uses Node Worker)
   ],
 
-  // Enable experimental features for better performance (Next.js 16.2.0)
+  // Keep only options supported by the installed Next.js release.
   experimental: {
     // Optimize imports for tree-shaking heavy UI libraries
     optimizePackageImports: [
@@ -203,19 +203,11 @@ const nextConfig: NextConfig = {
       'framer-motion',
       'date-fns',
     ],
-    // Enable CSS optimization for smaller bundles
-    optimizeCss: false,
-    // Optimize React server components rendering
-    optimizeServerReact: true,
     // Cache configuration for client-side router cache
     staleTimes: {
       dynamic: 0, // 0s for dynamic authenticated routes to eliminate cross-session layout caching
       static: 180, // 3 minutes for static routes
     },
-    // Bundle all segment data into a single response per link (Next.js 16.2)
-    prefetchInlining: true,
-    // Enable TypeScript 7 native compiler CLI typechecking (Next.js 16.3)
-    useTypeScriptCli: true,
   },
 
   // Turbopack config — acknowledge webpack config coexistence (Next.js 16)
@@ -268,7 +260,7 @@ const nextConfig: NextConfig = {
     return config;
   },
 
-  // Strict TypeScript type-checking during build via TypeScript 7 engine
+  // Keep build-time type checking enabled.
   typescript: {
     ignoreBuildErrors: false,
   },
