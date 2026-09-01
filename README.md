@@ -137,6 +137,31 @@ npm run lint                   # Run linting
 npm run type-check            # TypeScript type checking
 ```
 
+### Kiosk Release Validation
+
+The kiosk browser persistence proof is intentionally excluded from the normal
+test suite because it creates and removes a disposable tenant. Run it locally
+only against a disposable or staging database:
+
+```bash
+PAYFIX_E2E_ALLOW_DISPOSABLE=1 \
+PAYFIX_E2E_BASE_URL=http://127.0.0.1:3000 \
+pnpm run test:e2e:kiosk-reload
+```
+
+For release candidates, run the manual **Kiosk Release Validation** workflow
+from GitHub Actions. It builds and starts the app, checks the required
+database/authentication secrets without printing their values, runs the proof,
+and always stops the local server. Configure the five required secrets in that
+repository workflow using a disposable or staging Supabase project, not
+production:
+
+- `DATABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `SESSION_SECRET`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
 ## 📊 Performance Dashboard Usage
 
 The interactive performance dashboard provides:

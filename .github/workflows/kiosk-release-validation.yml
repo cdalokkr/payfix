@@ -1,0 +1,118 @@
+name: Kiosk Release Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag, or commit to validate (defaults to the selected ref)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kiosk-release-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-kiosk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      PAYFIX_E2E_ALLOW_DISPOSABLE: "1"
+      PAYFIX_E2E_BASE_URL: http://127.0.0.1:3000
+      PAYFIX_E2E_HEADLESS: "true"
+
+    steps:
+      - name: Check out release candidate
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Verify release validation secrets are configured
+        shell: bash
+        run: |
+          missing=()
+          for name in \
+            DATABASE_URL \
+            NEXT_PUBLIC_SUPABASE_ANON_KEY \
+            NEXT_PUBLIC_SUPABASE_URL \
+            SESSION_SECRET \
+            SUPABASE_SERVICE_ROLE_KEY
+          do
+            if [[ -z "${!name:-}" ]]; then
+              missing+=("$name")
+            fi
+          done
+
+          if (( ${#missing[@]} > 0 )); then
+            printf '::error::Missing GitHub Actions secrets: %s\n' "${missing[*]}"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium for Playwright
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build release candidate
+        run: pnpm run build
+
+      - name: Start local release server
+        shell: bash
+        run: |
+          pnpm run start > "$RUNNER_TEMP/payfix-next.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/payfix-next.pid"
+
+      - name: Wait for local release server
+        shell: bash
+        run: |
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error http://127.0.0.1:3000/login > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "::error::The release server did not become ready on port 3000."
+          cat "$RUNNER_TEMP/payfix-next.log"
+          exit 1
+
+      - name: Run kiosk browser release validation
+        run: pnpm run test:e2e:kiosk-reload
+
+      - name: Print release server log on failure
+        if: failure()
+        run: |
+          if [[ -f "$RUNNER_TEMP/payfix-next.log" ]]; then
+            cat "$RUNNER_TEMP/payfix-next.log"
+          else
+            echo "No local release server log was created."
+          fi
+
+      - name: Stop local release server
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f "$RUNNER_TEMP/payfix-next.pid" ]]; then
+            kill "$(cat "$RUNNER_TEMP/payfix-next.pid")" 2>/dev/null || true
+          fi
