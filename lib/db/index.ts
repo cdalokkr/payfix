@@ -3,6 +3,7 @@ import postgres from 'postgres';
 import * as schema from './schema';
 import { getTenantDb } from './tenant-connection';
 import { tenantStorage } from '../tenant/store';
+import { resolveTrustedTenantBySchema } from '../tenant/trusted-context';
 
 // Lazy singleton: connection is only created on first use at runtime,
 // NOT during module evaluation at build time (Vercel build has no DATABASE_URL).
@@ -73,14 +74,8 @@ export const db = new Proxy({} as any, {
  * Run a database callback explicitly inside a specified tenant schema.
  */
 export async function runWithTenantSchema<T>(tenantSchema: string, fn: () => Promise<T>): Promise<T> {
-    const slug = tenantSchema.replace(/^tenant_/, '');
-    return tenantStorage.run({
-        tenantId: `tenant_${slug}`,
-        slug,
-        tenantSchema,
-        databaseUrl: null,
-        brandName: slug
-    }, fn);
+    const context = await resolveTrustedTenantBySchema(tenantSchema);
+    return tenantStorage.run(context, fn);
 }
 
 
