@@ -117,10 +117,9 @@ export async function authMiddleware(request: NextRequest) {
       return redirectToUnauthorized(request)
     }
 
-    // Add user context to request headers for downstream use
+    // Do not forward identity or role as request authority. Downstream
+    // handlers must verify the request session and load the profile themselves.
     const response = NextResponse.next()
-    response.headers.set('x-user-id', context.user.id)
-    response.headers.set('x-user-role', userRole)
     response.headers.set('x-auth-time', context.metrics.duration?.toString() || '0')
     response.headers.set('x-cache-hit', context.metrics.cacheHit ? 'true' : 'false')
 
