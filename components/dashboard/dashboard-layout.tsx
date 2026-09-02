@@ -187,7 +187,10 @@ export function DashboardLayout({
   // Memoize profile context value to prevent unnecessary re-renders
   const profileContextValue = useMemo(() => ({
     profile: profile || storedProfile,
-    isLoading: profileLoading && !storedProfile
+    isLoading: profileLoading && !storedProfile,
+    // Keep cached profile rendering fast while exposing the fresh-profile
+    // request so dependent pages can wait for the authenticated context.
+    isInitializing: profileLoading
   }), [profile, profileLoading, storedProfile]);
 
   // Do not render a role-specific sidebar until the authenticated profile is known.
