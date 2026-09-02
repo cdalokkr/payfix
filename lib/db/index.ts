@@ -46,27 +46,17 @@ let lastLoggedTenant = '';
 export const db = new Proxy({} as any, {
     get(target, prop, receiver) {
         const context = tenantStorage.getStore();
-        if (context && context.tenantId) {
-            if (!context.trusted || !context.tenantSchema) {
-                throw new Error('Trusted tenant context is required for tenant database access.');
-            }
+        if (context?.trusted && context.tenantId && context.tenantSchema) {
             // Log routing decision (only on change to avoid spam)
             if (lastLoggedTenant !== context.tenantSchema) {
                 console.log(`[DB-PROXY] Routing to tenant DB: ${context.tenantSchema} (tenant: ${context.slug})`);
                 lastLoggedTenant = context.tenantSchema || '';
             }
-            const tenantDb = getTenantDb(context.tenantId, context.databaseUrl, context.tenantSchema);
+            const tenantDb = getTenantDb(context.tenantId, context.databaseUrl, context.tenantSchema, true);
             return Reflect.get(tenantDb, prop, receiver);
         }
-        
-        // Central database access must be explicit through centralDb. Keeping
-        // this compatibility fallback allows build-time imports and scripts to
-        // load the proxy without silently routing an authenticated request.
-        if (lastLoggedTenant !== 'centralDb') {
-            console.warn('[DB-PROXY] No tenant context — falling back to centralDb (public schema)');
-            lastLoggedTenant = 'centralDb';
-        }
-        return Reflect.get(getCentralDb(), prop, receiver);
+
+        throw new Error('TENANT_CONTEXT_REQUIRED: use centralDb explicitly for control-plane operations.');
     }
 });
 
@@ -75,6 +65,9 @@ export const db = new Proxy({} as any, {
  */
 export async function runWithTenantSchema<T>(tenantSchema: string, fn: () => Promise<T>): Promise<T> {
     const context = await resolveTrustedTenantBySchema(tenantSchema);
+    if (!context) {
+        throw new Error('TENANT_CONTEXT_REQUIRED: schema is not registered as an active tenant.');
+    }
     return tenantStorage.run(context, fn);
 }
 
