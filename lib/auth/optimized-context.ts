@@ -2,6 +2,7 @@ import { createServerSupabaseClient, createSupabaseClientSync } from '@/lib/supa
 import type { Profile } from '@/types'
 import type { User } from '@supabase/supabase-js'
 import { cookies, headers } from 'next/headers'
+import { createHash } from 'crypto'
 import { db, centralDb } from '@/lib/db'
 import { profiles, designations } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
@@ -9,6 +10,13 @@ import {
   hasValidTenantHealthProbeToken,
   isTenantHealthOperator,
 } from '@/lib/auth/tenant-health-policy'
+import {
+  getTrustedTenantStore,
+  resolveTrustedTenantBySlug,
+  resolveTrustedTenantFromRequest,
+  type TrustedTenantContext,
+} from '@/lib/tenant/trusted-context'
+import { tenantStorage } from '@/lib/tenant/store'
 
 function parseCookieHeader(cookieHeader: string): Array<{ name: string; value: string }> {
   if (!cookieHeader) return []
@@ -48,13 +56,65 @@ export interface OptimizedContextResult {
   supabase: Awaited<ReturnType<typeof createServerSupabaseClient>> | null
   user: User | null
   profile: Profile | null
+  tenant: TrustedTenantContext | null
   metrics: AuthPerformanceMetrics
 }
 
 // Session cache for optimizing repeated requests
+interface SessionCache {
+  user: User
+  profile: Profile | null
+  tenantId?: string
+  tenantSlug?: string
+  expiresAt: number
+  metrics: AuthPerformanceMetrics
+}
+
+// Global session cache (memory-based for performance)
+// Linked to globalThis to share caches across Next.js cross-bundle contexts (Server Components and Route Handlers)
+const globalForAuth = globalThis as unknown as {
+  sessionCache?: Map<string, SessionCache>
+  userToHashCache?: Map<string, string>
+  userIdSessionCache?: Map<string, SessionCache>
+}
+
+const sessionCache = globalForAuth.sessionCache ?? new Map<string, SessionCache>()
+const userToHashCache = globalForAuth.userToHashCache ?? new Map<string, string>()
+const userIdSessionCache = globalForAuth.userIdSessionCache ?? new Map<string, SessionCache>()
+
+globalForAuth.sessionCache = sessionCache
+globalForAuth.userToHashCache = userToHashCache
+globalForAuth.userIdSessionCache = userIdSessionCache
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+const CONTEXT_CACHE_PREFIX = 'ctx:'
+
 let createContextCallCount = 0
 let cacheHitCount = 0
 let totalContextTime = 0
+
+// Security-safe hash for cookies
+async function getCookieHash(cookieStore: Awaited<ReturnType<typeof cookies>>): Promise<string> {
+  try {
+    const allCookies = cookieStore.getAll()
+
+    // Fast-path: check for existence of common auth cookies first
+    const hasAuth = allCookies.some(c => c.name.includes('-auth-token'))
+    if (!hasAuth) return ''
+
+    // Identify auth cookies (sb-XXXX-auth-token or sb-XXXX-auth-token.0 etc)
+    const authCookies = allCookies
+      .filter((c: any) => c.name.includes('-auth-token'))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((c: any) => `${c.name}=${c.value}`)
+      .join(';')
+
+    if (!authCookies) return ''
+
+    return createHash('sha256').update(authCookies).digest('hex')
+  } catch (error) {
+    return ''
+  }
+}
 
 // Performance monitoring utility
 function startAuthTiming(): AuthPerformanceMetrics {
@@ -84,134 +144,182 @@ function endAuthTiming(metrics: AuthPerformanceMetrics, additionalData?: AuthMet
   return metrics
 }
 
+// Optimized session cache with TTL
+function getCachedSession(hash: string): SessionCache | null {
+  if (!hash) return null
+  const cacheKey = CONTEXT_CACHE_PREFIX + hash
+  const cached = sessionCache.get(cacheKey)
 
-// Preload profile data using Primary Key (id) for maximum performance
-// Includes retry logic for transient connection errors
-async function preloadProfile(profileId: string, authClient?: any): Promise<Profile | null> {
-  const MAX_RETRIES = 3;
-  const RETRY_DELAYS = [500, 1000, 2000]; // ms - exponential backoff
+  if (cached && Date.now() < cached.expiresAt) {
+    cacheHitCount++
+    return cached
+  }
 
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      const startTime = performance.now()
-
-      // Check centralDb first to see if this is a platform-wide super_admin
-      const centralResult = await (centralDb as any).query?.profiles?.findFirst?.({
-        where: eq(profiles.id, profileId),
-        with: { designation: true }
-      })
-
-      let result: any = null
-
-      if (centralResult) {
-        result = centralResult
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`[AUTH-PERF] Resolved profile via centralDb: ${profileId} (role: ${centralResult.role})`)
-        }
-      } else {
-        // Query mapped tenant DB
-        const tenantResult = await (db as any).query?.profiles?.findFirst?.({
-          where: eq(profiles.id, profileId),
-          with: { designation: true }
-        })
-        result = tenantResult
-      }
-
-      // Some request-only contexts do not expose the Drizzle query API (for
-      // example, lightweight health handlers). Use the already authenticated
-      // Supabase client as a server-side profile source, never request headers.
-      if (!result && authClient?.rpc) {
-        const { data: rpcProfile, error: rpcError } = await authClient.rpc(
-          'find_profile_across_schemas',
-          { p_user_id: profileId },
-        )
-        if (!rpcError && rpcProfile) {
-          result = Array.isArray(rpcProfile) ? rpcProfile[0] : rpcProfile
-        }
-      }
-
-      // Universal schema scan fallback if profile still not found
-      if (!result) {
-        try {
-          const { sql: sqlTag } = await import('drizzle-orm')
-          const scanResult = await centralDb.execute(sqlTag`
-            SELECT public.find_profile_across_schemas(${profileId}::uuid) as profile;
-          `)
-
-          const profileJson = scanResult[0]?.profile;
-          if (profileJson) {
-            const fbProfile = profileJson as any
-            if (typeof fbProfile.designation === 'string') {
-              try { fbProfile.designation = JSON.parse(fbProfile.designation); } catch {}
-            }
-            result = fbProfile
-            if (process.env.NODE_ENV === 'development') {
-              console.log(`[AUTH-PERF] Profile found via Universal Schema Scan in: ${fbProfile.tenant_schema}`)
-            }
-          }
-        } catch (scanErr) {
-          console.error('[AUTH] Universal schema scan failed:', scanErr)
-        }
-      }
-
-      const duration = performance.now() - startTime
-      if (process.env.NODE_ENV === 'development' && duration > 100) {
-        console.log(`[AUTH-PERF] Drizzle profile fetch: ${duration.toFixed(2)}ms`)
-      }
-
-      if (!result) return null
-
-      // Map Drizzle result to Profile type
-      return {
-        ...result,
-        id: result.id,
-        email: result.email,
-        full_name: result.full_name || undefined,
-        avatar_url: result.avatar_url || undefined,
-        role: result.role as any,
-        designation_id: result.designation_id || undefined,
-        designation: result.designation ? {
-          ...result.designation,
-          created_at: result.designation.created_at?.toISOString() || null,
-          updated_at: result.designation.updated_at?.toISOString() || null,
-          role: result.designation.role as any,
-        } : undefined,
-        first_name: result.first_name || undefined,
-        middle_name: result.middle_name || undefined,
-        last_name: result.last_name || undefined,
-        mobile_no: result.mobile_no || undefined,
-        date_of_birth: result.date_of_birth || undefined,
-        sex: result.sex || undefined,
-        status: result.status as any,
-        allowed_modules: result.allowed_modules || undefined,
-        created_at: result.created_at?.toISOString() || null,
-        updated_at: result.updated_at?.toISOString() || null,
-      } as Profile
-    } catch (error: any) {
-      // Check if this is a connection error that's worth retrying
-      const isConnectionError =
-        error?.cause?.code === 'CONNECT_TIMEOUT' ||
-        error?.cause?.code === 'ECONNREFUSED' ||
-        error?.cause?.code === 'ECONNRESET' ||
-        error?.message?.includes('CONNECT_TIMEOUT') ||
-        error?.message?.includes('connection');
-
-      if (isConnectionError && attempt < MAX_RETRIES) {
-        console.warn(`[AUTH-RETRY] Profile fetch attempt ${attempt + 1}/${MAX_RETRIES} failed (${error?.cause?.code || 'connection error'}), retrying in ${RETRY_DELAYS[attempt]}ms...`);
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]));
-        continue;
-      }
-
-      console.error('Exception preloading profile with Drizzle:', error)
-      return null
+  // Clean up expired cache
+  if (cached) {
+    sessionCache.delete(cacheKey)
+    if (cached.user?.id) {
+      userToHashCache.delete(cached.user.id)
     }
   }
 
   return null
 }
 
+function setCachedSession(hash: string, userId: string, session: SessionCache): void {
+  if (!hash) return
+  const cacheKey = CONTEXT_CACHE_PREFIX + hash
+  session.expiresAt = Date.now() + CACHE_TTL
+  sessionCache.set(cacheKey, session)
+  userToHashCache.set(userId, hash)
+
+  // Also store by userId for post-login optimization (when cookie hash changes)
+  userIdSessionCache.set(userId, session)
+
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[AUTH-CACHE] Set for ${userId} (hash: ${hash.substring(0, 8)}...)`)
+  }
+
+  // Clean up old cache entries to prevent memory leaks
+  if (sessionCache.size > 200) { // Bumped to 200
+    const now = Date.now()
+    for (const [key, value] of sessionCache.entries()) {
+      if (value.expiresAt < now) {
+        sessionCache.delete(key)
+        if (value.user?.id) {
+          userToHashCache.delete(value.user.id)
+          userIdSessionCache.delete(value.user.id)
+        }
+      }
+    }
+  }
+}
+
+// Get cached session by userId (fallback when cookie hash changes after login)
+function getCachedSessionByUserId(userId: string): SessionCache | null {
+  if (!userId) return null
+  const cached = userIdSessionCache.get(userId)
+
+  if (cached && Date.now() < cached.expiresAt) {
+    cacheHitCount++
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[AUTH-CACHE] UserId hit for ${userId}`)
+    }
+    return cached
+  }
+
+  // Clean up expired
+  if (cached) {
+    userIdSessionCache.delete(userId)
+  }
+
+  return null
+}
+
+interface ProfileResolution {
+  profile: Profile | null
+  tenant: TrustedTenantContext | null
+}
+
+function mapProfile(result: any): Profile {
+  return {
+    ...result,
+    id: result.id,
+    email: result.email,
+    full_name: result.full_name || undefined,
+    avatar_url: result.avatar_url || undefined,
+    role: result.role as any,
+    designation_id: result.designation_id || undefined,
+    designation: result.designation ? {
+      ...result.designation,
+      created_at: result.designation.created_at?.toISOString?.() || result.designation.created_at || null,
+      updated_at: result.designation.updated_at?.toISOString?.() || result.designation.updated_at || null,
+      role: result.designation.role as any,
+    } : undefined,
+    first_name: result.first_name || undefined,
+    middle_name: result.middle_name || undefined,
+    last_name: result.last_name || undefined,
+    mobile_no: result.mobile_no || undefined,
+    date_of_birth: result.date_of_birth || undefined,
+    sex: result.sex || undefined,
+    status: result.status as any,
+    allowed_modules: result.allowed_modules || undefined,
+    created_at: result.created_at?.toISOString?.() || result.created_at || null,
+    updated_at: result.updated_at?.toISOString?.() || result.updated_at || null,
+  } as Profile
+}
+
+/**
+ * Resolve a profile in the selected tenant schema. The registry-backed
+ * context is used for the direct query; the cross-schema RPC is only a
+ * user-bound recovery path when a stale host/cookie selected another tenant.
+ */
+async function preloadProfile(
+  profileId: string,
+  tenantContext: TrustedTenantContext | null,
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+): Promise<ProfileResolution> {
+  let result: any = null
+  let resolvedTenant = tenantContext
+
+  if (tenantContext?.tenantSchema) {
+    try {
+      const tenantProfileQuery = (db as any).query?.profiles?.findFirst
+      if (typeof tenantProfileQuery === 'function') {
+        result = await tenantStorage.run(tenantContext, () => tenantProfileQuery({
+          where: eq(profiles.id, profileId),
+          with: { designation: true },
+        }))
+      }
+    } catch (error) {
+      console.error('[AUTH] Tenant profile lookup failed:', error)
+    }
+  }
+
+  if (!result) {
+    try {
+      const { data: profileJson, error } = await supabase.rpc('find_profile_across_schemas', {
+        target_user_id: profileId,
+      })
+      if (error) throw error
+      if (profileJson) {
+        const discoveredTenant = await resolveTrustedTenantBySlug((profileJson as any).tenant_slug)
+        if (discoveredTenant) {
+          resolvedTenant = discoveredTenant
+          result = profileJson
+        }
+      }
+    } catch (error) {
+      console.error('[AUTH] User-bound tenant profile lookup failed:', error)
+    }
+  }
+
+  // Public profiles are a control-plane source only for platform super-admins.
+  if (!result) {
+    const centralProfileQuery = (centralDb as any).query?.profiles?.findFirst
+    const centralResult = typeof centralProfileQuery === 'function'
+      ? await centralProfileQuery({
+          where: eq(profiles.id, profileId),
+          with: { designation: true },
+        })
+      : null
+    if (centralResult?.role === 'super_admin') {
+      result = centralResult
+      resolvedTenant = null
+    }
+  }
+
+  return {
+    profile: result ? mapProfile(result) : null,
+    tenant: resolvedTenant,
+  }
+}
+
 // Optimized context creation with async session management
-export async function createOptimizedContext(req?: Request) {
+export async function createOptimizedContext(
+  req?: Request,
+  requestedTenant?: TrustedTenantContext | null,
+) {
   const metrics = startAuthTiming()
   createContextCallCount++
 
@@ -241,13 +349,18 @@ export async function createOptimizedContext(req?: Request) {
       try {
         authHeader = (await headers()).get('authorization')
       } catch {
-        // Cookies are the only session source outside a request context.
+        // No request headers are available in non-request callers.
       }
     }
 
-    // Avoid an unnecessary Supabase call when the request has no session.
+    // Do not consult any request-bound cache until Supabase has verified the
+    // cookie or bearer token below.
     const allCookies = cookieStore.getAll()
     const hasAuthCookie = allCookies.some((c: any) => c.name.includes('-auth-token'))
+    let cookieHash = ''
+    if (hasAuthCookie) {
+      cookieHash = await getCookieHash(cookieStore)
+    }
     const hasBearerToken = authHeader ? authHeader.startsWith('Bearer ') : false
 
     if (!hasAuthCookie && !hasBearerToken) {
@@ -265,13 +378,20 @@ export async function createOptimizedContext(req?: Request) {
         },
         user: null,
         profile: null,
+        tenant: requestedTenant || getTrustedTenantStore(),
         metrics: finalMetrics
       }
     }
 
-    // Always verify the session with Supabase before reading user/profile data.
+    // Authenticate first. In particular, a bearer token is never decoded
+    // locally and is never allowed to select a user-ID cache entry.
     const tClientStart = performance.now();
-    if (!_lazySupabase) _lazySupabase = createSupabaseClientSync(cookieStore as any);
+    if (!_lazySupabase) {
+      _lazySupabase = createSupabaseClientSync(
+        cookieStore as any,
+        hasBearerToken ? authHeader!.substring(7) : undefined,
+      );
+    }
     const supabase = _lazySupabase;
 
     if (process.env.NODE_ENV === 'development') {
@@ -295,12 +415,42 @@ export async function createOptimizedContext(req?: Request) {
         supabase,
         user: null,
         profile: null,
+        tenant: requestedTenant || getTrustedTenantStore(),
         metrics: finalMetrics
       }
     }
 
-    // Fetch the profile only after the token has been verified.
-    const profile = await preloadProfile(user.id, supabase)
+    const userId = user.id
+
+    const tenantContext = requestedTenant || getTrustedTenantStore() || await resolveTrustedTenantFromRequest(req)
+    const cachedSession = cookieHash ? getCachedSession(cookieHash) : null
+    const cacheMatchesVerifiedRequest = Boolean(
+      cachedSession &&
+      cachedSession.user.id === user.id &&
+      tenantContext &&
+      cachedSession.tenantId === tenantContext.tenantId,
+    )
+    if (cacheMatchesVerifiedRequest) {
+      const finalMetrics = endAuthTiming(metrics, {
+        userFound: true,
+        profileFound: !!cachedSession!.profile,
+        cacheHit: true,
+        contextSize: cachedSession!.metrics.contextSize
+      })
+
+      return {
+        supabase,
+        user,
+        profile: cachedSession!.profile,
+        tenant: tenantContext,
+        metrics: finalMetrics
+      }
+    }
+
+    // Fetch the profile from the registry-selected tenant, not from public.
+    const resolution = await preloadProfile(userId, tenantContext, supabase)
+    const profile = resolution.profile
+    const resolvedTenant = resolution.tenant
 
     // Estimate size without expensive stringify
     const contextSize = (user ? 1000 : 0) + (profile ? 2000 : 0);
@@ -319,8 +469,19 @@ export async function createOptimizedContext(req?: Request) {
       },
       user,
       profile,
+      tenant: resolvedTenant,
       metrics: finalMetrics
     }
+
+    // Cache successful session and profile
+    setCachedSession(cookieHash, userId, {
+      user,
+      profile,
+      tenantId: resolvedTenant?.tenantId,
+      tenantSlug: resolvedTenant?.slug,
+      expiresAt: Date.now() + CACHE_TTL,
+      metrics: finalMetrics
+    })
 
     totalContextTime += finalMetrics.duration || 0
 
@@ -365,6 +526,7 @@ export async function createOptimizedContext(req?: Request) {
       },
       user: null,
       profile: null,
+      tenant: requestedTenant || getTrustedTenantStore(),
       metrics: finalMetrics
     }
   }
@@ -398,21 +560,31 @@ export function getAuthPerformanceStats() {
     averageContextTime: avgContextTime,
     cacheHitRate: cacheHitRate,
     cacheHits: cacheHitCount,
-    cacheSize: 0
+    cacheSize: sessionCache.size
   }
 }
 
-// Kept as a compatibility hook for logout/session-refresh callers. Auth
-// context data is intentionally not cached because revocations and role
-// changes must take effect on the next verified request.
+// Invalidate session cache (call on logout or session refresh)
 export function invalidateUserSession(userId: string): void {
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`[AUTH-CACHE] No session cache to invalidate for ${userId}`)
+  // Clear every cookie-hash entry for the user. A user may have multiple
+  // devices, so clearing only the most recently observed hash is insufficient
+  // after a role or status change.
+  userIdSessionCache.delete(userId)
+  let removed = 0
+  for (const [cacheKey, session] of sessionCache.entries()) {
+    if (session.user?.id === userId) {
+      sessionCache.delete(cacheKey)
+      removed++
+    }
   }
+  userToHashCache.delete(userId)
+  console.log(`[AUTH-CACHE] Invalidated ${removed} session entr${removed === 1 ? 'y' : 'ies'} for ${userId}`)
 }
 
-// Invalidate all sessions (call on global events).
+// Invalidate all sessions (call on global events)
 export function invalidateAllSessions(): void {
+  sessionCache.clear()
+  userToHashCache.clear()
   cacheHitCount = 0
   createContextCallCount = 0
   totalContextTime = 0
@@ -444,8 +616,42 @@ export async function performLogout(userId?: string): Promise<{ success: boolean
 
 // Pre-seed session cache after successful login for instant first request
 export async function preSeedSessionCache(user: User, profile: Profile): Promise<void> {
-  // The function remains async for callers that already await it, but does
-  // not retain user/profile data in a process-global cache.
-  void user
-  void profile
+  try {
+    const startTime = performance.now()
+    const cookieStore = await cookies()
+    const cookieHash = await getCookieHash(cookieStore)
+    const tenantContext = getTrustedTenantStore()
+
+    const metrics: AuthPerformanceMetrics = {
+      startTime,
+      endTime: performance.now(),
+      duration: performance.now() - startTime,
+      contextSize: JSON.stringify({ user, profile }).length,
+      cacheHit: false,
+      userFound: true,
+      profileFound: true
+    }
+
+    const sessionData: SessionCache = {
+      user,
+      profile,
+      tenantId: tenantContext?.tenantId,
+      tenantSlug: tenantContext?.slug,
+      expiresAt: Date.now() + CACHE_TTL,
+      metrics
+    }
+
+    // CRITICAL: Always store by userId for post-login optimization
+    userIdSessionCache.set(user.id, sessionData)
+
+    // Also store by hash if available
+    if (cookieHash) {
+      setCachedSession(cookieHash, user.id, sessionData)
+      console.log(`[AUTH-CACHE] Pre-seeded for ${user.id} after login (hash: ${cookieHash.substring(0, 8)}...)`)
+    } else {
+      console.log(`[AUTH-CACHE] Pre-seeded for ${user.id} by userId (no hash yet)`)
+    }
+  } catch (error) {
+    console.warn('[AUTH-CACHE] Pre-seed failed (non-critical):', error)
+  }
 }
