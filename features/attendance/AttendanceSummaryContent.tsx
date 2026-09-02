@@ -5,10 +5,11 @@ import { DataTable } from "@/components/ui/data-table"
 import { ColumnDef } from "@tanstack/react-table"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import { useMemo } from "react"
-import { CalendarDays, Clock, ArrowRight } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import { CalendarDays, Clock, ArrowRight, ChevronLeft, ChevronRight } from "lucide-react"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
 
 interface DailyWorkingHours {
     [key: string]: {
@@ -40,6 +41,60 @@ function calculateScheduledHours(checkIn: string, checkOut: string): number {
     const inMinutes = inH * 60 + inM
     const outMinutes = outH * 60 + outM
     return (outMinutes - inMinutes) / 60
+}
+
+const SUMMARY_PAGE_SIZE = 16
+
+function SummaryPagination({
+    page,
+    pageCount,
+    total,
+    onPageChange,
+}: {
+    page: number
+    pageCount: number
+    total: number
+    onPageChange: (page: number) => void
+}) {
+    if (pageCount <= 1) return null
+
+    const start = page * SUMMARY_PAGE_SIZE + 1
+    const end = Math.min((page + 1) * SUMMARY_PAGE_SIZE, total)
+
+    return (
+        <div className="flex items-center justify-between gap-3 border-t border-border/40 px-2 pt-3 text-xs">
+            <span className="text-muted-foreground">
+                Showing {start}-{end} of {total} days
+            </span>
+            <div className="flex items-center gap-2">
+                <span className="font-semibold text-muted-foreground">
+                    Page {page + 1} of {pageCount}
+                </span>
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="size-7"
+                    onClick={() => onPageChange(Math.max(0, page - 1))}
+                    disabled={page === 0}
+                    aria-label="Previous attendance summary page"
+                >
+                    <ChevronLeft className="size-3.5" />
+                </Button>
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="size-7"
+                    onClick={() => onPageChange(Math.min(pageCount - 1, page + 1))}
+                    disabled={page === pageCount - 1}
+                    aria-label="Next attendance summary page"
+                >
+                    <ChevronRight className="size-3.5" />
+                </Button>
+            </div>
+        </div>
+    )
 }
 
 export function AttendanceSummaryContent({
@@ -185,6 +240,21 @@ export function AttendanceSummaryContent({
             }
         })
     }, [attendance, currentMonth, settings, closures, leaves])
+
+    const [summaryPage, setSummaryPage] = useState(0)
+    const summaryPageCount = Math.max(1, Math.ceil(compiledRecords.length / SUMMARY_PAGE_SIZE))
+    const activeSummaryPage = Math.min(summaryPage, summaryPageCount - 1)
+    const paginatedRecords = useMemo(
+        () => compiledRecords.slice(
+            activeSummaryPage * SUMMARY_PAGE_SIZE,
+            (activeSummaryPage + 1) * SUMMARY_PAGE_SIZE
+        ),
+        [activeSummaryPage, compiledRecords]
+    )
+
+    useEffect(() => {
+        setSummaryPage(0)
+    }, [currentMonth])
 
     const columns: ColumnDef<any>[] = [
         {
@@ -347,7 +417,7 @@ export function AttendanceSummaryContent({
 
         return (
             <div className="space-y-3 px-1 py-1">
-                {compiledRecords.map((record, idx) => {
+                {paginatedRecords.map((record, idx) => {
                     const status = record.status as string
                     const isHalfDay = record.is_half_day
                     const workingHours = record.working_hours as number
@@ -440,19 +510,31 @@ export function AttendanceSummaryContent({
                         </div>
                     )
                 })}
+                <SummaryPagination
+                    page={activeSummaryPage}
+                    pageCount={summaryPageCount}
+                    total={compiledRecords.length}
+                    onPageChange={setSummaryPage}
+                />
             </div>
         )
     }
 
     return (
-        <div className="w-full overflow-hidden [&_th]:px-2 [&_td]:px-2 [&_th:first-child]:pl-4 [&_td:first-child]:pl-4 [&_th:last-child]:pr-4 [&_td:last-child]:pr-4 [&_td]:text-xs [&_th]:text-[10px] [&_th]:uppercase [&_th]:tracking-wider">
+        <div className="flex min-h-full w-full flex-col overflow-hidden [&_th]:px-2 [&_td]:px-2 [&_th:first-child]:pl-4 [&_td:first-child]:pl-4 [&_th:last-child]:pr-4 [&_td:last-child]:pr-4 [&_td]:text-xs [&_th]:text-[10px] [&_th]:uppercase [&_th]:tracking-wider">
             <DataTable
                 columns={columns}
-                data={compiledRecords}
+                data={paginatedRecords}
                 isLoading={isLoading}
                 hidePagination={true}
                 emptyIcon={<CalendarDays className="size-10 text-muted-foreground/20" />}
                 emptyMessage="No attendance records for this month"
+            />
+            <SummaryPagination
+                page={activeSummaryPage}
+                pageCount={summaryPageCount}
+                total={compiledRecords.length}
+                onPageChange={setSummaryPage}
             />
         </div>
     )
