@@ -144,6 +144,18 @@ function getCookieValue(cookieHeader: string | null, name: string): string | nul
     return pair ? decodeURIComponent(pair.slice(prefix.length)) : null;
 }
 
+function isMainApplicationHost(hostname: string): boolean {
+    const host = hostname.split(':')[0].toLowerCase().trim();
+    const mainDomain = (process.env.NEXT_PUBLIC_MAIN_DOMAIN || 'payfix.com').toLowerCase();
+
+    return !host
+        || host === mainDomain
+        || host === `www.${mainDomain}`
+        || host.endsWith('.vercel.app')
+        || host === 'localhost'
+        || host === '127.0.0.1';
+}
+
 async function getRequestInputs(request?: Request): Promise<{
     host: string;
     tenantId: string | null;
@@ -183,7 +195,12 @@ async function getRequestInputs(request?: Request): Promise<{
 export async function resolveTrustedTenantFromRequest(request?: Request): Promise<TrustedTenantContext | null> {
     try {
         const inputs = await getRequestInputs(request);
-        const lookup = inputs.tenantSlug || inputs.fallbackSlug || inputs.host;
+        // Hostname (or the registry-backed fallback cookie on the main app
+        // host) selects the registry record. Forwarded tenant headers are
+        // checked against that record below, but never get to select one.
+        const lookup = isMainApplicationHost(inputs.host)
+            ? inputs.fallbackSlug || inputs.host
+            : inputs.host;
         const tenant = lookup ? await resolveTenant(lookup, true) : null;
         if (!tenant) return null;
 
