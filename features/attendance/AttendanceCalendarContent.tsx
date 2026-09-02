@@ -52,20 +52,20 @@ export function AttendanceCalendarContent({
                     onSelect={setSelectedDate}
                     captionLayout="dropdown"
                     showOutsideDays={false}
-                    className="p-0 border-0 w-fit h-fit mx-auto [--cell-size:2.5rem] sm:[--cell-size:3rem] md:[--cell-size:3.5rem] lg:[--cell-size:3.25rem] xl:[--cell-size:3.25rem]"
+                    className="p-4 sm:p-5 border-0 w-fit h-fit mx-auto [--cell-size:2.5rem] sm:[--cell-size:2.75rem] md:[--cell-size:3rem] lg:[--cell-size:2.75rem] xl:[--cell-size:2.9rem]"
                     classNames={{
                         root: "w-fit h-fit flex flex-col items-center",
-                        months: "w-fit h-fit flex flex-col items-center",
-                        month: "w-fit h-fit flex flex-col space-y-0 items-center",
-                        caption: "flex justify-center relative items-center mb-4",
+                        months: "w-fit h-fit flex flex-col items-center gap-3",
+                        month: "w-fit h-fit flex flex-col space-y-0 items-center gap-3",
+                        caption: "flex justify-center relative items-center mb-2 px-1",
                         nav: "hidden",
                         table: "w-fit border-separate border-spacing-0 flex flex-col items-center",
-                        tbody: "w-fit flex flex-col gap-4",
-                        head_row: "flex w-fit mb-4",
-                        weekday: "w-(--cell-size) mx-1.5 flex-none flex justify-center items-center font-bold text-[12px] uppercase tracking-widest text-muted-foreground",
-                        row: "flex w-fit",
-                        day: "w-(--cell-size) mx-1.5 flex-none flex items-center justify-center p-0",
-                        dropdowns: "w-full flex items-center text-sm font-medium justify-center gap-1.5 [&_[data-slot=select-trigger]]:border [&_[data-slot=select-trigger]]:border-muted/50",
+                        tbody: "w-fit flex flex-col gap-2",
+                        head_row: "flex w-fit mb-2 gap-1",
+                        weekday: "w-(--cell-size) flex-none flex justify-center items-center font-bold text-[11px] uppercase tracking-widest text-muted-foreground h-8",
+                        row: "flex w-fit gap-1",
+                        day: "w-(--cell-size) flex-none flex items-center justify-center p-0",
+                        dropdowns: "w-full flex items-center text-sm font-semibold justify-center gap-2 [&_[data-slot=select-trigger]]:border [&_[data-slot=select-trigger]]:border-muted/50 [&_[data-slot=select-trigger]]:h-9 [&_[data-slot=select-trigger]]:px-2.5",
                     }}
                     formatters={{
                         formatMonthDropdown: (date) => {
@@ -128,9 +128,9 @@ export function AttendanceCalendarContent({
                                             modifiers={modifiers}
                                             {...props}
                                             className={cn(
-                                                "size-(--cell-size) mx-auto p-0 rounded-2xl transition-all duration-500 relative overflow-visible flex flex-col items-center justify-center border-2 group/daybutton",
+                                                "size-(--cell-size) mx-auto !h-10 !w-10 sm:!h-11 sm:!w-11 md:!h-12 md:!w-12 lg:!h-11 lg:!w-11 xl:!h-12 xl:!w-12 p-0 rounded-xl transition-all duration-200 relative overflow-visible flex flex-col items-center justify-center border-2 group/daybutton outline-none hover:-translate-y-0.5 hover:scale-[1.04] hover:shadow-lg hover:z-30 focus-visible:ring-2 focus-visible:ring-primary/70 focus-visible:ring-offset-2",
                                                 isSelected
-                                                    ? "border-primary shadow-xl shadow-primary/40 z-20 bg-primary"
+                                                    ? "border-primary shadow-xl shadow-primary/40 z-20 bg-primary !text-primary-foreground"
                                                     : record?.status === 'verified'
                                                         ? "border-green-500/50 bg-green-500/10 text-green-700 hover:bg-green-500/20 hover:border-green-500/70 z-10"
                                                         : record?.status === 'rejected'
@@ -160,7 +160,7 @@ export function AttendanceCalendarContent({
                                             >
                                                 <span className={cn(
                                                     "text-base font-bold transition-colors duration-300",
-                                                    isSelected ? "text-primary-foreground" : (isToday ? "text-primary" : "text-foreground"),
+                                                    isSelected ? "!text-primary-foreground" : (isToday ? "!text-primary" : "!text-foreground"),
                                                     isOffDay && !isToday && !isSelected && "text-muted-foreground group-hover/daybutton:text-foreground"
                                                 )}>
                                                     {day.date.getDate()}
