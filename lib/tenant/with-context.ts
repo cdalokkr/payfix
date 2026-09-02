@@ -1,18 +1,9 @@
 import { NextRequest } from 'next/server';
-import { tenantStorage, type TenantContext } from './store';
-import { headers } from 'next/headers';
+import { tenantStorage, TenantContext } from './store';
 import {
-    resolveTrustedTenantBySlug,
-    resolveTrustedTenantContext,
-    TenantContextError,
+    getTrustedTenantStore,
+    resolveTrustedTenantFromRequest,
 } from './trusted-context';
-
-function tenantErrorResponse(message: string): Response {
-    return new Response(JSON.stringify({ error: message }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
-    });
-}
 
 /**
  * Higher-order function to wrap Next.js API route handlers.
@@ -21,15 +12,14 @@ function tenantErrorResponse(message: string): Response {
  */
 export function withTenantContext(handler: (req: NextRequest, ...args: any[]) => Promise<Response>) {
     return async (req: NextRequest, ...args: any[]) => {
-        try {
-            const context = await resolveTrustedTenantContext(new Headers(req.headers));
-            return tenantStorage.run(context, () => handler(req, ...args));
-        } catch (error) {
-            if (error instanceof TenantContextError) {
-                return tenantErrorResponse('A valid tenant context is required.');
-            }
-            throw error;
+        const context = await resolveTrustedTenantFromRequest(req);
+        if (!context) {
+            return new Response(JSON.stringify({ error: 'Tenant context is required.' }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' },
+            });
         }
+        return tenantStorage.run(context, () => handler(req, ...args));
     };
 }
 
@@ -46,32 +36,11 @@ export function runWithTenant<T>(context: TenantContext, callback: () => T): T {
  * and runs a callback within that storage context.
  */
 export async function runWithRequestHeaders<T>(callback: () => Promise<T>): Promise<T> {
-    try {
-        const headersList = await headers();
-        const tenantId = headersList.get('x-tenant-id');
-        const slug = headersList.get('x-tenant-slug');
-        const tenantSchema = headersList.get('x-tenant-schema');
+    const existingContext = getTrustedTenantStore();
+    if (existingContext) return tenantStorage.run(existingContext, callback);
 
-        if (tenantId && slug && tenantSchema) {
-            const context = await resolveTrustedTenantContext(new Headers(headersList));
-            return tenantStorage.run(context, callback);
-        }
+    const context = await resolveTrustedTenantFromRequest();
+    if (context) return tenantStorage.run(context, callback);
 
-        if (!slug) {
-            try {
-                const { cookies } = await import('next/headers');
-                const cookieStore = await cookies();
-                const fallbackSlug = cookieStore.get('tenant_fallback')?.value;
-                if (fallbackSlug) {
-                    const context = await resolveTrustedTenantBySlug(fallbackSlug);
-                    return tenantStorage.run(context, callback);
-                }
-            } catch {
-                // Fall through so callers that do not need tenant data can run.
-            }
-        }
-    } catch {
-        // Outside request context
-    }
     return callback();
 }
