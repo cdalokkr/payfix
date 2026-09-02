@@ -52,7 +52,7 @@ export function AttendanceDashboard() {
     const monthStart = startOfMonth(currentMonth)
     const monthEnd = endOfMonth(currentMonth)
 
-    const { data: attendance, isLoading: isAttendanceLoading, isFetching: isAttendanceFetching } = trpc.attendance.getAttendance.useQuery({
+    const { data: attendance, isLoading: isAttendanceLoading } = trpc.attendance.getAttendance.useQuery({
         profileId: profile?.id,
         startDate: format(monthStart, 'yyyy-MM-dd'),
         endDate: format(monthEnd, 'yyyy-MM-dd')
@@ -75,7 +75,9 @@ export function AttendanceDashboard() {
         enabled: !!profile?.id,
     })
 
-    const isAttendanceDataLoading = profileLoading || isAttendanceLoading || isAttendanceFetching
+    // Only block the page during the first request. Background refetches
+    // should keep the calendar, summary, and empty state visible.
+    const isAttendanceDataLoading = profileLoading || isAttendanceLoading
 
     const attendanceMap = useMemo(() => {
         const map: Record<string, any> = {}
