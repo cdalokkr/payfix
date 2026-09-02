@@ -44,16 +44,17 @@ export async function GET(request: NextRequest) {
         });
     }
 
+    const tenantSlug = request.headers.get('x-tenant-slug') 
+        || request.nextUrl.searchParams.get('tenant');
+        
     let tenant: TenantMetadata | null = null;
-    // Resolve from the host first. Proxy-added tenant headers are routing
-    // hints, not an authorization source, and can be spoofed on direct calls.
-    const hostname = request.headers.get('host') || '';
-    tenant = await resolveTenant(hostname);
-    if (!tenant) {
-        const requestedSlug = request.nextUrl.searchParams.get('tenant');
-        if (requestedSlug) {
-            tenant = await resolveTenant(requestedSlug);
-        }
+    if (tenantSlug) {
+        // Resolve tenant branding from central DB using slug
+        tenant = await resolveTenant(tenantSlug);
+    } else {
+        // Try to resolve from hostname if search parameter is not provided
+        const hostname = request.headers.get('host') || '';
+        tenant = await resolveTenant(hostname);
     }
 
     const appName = tenant?.branding?.app_name || 'PayFix';
@@ -98,7 +99,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(manifest, {
         headers: {
             'Content-Type': 'application/manifest+json',
-            'Cache-Control': 'private, no-store, max-age=0'
+            'Cache-Control': 'public, max-age=600, stale-while-revalidate=1200'
         }
     });
 }
