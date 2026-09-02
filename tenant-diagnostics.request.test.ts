@@ -63,8 +63,6 @@ const mockedHeaders = jest.mocked(headers);
 const mockedCookies = jest.mocked(cookies);
 
 const PROBE_TOKEN = 'request-contract-probe-token';
-const TEST_SUPABASE_URL = 'https://request-contract.supabase.co';
-const TEST_SUPABASE_ANON_KEY = 'request-contract-anon-key';
 const diagnosticHandlers = {
     '/api/health/tenant': getTenantHealth,
     '/api/health/tenant-deep': getTenantDeepHealth,
@@ -75,8 +73,6 @@ type DiagnosticRole = 'admin' | 'super_admin';
 let currentRole: DiagnosticRole | null = null;
 let requestSequence = 0;
 const originalProbeToken = process.env.TENANT_HEALTH_PROBE_TOKEN;
-const originalSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const originalSupabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 function makeRequest(
     pathname: keyof typeof diagnosticHandlers,
@@ -99,6 +95,7 @@ function makeRequest(
 function requestAfterProxy(
     response: NextResponse,
     pathname: keyof typeof diagnosticHandlers,
+    sourceRequest?: NextRequest,
 ): NextRequest {
     const forwardedHeaders = new Headers();
     const overrideHeaders = response.headers.get('x-middleware-override-headers');
@@ -113,6 +110,9 @@ function requestAfterProxy(
         }
     }
 
+    const sourceCookie = sourceRequest?.headers.get('cookie');
+    if (sourceCookie) forwardedHeaders.set('cookie', sourceCookie);
+
     return new NextRequest(`http://localhost${pathname}`, {
         method: 'GET',
         headers: forwardedHeaders,
@@ -122,13 +122,31 @@ function requestAfterProxy(
 beforeEach(() => {
     jest.clearAllMocks();
     process.env.TENANT_HEALTH_PROBE_TOKEN = PROBE_TOKEN;
-    // The Supabase client is mocked below, but its production constructor
-    // still requires both public configuration values before it can be called.
-    process.env.NEXT_PUBLIC_SUPABASE_URL = TEST_SUPABASE_URL;
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = TEST_SUPABASE_ANON_KEY;
     currentRole = null;
 
-    mockedResolveTenant.mockResolvedValue(null);
+    mockedResolveTenant.mockImplementation(async (lookup) => {
+        if (!currentRole) return null;
+        if (lookup === 'localhost' || lookup === 'primary' || lookup === 'acme') {
+            return {
+                id: 'tenant-id',
+                slug: 'primary',
+                company_name: 'Primary',
+                custom_domain: null,
+                status: 'active',
+                tenant_schema: 'tenant_primary',
+                database_url: null,
+                biometric_api_key: null,
+                trial_start: new Date('2026-01-01'),
+                trial_end: new Date('2026-12-31'),
+                trial_duration_days: 365,
+                trial_extended: false,
+                admin_email: 'admin@example.com',
+                license_expires_at: new Date('2026-12-31'),
+                branding: null,
+            } as never;
+        }
+        return null;
+    });
     mockedValidateRequest.mockReturnValue({ valid: true });
     mockedAddSecurityHeaders.mockImplementation((response) => response);
     mockedHeaders.mockResolvedValue(new Headers({
@@ -194,18 +212,6 @@ afterAll(() => {
     } else {
         process.env.TENANT_HEALTH_PROBE_TOKEN = originalProbeToken;
     }
-
-    if (originalSupabaseUrl === undefined) {
-        delete process.env.NEXT_PUBLIC_SUPABASE_URL;
-    } else {
-        process.env.NEXT_PUBLIC_SUPABASE_URL = originalSupabaseUrl;
-    }
-
-    if (originalSupabaseAnonKey === undefined) {
-        delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    } else {
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = originalSupabaseAnonKey;
-    }
 });
 
 describe('tenant diagnostic request authorization contract', () => {
@@ -243,7 +249,7 @@ describe('tenant diagnostic request authorization contract', () => {
                 const proxyResponse = await proxy(request);
 
                 expect(proxyResponse.status).toBe(200);
-                const downstreamRequest = requestAfterProxy(proxyResponse, pathname);
+                const downstreamRequest = requestAfterProxy(proxyResponse, pathname, request);
                 expect(downstreamRequest.headers.get('x-user-profile')).toContain(`"role":"${role}"`);
 
                 const handlerResponse = await diagnosticHandlers[pathname](downstreamRequest);
