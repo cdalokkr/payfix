@@ -52,7 +52,7 @@ export function AttendanceCalendarContent({
                     onSelect={setSelectedDate}
                     captionLayout="dropdown"
                     showOutsideDays={false}
-                    className="p-4 sm:p-5 border-0 w-fit h-fit mx-auto [--cell-size:2.5rem] sm:[--cell-size:2.75rem] md:[--cell-size:3rem] lg:[--cell-size:2.75rem] xl:[--cell-size:2.9rem]"
+                    className="p-4 sm:p-5 border-0 w-fit h-fit mx-auto [--cell-size:2.25rem] sm:[--cell-size:2.5rem] md:[--cell-size:2.65rem] lg:[--cell-size:2.45rem] xl:[--cell-size:2.55rem]"
                     classNames={{
                         root: "w-fit h-fit flex flex-col items-center",
                         months: "w-fit h-fit flex flex-col items-center gap-3",
@@ -60,10 +60,10 @@ export function AttendanceCalendarContent({
                         caption: "flex justify-center relative items-center mb-2 px-1",
                         nav: "hidden",
                         table: "w-fit border-separate border-spacing-0 flex flex-col items-center",
-                        tbody: "w-fit flex flex-col gap-2",
-                        head_row: "flex w-fit mb-2 gap-1",
+                        tbody: "w-fit flex flex-col gap-2.5",
+                        head_row: "flex w-fit mb-2 gap-2.5",
                         weekday: "w-(--cell-size) flex-none flex justify-center items-center font-bold text-[11px] uppercase tracking-widest text-muted-foreground h-8",
-                        row: "flex w-fit gap-1",
+                        row: "flex w-fit gap-2.5",
                         day: "w-(--cell-size) flex-none flex items-center justify-center p-0",
                         dropdowns: "w-full flex items-center text-sm font-semibold justify-center gap-2 [&_[data-slot=select-trigger]]:border [&_[data-slot=select-trigger]]:border-muted/50 [&_[data-slot=select-trigger]]:h-9 [&_[data-slot=select-trigger]]:px-2.5",
                     }}
@@ -128,10 +128,10 @@ export function AttendanceCalendarContent({
                                             modifiers={modifiers}
                                             {...props}
                                             className={cn(
-                                                "size-(--cell-size) mx-auto !h-10 !w-10 sm:!h-11 sm:!w-11 md:!h-12 md:!w-12 lg:!h-11 lg:!w-11 xl:!h-12 xl:!w-12 p-0 rounded-xl relative overflow-visible flex flex-col items-center justify-center border-2 group/daybutton outline-none",
+                                                "size-(--cell-size) mx-auto !h-9 !w-9 sm:!h-10 sm:!w-10 md:!h-10 md:!w-10 lg:!h-10 lg:!w-10 xl:!h-10 xl:!w-10 p-0 rounded-xl relative overflow-visible flex flex-col items-center justify-center border-2 group/daybutton outline-none",
                                                 isSelected
                                                     ? isToday
-                                                        ? "border-primary bg-primary/10 text-primary z-20 !text-primary"
+                                                        ? "border-primary bg-primary text-primary-foreground z-20 shadow-md !text-primary-foreground"
                                                         : "border-primary shadow-xl shadow-primary/40 z-20 bg-primary !text-primary-foreground"
                                                     : record?.status === 'verified'
                                                         ? "border-green-500/50 bg-green-500/10 text-green-700 z-10"
@@ -161,7 +161,7 @@ export function AttendanceCalendarContent({
                                             >
                                                 <span className={cn(
                                                     "text-base font-bold transition-colors duration-300",
-                                                    isSelected && isToday ? "!text-primary" : (isSelected ? "!text-primary-foreground" : (isToday ? "!text-primary" : "!text-foreground")),
+                                                    isSelected && isToday ? "!text-primary-foreground" : (isSelected ? "!text-primary-foreground" : (isToday ? "!text-primary" : "!text-foreground")),
                                                     isOffDay && !isToday && !isSelected && "text-muted-foreground"
                                                 )}>
                                                     {day.date.getDate()}
