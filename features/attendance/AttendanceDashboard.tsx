@@ -33,7 +33,8 @@ function calculateScheduledHours(checkIn: string, checkOut: string): number {
 }
 
 export function AttendanceDashboard() {
-    const { profile, isLoading: profileLoading } = useProfile()
+    const { profile, isLoading: profileLoading, isInitializing: profileInitializing } = useProfile()
+    const profileReady = Boolean(profile?.id) && !profileInitializing
     const isMobile = useIsMobile()
     const utils = trpc.useUtils()
     const [isDownloading, setIsDownloading] = useState(false)
@@ -57,7 +58,7 @@ export function AttendanceDashboard() {
         startDate: format(monthStart, 'yyyy-MM-dd'),
         endDate: format(monthEnd, 'yyyy-MM-dd')
     }, {
-        enabled: !!profile?.id,
+        enabled: profileReady,
         retry: 1,
     })
 
@@ -65,19 +66,19 @@ export function AttendanceDashboard() {
         profileId: profile?.id,
         status: 'approved'
     }, {
-        enabled: !!profile?.id,
+        enabled: profileReady,
     })
 
     const { data: closures } = trpc.attendance.getOfficeClosures.useQuery(undefined, {
-        enabled: !!profile?.id,
+        enabled: profileReady,
     })
     const { data: settings } = trpc.attendance.getOfficeSettings.useQuery(undefined, {
-        enabled: !!profile?.id,
+        enabled: profileReady,
     })
 
     // Only block the page during the first request. Background refetches
     // should keep the calendar, summary, and empty state visible.
-    const isAttendanceDataLoading = profileLoading || isAttendanceLoading
+    const isAttendanceDataLoading = profileLoading || profileInitializing || isAttendanceLoading
 
     const attendanceMap = useMemo(() => {
         const map: Record<string, any> = {}
