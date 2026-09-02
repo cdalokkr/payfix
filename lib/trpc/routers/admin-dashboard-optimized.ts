@@ -7,7 +7,6 @@ import { z } from 'zod'
 import { router, adminProcedure, protectedProcedure, createContext } from '../server'
 import { createOptimizedQueryManager, clearQueryCaches } from '@/lib/db/optimized-query-manager'
 import { db } from '@/lib/db'
-import { tenantStorage } from '@/lib/tenant/store'
 
 type Context = Awaited<ReturnType<typeof createContext>>
 
@@ -23,7 +22,7 @@ interface DashboardPerformanceMetrics {
 
 // Request deduplication cache
 const requestCache = new Map<string, { data: unknown; expiry: number; promise: Promise<unknown> }>()
-const CACHE_TTL = 60 * 1000 // Keep dashboard cache short; auth and realtime own freshness.
+const CACHE_TTL = 10 * 60 * 1000 // 10 minutes (aggressive caching for performance)
 
 // Cache version mechanism
 let cacheVersion = 0
@@ -32,12 +31,7 @@ let cacheVersion = 0
 const queryManager = createOptimizedQueryManager()
 
 // Cache invalidation function - exported for use by other modules
-export function invalidateDashboardCache(pattern?: string, tenantKey = tenantStorage.getStore()?.tenantSchema): number {
-  if (!tenantKey) {
-    console.warn('[DASHBOARD-CACHE] Refusing unscoped cache invalidation')
-    return 0
-  }
-
+export function invalidateDashboardCache(pattern?: string): number {
   let invalidatedCount = 0
 
   // Increment cache version
@@ -46,8 +40,7 @@ export function invalidateDashboardCache(pattern?: string, tenantKey = tenantSto
   console.log(`[DASHBOARD-CACHE] Cache version incremented: ${previousVersion} -> ${cacheVersion}`)
 
   for (const [key] of requestCache.entries()) {
-    const belongsToTenant = key.includes(`-${tenantKey}-`)
-    if (belongsToTenant && (!pattern || key.includes(pattern))) {
+    if (!pattern || key.includes(pattern)) {
       requestCache.delete(key)
       invalidatedCount++
     }
@@ -55,7 +48,7 @@ export function invalidateDashboardCache(pattern?: string, tenantKey = tenantSto
 
   // CRITICAL: Also clear the lower-level query cache in OptimizedQueryManager
   // This ensures fresh data is fetched from the database on the next request
-  clearQueryCaches(tenantKey ?? undefined)
+  clearQueryCaches()
   console.log(`[DASHBOARD-CACHE] Cleared query caches for fresh data`)
 
   return invalidatedCount
@@ -98,8 +91,8 @@ export const adminDashboardRouter = router({
   getUnifiedDashboardData: protectedProcedure
     .input(
       z.object({
-        analyticsDays: z.number().int().min(1).max(90).default(7),
-        activitiesLimit: z.number().int().min(1).max(50).default(10),
+        analyticsDays: z.number().default(7),
+        activitiesLimit: z.number().default(10),
         enableCache: z.boolean().default(true),
         priority: z.enum(['speed', 'freshness']).default('speed'),
         localDate: z.string().optional()
@@ -107,14 +100,14 @@ export const adminDashboardRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const metrics = startDashboardTiming('getUnifiedDashboardData')
-      const tenantKey = ctx.tenant?.tenantSchema || 'default'
+      const tenantKey = ctx.tenant?.slug || 'default'
       const cacheKey = `unified-dashboard-${tenantKey}-${ctx.user.id}-${input.analyticsDays}-${input.activitiesLimit}-${input.priority}-${input.localDate || 'no-date'}-v${cacheVersion}`
 
       try {
         // Check local request cache first (including concurrent in-progress promises)
         if (input.enableCache && input.priority === 'speed') {
           const cached = requestCache.get(cacheKey)
-          if (cached && (cached.data === null || Date.now() < cached.expiry)) {
+          if (cached && (Date.now() < cached.expiry || cached.promise)) {
             metrics.cacheHit = true
             
             // Wait for in-progress promise or reuse cached data
@@ -221,7 +214,7 @@ export const adminDashboardRouter = router({
 
   getRecentActivities: protectedProcedure
     .input(z.object({
-       limit: z.number().int().min(1).max(50).default(10),
+      limit: z.number().default(10),
       userId: z.string().optional() // Filter activities by user ID (for employee/moderator dashboards)
     }))
     .query(async ({ ctx, input }) => {
@@ -250,13 +243,12 @@ export const adminDashboardRouter = router({
   invalidateCache: protectedProcedure
     .input(
       z.object({
-        pattern: z.string().max(100).optional(),
-        reason: z.string().max(200).optional()
+        pattern: z.string().optional(),
+        reason: z.string().optional()
       }).optional()
     )
-    .mutation(async ({ ctx, input }) => {
-      const tenantKey = ctx.tenant?.tenantSchema
-      const invalidatedCount = invalidateDashboardCache(input?.pattern, tenantKey)
+    .mutation(async ({ input }) => {
+      const invalidatedCount = invalidateDashboardCache(input?.pattern)
       return {
         success: true,
         invalidatedCount,
