@@ -26,6 +26,7 @@ function getMasterDb() {
 
 export const masterDb = new Proxy({} as any, {
     get(_, prop, receiver) {
-        return Reflect.get(getMasterDb(), prop, receiver);
+        const database = getMasterDb();
+        return Reflect.get(database, prop, database);
     }
 });
