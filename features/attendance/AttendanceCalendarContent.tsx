@@ -5,7 +5,6 @@ import { Calendar as ShadcnCalendar, CalendarDayButton } from "@/components/ui/c
 import { cn } from "@/lib/utils"
 import { motion } from "framer-motion"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Loader2 } from "lucide-react"
 
 interface AttendanceCalendarContentProps {
     currentMonth: Date
@@ -19,7 +18,6 @@ interface AttendanceCalendarContentProps {
     setSelectedDate: (date: Date | undefined) => void
     today: Date
     monthStart: Date
-    isLoading?: boolean
 }
 
 export function AttendanceCalendarContent({
@@ -33,16 +31,10 @@ export function AttendanceCalendarContent({
     selectedDate,
     setSelectedDate,
     today,
-    monthStart,
-    isLoading
+    monthStart
 }: AttendanceCalendarContentProps) {
     return (
         <div className="flex flex-col w-full h-full relative">
-            {isLoading && (
-                <div className="absolute inset-0 bg-background/50 backdrop-blur-xs flex items-center justify-center z-30 rounded-2xl animate-in fade-in duration-200">
-                    <Loader2 className="size-10 animate-spin text-primary" />
-                </div>
-            )}
             <TooltipProvider>
                 <ShadcnCalendar
                     mode="single"
