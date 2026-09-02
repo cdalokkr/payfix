@@ -10,6 +10,29 @@ export type TrustedTenantContext = TenantContext & {
     trusted: true;
 };
 
+const REGISTRY_UUID_PATTERN =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const TENANT_SLUG_PATTERN =
+    /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;
+
+export class TenantContextError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'TenantContextError';
+    }
+}
+
+/**
+ * Derive the stable non-login database role used by tenant security policies.
+ * Only registry UUIDs are accepted so callers cannot create arbitrary roles.
+ */
+export function tenantRuntimeRoleName(tenantId: string): string {
+    if (!REGISTRY_UUID_PATTERN.test(tenantId)) {
+        throw new TenantContextError('Tenant runtime roles require a valid registry UUID.');
+    }
+    return `payfix_tenant_${tenantId.replace(/-/g, '').toLowerCase()}`;
+}
+
 function isPostgresUrl(value: string): boolean {
     try {
         const parsed = new URL(value);
@@ -40,6 +63,7 @@ function isTenantAvailable(tenant: TenantMetadata): boolean {
  */
 export function tenantMetadataToTrustedContext(tenant: TenantMetadata): TrustedTenantContext | null {
     if (!isTenantAvailable(tenant)) return null;
+    if (!TENANT_SLUG_PATTERN.test(tenant.slug)) return null;
 
     if (tenant.tenant_schema) {
         try {
@@ -64,6 +88,29 @@ export function tenantMetadataToTrustedContext(tenant: TenantMetadata): TrustedT
             : null,
         trusted: true,
     };
+}
+
+/**
+ * Compatibility entry point for provisioning and security setup callers.
+ * Unlike the nullable request-resolution helpers, invalid registry records
+ * fail explicitly so provisioning cannot continue with an untrusted context.
+ */
+export function createTrustedTenantContext(tenant: TenantMetadata): TrustedTenantContext {
+    if (!REGISTRY_UUID_PATTERN.test(tenant.id)) {
+        throw new TenantContextError('Trusted tenant contexts require a valid registry UUID.');
+    }
+
+    const context = tenantMetadataToTrustedContext(tenant);
+    if (!context) {
+        throw new TenantContextError('Tenant registry record is not eligible for trusted routing.');
+    }
+
+    if (context.licenseExpiresAt === null) {
+        const { licenseExpiresAt: _licenseExpiresAt, ...contextWithoutOptionalExpiry } = context;
+        return contextWithoutOptionalExpiry;
+    }
+
+    return context;
 }
 
 export async function resolveTrustedTenantBySlug(slug: string | null | undefined): Promise<TrustedTenantContext | null> {
