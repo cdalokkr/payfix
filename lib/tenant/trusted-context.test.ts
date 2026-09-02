@@ -77,4 +77,49 @@ describe('trusted tenant context', () => {
         } as Request);
         expect(spoofed).toBeNull();
     });
+
+    it('uses the host for lookup instead of a spoofed tenant slug', async () => {
+        mockedResolveTenant.mockImplementation(async (lookup) => {
+            if (lookup === 'acme.payfix.com') return tenant();
+            return null;
+        });
+
+        const spoofed = await resolveTrustedTenantFromRequest({
+            headers: new Headers({
+                host: 'acme.payfix.com',
+                'x-tenant-slug': 'beta',
+            }),
+        } as Request);
+
+        expect(spoofed).toBeNull();
+        expect(mockedResolveTenant).toHaveBeenCalledWith('acme.payfix.com', true);
+
+        mockedResolveTenant.mockClear();
+        const missingHost = await resolveTrustedTenantFromRequest({
+            headers: new Headers({
+                'x-tenant-slug': 'acme',
+            }),
+        } as Request);
+
+        expect(missingHost).toBeNull();
+        expect(mockedResolveTenant).not.toHaveBeenCalled();
+    });
+
+    it('accepts a fallback cookie only on the main application host', async () => {
+        mockedResolveTenant.mockImplementation(async (lookup) => {
+            if (lookup === 'beta') return tenant({ slug: 'beta', tenant_schema: 'tenant_beta' });
+            return null;
+        });
+
+        const context = await resolveTrustedTenantFromRequest({
+            headers: new Headers({
+                host: 'payfix.vercel.app',
+                cookie: 'tenant_fallback=beta',
+                'x-tenant-slug': 'beta',
+            }),
+        } as Request);
+
+        expect(context?.slug).toBe('beta');
+        expect(mockedResolveTenant).toHaveBeenCalledWith('beta', true);
+    });
 });
