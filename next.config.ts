@@ -88,7 +88,6 @@ const nextConfig: NextConfig = {
               'magnetometer=()',
               'payment=()',
               'usb=()',
-              'bluetooth=()',
               'serial=()',
               'midi=()',
               'picture-in-picture=(self)',
@@ -146,8 +145,9 @@ const nextConfig: NextConfig = {
 
   // Image optimization configuration for Next.js 16
   images: {
-    // Enable modern image formats
-    formats: ['image/avif', 'image/webp'],
+    // Prefer WebP. Keep AVIF disabled until the patched image pipeline is
+    // proven in this release line; this avoids the libheif attack surface.
+    formats: ['image/webp'],
     // Remote patterns for external images (Supabase Storage, HF Spaces, etc.)
     remotePatterns: [
       {
@@ -176,7 +176,10 @@ const nextConfig: NextConfig = {
     'fflate', // Compression library used by jspdf (uses Node Worker)
   ],
 
-  // Keep only options supported by the installed Next.js release.
+  // Keep only supported, tenant-safe performance settings here. Cache
+  // Components and Partial Prefetching remain opt-in: authenticated layouts
+  // read request cookies/headers and the tenant key must be part of every
+  // cache identity before those features can be enabled safely.
   experimental: {
     // Optimize imports for tree-shaking heavy UI libraries
     optimizePackageImports: [
@@ -260,7 +263,7 @@ const nextConfig: NextConfig = {
     return config;
   },
 
-  // Keep build-time type checking enabled.
+  // Strict TypeScript type-checking during build
   typescript: {
     ignoreBuildErrors: false,
   },
