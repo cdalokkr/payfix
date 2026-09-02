@@ -128,40 +128,41 @@ export function AttendanceCalendarContent({
                                             modifiers={modifiers}
                                             {...props}
                                             className={cn(
-                                                "size-(--cell-size) mx-auto !h-10 !w-10 sm:!h-11 sm:!w-11 md:!h-12 md:!w-12 lg:!h-11 lg:!w-11 xl:!h-12 xl:!w-12 p-0 rounded-xl transition-all duration-200 relative overflow-visible flex flex-col items-center justify-center border-2 group/daybutton outline-none hover:-translate-y-0.5 hover:scale-[1.04] hover:shadow-lg hover:z-30 focus-visible:ring-2 focus-visible:ring-primary/70 focus-visible:ring-offset-2",
+                                                "size-(--cell-size) mx-auto !h-10 !w-10 sm:!h-11 sm:!w-11 md:!h-12 md:!w-12 lg:!h-11 lg:!w-11 xl:!h-12 xl:!w-12 p-0 rounded-xl relative overflow-visible flex flex-col items-center justify-center border-2 group/daybutton outline-none",
                                                 isSelected
-                                                    ? "border-primary shadow-xl shadow-primary/40 z-20 bg-primary !text-primary-foreground"
+                                                    ? isToday
+                                                        ? "border-primary bg-primary/10 text-primary z-20 !text-primary"
+                                                        : "border-primary shadow-xl shadow-primary/40 z-20 bg-primary !text-primary-foreground"
                                                     : record?.status === 'verified'
-                                                        ? "border-green-500/50 bg-green-500/10 text-green-700 hover:bg-green-500/20 hover:border-green-500/70 z-10"
+                                                        ? "border-green-500/50 bg-green-500/10 text-green-700 z-10"
                                                         : record?.status === 'rejected'
-                                                            ? "border-rose-500/50 bg-rose-500/15 text-rose-700 hover:bg-rose-500/25 hover:border-rose-500/70 z-10 line-through decoration-rose-500 decoration-2"
+                                                            ? "border-rose-500/50 bg-rose-500/15 text-rose-700 z-10 line-through decoration-rose-500 decoration-2"
                                                             : record?.check_in && record?.check_out
-                                                                ? "border-primary/50 bg-primary/10 text-primary hover:bg-primary/20 hover:border-primary/70 z-10"
+                                                                ? "border-primary/50 bg-primary/10 text-primary z-10"
                                                                 : record?.check_in
-                                                                    ? "border-green-500/50 bg-green-500/10 text-green-700 hover:bg-green-500/20 hover:border-green-500/70"
+                                                                    ? "border-green-500/50 bg-green-500/10 text-green-700"
                                                                     : modifiers.leave
-                                                                        ? "border-orange-500/50 bg-orange-500/10 text-orange-700 hover:bg-orange-500/20 hover:border-orange-500/70"
+                                                                        ? "border-orange-500/50 bg-orange-500/10 text-orange-700"
                                                                         : modifiers.holiday
-                                                                            ? "border-blue-500/50 bg-blue-500/10 text-blue-700 hover:bg-blue-500/20 hover:border-blue-500/70"
+                                                                            ? "border-blue-500/50 bg-blue-500/10 text-blue-700"
                                                                             : modifiers.offDay
-                                                                                ? "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted/50 hover:text-foreground hover:border-muted-foreground/30"
+                                                                                ? "border-transparent bg-muted/40 text-muted-foreground"
                                                                                 : modifiers.absent
-                                                                                    ? "border-red-500/30 bg-red-500/10 text-red-700 hover:bg-red-500/20 hover:border-red-500/50"
+                                                                                    ? "border-red-500/30 bg-red-500/10 text-red-700"
                                                                                     : isToday
-                                                                                        ? "border-primary bg-primary/20 text-primary z-10 shadow-lg shadow-primary/5"
-                                                                                        : "bg-muted/20 border-muted/20 hover:bg-muted/30 hover:border-muted/40"
+                                                                                        ? "border-primary bg-primary/20 text-primary z-10"
+                                                                                        : "bg-muted/20 border-muted/20"
                                             )}
                                         >
                                             <motion.div
                                                 className="w-full h-full flex flex-col items-center justify-center relative z-10"
-                                                whileHover={{ y: -4, scale: 1.04 }}
                                                 whileTap={{ scale: 0.96 }}
                                                 transition={{ type: "spring", stiffness: 400, damping: 20 }}
                                             >
                                                 <span className={cn(
                                                     "text-base font-bold transition-colors duration-300",
-                                                    isSelected ? "!text-primary-foreground" : (isToday ? "!text-primary" : "!text-foreground"),
-                                                    isOffDay && !isToday && !isSelected && "text-muted-foreground group-hover/daybutton:text-foreground"
+                                                    isSelected && isToday ? "!text-primary" : (isSelected ? "!text-primary-foreground" : (isToday ? "!text-primary" : "!text-foreground")),
+                                                    isOffDay && !isToday && !isSelected && "text-muted-foreground"
                                                 )}>
                                                     {day.date.getDate()}
                                                 </span>
@@ -175,17 +176,9 @@ export function AttendanceCalendarContent({
                                                     </div>
                                                 )}
                                                 {isOffDay && (
-                                                    <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_2px,transparent_2px)] [background-size:12px_12px] opacity-10 pointer-events-none group-hover/daybutton:opacity-30 transition-opacity" />
+                                                    <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_2px,transparent_2px)] [background-size:12px_12px] opacity-10 pointer-events-none" />
                                                 )}
 
-                                                {isToday && (
-                                                    <div className={cn(
-                                                        "absolute inset-0 rounded-2xl ring-2 ring-primary ring-offset-2 ring-offset-background animate-pulse -z-10",
-                                                        isSelected ? "opacity-100" : "opacity-50"
-                                                    )} />
-                                                )}
-
-                                                <div className="absolute inset-0 rounded-2xl bg-primary opacity-0 group-hover/daybutton:opacity-[0.05] transition-opacity pointer-events-none" />
                                             </motion.div>
                                         </CalendarDayButton>
                                     </TooltipTrigger>
