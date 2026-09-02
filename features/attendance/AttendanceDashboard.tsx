@@ -33,7 +33,7 @@ function calculateScheduledHours(checkIn: string, checkOut: string): number {
 }
 
 export function AttendanceDashboard() {
-    const { profile } = useProfile()
+    const { profile, isLoading: profileLoading } = useProfile()
     const isMobile = useIsMobile()
     const utils = trpc.useUtils()
     const [isDownloading, setIsDownloading] = useState(false)
@@ -57,16 +57,25 @@ export function AttendanceDashboard() {
         startDate: format(monthStart, 'yyyy-MM-dd'),
         endDate: format(monthEnd, 'yyyy-MM-dd')
     }, {
-        enabled: !!profile?.id
+        enabled: !!profile?.id,
+        retry: 1,
     })
 
     const { data: leaves } = trpc.attendance.getLeaves.useQuery({
         profileId: profile?.id,
         status: 'approved'
+    }, {
+        enabled: !!profile?.id,
     })
 
-    const { data: closures } = trpc.attendance.getOfficeClosures.useQuery()
-    const { data: settings } = trpc.attendance.getOfficeSettings.useQuery()
+    const { data: closures } = trpc.attendance.getOfficeClosures.useQuery(undefined, {
+        enabled: !!profile?.id,
+    })
+    const { data: settings } = trpc.attendance.getOfficeSettings.useQuery(undefined, {
+        enabled: !!profile?.id,
+    })
+
+    const isAttendanceDataLoading = profileLoading || isAttendanceLoading || isAttendanceFetching
 
     const attendanceMap = useMemo(() => {
         const map: Record<string, any> = {}
@@ -293,7 +302,7 @@ export function AttendanceDashboard() {
                         icon={stat.icon}
                         theme={stat.theme}
                         delay={0.1 + i * 0.05}
-                        loading={isAttendanceLoading || isAttendanceFetching}
+                         loading={isAttendanceDataLoading}
                     />
                 ))}
             </div>
@@ -312,7 +321,7 @@ export function AttendanceDashboard() {
                         icon={stat.icon}
                         theme={stat.theme}
                         delay={0.4 + i * 0.1}
-                        loading={isAttendanceLoading || isAttendanceFetching}
+                         loading={isAttendanceDataLoading}
                     />
                 ))}
             </div>
@@ -337,7 +346,7 @@ export function AttendanceDashboard() {
                         setSelectedDate={setSelectedDate}
                         today={today}
                         monthStart={monthStart}
-                        isLoading={isAttendanceLoading || isAttendanceFetching}
+                         isLoading={isAttendanceDataLoading}
                     />
                 </CardShell>
 
@@ -351,7 +360,7 @@ export function AttendanceDashboard() {
                     <div className="px-4 py-2">
                         <AttendanceSummaryContent
                             attendance={attendance}
-                            isLoading={isAttendanceLoading || isAttendanceFetching}
+                             isLoading={isAttendanceDataLoading}
                             settings={settings}
                             closures={closures}
                             leaves={leaves}
