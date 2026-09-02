@@ -328,7 +328,7 @@ export function AttendanceDashboard() {
                 ))}
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-stretch">
                 <CardShell
                     title="Monthly Calendar"
                     description={`Visual report for ${format(currentMonth, 'MMMM yyyy')}`}
