@@ -30,7 +30,9 @@
     "setup:fresh": "npx tsx scripts/setup-fresh.ts",
     "setup:complete": "npx tsx scripts/complete-setup.ts",
     "functions:serve": "supabase functions serve",
-    "functions:deploy": "supabase functions deploy"
+    "functions:deploy": "supabase functions deploy",
+    "test:saas-environment": "node --test scripts/validate-test-environment.node-test.mjs",
+    "validate:test-environment": "node scripts/validate-test-environment.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.8.0",
