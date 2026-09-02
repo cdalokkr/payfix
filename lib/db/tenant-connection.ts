@@ -4,6 +4,7 @@ import * as schema from './schema'; // Standard business schema
 import { masterDb } from './master-connection';
 import { tenants } from './master-schema';
 import { eq, or } from 'drizzle-orm';
+import { assertTenantSchemaName } from '../tenant/schema-contract';
 
 
 interface CachedConnection {
@@ -66,9 +67,7 @@ async function refreshTenantLockoutState(tenantId: string): Promise<boolean> {
         return blocked;
     } catch (err) {
         console.error(`[DB Router] Error refreshing lockout state for tenant ${tenantId}:`, err);
-        // On control-plane errors, preserve a known state. A tenant with no
-        // known state must not be treated as active because that would turn a
-        // control-plane outage into an authorization bypass.
+        // A control-plane failure must not turn into tenant data access.
         const prev = tenantLockoutCache.get(tenantId);
         return prev ? prev.blocked : true;
     }
@@ -79,7 +78,26 @@ async function refreshTenantLockoutState(tenantId: string): Promise<boolean> {
  * Uses schema-per-tenant on the central DB if databaseUrl is not provided.
  * Enforces database-level lockout for expired trials or suspended subscriptions.
  */
-export function getTenantDb(tenantId: string, databaseUrl: string | null, schemaName: string | null) {
+export function getTenantDb(
+    tenantId: string,
+    databaseUrl: string | null,
+    schemaName: string | null,
+    trusted = false,
+) {
+    if (!trusted) {
+        throw new Error('TENANT_CONTEXT_REQUIRED: tenant database routing requires a registry-backed context.');
+    }
+    if (!schemaName) {
+        throw new Error('TENANT_SCHEMA_REQUIRED: tenant database routing requires a registered schema.');
+    }
+    assertTenantSchemaName(schemaName);
+    if (databaseUrl) {
+        const parsedUrl = new URL(databaseUrl);
+        if (parsedUrl.protocol !== 'postgres:' && parsedUrl.protocol !== 'postgresql:') {
+            throw new Error('TENANT_DATABASE_URL_INVALID: tenant database URL must use PostgreSQL.');
+        }
+    }
+
     // 1. Enforce Subscription Lockout Check
     const cachedLockout = tenantLockoutCache.get(tenantId);
     if (cachedLockout && cachedLockout.blocked) {
@@ -93,10 +111,11 @@ export function getTenantDb(tenantId: string, databaseUrl: string | null, schema
 
     // 2. Resolve database connection pool
     const isCustomExternalDb = !!databaseUrl && databaseUrl !== process.env.DATABASE_URL;
-    const safeSchemaName = schemaName ? schemaName.replace(/[^a-zA-Z0-9_]/g, '') : null;
+    const safeSchemaName = schemaName;
 
-    // Cache key: If custom external DB -> tenantId; If shared DB -> shared_${safeSchemaName}
-    const cacheKey = isCustomExternalDb ? tenantId : `shared_${safeSchemaName || 'public'}`;
+    // Include tenant and target in the key so a changed routing record cannot
+    // reuse another tenant's connection pool.
+    const cacheKey = `${tenantId}:${isCustomExternalDb ? databaseUrl : 'shared'}:${safeSchemaName}`;
     const cached = connectionPoolCache.get(cacheKey);
     
     if (cached) {
@@ -109,12 +128,10 @@ export function getTenantDb(tenantId: string, databaseUrl: string | null, schema
         throw new Error('Database URL configuration is missing.');
     }
 
-    console.log(`[DB Router] Initializing new connection pool for: ${cacheKey} (search_path: ${safeSchemaName ? `${safeSchemaName}, public` : 'public'})`);
+    console.log(`[DB Router] Initializing new connection pool for: ${cacheKey} (search_path: ${safeSchemaName})`);
 
     const connectionParams: Record<string, any> = {};
-    if (safeSchemaName) {
-        connectionParams.search_path = `${safeSchemaName}, public`;
-    }
+    connectionParams.search_path = safeSchemaName;
 
     const client = postgres(targetDbUrl, {
         prepare: false,
