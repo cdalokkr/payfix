@@ -10,7 +10,7 @@
     "start": "next start",
     "lint": "eslint --max-warnings=0",
     "typecheck": "tsc --noEmit",
-    "test": "jest",
+    "test": "pnpm run test:saas-environment && NEXT_PUBLIC_SUPABASE_URL=https://unit-test.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=unit-test-anon-key pnpm run validate:test-environment && jest",
     "test:e2e:instant": "playwright test e2e/instant-navigation.spec.ts",
     "test:watch": "jest --watch",
     "test:saas-migrations": "node --test scripts/validate-saas-migrations.node-test.mjs",
