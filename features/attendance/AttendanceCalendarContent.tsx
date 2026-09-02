@@ -109,7 +109,7 @@ export function AttendanceCalendarContent({
                                 return <div className="size-(--cell-size)" />
                             }
 
-                            const isToday = modifiers.today
+                            const isToday = format(day.date, "yyyy-MM-dd") === format(today, "yyyy-MM-dd")
                             const isSelected = modifiers.selected
                             const isOffDay = modifiers.offDay
 
@@ -131,8 +131,8 @@ export function AttendanceCalendarContent({
                                                 "size-(--cell-size) mx-auto !h-9 !w-9 sm:!h-10 sm:!w-10 md:!h-10 md:!w-10 lg:!h-10 lg:!w-10 xl:!h-10 xl:!w-10 p-0 rounded-xl relative overflow-visible flex flex-col items-center justify-center border-2 group/daybutton outline-none",
                                                 isSelected
                                                     ? isToday
-                                                        ? "border-primary bg-primary text-primary-foreground z-20 shadow-md !text-primary-foreground"
-                                                        : "border-primary shadow-xl shadow-primary/40 z-20 bg-primary !text-primary-foreground"
+                                                        ? "!border-primary !bg-primary !text-primary-foreground z-20 shadow-md"
+                                                        : "!border-primary shadow-xl shadow-primary/40 z-20 !bg-primary !text-primary-foreground"
                                                     : record?.status === 'verified'
                                                         ? "border-green-500/50 bg-green-500/10 text-green-700 z-10"
                                                         : record?.status === 'rejected'
@@ -150,7 +150,7 @@ export function AttendanceCalendarContent({
                                                                                 : modifiers.absent
                                                                                     ? "border-red-500/30 bg-red-500/10 text-red-700"
                                                                                     : isToday
-                                                                                        ? "border-primary bg-primary/20 text-primary z-10"
+                                                                                            ? "!border-primary bg-primary/20 !text-primary z-10"
                                                                                         : "bg-muted/20 border-muted/20"
                                             )}
                                         >
@@ -161,7 +161,7 @@ export function AttendanceCalendarContent({
                                             >
                                                 <span className={cn(
                                                     "text-base font-bold transition-colors duration-300",
-                                                    isSelected && isToday ? "!text-primary-foreground" : (isSelected ? "!text-primary-foreground" : (isToday ? "!text-primary" : "!text-foreground")),
+                                                    isSelected ? "!text-primary-foreground" : (isToday ? "!text-primary" : "!text-foreground"),
                                                     isOffDay && !isToday && !isSelected && "text-muted-foreground"
                                                 )}>
                                                     {day.date.getDate()}
