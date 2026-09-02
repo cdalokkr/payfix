@@ -422,7 +422,12 @@ export const authRouter = router({
                 });
 
                 if (tenantRecord) {
-                  const tenantDbInstance = getTenantDb(tenantRecord.id, tenantRecord.database_url, tenantRecord.tenant_schema);
+                  const tenantDbInstance = getTenantDb(
+                    tenantRecord.id,
+                    tenantRecord.database_url,
+                    tenantRecord.tenant_schema,
+                    true,
+                  );
                   const tStart = performance.now();
                   await tenantDbInstance.execute(sqlTag`SELECT 1`);
                   if (process.env.NODE_ENV === 'development') {
