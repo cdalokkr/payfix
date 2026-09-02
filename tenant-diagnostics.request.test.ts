@@ -73,6 +73,8 @@ type DiagnosticRole = 'admin' | 'super_admin';
 let currentRole: DiagnosticRole | null = null;
 let requestSequence = 0;
 const originalProbeToken = process.env.TENANT_HEALTH_PROBE_TOKEN;
+const originalSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const originalSupabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 function makeRequest(
     pathname: keyof typeof diagnosticHandlers,
@@ -122,6 +124,8 @@ function requestAfterProxy(
 beforeEach(() => {
     jest.clearAllMocks();
     process.env.TENANT_HEALTH_PROBE_TOKEN = PROBE_TOKEN;
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://unit-test.supabase.co';
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'unit-test-anon-key';
     currentRole = null;
 
     mockedResolveTenant.mockImplementation(async (lookup) => {
@@ -211,6 +215,16 @@ afterAll(() => {
         delete process.env.TENANT_HEALTH_PROBE_TOKEN;
     } else {
         process.env.TENANT_HEALTH_PROBE_TOKEN = originalProbeToken;
+    }
+    if (originalSupabaseUrl === undefined) {
+        delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    } else {
+        process.env.NEXT_PUBLIC_SUPABASE_URL = originalSupabaseUrl;
+    }
+    if (originalSupabaseAnonKey === undefined) {
+        delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    } else {
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = originalSupabaseAnonKey;
     }
 });
 

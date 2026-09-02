@@ -21,6 +21,8 @@ jest.mock('next/headers', () => ({
 
 const mockedCreateServerClient = jest.mocked(createServerClient);
 const mockedCookies = jest.mocked(cookies);
+const originalSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const originalSupabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 const user = {
     id: 'user-security-test',
@@ -47,9 +49,24 @@ function requestWithSession(): Request {
 describe('optimized authentication trust boundary', () => {
     beforeEach(() => {
         invalidateAllSessions();
+        process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://unit-test.supabase.co';
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'unit-test-anon-key';
         mockedCookies.mockResolvedValue({
             getAll: () => [{ name: 'sb-security-auth-token', value: 'session' }],
         } as never);
+    });
+
+    afterAll(() => {
+        if (originalSupabaseUrl === undefined) {
+            delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+        } else {
+            process.env.NEXT_PUBLIC_SUPABASE_URL = originalSupabaseUrl;
+        }
+        if (originalSupabaseAnonKey === undefined) {
+            delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+        } else {
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = originalSupabaseAnonKey;
+        }
     });
 
     it('verifies a revoked session before considering a cached context', async () => {
