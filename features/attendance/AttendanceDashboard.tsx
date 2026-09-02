@@ -42,7 +42,8 @@ export function AttendanceDashboard() {
     useUserRealtimeDashboard(
         profile?.id || '',
         undefined,
-        'employee'
+        'employee',
+        { enableDashboardQuery: false }
     )
 
     const today = useMemo(() => new Date(), [])
