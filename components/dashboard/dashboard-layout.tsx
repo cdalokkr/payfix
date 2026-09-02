@@ -243,10 +243,7 @@ export function DashboardLayout({
             tenantLicenseExpiresAt={tenantLicenseExpiresAt} 
           />
           <div className="flex-1 overflow-y-auto pt-6 pb-20 lg:pb-4 scroll-smooth bg-background">
-            <div
-              key={pathname}
-              className="w-full animate-fade-in"
-            >
+             <div className="w-full">
               {children || <DashboardContent profile={profile} isLoading={profileLoading} onLoadingChange={() => {}} />}
             </div>
           </div>
