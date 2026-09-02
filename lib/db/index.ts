@@ -31,7 +31,8 @@ function getCentralDb() {
 // Re-export centralDb as a getter-backed proxy so existing imports keep working
 export const centralDb = new Proxy({} as any, {
     get(_, prop, receiver) {
-        return Reflect.get(getCentralDb(), prop, receiver);
+        const database = getCentralDb();
+        return Reflect.get(database, prop, database);
     }
 });
 
@@ -53,7 +54,9 @@ export const db = new Proxy({} as any, {
                 lastLoggedTenant = context.tenantSchema || '';
             }
             const tenantDb = getTenantDb(context.tenantId, context.databaseUrl, context.tenantSchema, true);
-            return Reflect.get(tenantDb, prop, receiver);
+            // Drizzle's query getter reads internal schema metadata from its
+            // receiver. Bind it to the real tenant DB, not this routing proxy.
+            return Reflect.get(tenantDb, prop, tenantDb);
         }
 
         throw new Error('TENANT_CONTEXT_REQUIRED: use centralDb explicitly for control-plane operations.');
