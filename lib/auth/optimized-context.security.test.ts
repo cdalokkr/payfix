@@ -86,6 +86,39 @@ describe('optimized authentication trust boundary', () => {
         expect(context.profile).toBeNull();
     });
 
+    it('writes refreshed auth cookies through the response cookie store for request contexts', async () => {
+        const setCookie = jest.fn();
+        let clientOptions: any;
+        const getUser = jest.fn().mockResolvedValue({
+            data: { user: null },
+            error: { message: 'Session expired' },
+        });
+        mockedCookies.mockResolvedValue({
+            getAll: () => [{ name: 'sb-security-auth-token', value: 'session' }],
+            set: setCookie,
+        } as never);
+        mockedCreateServerClient.mockImplementation((_url, _key, options) => {
+            clientOptions = options;
+            return { auth: { getUser } } as never;
+        });
+
+        await createOptimizedContext(requestWithSession());
+
+        clientOptions.cookies.setAll([
+            { name: 'sb-security-auth-token', value: 'refreshed-session', options: { path: '/' } },
+        ]);
+
+        expect(setCookie).toHaveBeenCalledWith(
+            'sb-security-auth-token',
+            'refreshed-session',
+            expect.objectContaining({
+                path: '/',
+                httpOnly: true,
+                sameSite: 'lax',
+            }),
+        );
+    });
+
     it('invalidates every cached device session when a role or status changes', async () => {
         await preSeedSessionCache(user, profile);
         const firstCacheSize = getAuthPerformanceStats().cacheSize;

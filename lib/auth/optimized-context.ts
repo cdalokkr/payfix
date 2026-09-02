@@ -334,6 +334,7 @@ export async function createOptimizedContext(
       const cookieHeader = req.headers.get('cookie') || ''
       const parsed = parseCookieHeader(cookieHeader)
       authHeader = req.headers.get('authorization')
+      const responseCookieStore = await cookies()
       cookieStore = {
         getAll: () => parsed,
         get: (name: string) => {
@@ -341,7 +342,15 @@ export async function createOptimizedContext(
           return match ? { name, value: match.value } : undefined
         },
         set: (name: string, value: string, options?: any) => {
-          // Read-only path, mutations handled separately or silently ignored
+          // Request-bound contexts still need to persist Supabase session
+          // cookies for login and token-refresh mutations handled by tRPC.
+          // The incoming Request remains the source for reads, while the
+          // Next.js cookie store owns response Set-Cookie headers.
+          try {
+            responseCookieStore.set(name, value, options)
+          } catch {
+            // Server component callers may expose a read-only cookie store.
+          }
         }
       } as any;
     } else {
