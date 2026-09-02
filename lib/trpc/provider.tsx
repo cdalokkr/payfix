@@ -20,15 +20,10 @@ function makeQueryClient() {
         gcTime: 5 * 60 * 1000,
         // Don't refetch on window focus for better UX
         refetchOnWindowFocus: false,
-        // Realtime-aware screens explicitly refresh after reconnect. Other
-        // queries only refetch when stale, avoiding a request storm.
-        refetchOnReconnect: true,
-        // Retry transient failures once, but never retry client/auth errors.
-        retry: (failureCount, error) => {
-          const httpStatus = (error as { data?: { httpStatus?: number } })?.data?.httpStatus
-          if (httpStatus && httpStatus >= 400 && httpStatus < 500) return false
-          return failureCount < 1
-        },
+        // Don't refetch on reconnect unless data is stale
+        refetchOnReconnect: 'always',
+        // Retry failed requests up to 2 times
+        retry: 2,
         // Exponential backoff for retries
         retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
         // Enable structural sharing for better performance
