@@ -9,13 +9,7 @@ import { db } from '@/lib/db'
 import type { Profile } from '@/types'
 import { cache } from 'react'
 
-import { headers, cookies } from 'next/headers'
-import { tenantStorage, type TenantContext } from '@/lib/tenant/store'
-import {
-  resolveTrustedTenantBySlug,
-  resolveTrustedTenantContext,
-  TenantContextError,
-} from '@/lib/tenant/trusted-context'
+import { tenantStorage } from '@/lib/tenant/store'
 
 let createContextCallCount = 0
 const authCallTimes: number[] = []
@@ -26,32 +20,7 @@ export const createContext = async (opts?: { req: Request }) => {
   const startTime = performance.now()
 
   try {
-    const reqHeaders = opts?.req ? new Headers(opts.req.headers) : await headers();
-    let tenant: TenantContext | null = null;
-    const tenantId = reqHeaders.get('x-tenant-id');
-    const tenantSlug = reqHeaders.get('x-tenant-slug');
-    const tenantSchema = reqHeaders.get('x-tenant-schema');
-
-    if (tenantId || tenantSlug || tenantSchema) {
-      if (!tenantId || !tenantSlug || !tenantSchema) {
-        throw new TenantContextError('Tenant headers are incomplete.');
-      }
-      tenant = await resolveTrustedTenantContext(reqHeaders);
-    } else {
-      try {
-        const cookieStore = await cookies();
-        const fallbackSlug = cookieStore.get('tenant_fallback')?.value;
-        if (fallbackSlug) {
-          tenant = await resolveTrustedTenantBySlug(fallbackSlug);
-        }
-      } catch (cookieErr) {
-        console.error('[TRPC-CONTEXT] Error reading fallback cookie:', cookieErr);
-      }
-    }
-
-    const context = tenant
-      ? await tenantStorage.run(tenant, () => createOptimizedContext(opts?.req))
-      : await createOptimizedContext(opts?.req)
+    const context = await createOptimizedContext(opts?.req)
 
 
     // Record timing for performance monitoring
@@ -77,7 +46,7 @@ export const createContext = async (opts?: { req: Request }) => {
       db: db,
       user: context.user,
       profile: context.profile,
-      tenant,
+      tenant: context.tenant,
       performance: {
         contextCreationTime: duration,
         cacheHit: context.metrics.cacheHit,
@@ -156,11 +125,13 @@ const t = initTRPC.context<Context>().create({
 
 // Middleware to run tRPC procedures inside the resolved tenant context
 const tenantContextMiddleware = t.middleware(async ({ ctx, next }) => {
-  if (ctx.tenant) {
+  if (ctx.tenant?.trusted) {
     return tenantStorage.run(ctx.tenant, () => {
       return next();
     });
   }
+  // Public control-plane procedures (availability checks, login, signup) may
+  // run without a tenant. Any procedure that reaches db will fail closed.
   return next();
 });
 
@@ -189,16 +160,8 @@ export const protectedProcedure = publicProcedure.use(async ({ ctx, next }) => {
     }
     throw new TRPCError({
       code: 'UNAUTHORIZED',
-      message: ctx.user ? 'Profile temporarily unavailable - please try again' : undefined,
+       message: ctx.user ? 'Profile temporarily unavailable - please try again' : undefined,
       cause: { performance: ctx.performance }
-    })
-  }
-
-  if (!ctx.tenant?.trusted || !ctx.tenant.tenantSchema) {
-    throw new TRPCError({
-      code: 'FORBIDDEN',
-      message: 'A trusted tenant context is required.',
-      cause: { performance: ctx.performance },
     })
   }
 
@@ -256,6 +219,14 @@ export const superAdminProcedure = protectedProcedure.use(async ({ ctx, next }) 
 })
 
 export const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  if (!ctx.tenant?.trusted) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'A valid workspace context is required.',
+      cause: { performance: ctx.performance },
+    })
+  }
+
   if (ctx.profile.role !== 'admin' && ctx.profile.role !== 'super_admin') {
     throw new TRPCError({
       code: 'FORBIDDEN',
@@ -270,6 +241,14 @@ export const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
 })
 
 export const moderatorProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  if (!ctx.tenant?.trusted) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'A valid workspace context is required.',
+      cause: { performance: ctx.performance },
+    })
+  }
+
   if (ctx.profile.role !== 'admin' && ctx.profile.role !== 'moderator' && ctx.profile.role !== 'super_admin') {
     throw new TRPCError({
       code: 'FORBIDDEN',
