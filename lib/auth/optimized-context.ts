@@ -264,13 +264,17 @@ async function preloadProfile(
 
   if (tenantContext?.tenantSchema) {
     try {
-      const tenantProfileQuery = (db as any).query?.profiles?.findFirst
-      if (typeof tenantProfileQuery === 'function') {
-        result = await tenantStorage.run(tenantContext, () => tenantProfileQuery({
-          where: eq(profiles.id, profileId),
-          with: { designation: true },
-        }))
-      }
+      result = await tenantStorage.run(tenantContext, async () => {
+        // The tenant DB proxy reads AsyncLocalStorage when its properties are
+        // accessed, so resolve the query only after entering the tenant scope.
+        const tenantProfileQuery = (db as any).query?.profiles?.findFirst
+        return typeof tenantProfileQuery === 'function'
+          ? tenantProfileQuery({
+              where: eq(profiles.id, profileId),
+              with: { designation: true },
+            })
+          : null
+      })
     } catch (error) {
       console.error('[AUTH] Tenant profile lookup failed:', error)
     }
