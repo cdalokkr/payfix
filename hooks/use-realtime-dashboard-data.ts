@@ -498,12 +498,13 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
     return `${year}-${month}-${day}`;
   }, []);
 
-  // Progressive loading state management
-  const [magicCardsDataReady, setMagicCardsDataReady] = useState(false)
-  const [recentActivityDataReady, setRecentActivityDataReady] = useState(false)
+  // Server-prefetched data should render immediately. Skeletons are only
+  // needed when there is no usable dashboard data yet.
+  const hasInitialData = Boolean(initialData && 'critical' in initialData)
+  const [magicCardsDataReady, setMagicCardsDataReady] = useState(hasInitialData)
+  const [recentActivityDataReady, setRecentActivityDataReady] = useState(hasInitialData)
 
-  // Skeleton display state - shows on every route change to dashboard
-  const [showSkeleton, setShowSkeleton] = useState(true)
+  const [showSkeleton, setShowSkeleton] = useState(!hasInitialData)
   const skeletonStartTimeRef = useRef<number>(Date.now())
   const previousPathnameRef = useRef<string | null>(null)
 
