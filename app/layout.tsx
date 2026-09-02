@@ -4,14 +4,14 @@ import './globals.css'
 import { TRPCProvider } from '@/lib/trpc/provider'
 import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster as SonnerToaster } from "@/components/ui/sonner"
-import dynamic from 'next/dynamic'
+import dynamicImport from 'next/dynamic'
 
 // Lazy-load non-critical components (they render null but load JS modules)
 // Code-split to keep them off the initial bundle critical path
-const WebVitalsReporter = dynamic(
+const WebVitalsReporter = dynamicImport(
   () => import('@/components/monitoring/web-vitals-reporter')
 )
-const PWARegister = dynamic(
+const PWARegister = dynamicImport(
   () => import('@/components/pwa/pwa-register')
 )
 
@@ -38,6 +38,12 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
 }
+
+// The root layout reads tenant branding from request headers. Mark it dynamic
+// explicitly so Next never attempts static rendering or cross-tenant shell
+// reuse for a request-scoped theme.
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export const metadata: Metadata = {
   title: {

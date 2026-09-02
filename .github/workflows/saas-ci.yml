@@ -56,5 +56,8 @@ jobs:
       - name: Test
         run: pnpm run test --runInBand
 
-      - name: Build
-        run: pnpm run build
+      - name: Build with Turbopack
+        run: pnpm run build:turbopack
+
+      - name: Build with webpack
+        run: pnpm run build:webpack
