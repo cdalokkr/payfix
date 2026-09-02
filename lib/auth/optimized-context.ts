@@ -267,9 +267,9 @@ async function preloadProfile(
       result = await tenantStorage.run(tenantContext, async () => {
         // The tenant DB proxy reads AsyncLocalStorage when its properties are
         // accessed, so resolve the query only after entering the tenant scope.
-        const tenantProfileQuery = (db as any).query?.profiles?.findFirst
-        return typeof tenantProfileQuery === 'function'
-          ? tenantProfileQuery({
+        const tenantProfilesQuery = (db as any).query?.profiles
+        return typeof tenantProfilesQuery?.findFirst === 'function'
+          ? tenantProfilesQuery.findFirst({
               where: eq(profiles.id, profileId),
               with: { designation: true },
             })
@@ -300,9 +300,9 @@ async function preloadProfile(
 
   // Public profiles are a control-plane source only for platform super-admins.
   if (!result) {
-    const centralProfileQuery = (centralDb as any).query?.profiles?.findFirst
-    const centralResult = typeof centralProfileQuery === 'function'
-      ? await centralProfileQuery({
+    const centralProfilesQuery = (centralDb as any).query?.profiles
+    const centralResult = typeof centralProfilesQuery?.findFirst === 'function'
+      ? await centralProfilesQuery.findFirst({
           where: eq(profiles.id, profileId),
           with: { designation: true },
         })
