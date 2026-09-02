@@ -348,7 +348,6 @@ export function AttendanceDashboard() {
                         setSelectedDate={setSelectedDate}
                         today={today}
                         monthStart={monthStart}
-                         isLoading={isAttendanceDataLoading}
                     />
                 </CardShell>
 
