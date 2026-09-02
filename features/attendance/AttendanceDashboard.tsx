@@ -34,7 +34,6 @@ function calculateScheduledHours(checkIn: string, checkOut: string): number {
 
 export function AttendanceDashboard() {
     const { profile, isLoading: profileLoading, isInitializing: profileInitializing } = useProfile()
-    const profileReady = Boolean(profile?.id) && !profileInitializing
     const isMobile = useIsMobile()
     const utils = trpc.useUtils()
     const [isDownloading, setIsDownloading] = useState(false)
@@ -53,32 +52,49 @@ export function AttendanceDashboard() {
     const monthStart = startOfMonth(currentMonth)
     const monthEnd = endOfMonth(currentMonth)
 
-    const { data: attendance, isLoading: isAttendanceLoading } = trpc.attendance.getAttendance.useQuery({
+    // Employee attendance is authorized from the server-side session. Do not
+    // wait for the client profile cache before starting the first current-month
+    // request; that cache can lag behind the authenticated tRPC context.
+    const {
+        data: attendance,
+        isLoading: isAttendanceLoading,
+        isError: isAttendanceError,
+        error: attendanceError,
+        refetch: refetchAttendance,
+    } = trpc.attendance.getAttendance.useQuery({
         profileId: profile?.id,
         startDate: format(monthStart, 'yyyy-MM-dd'),
         endDate: format(monthEnd, 'yyyy-MM-dd')
     }, {
-        enabled: profileReady,
-        retry: 1,
+        enabled: true,
+        retry: 3,
+        retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 8000),
+        refetchOnMount: 'always',
+        refetchOnReconnect: 'always',
     })
 
-    const { data: leaves } = trpc.attendance.getLeaves.useQuery({
+    const { data: leaves, isLoading: isLeavesLoading } = trpc.attendance.getLeaves.useQuery({
         profileId: profile?.id,
         status: 'approved'
     }, {
-        enabled: profileReady,
+        enabled: true,
     })
 
-    const { data: closures } = trpc.attendance.getOfficeClosures.useQuery(undefined, {
-        enabled: profileReady,
+    const { data: closures, isLoading: isClosuresLoading } = trpc.attendance.getOfficeClosures.useQuery(undefined, {
+        enabled: true,
     })
-    const { data: settings } = trpc.attendance.getOfficeSettings.useQuery(undefined, {
-        enabled: profileReady,
+    const { data: settings, isLoading: isSettingsLoading } = trpc.attendance.getOfficeSettings.useQuery(undefined, {
+        enabled: true,
     })
 
     // Only block the page during the first request. Background refetches
     // should keep the calendar, summary, and empty state visible.
-    const isAttendanceDataLoading = profileLoading || profileInitializing || isAttendanceLoading
+    const isAttendanceDataLoading = profileLoading
+        || profileInitializing
+        || isAttendanceLoading
+        || isLeavesLoading
+        || isClosuresLoading
+        || isSettingsLoading
 
     const attendanceMap = useMemo(() => {
         const map: Record<string, any> = {}
@@ -328,6 +344,25 @@ export function AttendanceDashboard() {
                     />
                 ))}
             </div>
+
+            {isAttendanceError && (
+                <div
+                    role="alert"
+                    className="flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between"
+                >
+                    <span>
+                        {attendanceError?.message || "Attendance data could not be loaded."}
+                    </span>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void refetchAttendance()}
+                    >
+                        Retry
+                    </Button>
+                </div>
+            )}
 
             <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-stretch">
                 <CardShell
