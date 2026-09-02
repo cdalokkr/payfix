@@ -22,6 +22,10 @@ jest.mock('next/headers', () => ({
 const mockSessions = new Map<string, { id: string; email: string }>();
 const mockTenantRecords = new Map<string, any>();
 const mockProfileRecords = new Map<string, any>();
+const mockCrossSchemaProfiles = new Map<string, any>();
+const failureInjection = {
+    tenantProfileLookup: false,
+};
 
 jest.mock('@/lib/tenant/trusted-context', () => {
     const { tenantStorage } = jest.requireActual('@/lib/tenant/store');
@@ -85,6 +89,9 @@ jest.mock('@/lib/db', () => {
         // Keep the delay so Promise.all below exercises two overlapping
         // requests instead of only checking sequential behavior.
         await new Promise(resolve => setTimeout(resolve, 5));
+        if (failureInjection.tenantProfileLookup) {
+            throw new Error('Injected tenant profile lookup failure');
+        }
         const tenant = tenantStorage.getStore();
         const profileId = profileIdFromWhere(config?.where);
         return tenant && profileId
@@ -121,6 +128,8 @@ jest.mock('@/lib/db', () => {
 
 const mockedCreateServerClient = jest.mocked(createServerClient);
 const mockedCookies = jest.mocked(cookies);
+const originalSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const originalSupabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const tenants = {
     acme: {
         id: '11111111-1111-4111-8111-111111111111',
@@ -202,7 +211,10 @@ function configureSupabaseSessions() {
                     error: session ? null : { message: 'Invalid session' },
                 }),
             },
-            rpc: jest.fn().mockResolvedValue({ data: null, error: null }),
+            rpc: jest.fn().mockImplementation(async (_name: string, args: { target_user_id?: string }) => ({
+                data: args?.target_user_id ? mockCrossSchemaProfiles.get(args.target_user_id) || null : null,
+                error: null,
+            })),
         } as never;
     });
 }
@@ -222,13 +234,30 @@ describe('production-like tenant session isolation', () => {
         mockSessions.clear();
         mockTenantRecords.clear();
         mockProfileRecords.clear();
+        mockCrossSchemaProfiles.clear();
+        failureInjection.tenantProfileLookup = false;
         mockedCreateServerClient.mockReset();
+        process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://unit-test.supabase.co';
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'unit-test-anon-key';
         mockedCookies.mockResolvedValue({
             getAll: () => [],
             set: jest.fn(),
         } as never);
         seedTenantProfiles();
         configureSupabaseSessions();
+    });
+
+    afterAll(() => {
+        if (originalSupabaseUrl === undefined) {
+            delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+        } else {
+            process.env.NEXT_PUBLIC_SUPABASE_URL = originalSupabaseUrl;
+        }
+        if (originalSupabaseAnonKey === undefined) {
+            delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+        } else {
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = originalSupabaseAnonKey;
+        }
     });
 
     it('keeps two concurrent cookie sessions on their own registry tenant', async () => {
@@ -314,5 +343,43 @@ describe('production-like tenant session isolation', () => {
 
         expect(context.tenant).toBeNull();
         expect(context.profile).toBeNull();
+    });
+
+    it('fails closed when the registry tenant is unavailable for a valid session', async () => {
+        mockSessions.set('cookie-acme', { id: profiles.acme.id, email: profiles.acme.email });
+        mockTenantRecords.delete('acme.payfix.com');
+
+        const context = await createOptimizedContext(requestFor('cookie-acme', 'acme.payfix.com'));
+
+        // A valid Supabase session alone must not authorize a tenant request.
+        expect(context.user?.email).toBe(profiles.acme.email);
+        expect(context.tenant).toBeNull();
+        expect(context.profile).toBeNull();
+    });
+
+    it('fails closed when tenant profile loading is unavailable', async () => {
+        mockSessions.set('cookie-acme', { id: profiles.acme.id, email: profiles.acme.email });
+        failureInjection.tenantProfileLookup = true;
+
+        const context = await createOptimizedContext(requestFor('cookie-acme', 'acme.payfix.com'));
+
+        // The injected database failure must not fall through to a regular
+        // public profile or manufacture an authenticated tenant profile.
+        expect(context.tenant?.slug).toBe('acme');
+        expect(context.profile).toBeNull();
+    });
+
+    it('recovers a mismatched tenant selection only to the user-bound registry tenant', async () => {
+        mockSessions.set('cookie-acme', { id: profiles.acme.id, email: profiles.acme.email });
+        mockCrossSchemaProfiles.set(profiles.acme.id, {
+            ...profiles.acme,
+            tenant_slug: profiles.acme.tenantSlug,
+        });
+
+        const context = await createOptimizedContext(requestFor('cookie-acme', 'beta.payfix.com'));
+
+        expect(context.profile?.email).toBe(profiles.acme.email);
+        expect(context.tenant?.slug).toBe('acme');
+        expect(context.tenant?.slug).not.toBe('beta');
     });
 });
