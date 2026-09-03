@@ -285,22 +285,6 @@ async function processTenant(
     report.missingTenantId = numberValue(counts[0]?.missing);
     report.conflictingProfiles = numberValue(counts[0]?.conflicting);
 
-    if (report.conflictingProfiles > 0) {
-        const conflicts = await database.execute(sql`
-            SELECT id::text AS profile_id, email, tenant_id::text AS current_tenant_id
-            FROM ${sql.raw(schemaName)}.profiles
-            WHERE tenant_id IS NOT NULL
-              AND tenant_id <> ${tenant.id}::uuid
-            ORDER BY id
-        `);
-        report.conflicts = conflicts.map((conflict: any) => ({
-            profileId: String(conflict.profile_id),
-            email: conflict.email ?? null,
-            currentTenantId: String(conflict.current_tenant_id),
-            expectedTenantId: tenant.id,
-        }));
-    }
-
     if (options.apply && report.missingTenantId > 0) {
         const updated: any = await database.execute(sql`
             UPDATE ${sql.raw(schemaName)}.profiles
@@ -324,6 +308,19 @@ async function processTenant(
     report.conflictingProfiles = numberValue(verification[0]?.conflicting);
 
     if (report.conflictingProfiles > 0) {
+        const conflicts = await database.execute(sql`
+            SELECT id::text AS profile_id, email, tenant_id::text AS current_tenant_id
+            FROM ${sql.raw(schemaName)}.profiles
+            WHERE tenant_id IS NOT NULL
+              AND tenant_id <> ${tenant.id}::uuid
+            ORDER BY id
+        `);
+        report.conflicts = conflicts.map((conflict: any) => ({
+            profileId: String(conflict.profile_id),
+            email: conflict.email ?? null,
+            currentTenantId: String(conflict.current_tenant_id),
+            expectedTenantId: tenant.id,
+        }));
         report.status = 'conflicts';
     } else if (report.missingTenantId > 0) {
         report.status = options.apply ? 'error' : 'missing';

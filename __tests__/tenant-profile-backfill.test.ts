@@ -93,7 +93,7 @@ function profileCounts(profiles: Profile[]) {
     }];
 }
 
-function createMockTenantDatabase(profiles: Profile[]) {
+function createMockTenantDatabase(profiles: Profile[], beforeUpdate?: () => void) {
     const execute = jest.fn(async (query: unknown) => {
         const text = queryText(query);
 
@@ -107,6 +107,7 @@ function createMockTenantDatabase(profiles: Profile[]) {
             return [{ data_type: 'uuid', udt_name: 'uuid' }];
         }
         if (text.includes('UPDATE')) {
+            beforeUpdate?.();
             const missingProfiles = profiles.filter((profile) => profile.tenant_id === null);
             missingProfiles.forEach((profile) => {
                 profile.tenant_id = expectedTenant.id;
@@ -132,8 +133,8 @@ function createMockTenantDatabase(profiles: Profile[]) {
     return { execute };
 }
 
-function configureMockTenantDatabase(profiles: Profile[]) {
-    const database = createMockTenantDatabase(profiles);
+function configureMockTenantDatabase(profiles: Profile[], beforeUpdate?: () => void) {
+    const database = createMockTenantDatabase(profiles, beforeUpdate);
     mockMasterDb.query.tenants.findMany.mockResolvedValue([expectedTenant]);
     mockCentralDb.execute = database.execute;
     return database;
@@ -237,6 +238,80 @@ describe('tenant profile ownership backfill', () => {
             conflictingProfiles: 1,
             updatedProfiles: 0,
         });
+
+        exit.mockRestore();
+    });
+
+    it('preserves and reports a conflict introduced after the initial scan', async () => {
+        const profiles = createProfiles();
+        let concurrentUpdateApplied = false;
+        const database = configureMockTenantDatabase(profiles, () => {
+            concurrentUpdateApplied = true;
+            const profile = profiles.find((candidate) => candidate.tenant_id === null);
+            if (!profile) {
+                throw new Error('Expected a NULL profile for the concurrent update');
+            }
+            profile.tenant_id = conflictingTenantId;
+        });
+        let exitCode: number | undefined;
+        const exit = jest.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+            exitCode = code;
+            throw new Error('process exited');
+        }) as never);
+
+        await expect(main(['--apply', '--tenant', expectedTenant.slug])).rejects.toThrow('process exited');
+
+        expect(concurrentUpdateApplied).toBe(true);
+        expect(exitCode).toBe(1);
+        expect(database.execute.mock.calls.some(([query]) => {
+            const text = queryText(query);
+            return text.includes('UPDATE') && text.includes('WHERE tenant_id IS NULL');
+        })).toBe(true);
+        expect(profiles.find((profile) => profile.email === 'missing@example.com')?.tenant_id)
+            .toBe(conflictingTenantId);
+        expect(profiles).toEqual([
+            {
+                id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+                email: 'missing@example.com',
+                tenant_id: conflictingTenantId,
+            },
+            {
+                id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+                email: 'owned@example.com',
+                tenant_id: expectedTenant.id,
+            },
+            {
+                id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+                email: 'conflict@example.com',
+                tenant_id: conflictingTenantId,
+            },
+        ]);
+
+        const report = await runTenantProfileBackfill({
+            apply: true,
+            tenantSlug: expectedTenant.slug,
+        });
+        expect(report.verified).toBe(false);
+        expect(report.tenants[0]).toMatchObject({
+            status: 'conflicts',
+            missingTenantId: 0,
+            conflictingProfiles: 2,
+            updatedProfiles: 0,
+        });
+        expect(report.tenants[0].conflicts).toEqual([
+            {
+                profileId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+                email: 'missing@example.com',
+                currentTenantId: conflictingTenantId,
+                expectedTenantId: expectedTenant.id,
+            },
+            {
+                profileId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+                email: 'conflict@example.com',
+                currentTenantId: conflictingTenantId,
+                expectedTenantId: expectedTenant.id,
+            },
+        ]);
 
         exit.mockRestore();
     });
