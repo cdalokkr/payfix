@@ -477,16 +477,17 @@ export const adminUsersRouter = router({
   createUser: adminProcedure
     .input(createUserSchema)
     .mutation(async ({ ctx, input }) => {
+      const tenantId = requireTenantId(ctx)
       if (!ctx.supabase) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Supabase client not available' })
 
       // 1. Enforce Plan Limits check if tenant context is present
-      if (ctx.tenant?.tenantId) {
+      if (tenantId) {
         try {
           const tenantRow = await masterDb
             .select()
             .from(tenants)
             .leftJoin(tenantPlans, eq(tenants.plan_id, tenantPlans.id))
-            .where(eq(tenants.id, ctx.tenant.tenantId))
+            .where(eq(tenants.id, tenantId))
             .limit(1);
 
           if (tenantRow[0]) {
@@ -505,7 +506,7 @@ export const adminUsersRouter = router({
               const currentEmployees = await ctx.db
                 .select({ count: count() })
                 .from(profiles)
-                .where(eq(profiles.role, 'employee'));
+                .where(and(eq(profiles.tenant_id, tenantId), eq(profiles.role, 'employee')));
 
               const empCount = currentEmployees[0]?.count || 0;
               if (empCount >= maxEmployees) {
@@ -518,7 +519,7 @@ export const adminUsersRouter = router({
               const currentModerators = await ctx.db
                 .select({ count: count() })
                 .from(profiles)
-                .where(eq(profiles.role, 'moderator'));
+                .where(and(eq(profiles.tenant_id, tenantId), eq(profiles.role, 'moderator')));
 
               const modCount = currentModerators[0]?.count || 0;
               if (modCount >= maxModerators) {
@@ -538,7 +539,7 @@ export const adminUsersRouter = router({
 
       // Check if user already exists using Drizzle
       const existingProfile = await ctx.db.query.profiles.findFirst({
-        where: eq(profiles.email, input.email),
+        where: and(eq(profiles.tenant_id, tenantId), eq(profiles.email, input.email)),
         columns: { id: true }
       })
 
@@ -566,6 +567,7 @@ export const adminUsersRouter = router({
       // Create the profile using Drizzle
       const [profileData] = await ctx.db.insert(profiles).values({
         id: authData.user!.id,
+         tenant_id: tenantId,
         email: input.email,
         first_name: input.firstName,
         middle_name: input.middleName,
@@ -606,9 +608,10 @@ export const adminUsersRouter = router({
 
   migrateAvatars: adminProcedure
     .mutation(async ({ ctx }) => {
+      const tenantId = requireTenantId(ctx)
       // Fetch all users with null avatar_url using Drizzle
       const profilesToUpdate = await ctx.db.query.profiles.findMany({
-        where: sql`${profiles.avatar_url} IS NULL`,
+        where: and(eq(profiles.tenant_id, tenantId), sql`${profiles.avatar_url} IS NULL`),
         columns: { id: true, sex: true }
       })
 
@@ -621,7 +624,7 @@ export const adminUsersRouter = router({
         await ctx.db
           .update(profiles)
           .set({ avatar_url: getDefaultAvatarUrl(profile.sex) })
-          .where(eq(profiles.id, profile.id))
+          .where(and(eq(profiles.tenant_id, tenantId), eq(profiles.id, profile.id)))
         updatedCount++
       }
 
@@ -635,8 +638,9 @@ export const adminUsersRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const tenantId = requireTenantId(ctx)
       const data = await ctx.db.query.profiles.findFirst({
-        where: eq(profiles.email, input.email),
+        where: and(eq(profiles.tenant_id, tenantId), eq(profiles.email, input.email)),
         columns: { id: true }
       })
 
@@ -654,13 +658,14 @@ export const adminUsersRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const tenantId = requireTenantId(ctx)
       const [data] = await ctx.db
         .update(profiles)
         .set({
           avatar_url: input.avatarUrl,
           updated_at: new Date(),
         })
-        .where(eq(profiles.id, input.userId))
+        .where(and(eq(profiles.tenant_id, tenantId), eq(profiles.id, input.userId)))
         .returning()
 
       if (!data) throw new Error('User not found')
@@ -697,11 +702,12 @@ export const adminUsersRouter = router({
       password: z.string().min(8, 'Password must be at least 8 characters'),
     }))
     .mutation(async ({ ctx, input }) => {
+      const tenantId = requireTenantId(ctx)
       if (!ctx.supabase) throw new Error('Supabase client not available')
 
       // 1. Get the user's profile to find the auth user_id using Drizzle
       const profile = await ctx.db.query.profiles.findFirst({
-        where: eq(profiles.id, input.userId),
+        where: and(eq(profiles.tenant_id, tenantId), eq(profiles.id, input.userId)),
         columns: { id: true, email: true }
       })
 
