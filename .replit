@@ -8,6 +8,10 @@ timeoutMs = 180000
 localPort = 8080
 externalPort = 80
 
+[[ports]]
+localPort = 8081
+externalPort = 8081
+
 [deployment]
 deploymentTarget = "autoscale"
 # pnpm is the repository's canonical package manager; see package.json.
