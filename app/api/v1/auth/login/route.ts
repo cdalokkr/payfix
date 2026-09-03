@@ -5,17 +5,31 @@ import { profiles } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { withTenantContext } from '@/lib/tenant/with-context'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-        autoRefreshToken: false,
-        persistSession: false,
+let supabaseClient: ReturnType<typeof createClient> | null = null
+
+function getSupabaseClient() {
+    if (!supabaseClient) {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+        if (!supabaseUrl || !supabaseAnonKey) {
+            throw new Error('Authentication service is missing server configuration')
+        }
+
+        supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+            auth: {
+                autoRefreshToken: false,
+                persistSession: false,
+            }
+        })
     }
-})
+
+    return supabaseClient
+}
 
 export const POST = withTenantContext(async (req: NextRequest) => {
     try {
+        const supabase = getSupabaseClient()
         const body = await req.json()
         const { email, password } = body
 

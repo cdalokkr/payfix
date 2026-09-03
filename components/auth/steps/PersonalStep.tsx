@@ -48,6 +48,8 @@ export default function PersonalStep({
     },
   });
 
+  // react-hook-form's watch API is intentionally live and is not React Compiler-memoizable.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const countryCode = watch("countryCode");
   const country = watch("country");
   const phone = watch("phone");

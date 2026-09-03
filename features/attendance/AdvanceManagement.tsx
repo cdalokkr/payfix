@@ -125,6 +125,8 @@ export function AdvanceManagement() {
     })
 
     const { control, handleSubmit, reset, watch, setValue, formState: { errors } } = form
+    // react-hook-form's watch API is intentionally live and is not React Compiler-memoizable.
+    // eslint-disable-next-line react-hooks/incompatible-library
     const selectedProfileId = watch("profileId")
 
     // Get employees filtered by role group
@@ -141,7 +143,8 @@ export function AdvanceManagement() {
         { placeholderData: (prev: any) => prev }
     )
 
-    const advances = advancesData?.advances || []
+    const advancesFromQuery = advancesData?.advances
+    const advances = useMemo(() => advancesFromQuery || [], [advancesFromQuery])
 
     const updateMutation = trpc.salary.updateAdvance.useMutation({
         onSuccess: () => {
@@ -178,6 +181,9 @@ export function AdvanceManagement() {
         }
         document.addEventListener('keydown', handleKeyDown)
         return () => document.removeEventListener('keydown', handleKeyDown)
+    // onSubmit is declared below and the shortcut is intentionally tied to the
+    // open state rather than recreated as mutation handlers change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sheetOpen, handleSubmit])
 
     // Cleanup timer on unmount
@@ -248,7 +254,7 @@ export function AdvanceManagement() {
         setDeleteDialogOpen(true)
     }
 
-    const handleEdit = (advance: any) => {
+    const handleEdit = useCallback((advance: any) => {
         setEditingId(advance.id)
         // Map role correctly: admin/moderator -> 'staff', employee -> 'employee'
         const role = advance.profile?.role
@@ -263,7 +269,7 @@ export function AdvanceManagement() {
             })
         }, 0)
         setSheetOpen(true)
-    }
+    }, [reset])
 
     // Reset employee selection when role group changes (only when not locked)
     const handleRoleGroupChange = (value: "staff" | "employee") => {
@@ -471,7 +477,7 @@ export function AdvanceManagement() {
             },
             size: 80,
         },
-    ], [employeeBalances])
+    ], [employeeBalances, handleEdit])
 
     const filteredAdvances = useMemo(() => {
         if (!advances) return []

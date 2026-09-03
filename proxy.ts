@@ -7,41 +7,12 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { resolveTenant, type TenantMetadata } from '@/lib/tenant/resolver'
 
 import { validateRequest, addSecurityHeaders } from '@/lib/proxy/security'
-
-// ============================================
-// Proxy Session Cache for Performance Optimization
-// ============================================
-interface ProxySession {
-    user: any
-    profile: any
-    expiresAt: number
-}
-
-const proxySessionCache = new Map<string, ProxySession>()
-const PROXY_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
-
-// Generate a fast pure-JS hash of the auth cookies to avoid Node crypto dependency in Edge runtime
-function getProxyCookieHash(request: NextRequest): string {
-    try {
-        const allCookies = request.cookies.getAll()
-        const authCookies = allCookies
-            .filter(c => c.name.includes('-auth-token'))
-            .sort((a, b) => a.name.localeCompare(b.name))
-            .map(c => `${c.name}=${c.value}`)
-            .join(';')
-
-        if (!authCookies) return ''
-
-        // DJB2 hash of the auth cookies string
-        let hash = 5381
-        for (let i = 0; i < authCookies.length; i++) {
-            hash = (hash * 33) ^ authCookies.charCodeAt(i)
-        }
-        return (hash >>> 0).toString(16)
-    } catch {
-        return ''
-    }
-}
+import {
+    TENANT_HEALTH_PROBE_TOKEN_HEADER,
+    hasValidTenantHealthProbeToken,
+    isTenantHealthDiagnosticPath,
+    isTenantHealthOperator,
+} from '@/lib/auth/tenant-health-policy'
 
 // ============================================
 // Role to Dashboard Path Mapping
@@ -63,6 +34,9 @@ function roleToDashboardPath(role: string): string {
 // ============================================
 export async function proxy(request: NextRequest) {
     const pathname = request.nextUrl.pathname
+    const isTenantHealthDiagnostic = isTenantHealthDiagnosticPath(pathname)
+    const isTrustedTenantHealthProbe =
+        isTenantHealthDiagnostic && hasValidTenantHealthProbeToken(request)
     const hostname = request.headers.get('host') || ''
     const url = request.nextUrl.clone()
 
@@ -87,7 +61,7 @@ export async function proxy(request: NextRequest) {
     // The cookie is set when a user's profile is discovered in their actual tenant.
     const preferredSlug = queryTenant || cookieTenant;
     if (preferredSlug && preferredSlug !== 'primary') {
-        tenant = await resolveTenant(preferredSlug);
+        tenant = await resolveTenant(preferredSlug, true);
         if (tenant) {
             resolvedViaFallback = true;
             if (process.env.NODE_ENV === 'development') {
@@ -98,7 +72,7 @@ export async function proxy(request: NextRequest) {
 
     // Only resolve from hostname if no preferred fallback slug was resolved
     if (!tenant) {
-        tenant = await resolveTenant(hostname);
+        tenant = await resolveTenant(hostname, true);
     }
 
     // Redirect to clean URL if tenant was passed via query parameter to prevent URL cluttering
@@ -232,6 +206,17 @@ export async function proxy(request: NextRequest) {
     requestHeaders.delete('x-tenant-brand')
     requestHeaders.delete('x-tenant-theme')
     requestHeaders.delete('x-tenant-license-expires-at')
+    requestHeaders.delete(TENANT_HEALTH_PROBE_TOKEN_HEADER)
+
+    // Only forward a probe token after this proxy has validated it. This
+    // keeps the handler's defense-in-depth check effective without exposing
+    // the token in the response or trusting a caller-controlled marker.
+    if (isTrustedTenantHealthProbe) {
+        requestHeaders.set(
+            TENANT_HEALTH_PROBE_TOKEN_HEADER,
+            request.headers.get(TENANT_HEALTH_PROBE_TOKEN_HEADER) || '',
+        )
+    }
 
     if (tenant) {
         requestHeaders.set('x-tenant-id', tenant.id);
@@ -311,17 +296,12 @@ export async function proxy(request: NextRequest) {
     const isLoginRoute = pathname === '/login'
     const isDeactiveAccountRoute = pathname === '/deactive-account'
 
-    // Optimized resolution with memory caching to bypass slow Supabase network calls
-    const cookieHash = getProxyCookieHash(request)
-
     // After workspace provisioning, /admin?setup_done=1 signals the proxy to:
-    // 1. Invalidate the stale session cache (which still has role: undefined)
-    // 2. Force-refresh tenant from DB (which now has status: trial)
-    // 3. Redirect to clean /admin URL
+    // 1. Force-refresh tenant from DB (which now has status: trial)
+    // 2. Redirect to clean /admin URL
     const setupDone = request.nextUrl.searchParams.get('setup_done');
-    if (setupDone === '1' && cookieHash) {
-        console.log(`[PROXY-SETUP] Post-provisioning redirect detected — clearing stale caches`);
-        proxySessionCache.delete(cookieHash);
+    if (setupDone === '1') {
+        console.log('[PROXY-SETUP] Post-provisioning redirect detected — refreshing tenant');
         // Force re-resolve tenant from DB (bypass any stale cache)
         if (tenant) {
             const freshTenant = await resolveTenant(tenant.slug, true);
@@ -334,46 +314,16 @@ export async function proxy(request: NextRequest) {
         return NextResponse.redirect(cleanUrl);
     }
 
-    // Get cached session before invalidation so the current request can still use it for fast-path
-    let cached = cookieHash ? proxySessionCache.get(cookieHash) : null
-
-    if (cached && Date.now() > cached.expiresAt) {
-        proxySessionCache.delete(cookieHash)
-        cached = null
-    }
-
-    // Invalidate proxy session cache immediately if this is a logout request
-    if (cookieHash && pathname.includes('auth.logout')) {
-        proxySessionCache.delete(cookieHash)
-        if (process.env.NODE_ENV === 'development') {
-            console.log(`[PROXY-CACHE] Invalidated session on logout for hash ${cookieHash.substring(0, 8)}...`)
-        }
-    }
-
-    // Invalidate proxy session cache on login requests to prevent stale profile=null from being served
-    // After a successful login, the next page navigation must re-resolve the profile from the DB
-    if (cookieHash && pathname.includes('auth.login') && request.method === 'POST') {
-        proxySessionCache.delete(cookieHash)
-        if (process.env.NODE_ENV === 'development') {
-            console.log(`[PROXY-CACHE] Invalidated stale session on login for hash ${cookieHash.substring(0, 8)}...`)
-        }
-    }
-
     let user: any = null
     let profile: any = null
 
-    // Optimization: Skip auth resolution for unauthenticated requests or public auth POST endpoints
+    // Skip auth resolution for unauthenticated requests or public auth POST endpoints.
+    const hasAuthCookies = request.cookies.getAll().some(cookie => cookie.name.includes('-auth-token'))
     const isLoginOrSignupPost = (pathname.includes('auth.login') || pathname.includes('auth.registerTenant')) && request.method === 'POST';
 
-    if (!cookieHash || isLoginOrSignupPost) {
+    if (!hasAuthCookies || isLoginOrSignupPost) {
         user = null
         profile = null
-    } else if (cached) {
-        user = cached.user
-        profile = cached.profile
-        if (process.env.NODE_ENV === 'development') {
-            console.log(`[PROXY-CACHE] Hit for hash ${cookieHash.substring(0, 8)}... (role: ${profile?.role})`)
-        }
     } else {
         const tStart = performance.now()
         let authData: { user: any } | null = null
@@ -420,7 +370,7 @@ export async function proxy(request: NextRequest) {
 
                     // CRITICAL: Override tenant context to the user's actual workspace.
                     if (scanResult.tenant_slug && scanResult.tenant_slug !== tenant?.slug) {
-                        const discoveredTenant = await resolveTenant(scanResult.tenant_slug);
+                        const discoveredTenant = await resolveTenant(scanResult.tenant_slug, true);
                         if (discoveredTenant) {
                             tenant = discoveredTenant;
                             // Update request headers so downstream tRPC handlers use correct tenant
@@ -453,7 +403,7 @@ export async function proxy(request: NextRequest) {
                     .eq('id', user.id)
                     .maybeSingle();
 
-                if (publicProfile) {
+                if (publicProfile?.role === 'super_admin') {
                     dbProfile = publicProfile;
                     if (process.env.NODE_ENV === 'development') {
                         console.log(`[PROXY-AUTH] Super Admin resolved via public.profiles for user: ${user.id}`);
@@ -461,22 +411,15 @@ export async function proxy(request: NextRequest) {
                 }
             }
 
-            profile = dbProfile ? {
+            profile = profile || (dbProfile ? {
                 ...dbProfile,
                 designation: Array.isArray(dbProfile.designation)
                     ? dbProfile.designation[0] || null
                     : dbProfile.designation
-            } : null
+            } : null)
 
-            if (cookieHash) {
-                proxySessionCache.set(cookieHash, {
-                    user,
-                    profile,
-                    expiresAt: Date.now() + PROXY_CACHE_TTL
-                })
-                if (process.env.NODE_ENV === 'development') {
-                    console.log(`[PROXY-CACHE] Set for user ${user.id} (hash: ${cookieHash.substring(0, 8)}... took ${(performance.now() - tStart).toFixed(2)}ms)`)
-                }
+            if (process.env.NODE_ENV === 'development') {
+                console.log(`[PROXY-AUTH] Fresh profile resolution for user ${user.id} took ${(performance.now() - tStart).toFixed(2)}ms`)
             }
         }
     }
@@ -528,6 +471,25 @@ export async function proxy(request: NextRequest) {
             // Clear it so future requests don't override to the wrong tenant.
             response.cookies.delete('tenant_fallback');
         }
+    }
+
+    // Tenant diagnostics are not public health checks. Return an API response
+    // rather than redirecting a browser request to the login page.
+    if (
+        isTenantHealthDiagnostic &&
+        !isTrustedTenantHealthProbe &&
+        !isTenantHealthOperator(profile)
+    ) {
+        return new NextResponse(
+            JSON.stringify({ error: user ? 'Forbidden' : 'Unauthorized' }),
+            {
+                status: user ? 403 : 401,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Cache-Control': 'no-store',
+                },
+            },
+        )
     }
 
     // Redirect to login if not authenticated on a protected route

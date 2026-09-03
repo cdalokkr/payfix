@@ -38,6 +38,7 @@ export function Combobox({
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
   const [search, setSearch] = React.useState("")
+  const listboxId = React.useId()
 
   const selectedOption = options.find((option) => option.value === value)
 
@@ -54,7 +55,8 @@ export function Combobox({
         <button
           type="button"
           disabled={disabled}
-          role="combobox"
+            role="combobox"
+            aria-controls={listboxId}
           aria-expanded={open}
           className={cn(
             "w-full h-[38px] px-3 bg-white dark:bg-[#0B131A] border border-gray-200/90 dark:border-slate-700/80 rounded-[12px] text-xs text-slate-900 dark:text-slate-100 outline-none flex items-center justify-between gap-2 shadow-xs transition-all duration-200 focus:ring-[3px] focus:ring-indigo-500/10 focus:border-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer",
@@ -84,7 +86,7 @@ export function Combobox({
             />
           </div>
         )}
-        <div className="max-h-48 overflow-y-auto py-1 space-y-0.5">
+        <div id={listboxId} role="listbox" className="max-h-48 overflow-y-auto py-1 space-y-0.5">
           {filteredOptions.length === 0 ? (
             <p className="p-2 text-center text-xs text-slate-400 dark:text-slate-500 font-medium">{emptyText}</p>
           ) : (

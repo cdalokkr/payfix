@@ -174,6 +174,8 @@ async function migrateAllTenants() {
                     "id"            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
                     "name"          text NOT NULL,
                     "pairing_code"  text NOT NULL UNIQUE,
+                    "credential_hash" text,
+                    "credential_expires_at" timestamp with time zone,
                     "location_id"   uuid REFERENCES ${sql.raw(schema)}.office_locations("id") ON DELETE SET NULL,
                     "is_active"     boolean DEFAULT true,
                     "last_seen_at"  timestamp with time zone,
@@ -181,6 +183,11 @@ async function migrateAllTenants() {
                     "created_at"    timestamp with time zone DEFAULT now(),
                     "updated_at"    timestamp with time zone DEFAULT now()
                 );
+            `)
+            await centralDb.execute(sql`
+                ALTER TABLE IF EXISTS ${sql.raw(schema)}.kiosk_devices
+                    ADD COLUMN IF NOT EXISTS "credential_hash" text,
+                    ADD COLUMN IF NOT EXISTS "credential_expires_at" timestamp with time zone;
             `)
             console.log('  ✅ kiosk_devices table — OK')
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Loader2, CheckCircle, AlertCircle, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -91,11 +91,11 @@ export function EnhancedAsyncButton({
   const currentIcons = { ...defaultIcons, ...icons };
 
   // Enhanced state change handler
-  const handleStateChange = (newState: AsyncState) => {
+  const handleStateChange = useCallback((newState: AsyncState) => {
     console.log(`Enhanced AsyncButton: State changed from ${previousState} to ${newState}`);
     setPreviousState(state);
     callbacks.onStateChange?.(newState, state);
-  };
+  }, [callbacks, previousState, state]);
 
   // Timeout management
   useEffect(() => {
@@ -148,7 +148,7 @@ export function EnhancedAsyncButton({
         }
       };
     }
-  }, [state, autoReset, successDuration, errorDuration, showErrorBriefly]);
+  }, [state, autoReset, successDuration, errorDuration, showErrorBriefly, handleStateChange]);
 
   // Cleanup on unmount
   useEffect(() => {

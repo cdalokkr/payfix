@@ -66,13 +66,6 @@ export function MpinLogin({ onSuccess, onForgotMpin, onUsePassword }: MpinLoginP
         }
     }, [mpinStatus])
 
-    // Auto-submit when 6 digits entered
-    useEffect(() => {
-        if (mpin.length === 6 && !lockedUntil) {
-            handleSubmit()
-        }
-    }, [mpin])
-
     const handleKeyPress = useCallback((digit: string) => {
         if (mpin.length < 6 && !lockedUntil) {
             setMpin(prev => prev + digit)
@@ -100,6 +93,13 @@ export function MpinLogin({ onSuccess, onForgotMpin, onUsePassword }: MpinLoginP
             setIsValidating(false)
         }
     }, [mpin, validateMpin])
+
+    // Auto-submit when 6 digits entered
+    useEffect(() => {
+        if (mpin.length === 6 && !lockedUntil) {
+            handleSubmit()
+        }
+    }, [mpin, lockedUntil, handleSubmit])
 
     const handleBiometric = useCallback(async () => {
         if (!window.PublicKeyCredential) {

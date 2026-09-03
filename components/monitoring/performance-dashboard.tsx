@@ -71,30 +71,6 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
   // Real-time metrics tracking
   const [realTimeMetrics, setRealTimeMetrics] = useState<Record<string, RealTimeMetric[]>>({});
 
-  // Fetch and update data
-  const fetchData = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      
-      // Get current metrics from monitoring system
-      const currentMetrics = webVitalsMonitor.getMetrics();
-      const analyticsSummary = getPerformanceSummary();
-      
-      setMetrics(currentMetrics);
-      setIssues(analyticsSummary.activeIssues);
-      
-      // Update real-time metrics
-      if (realTimeMode) {
-        updateRealTimeMetrics(currentMetrics);
-      }
-      
-    } catch (error) {
-      console.error('Failed to fetch performance data:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [realTimeMode]);
-
   // Update real-time metrics
   const updateRealTimeMetrics = useCallback((currentMetrics: WebVitalRecord[]) => {
     setRealTimeMetrics(prev => {
@@ -121,6 +97,30 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({
       return updated;
     });
   }, []);
+
+  // Fetch and update data
+  const fetchData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      
+      // Get current metrics from monitoring system
+      const currentMetrics = webVitalsMonitor.getMetrics();
+      const analyticsSummary = getPerformanceSummary();
+      
+      setMetrics(currentMetrics);
+      setIssues(analyticsSummary.activeIssues);
+      
+      // Update real-time metrics
+      if (realTimeMode) {
+        updateRealTimeMetrics(currentMetrics);
+      }
+      
+    } catch (error) {
+      console.error('Failed to fetch performance data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [realTimeMode, updateRealTimeMetrics]);
 
   // Run performance test
   const runPerformanceTest = useCallback(async () => {

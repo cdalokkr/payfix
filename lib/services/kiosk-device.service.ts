@@ -2,6 +2,12 @@ import { db, centralDb } from '@/lib/db'
 import { kioskDevices, officeLocations } from '@/lib/db/schema'
 import { eq, and, sql } from 'drizzle-orm'
 import { throwAppError } from '@/lib/errors/app-errors'
+import { createHash, randomBytes } from 'node:crypto'
+import { tenantStorage } from '@/lib/tenant/store'
+
+export const KIOSK_SESSION_COOKIE = 'payfix_kiosk_session'
+export const KIOSK_SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
+const KIOSK_SESSION_TTL_MS = KIOSK_SESSION_MAX_AGE_SECONDS * 1000
 
 // ─── In-memory Pairing Code Cache (5-min TTL) — avoids tenant scan loop on every punch ───
 interface PairingInfo {
@@ -19,6 +25,31 @@ interface PairingInfo {
     tenantSchema: string
     tenantSlug: string
 }
+
+export type KioskDevicePublicInfo = Omit<PairingInfo['device'], 'pairingCode'>
+
+export function toPublicKioskDevice(device: PairingInfo['device']): KioskDevicePublicInfo {
+    const { pairingCode: _pairingCode, ...publicDevice } = device
+    return publicDevice
+}
+
+function hashCredential(credential: string): string {
+    return createHash('sha256').update(credential).digest('hex')
+}
+
+export function getKioskSessionCredential(request: Request): string | null {
+    const cookieHeader = request.headers.get('cookie') || ''
+    const cookie = cookieHeader
+        .split(';')
+        .map(value => value.trim())
+        .find(value => value.startsWith(`${KIOSK_SESSION_COOKIE}=`))
+    if (!cookie) return null
+    try {
+        return decodeURIComponent(cookie.slice(KIOSK_SESSION_COOKIE.length + 1)) || null
+    } catch {
+        return null
+    }
+}
 const _pairingCache = new Map<string, { data: PairingInfo; expiresAt: number }>()
 const PAIRING_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 
@@ -30,7 +61,7 @@ export class KioskDeviceService {
      * Ensure kiosk_devices table exists in the current tenant schema.
      */
     static async ensureSchema() {
-        const schemaKey = 'kiosk_schema'
+        const schemaKey = tenantStorage.getStore()?.tenantSchema || 'kiosk_schema'
         if (_kioskSchemaEnsured.has(schemaKey)) return // Skip if already ensured this process lifetime
         try {
             await db.execute(sql`
@@ -48,6 +79,8 @@ export class KioskDeviceService {
                 );
             `)
             await db.execute(sql`ALTER TABLE "kiosk_devices" ADD COLUMN IF NOT EXISTS "terminal_id" text;`)
+            await db.execute(sql`ALTER TABLE "kiosk_devices" ADD COLUMN IF NOT EXISTS "credential_hash" text;`)
+            await db.execute(sql`ALTER TABLE "kiosk_devices" ADD COLUMN IF NOT EXISTS "credential_expires_at" timestamp with time zone;`)
             await db.execute(sql`
                 CREATE INDEX IF NOT EXISTS "kiosk_devices_terminal_id_idx"
                 ON "kiosk_devices" ("terminal_id")
@@ -196,9 +229,23 @@ export class KioskDeviceService {
             const schemasRes = await centralDb.execute(sql`
                 SELECT schema_name FROM information_schema.schemata WHERE schema_name LIKE 'tenant_%';
             `)
+            const tenantRegistry = await centralDb.execute(sql`
+                SELECT slug, tenant_schema
+                FROM public.tenants
+                WHERE tenant_schema IS NOT NULL;
+            `)
+            const slugBySchema = new Map<string, string>(
+                tenantRegistry.map((row: any) => [String(row.tenant_schema), String(row.slug)]),
+            )
 
             for (const row of schemasRes) {
                 const schemaName = (row as any).schema_name
+                const tenantSlug = slugBySchema.get(schemaName)
+                // A tenant schema must be registered in the control plane before
+                // it can authorize a kiosk pairing. Do not infer a slug from the
+                // schema name: valid slugs may contain hyphens, while schema
+                // identifiers use underscores.
+                if (!tenantSlug) continue
                 try {
                     const devices = await centralDb.execute(sql`
                         SELECT id, name, pairing_code, terminal_id, location_id, is_active
@@ -212,8 +259,6 @@ export class KioskDeviceService {
                         if (device.terminal_id && device.terminal_id !== terminalId) {
                             return null
                         }
-                        const slug = schemaName.replace(/^tenant_/, '')
-
                         let locationName: string | null = null
                         let latitude: number | null = null
                         let longitude: number | null = null
@@ -259,7 +304,7 @@ export class KioskDeviceService {
                                 radiusMeters,
                             },
                             tenantSchema: schemaName,
-                            tenantSlug: slug
+                            tenantSlug
                         }
 
                         // ✅ Cache result for 5 minutes
@@ -291,6 +336,118 @@ export class KioskDeviceService {
             .returning({ id: kioskDevices.id })
         _pairingCache.delete(pairingCode.trim().toUpperCase())
         return claimed ? { ...result, device: { ...result.device, terminalId } } : null
+    }
+
+    /**
+     * Replace a one-time admin pairing code with a random, expiring kiosk
+     * session credential. Only its hash is stored server-side and the raw
+     * credential is returned to the route solely for an HttpOnly cookie.
+     */
+    static async issueSessionCredential(pairing: PairingInfo, terminalId: string) {
+        const credential = randomBytes(32).toString('base64url')
+        const expiresAt = new Date(Date.now() + KIOSK_SESSION_TTL_MS)
+        const [updated] = await db.update(kioskDevices)
+            .set({
+                credential_hash: hashCredential(credential),
+                credential_expires_at: expiresAt,
+                terminal_id: terminalId,
+                updated_at: new Date(),
+            })
+            .where(and(
+                eq(kioskDevices.id, pairing.device.id),
+                eq(kioskDevices.is_active, true),
+                sql`("terminal_id" IS NULL OR "terminal_id" = ${terminalId})`,
+            ))
+            .returning({ id: kioskDevices.id })
+
+        if (!updated) return null
+        return {
+            credential,
+            expiresAt,
+            device: { ...pairing.device, terminalId },
+            tenantSchema: pairing.tenantSchema,
+            tenantSlug: pairing.tenantSlug,
+        }
+    }
+
+    /**
+     * Resolve an HttpOnly kiosk session credential. The database row is
+     * rechecked on every request so delete, deactivation, revocation, and
+     * expiry take effect without waiting for an in-memory cache.
+     */
+    static async verifySessionCredential(credential: string, terminalId?: string) {
+        if (!credential) return null
+        const credentialHash = hashCredential(credential)
+
+        try {
+            const schemasRes = await centralDb.execute(sql`
+                SELECT schema_name FROM information_schema.schemata WHERE schema_name LIKE 'tenant_%';
+            `)
+
+            for (const row of schemasRes) {
+                const schemaName = (row as any).schema_name
+                try {
+                    const devices = await centralDb.execute(sql`
+                        SELECT pairing_code
+                        FROM ${sql.raw(schemaName)}.kiosk_devices
+                        WHERE credential_hash = ${credentialHash}
+                          AND is_active = true
+                          AND credential_expires_at > NOW()
+                          AND ("terminal_id" IS NULL OR "terminal_id" = ${terminalId || ''})
+                        LIMIT 1;
+                    `)
+                    const pairingCode = (devices[0] as any)?.pairing_code
+                    if (pairingCode) {
+                        return await KioskDeviceService.verifyPairingCode(pairingCode, terminalId)
+                    }
+                } catch {
+                    // Older tenant schemas without the new columns are
+                    // intentionally treated as requiring an explicit re-pair.
+                }
+            }
+        } catch (err) {
+            console.error('[KioskDeviceService] verifySessionCredential error:', err)
+            throw err
+        }
+
+        return null
+    }
+
+    /**
+     * Revoke the current browser session immediately without deleting the
+     * registered kiosk device. The next open must explicitly re-pair.
+     */
+    static async revokeSessionCredential(credential: string, terminalId?: string) {
+        if (!credential) return false
+        const credentialHash = hashCredential(credential)
+        const terminalConstraint = terminalId
+            ? sql`AND ("terminal_id" IS NULL OR "terminal_id" = ${terminalId})`
+            : sql``
+
+        const schemasRes = await centralDb.execute(sql`
+            SELECT schema_name FROM information_schema.schemata WHERE schema_name LIKE 'tenant_%';
+        `)
+
+        for (const row of schemasRes) {
+            const schemaName = (row as any).schema_name
+            try {
+                const revoked = await centralDb.execute(sql`
+                    UPDATE ${sql.raw(schemaName)}.kiosk_devices
+                    SET credential_hash = NULL,
+                        credential_expires_at = NULL,
+                        updated_at = NOW()
+                    WHERE credential_hash = ${credentialHash}
+                      AND is_active = true
+                      ${terminalConstraint}
+                    RETURNING id;
+                `)
+                if (revoked[0]) return true
+            } catch {
+                // Older tenant schemas without session columns are ignored.
+            }
+        }
+
+        return false
     }
 
 }

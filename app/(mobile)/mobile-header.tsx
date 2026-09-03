@@ -172,7 +172,7 @@ export function MobileHeader({ profile }: MobileHeaderProps) {
                         </div>
                         <DialogTitle>Photo Update Pending</DialogTitle>
                         <DialogDescription className="text-center">
-                            Your previous photo update request is still awaiting admin approval. You cannot submit a new photo until it's reviewed.
+                            Your previous photo update request is still awaiting admin approval. You cannot submit a new photo until it&apos;s reviewed.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter className="sm:justify-center">

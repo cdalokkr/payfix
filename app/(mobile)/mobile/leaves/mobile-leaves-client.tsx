@@ -323,7 +323,7 @@ export function MobileLeavesClient({ profile }: { profile: any }) {
                                         {leave.reason && (
                                             <div className="text-xs text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-slate-100 dark:border-slate-900 flex items-start gap-2">
                                                 <FileText className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
-                                                <p className="leading-relaxed italic">"{leave.reason}"</p>
+                                                <p className="leading-relaxed italic">&quot;{leave.reason}&quot;</p>
                                             </div>
                                         )}
 

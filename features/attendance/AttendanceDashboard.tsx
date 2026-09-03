@@ -33,7 +33,7 @@ function calculateScheduledHours(checkIn: string, checkOut: string): number {
 }
 
 export function AttendanceDashboard() {
-    const { profile } = useProfile()
+    const { profile, isLoading: profileLoading, isInitializing: profileInitializing } = useProfile()
     const isMobile = useIsMobile()
     const utils = trpc.useUtils()
     const [isDownloading, setIsDownloading] = useState(false)
@@ -42,31 +42,60 @@ export function AttendanceDashboard() {
     useUserRealtimeDashboard(
         profile?.id || '',
         undefined,
-        'employee'
+        'employee',
+        { enableDashboardQuery: false }
     )
 
-    const today = new Date()
+    const today = useMemo(() => new Date(), [])
     const [currentMonth, setCurrentMonth] = useState(startOfMonth(today))
     const [selectedDate, setSelectedDate] = useState<Date | undefined>(today)
 
     const monthStart = startOfMonth(currentMonth)
     const monthEnd = endOfMonth(currentMonth)
 
-    const { data: attendance, isLoading: isAttendanceLoading, isFetching: isAttendanceFetching } = trpc.attendance.getAttendance.useQuery({
+    // Employee attendance is authorized from the server-side session. Do not
+    // wait for the client profile cache before starting the first current-month
+    // request; that cache can lag behind the authenticated tRPC context.
+    const {
+        data: attendance,
+        isLoading: isAttendanceLoading,
+        isError: isAttendanceError,
+        error: attendanceError,
+        refetch: refetchAttendance,
+    } = trpc.attendance.getAttendance.useQuery({
         profileId: profile?.id,
         startDate: format(monthStart, 'yyyy-MM-dd'),
         endDate: format(monthEnd, 'yyyy-MM-dd')
     }, {
-        enabled: !!profile?.id
+        enabled: true,
+        retry: 3,
+        retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 8000),
+        refetchOnMount: 'always',
+        refetchOnReconnect: 'always',
     })
 
-    const { data: leaves } = trpc.attendance.getLeaves.useQuery({
+    const { data: leaves, isLoading: isLeavesLoading } = trpc.attendance.getLeaves.useQuery({
         profileId: profile?.id,
         status: 'approved'
+    }, {
+        enabled: true,
     })
 
-    const { data: closures } = trpc.attendance.getOfficeClosures.useQuery()
-    const { data: settings } = trpc.attendance.getOfficeSettings.useQuery()
+    const { data: closures, isLoading: isClosuresLoading } = trpc.attendance.getOfficeClosures.useQuery(undefined, {
+        enabled: true,
+    })
+    const { data: settings, isLoading: isSettingsLoading } = trpc.attendance.getOfficeSettings.useQuery(undefined, {
+        enabled: true,
+    })
+
+    // Only block the page during the first request. Background refetches
+    // should keep the calendar, summary, and empty state visible.
+    const isAttendanceDataLoading = profileLoading
+        || profileInitializing
+        || isAttendanceLoading
+        || isLeavesLoading
+        || isClosuresLoading
+        || isSettingsLoading
 
     const attendanceMap = useMemo(() => {
         const map: Record<string, any> = {}
@@ -293,7 +322,7 @@ export function AttendanceDashboard() {
                         icon={stat.icon}
                         theme={stat.theme}
                         delay={0.1 + i * 0.05}
-                        loading={isAttendanceLoading || isAttendanceFetching}
+                         loading={isAttendanceDataLoading}
                     />
                 ))}
             </div>
@@ -312,12 +341,31 @@ export function AttendanceDashboard() {
                         icon={stat.icon}
                         theme={stat.theme}
                         delay={0.4 + i * 0.1}
-                        loading={isAttendanceLoading || isAttendanceFetching}
+                         loading={isAttendanceDataLoading}
                     />
                 ))}
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+            {isAttendanceError && (
+                <div
+                    role="alert"
+                    className="flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between"
+                >
+                    <span>
+                        {attendanceError?.message || "Attendance data could not be loaded."}
+                    </span>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void refetchAttendance()}
+                    >
+                        Retry
+                    </Button>
+                </div>
+            )}
+
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-stretch">
                 <CardShell
                     title="Monthly Calendar"
                     description={`Visual report for ${format(currentMonth, 'MMMM yyyy')}`}
@@ -337,7 +385,6 @@ export function AttendanceDashboard() {
                         setSelectedDate={setSelectedDate}
                         today={today}
                         monthStart={monthStart}
-                        isLoading={isAttendanceLoading || isAttendanceFetching}
                     />
                 </CardShell>
 
@@ -351,7 +398,7 @@ export function AttendanceDashboard() {
                     <div className="px-4 py-2">
                         <AttendanceSummaryContent
                             attendance={attendance}
-                            isLoading={isAttendanceLoading || isAttendanceFetching}
+                             isLoading={isAttendanceDataLoading}
                             settings={settings}
                             closures={closures}
                             leaves={leaves}

@@ -266,6 +266,9 @@ export function ProgressiveUserTable({
       ...prev,
       filter: { ...prev.filter, ...newFilter }
     }))
+  // The callback only writes through the functional state updater; state is used
+  // here solely for its inferred filter type.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Handle sorting

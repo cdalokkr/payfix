@@ -1,5 +1,8 @@
 "use client"
 
+/* Approval previews use dynamic user-uploaded URLs that next/image cannot optimize. */
+/* eslint-disable @next/next/no-img-element */
+
 import React, { useState, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"

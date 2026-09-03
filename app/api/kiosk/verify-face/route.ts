@@ -4,7 +4,7 @@ import { AttendanceService } from '@/lib/services/attendance.service'
 import { db, runWithTenantSchema } from '@/lib/db'
 import { attendanceSessions, profiles } from '@/lib/db/schema'
 import { FaceServiceClient } from '@/lib/face-service-client'
-import { KioskDeviceService } from '@/lib/services/kiosk-device.service'
+import { getKioskSessionCredential, KioskDeviceService } from '@/lib/services/kiosk-device.service'
 import { getDistanceFromLatLonInMeters } from '@/lib/utils/geo-utils'
 import { getLocalDateIST } from '@/lib/utils/date-utils'
 import { consumeLivenessChallenge, LIVENESS_FRAME_COUNT } from '@/lib/liveness-challenge'
@@ -81,12 +81,12 @@ export async function POST(request: NextRequest) {
             return NextResponse.json(body, init)
         }
     try {
-        const kioskSecret = request.headers.get('x-kiosk-secret')
-        if (!kioskSecret) {
+        const kioskCredential = getKioskSessionCredential(request)
+        if (!kioskCredential) {
             return respond({ error: 'UNAUTHORIZED_KIOSK_DEVICE', message: 'This kiosk is not paired.' }, { status: 401 })
         }
         const terminalId = request.headers.get('x-kiosk-installation-id') || undefined
-        const pairingInfo = await KioskDeviceService.verifyPairingCode(kioskSecret, terminalId)
+        const pairingInfo = await KioskDeviceService.verifySessionCredential(kioskCredential, terminalId)
         if (pairingInfo) auditTenantSchema = pairingInfo.tenantSchema
         if (!pairingInfo) {
             return respond({ error: 'INVALID_PAIRING_CODE', message: 'This kiosk pairing is invalid or inactive.' }, { status: 401 })

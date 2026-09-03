@@ -63,6 +63,8 @@ export function LoginForm() {
     },
   })
 
+  // react-hook-form's watch API is intentionally live and is not React Compiler-memoizable.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const remember = watch("remember" as any) || false
 
   const loginMutation = trpc.auth.login.useMutation({

@@ -423,6 +423,8 @@ interface RealtimeConfig {
 interface EnhancedRealtimeConfig extends RealtimeConfig {
   /** Enable enhanced event filtering */
   enableSmartFiltering?: boolean
+  /** Enable the unified dashboard query used by dashboard overview pages */
+  enableDashboardQuery?: boolean
   /** Enable multi-tier caching */
   enableMultiTierCache?: boolean
   /** Cache tier configuration */
@@ -463,6 +465,7 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
     role,
     userId,
     enableSmartFiltering = true,
+    enableDashboardQuery = true,
     enableMultiTierCache = true,
     cacheConfig,
     filterConfig,
@@ -498,12 +501,13 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
     return `${year}-${month}-${day}`;
   }, []);
 
-  // Progressive loading state management
-  const [magicCardsDataReady, setMagicCardsDataReady] = useState(false)
-  const [recentActivityDataReady, setRecentActivityDataReady] = useState(false)
+  // Server-prefetched data should render immediately. Skeletons are only
+  // needed when there is no usable dashboard data yet.
+  const hasInitialData = Boolean(initialData && 'critical' in initialData)
+  const [magicCardsDataReady, setMagicCardsDataReady] = useState(hasInitialData)
+  const [recentActivityDataReady, setRecentActivityDataReady] = useState(hasInitialData)
 
-  // Skeleton display state - shows on every route change to dashboard
-  const [showSkeleton, setShowSkeleton] = useState(true)
+  const [showSkeleton, setShowSkeleton] = useState(!hasInitialData)
   const skeletonStartTimeRef = useRef<number>(Date.now())
   const previousPathnameRef = useRef<string | null>(null)
 
@@ -529,6 +533,7 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
   } = trpc.admin.dashboard.getUnifiedDashboardData.useQuery(
     queryParams,
     {
+      enabled: enableDashboardQuery,
       // Keep data fresh but allow some caching for performance
       staleTime: forceFresh ? 0 : 30000,
       // PERFORMANCE FIX: Disable refetchOnWindowFocus since we handle visibility manually
@@ -567,6 +572,12 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
     const performRefetch = async () => {
       console.log(`[REALTIME] Dashboard refresh triggered${options?.forceFresh ? ' (FORCE FRESH)' : ''}`)
 
+      // Attendance-only pages still use this hook for realtime subscriptions,
+      // but must not reintroduce the expensive dashboard query on refresh.
+      if (!enableDashboardQuery) {
+        return utils.attendance.invalidate()
+      }
+
       // If forceFresh is requested, we MUST invalidate the server cache first
       // This overcomes any race conditions or stale cache layers
       if (options?.forceFresh) {
@@ -594,7 +605,7 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
     })
     pendingRefetchPromiseRef.current = promise
     return promise
-  }, [invalidateCacheMutation, utils])
+  }, [enableDashboardQuery, invalidateCacheMutation, utils])
 
   // Ref to track if component is mounted (for handling React Strict Mode)
   const isMountedRef = useRef(true)
@@ -1066,7 +1077,7 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
         }
       }, 100) // 100ms delay to handle Strict Mode double-mount
     }
-  }, [refetch, role, userId, channelRecreationTrigger, recreateChannel])
+  }, [refetch, role, userId, channelRecreationTrigger, recreateChannel, utils.attendance.getAttendance, utils.attendance.getLeaves])
 
   // Visibility change handler for channel reconnection on tab focus
   // PERFORMANCE FIX: Only refetch when channel is disconnected - trust realtime for connected channels
@@ -1228,8 +1239,18 @@ export function useAdminRealtimeDashboard(userId: string, initialData?: UnifiedD
 // USER-SPECIFIC HOOK
 // For regular user dashboard with filtered real-time updates
 // ============================================
-export function useUserRealtimeDashboard(userId: string, initialData?: UnifiedDashboardData, role: UserRole = 'employee'): RealtimeDashboardData {
-  return useRoleBasedRealtimeDashboard({ role, userId, initialData })
+export function useUserRealtimeDashboard(
+  userId: string,
+  initialData?: UnifiedDashboardData,
+  role: UserRole = 'employee',
+  options?: { enableDashboardQuery?: boolean }
+): RealtimeDashboardData {
+  return useRoleBasedRealtimeDashboard({
+    role,
+    userId,
+    initialData,
+    enableDashboardQuery: options?.enableDashboardQuery
+  })
 }
 
 // ============================================

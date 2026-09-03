@@ -177,6 +177,9 @@ export function ModernAddClientForm({
       isMounted.current = false
       clearTimeouts()
     }
+  // Cleanup intentionally runs only on unmount; clearing timeouts when other
+  // state changes would cancel newly scheduled success feedback.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {

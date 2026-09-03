@@ -1,5 +1,8 @@
 "use client"
 
+/* Capture previews use camera/blob URLs that next/image cannot optimize. */
+/* eslint-disable @next/next/no-img-element */
+
 import { useState, useRef, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"

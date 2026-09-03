@@ -6,7 +6,7 @@ import { DashboardPageLayout } from '@/components/dashboard/dashboard-page-layou
 import { ProfilePictureSettings } from './profile-picture-settings';
 import { ProfileInformationSettings } from './profile-information-settings';
 import { SecuritySettings } from './security-settings';
-import { Image, User, Lock } from 'lucide-react';
+import { Image as ImageIcon, User, Lock } from 'lucide-react';
 import { Profile } from '@/types';
 
 interface SettingsViewProps {
@@ -28,7 +28,7 @@ export function SettingsView({ user }: SettingsViewProps) {
                                     <TabsTrigger
                                         value="picture"
                                     >
-                                        <Image className="h-4 w-4" />
+                                         <ImageIcon className="h-4 w-4" aria-hidden="true" />
                                         Profile Picture
                                     </TabsTrigger>
                                     <TabsTrigger

@@ -234,7 +234,7 @@ export function withErrorLogging<P extends object>(
         category: ErrorCategory.CLIENT,
         context: { component: errorContext.componentName }
       })
-    }, [])
+    }, [logError])
 
     return (
       <ErrorBoundary

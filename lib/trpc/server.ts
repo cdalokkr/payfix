@@ -9,7 +9,6 @@ import { db } from '@/lib/db'
 import type { Profile } from '@/types'
 import { cache } from 'react'
 
-import { headers, cookies } from 'next/headers'
 import { tenantStorage } from '@/lib/tenant/store'
 
 let createContextCallCount = 0
@@ -22,37 +21,6 @@ export const createContext = async (opts?: { req: Request }) => {
 
   try {
     const context = await createOptimizedContext(opts?.req)
-
-    // Extract tenant context from headers
-    const reqHeaders = opts?.req ? new Headers(opts.req.headers) : await headers();
-    let tenantId = reqHeaders.get('x-tenant-id');
-    let tenantSlug = reqHeaders.get('x-tenant-slug');
-    let tenantDbUrl = reqHeaders.get('x-tenant-db-url') || null;
-    let tenantSchema = reqHeaders.get('x-tenant-schema') || null;
-    let tenantBrand = reqHeaders.get('x-tenant-brand') || 'PayFix';
-    let tenantLicenseExpiresAt = reqHeaders.get('x-tenant-license-expires-at') || null;
-
-    // Fail-safe fallback: If headers are missing (e.g. during Next.js server component rendering), resolve from cookie
-    if (!tenantSlug) {
-      try {
-        const cookieStore = await cookies();
-        const fallbackSlug = cookieStore.get('tenant_fallback')?.value;
-        if (fallbackSlug) {
-          const { resolveTenant } = await import('@/lib/tenant/resolver');
-          const tenant = await resolveTenant(fallbackSlug);
-          if (tenant) {
-            tenantId = tenant.id;
-            tenantSlug = tenant.slug;
-            tenantDbUrl = tenant.database_url || null;
-            tenantSchema = tenant.tenant_schema || null;
-            tenantBrand = tenant.branding?.app_name || tenant.company_name;
-            tenantLicenseExpiresAt = tenant.license_expires_at ? new Date(tenant.license_expires_at).toISOString() : null;
-          }
-        }
-      } catch (cookieErr) {
-        console.error('[TRPC-CONTEXT] Error reading fallback cookie:', cookieErr);
-      }
-    }
 
 
     // Record timing for performance monitoring
@@ -78,14 +46,7 @@ export const createContext = async (opts?: { req: Request }) => {
       db: db,
       user: context.user,
       profile: context.profile,
-      tenant: tenantId && tenantSlug ? {
-        tenantId,
-        slug: tenantSlug,
-        databaseUrl: tenantDbUrl,
-        tenantSchema,
-        brandName: tenantBrand,
-        licenseExpiresAt: tenantLicenseExpiresAt
-      } : null,
+      tenant: context.tenant,
       performance: {
         contextCreationTime: duration,
         cacheHit: context.metrics.cacheHit,
@@ -164,12 +125,13 @@ const t = initTRPC.context<Context>().create({
 
 // Middleware to run tRPC procedures inside the resolved tenant context
 const tenantContextMiddleware = t.middleware(async ({ ctx, next }) => {
-  if (ctx.tenant) {
+  if (ctx.tenant?.trusted) {
     return tenantStorage.run(ctx.tenant, () => {
       return next();
     });
   }
-  console.warn('[TENANT-MW] No tenant context — queries will use centralDb');
+  // Public control-plane procedures (availability checks, login, signup) may
+  // run without a tenant. Any procedure that reaches db will fail closed.
   return next();
 });
 
@@ -198,7 +160,7 @@ export const protectedProcedure = publicProcedure.use(async ({ ctx, next }) => {
     }
     throw new TRPCError({
       code: 'UNAUTHORIZED',
-      message: ctx.user ? 'Profile temporarily unavailable - please try again' : undefined,
+       message: ctx.user ? 'Profile temporarily unavailable - please try again' : undefined,
       cause: { performance: ctx.performance }
     })
   }
@@ -257,6 +219,14 @@ export const superAdminProcedure = protectedProcedure.use(async ({ ctx, next }) 
 })
 
 export const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  if (!ctx.tenant?.trusted) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'A valid workspace context is required.',
+      cause: { performance: ctx.performance },
+    })
+  }
+
   if (ctx.profile.role !== 'admin' && ctx.profile.role !== 'super_admin') {
     throw new TRPCError({
       code: 'FORBIDDEN',
@@ -271,6 +241,14 @@ export const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
 })
 
 export const moderatorProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  if (!ctx.tenant?.trusted) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'A valid workspace context is required.',
+      cause: { performance: ctx.performance },
+    })
+  }
+
   if (ctx.profile.role !== 'admin' && ctx.profile.role !== 'moderator' && ctx.profile.role !== 'super_admin') {
     throw new TRPCError({
       code: 'FORBIDDEN',

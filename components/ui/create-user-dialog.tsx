@@ -103,6 +103,8 @@ export default function CreateUserDialog() {
   const hasFormErrors = Object.keys(form.formState.errors).length > 0;
   
   // Check if required fields have values
+  // react-hook-form's watch API is intentionally live and is not React Compiler-memoizable.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const hasRequiredFields = !!form.watch('firstName') &&
                            !!form.watch('lastName') &&
                            !!form.watch('email') &&

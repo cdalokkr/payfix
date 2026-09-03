@@ -5,6 +5,10 @@
  * 1. Fast async storage for employee face vectors (unlimited quota, structured storage)
  * 2. Sync metadata tracking (lastSyncedAt, totalEmployees, tenantId)
  * 3. Offline attendance punch queueing for background sync when internet drops
+ *
+ * Pairing credentials deliberately do not live here. The active kiosk session
+ * is an HttpOnly server cookie; IndexedDB may retain only non-sensitive device
+ * display metadata and the stable installation identity.
  */
 
 const DB_NAME = 'payfix_kiosk_db';
@@ -158,8 +162,9 @@ export const KioskIndexedDBService = {
     },
 
     /**
-     * Purge legacy employee template data while retaining kiosk pairing
-     * credentials. The live kiosk flow never reads or writes face vectors.
+     * Purge legacy employee template data while retaining the installation
+     * identity and non-sensitive kiosk metadata. The live kiosk flow never
+     * reads or writes face vectors.
      */
     async clearEmployeeTemplates(): Promise<void> {
         try {
@@ -248,93 +253,59 @@ export const KioskIndexedDBService = {
     },
 
     /**
-     * Save Kiosk Pairing Key and Device Info persistently to IndexedDB and long-lived cookies
+     * Save non-sensitive device metadata for the kiosk header. The credential
+     * itself is issued and retained only by the server as an HttpOnly cookie.
      */
-    async savePairingCredentials(pairingCode: string, deviceInfo: any): Promise<void> {
+    async saveDeviceMetadata(deviceInfo: any): Promise<void> {
         try {
             const db = await openDB();
             const tx = db.transaction(STORE_META, 'readwrite');
             const store = tx.objectStore(STORE_META);
-            store.put({ key: 'pairing_code', value: pairingCode, updatedAt: Date.now() });
-            store.put({ key: 'device_info', value: deviceInfo, updatedAt: Date.now() });
+            const safeDeviceInfo = deviceInfo && typeof deviceInfo === 'object'
+                ? {
+                    id: typeof deviceInfo.id === 'string' ? deviceInfo.id : '',
+                    name: typeof deviceInfo.name === 'string' ? deviceInfo.name : '',
+                    locationId: deviceInfo.locationId ?? null,
+                    locationName: deviceInfo.locationName ?? null,
+                    latitude: typeof deviceInfo.latitude === 'number' ? deviceInfo.latitude : null,
+                    longitude: typeof deviceInfo.longitude === 'number' ? deviceInfo.longitude : null,
+                    radiusMeters: typeof deviceInfo.radiusMeters === 'number' ? deviceInfo.radiusMeters : 200,
+                }
+                : null;
+            store.put({ key: 'device_metadata', value: safeDeviceInfo, updatedAt: Date.now() });
             await new Promise((res, rej) => {
                 tx.oncomplete = () => res(null);
                 tx.onerror = () => rej(tx.error);
             });
-        } catch {}
-
-        try {
-            if (typeof document !== 'undefined') {
-                const exp = new Date(Date.now() + 10 * 365 * 24 * 3600 * 1000).toUTCString();
-                document.cookie = `payfix_kiosk_pairing_code=${encodeURIComponent(pairingCode)}; expires=${exp}; path=/; SameSite=Lax`;
-                if (deviceInfo) {
-                    document.cookie = `payfix_kiosk_device_info=${encodeURIComponent(JSON.stringify(deviceInfo))}; expires=${exp}; path=/; SameSite=Lax`;
-                }
-            }
-        } catch {}
+        } catch (err) {
+            console.warn('[KioskIndexedDB] Failed to save device metadata:', err);
+        }
     },
 
     /**
-     * Load Pairing Credentials from LocalStorage || IndexedDB || Cookies
+     * Read non-sensitive display metadata only. Pairing credentials are never
+     * returned to page JavaScript.
      */
-    async loadPairingCredentials(): Promise<{ pairingCode: string | null; deviceInfo: any | null }> {
-        let code: string | null = null;
-        let device: any = null;
-
-        // 1. Try LocalStorage
+    async loadDeviceMetadata(): Promise<any | null> {
         try {
-            code = localStorage.getItem('payfix_kiosk_pairing_code');
-            const rawDev = localStorage.getItem('payfix_kiosk_device_info');
-            if (rawDev) device = JSON.parse(rawDev);
-        } catch {}
-
-        // 2. Try IndexedDB if not found
-        if (!code) {
-            try {
-                const db = await openDB();
-                const tx = db.transaction(STORE_META, 'readonly');
-                const store = tx.objectStore(STORE_META);
-                const reqCode = store.get('pairing_code');
-                const reqDev = store.get('device_info');
-                await new Promise((res) => {
-                    tx.oncomplete = () => {
-                        if (reqCode.result?.value) code = reqCode.result.value;
-                        if (reqDev.result?.value) device = reqDev.result.value;
-                        res(null);
-                    };
-                    tx.onerror = () => res(null);
-                });
-            } catch {}
+            const db = await openDB();
+            const tx = db.transaction(STORE_META, 'readonly');
+            const request = tx.objectStore(STORE_META).get('device_metadata');
+            return await new Promise((resolve) => {
+                request.onsuccess = () => resolve(request.result?.value || null);
+                request.onerror = () => resolve(null);
+            });
+        } catch {
+            return null;
         }
-
-        // 3. Try Cookies if still not found
-        if (!code && typeof document !== 'undefined') {
-            try {
-                const cookies = document.cookie.split(';');
-                for (const c of cookies) {
-                    const [k, v] = c.trim().split('=');
-                    if (k === 'payfix_kiosk_pairing_code' && v) {
-                        code = decodeURIComponent(v);
-                    }
-                    if (k === 'payfix_kiosk_device_info' && v) {
-                        device = JSON.parse(decodeURIComponent(v));
-                    }
-                }
-            } catch {}
-        }
-
-        // Auto-heal LocalStorage if recovered from IDB / Cookie
-        if (code && typeof localStorage !== 'undefined') {
-            try {
-                localStorage.setItem('payfix_kiosk_pairing_code', code);
-                if (device) localStorage.setItem('payfix_kiosk_device_info', JSON.stringify(device));
-            } catch {}
-        }
-
-        return { pairingCode: code, deviceInfo: device };
     },
 
-    async clearPairingCredentials(): Promise<void> {
+    /**
+     * Existing kiosk builds stored the pairing secret in several browser
+     * stores. Remove those copies on first open; the user can re-pair through
+     * the authenticated admin setup screen.
+     */
+    async clearLegacyPairingStorage(): Promise<void> {
         try {
             localStorage.removeItem('payfix_kiosk_pairing_code');
             localStorage.removeItem('payfix_kiosk_device_info');
@@ -345,10 +316,29 @@ export const KioskIndexedDBService = {
             const store = tx.objectStore(STORE_META);
             store.delete('pairing_code');
             store.delete('device_info');
+            await new Promise<void>((resolve) => {
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => resolve();
+                tx.onabort = () => resolve();
+            });
         } catch {}
         try {
             document.cookie = 'payfix_kiosk_pairing_code=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
             document.cookie = 'payfix_kiosk_device_info=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+        } catch {}
+    },
+
+    async clearPairingCredentials(): Promise<void> {
+        try {
+            const db = await openDB();
+            const tx = db.transaction(STORE_META, 'readwrite');
+            const store = tx.objectStore(STORE_META);
+            store.delete('device_metadata');
+            await new Promise<void>((resolve) => {
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => resolve();
+                tx.onabort = () => resolve();
+            });
         } catch {}
     },
 

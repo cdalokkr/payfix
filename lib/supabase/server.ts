@@ -15,7 +15,10 @@ const SECURE_COOKIE_DEFAULTS = {
 }
 
 // Synchronous version for use when cookie store is already available (optimizes createContext)
-export function createSupabaseClientSync(cookieStore: Awaited<ReturnType<typeof cookies>>) {
+export function createSupabaseClientSync(
+  cookieStore: Awaited<ReturnType<typeof cookies>>,
+  bearerToken?: string,
+) {
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
@@ -31,6 +34,9 @@ export function createSupabaseClientSync(cookieStore: Awaited<ReturnType<typeof 
         persistSession: false,
         detectSessionInUrl: false,
       },
+      global: bearerToken
+        ? { headers: { Authorization: `Bearer ${bearerToken}` } }
+        : undefined,
       cookies: {
         getAll() {
           return cookieStore.getAll()

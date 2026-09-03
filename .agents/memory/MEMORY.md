@@ -1,0 +1,5 @@
+- [Biometric rollout](biometric-rollout.md) — working PWA/kiosk flow still has unversioned or missing 512-d templates requiring controlled re-enrollment.
+- [Public security remediation](public-security-remediation.md) — preserve exposed helper names with invoker wrappers around private privileged implementations.
+- [Tenant schema safety](tenant-schema-safety.md) — reconcile tenant structure only; prefer tenant_primary and use public only as a read-only fallback.
+- [Nested GitHub app](nested-github-app.md) — the Payfix app lives under the workspace’s payfix/ directory, while GitHub treats that directory as repository root.
+- [GitHub blob publishing](github-blob-publishing.md) — use direct file reads for large blobs; shell output can truncate or corrupt Git Data API uploads.

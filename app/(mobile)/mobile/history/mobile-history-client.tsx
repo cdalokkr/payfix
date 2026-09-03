@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
     format,
@@ -53,7 +53,7 @@ const itemVars = {
 
 export function MobileHistoryClient({ profile }: { profile: any }) {
     const router = useRouter()
-    const today = new Date()
+    const [today] = useState(() => new Date())
     const [currentMonth, setCurrentMonth] = useState<Date>(today)
     const [selectedDate, setSelectedDate] = useState<Date>(today)
 
@@ -96,10 +96,10 @@ export function MobileHistoryClient({ profile }: { profile: any }) {
         const startGrid = startOfWeek(monthStart, { weekStartsOn: 0 })
         const endGrid = endOfWeek(monthEnd, { weekStartsOn: 0 })
         return eachDayOfInterval({ start: startGrid, end: endGrid })
-    }, [currentMonth])
+    }, [monthStart, monthEnd])
 
     // Helper: get status and configuration of a specific date
-    const getDateInfo = (day: Date) => {
+    const getDateInfo = useCallback((day: Date) => {
         const dateStr = format(day, 'yyyy-MM-dd')
         const record = attendanceMap[dateStr]
         const dayOfWeek = day.getDay()
@@ -144,7 +144,7 @@ export function MobileHistoryClient({ profile }: { profile: any }) {
             status,
             holidayDetail: isHoliday ? closures.find((c: any) => c.date === dateStr) : null
         }
-    }
+    }, [attendanceMap, closures, leaves, settings, today])
 
     // Stats compiled for current month (up to today)
     const stats = useMemo(() => {
@@ -175,7 +175,7 @@ export function MobileHistoryClient({ profile }: { profile: any }) {
         })
 
         return { present, pending, rejected, absent, leaves: leavesCount, holidays }
-    }, [attendanceMap, leaves, closures, settings, currentMonth])
+    }, [getDateInfo, monthEnd, monthStart, today])
 
     const handlePrevMonth = () => {
         const newMonth = subMonths(currentMonth, 1)
@@ -196,7 +196,7 @@ export function MobileHistoryClient({ profile }: { profile: any }) {
         
         // Return reverse chronological days
         return eachDayOfInterval({ start, end }).reverse()
-    }, [currentMonth])
+    }, [currentMonth, monthEnd, monthStart, today])
 
     return (
         <div className="flex flex-col min-h-[calc(100dvh-5rem-5rem)] -mx-4 -mt-4 bg-slate-50 dark:bg-slate-950 pb-20 relative">
@@ -474,7 +474,7 @@ export function MobileHistoryClient({ profile }: { profile: any }) {
                                                     <strong className="text-indigo-600 dark:text-indigo-400 font-semibold">{info.approvedLeave.leave_type || "Leave"}:</strong> Approved
                                                 </p>
                                                 {info.approvedLeave.reason && (
-                                                    <p className="text-muted-foreground italic">"{info.approvedLeave.reason}"</p>
+                                                    <p className="text-muted-foreground italic">&quot;{info.approvedLeave.reason}&quot;</p>
                                                 )}
                                             </div>
                                         )}

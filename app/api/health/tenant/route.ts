@@ -3,6 +3,14 @@ import { headers, cookies } from 'next/headers';
 import { tenantStorage } from '@/lib/tenant/store';
 import { centralDb } from '@/lib/db';
 import { sql } from 'drizzle-orm';
+import { canAccessTenantHealthDiagnostics } from '@/lib/auth/optimized-context';
+
+type ProfileCount = number | null;
+
+function parseProfileCount(value: unknown): ProfileCount {
+    const count = Number(value);
+    return Number.isInteger(count) && count >= 0 ? count : null;
+}
 
 /**
  * Diagnostic endpoint to verify tenant context propagation.
@@ -12,6 +20,16 @@ import { sql } from 'drizzle-orm';
  * and which schema the DB queries would hit.
  */
 export async function GET(request: NextRequest) {
+    if (!await canAccessTenantHealthDiagnostics(request)) {
+        return NextResponse.json(
+            { error: 'Unauthorized' },
+            {
+                status: 401,
+                headers: { 'Cache-Control': 'no-store' },
+            },
+        );
+    }
+
     try {
         // 1. Read raw headers from proxy
         const headerStore = await headers();
@@ -19,10 +37,6 @@ export async function GET(request: NextRequest) {
             'x-tenant-id': headerStore.get('x-tenant-id'),
             'x-tenant-slug': headerStore.get('x-tenant-slug'),
             'x-tenant-schema': headerStore.get('x-tenant-schema'),
-            'x-tenant-brand': headerStore.get('x-tenant-brand'),
-            'x-tenant-db-url': headerStore.get('x-tenant-db-url'),
-            'x-user-id': headerStore.get('x-user-id'),
-            'x-user-email': headerStore.get('x-user-email'),
         };
 
         // 2. Read cookies
@@ -51,13 +65,13 @@ export async function GET(request: NextRequest) {
         } catch {}
 
         // 6. Count profiles in both schemas
-        let publicProfileCount = 0;
-        let tenantProfileCount = 0;
+        let publicProfileCount: ProfileCount = null;
+        let tenantProfileCount: ProfileCount = null;
         const tenantSchema = tenantHeaders['x-tenant-schema'] || resolvedTenant?.tenant_schema;
 
         try {
             const publicResult = await centralDb.execute(sql`SELECT COUNT(*) as cnt FROM public.profiles;`);
-            publicProfileCount = parseInt(publicResult[0]?.cnt || '0');
+            publicProfileCount = parseProfileCount(publicResult[0]?.cnt);
         } catch {}
 
         if (tenantSchema) {
@@ -65,9 +79,9 @@ export async function GET(request: NextRequest) {
                 const tenantResult = await centralDb.execute(sql`
                     SELECT COUNT(*) as cnt FROM ${sql.raw(tenantSchema)}.profiles;
                 `);
-                tenantProfileCount = parseInt(tenantResult[0]?.cnt || '0');
-            } catch (err: any) {
-                tenantProfileCount = -1; // error
+                tenantProfileCount = parseProfileCount(tenantResult[0]?.cnt);
+            } catch {
+                tenantProfileCount = null;
             }
         }
 
@@ -75,7 +89,7 @@ export async function GET(request: NextRequest) {
             timestamp: new Date().toISOString(),
             diagnosis: {
                 proxyHeaders: tenantHeaders,
-                tenantFallbackCookie: tenantFallbackCookie,
+                hasTenantFallbackCookie: Boolean(tenantFallbackCookie),
                 asyncLocalStorageContext: asyncContext ? {
                     tenantId: asyncContext.tenantId,
                     slug: asyncContext.slug,
@@ -85,7 +99,6 @@ export async function GET(request: NextRequest) {
                     id: resolvedTenant.id,
                     slug: resolvedTenant.slug,
                     tenant_schema: resolvedTenant.tenant_schema,
-                    company_name: resolvedTenant.company_name,
                 } : null,
                 currentSearchPath,
                 profileCounts: {
@@ -100,10 +113,10 @@ export async function GET(request: NextRequest) {
                     ? '⚠️ No proxy headers, but cookie exists — headers may not propagate from proxy.ts'
                     : '❌ No tenant context at all — cookie and headers both missing'
         });
-    } catch (error: any) {
+    } catch (error) {
+        console.error('[TENANT-HEALTH] Diagnostic failed:', error);
         return NextResponse.json({
-            error: error.message,
-            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            error: 'Tenant health diagnostic failed',
         }, { status: 500 });
     }
 }

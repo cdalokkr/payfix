@@ -55,7 +55,8 @@ export async function POST(req: NextRequest) {
             slug: tenant.slug,
             databaseUrl: tenant.database_url || null,
             tenantSchema: tenant.tenant_schema || null,
-            brandName: tenant.company_name
+            brandName: tenant.company_name,
+            trusted: true,
         };
 
         return await tenantStorage.run(tenantContext, async () => {

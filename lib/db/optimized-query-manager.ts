@@ -258,9 +258,9 @@ export class OptimizedQueryManager {
       const profilesStatsQuery = shouldFetchGlobalStats
         ? db.execute(sql`
             SELECT 
-              count(*) FILTER (WHERE role = 'employee'::user_role) as employee_count,
-              count(*) FILTER (WHERE role = 'moderator'::user_role) as moderator_count,
-              count(*) FILTER (WHERE role = 'admin'::user_role) as admin_count
+              count(*) FILTER (WHERE role = 'employee'::public.user_role) as employee_count,
+              count(*) FILTER (WHERE role = 'moderator'::public.user_role) as moderator_count,
+              count(*) FILTER (WHERE role = 'admin'::public.user_role) as admin_count
             FROM profiles
           `)
         : Promise.resolve([{

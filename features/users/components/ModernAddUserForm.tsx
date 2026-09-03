@@ -225,6 +225,9 @@ export function ModernAddUserForm({
       isMounted.current = false
       clearTimeouts()
     }
+  // Cleanup intentionally runs only on unmount; clearing timeouts when other
+  // state changes would cancel newly scheduled success feedback.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Reset form when editingUser changes
@@ -623,7 +626,6 @@ export function ModernAddUserForm({
           sex: data.sex as "male" | "female",
           role: data.role as "admin" | "moderator" | "employee",
           designationId: data.designationId as string, // Added designationId
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           allowedModules: data.role === 'employee' ? (data.allowedModules as any) : [],
         }
         await createUserMutation.mutateAsync(createData)

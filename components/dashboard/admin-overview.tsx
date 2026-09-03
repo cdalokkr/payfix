@@ -116,7 +116,7 @@ export function AdminOverview({
     }
 
     previousPathnameRef.current = pathname
-  }, [pathname, clearPrefetch])
+  }, [pathname, clearPrefetch, initialData])
 
   useEffect(() => {
     onLoadingChange?.(isLoading || showSkeleton || notificationsLoading || sessionLoading)

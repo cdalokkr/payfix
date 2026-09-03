@@ -296,7 +296,7 @@ export default function TenantsPage() {
 
       const fullPhone = newAdminPhone.startsWith('+') ? newAdminPhone : `${newAdminCountryCode}${newAdminPhone}`;
 
-      await createTenantMutation.mutateAsync({
+      const result = await createTenantMutation.mutateAsync({
         companyName: newWorkspaceName || newCompanyName,
         slug: newSlug,
         adminName: newAdminName || newCompanyName + " Admin",
@@ -305,7 +305,10 @@ export default function TenantsPage() {
         planId: null, // Assigned default trial plan internally
         licenseExpiresAt: trialExpiryDate.toISOString(),
       });
-      toast.success("Tenant workspace provisioned successfully!");
+      toast.success("Tenant workspace provisioned successfully!", {
+        description: `Primary admin: ${result.adminEmail}. Temporary password: ${result.temporaryPassword}. Ask the admin to reset it after first login.`,
+        duration: 10000,
+      });
       setAddTenantAsyncState('success');
       await new Promise(r => setTimeout(r, 2000));
       handleResetAddTenantModal(false);
@@ -564,7 +567,7 @@ export default function TenantsPage() {
         setExpiryDate(undefined);
       }
     }
-  }, [selectedTenant?.id, freeDbPlanId]);
+  }, [selectedTenant, freeDbPlanId]);
 
   // Metric counts
   const totalTenantsCount = tenantsList?.length || 8;
@@ -1283,6 +1286,13 @@ export default function TenantsPage() {
                   }}
                 />
               </div>
+            </div>
+            <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] leading-4 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-300">
+              <Key className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>
+                This super-admin flow creates the account with the temporary password <strong className="font-bold">Payfix@2026!</strong>.
+                Share it securely with the primary admin and have them reset it after signing in.
+              </span>
             </div>
           </div>
 

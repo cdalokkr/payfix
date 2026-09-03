@@ -117,16 +117,8 @@ export function DashboardLayout({
   tenantLicenseExpiresAt
 }: DashboardLayoutProps) {
   const pathname = usePathname()
-  const [storedProfile, setStoredProfile] = useState<Profile | null>(null)
+  const [storedProfile, setStoredProfile] = useState<Profile | null>(() => getInitialProfile())
   const [isLoggingOut, setIsLoggingOut] = useState(false)
-
-  // Detect and set stored profile
-  useEffect(() => {
-    const initialProfile = getInitialProfile();
-    if (initialProfile) {
-      setStoredProfile(initialProfile);
-    }
-  }, [])
 
   // Listen for logout event to stop fetching data
   useEffect(() => {
@@ -136,9 +128,6 @@ export function DashboardLayout({
     window.addEventListener('loggingOut', handleLogout)
     return () => window.removeEventListener('loggingOut', handleLogout)
   }, [])
-
-  // Get initial profile once to avoid multiple calls
-  const initialProfile = getInitialProfile();
 
   // Use cached profile as initial data and always fetch fresh data in background
   const { data: profile, isLoading: profileLoading, isError: profileError } = trpc.profile.get.useQuery(undefined, {
@@ -178,24 +167,37 @@ export function DashboardLayout({
   // Determine the current user role, prioritizing fresh profile data
   const currentRole = profile?.role || storedProfile?.role;
   const currentUser = profile || storedProfile || null;
+  const isDashboardRoute = ['/admin', '/moderator', '/employee', '/superadmin'].some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`)
+  )
+  // Presentation-only fallback while the authenticated profile is loading.
+  // Route authorization still happens on the server and the fetched profile
+  // remains the source of truth once available.
+  const routeRole = pathname.startsWith('/superadmin')
+    ? 'super_admin'
+    : pathname.startsWith('/admin')
+      ? 'admin'
+      : pathname.startsWith('/moderator')
+        ? 'moderator'
+        : pathname.startsWith('/employee')
+          ? 'employee'
+          : undefined
+  const displayRole = currentRole || routeRole
 
   // Memoize profile context value to prevent unnecessary re-renders
   const profileContextValue = useMemo(() => ({
-    profile,
-    isLoading: profileLoading
-  }), [profile, profileLoading]);
+    profile: profile || storedProfile,
+    isLoading: profileLoading && !storedProfile,
+    // Keep cached profile rendering fast while exposing the fresh-profile
+    // request so dependent pages can wait for the authenticated context.
+    isInitializing: profileLoading
+  }), [profile, profileLoading, storedProfile]);
 
-  // Show loading dialog while role is being determined (but don't block the UI)
-  if (!currentRole && (pathname === '/admin' || pathname === '/user')) {
+  // Do not render a role-specific sidebar until the authenticated profile is known.
+  // Falling back to employee here causes a visible menu flash for privileged users.
+  if (!displayRole && isDashboardRoute && !isLoggingOut) {
     return (
       <SidebarProvider>
-        <AppSidebar
-          role="employee"
-          tenants={tenants}
-          defaultTenant={defaultTenant}
-          onTenantSwitch={handleTenantSwitch}
-          user={null}
-        />
         <SidebarInset className="flex flex-col min-h-screen">
           <TopBar 
             user={null} 
@@ -206,8 +208,14 @@ export function DashboardLayout({
             <div className="min-h-full p-4 md:p-6 lg:p-8 space-y-6 scroll-smooth-touch mobile-optimized">
               <div className="bg-background/50 backdrop-blur-sm rounded-lg border border-border/20 shadow-sm p-6 md:p-8">
                 <div className="text-center">
-                  <h2 className="text-xl font-bold mb-4">Loading your dashboard...</h2>
-                  <p className="text-muted-foreground">Please wait while we prepare your content.</p>
+                  <h2 className="text-xl font-bold mb-4">
+                    {profileError ? 'Unable to load your profile' : 'Loading your dashboard...'}
+                  </h2>
+                  <p className="text-muted-foreground">
+                    {profileError
+                      ? 'Please refresh the page and try again.'
+                      : 'Please wait while we prepare your content.'}
+                  </p>
                 </div>
               </div>
             </div>
@@ -224,7 +232,7 @@ export function DashboardLayout({
       <NotificationToastListener />
       <SidebarProvider>
         <AppSidebar
-          role={currentRole || 'employee'}
+          role={displayRole || 'employee'}
           tenants={tenants}
           defaultTenant={defaultTenant}
           onTenantSwitch={handleTenantSwitch}
@@ -238,10 +246,7 @@ export function DashboardLayout({
             tenantLicenseExpiresAt={tenantLicenseExpiresAt} 
           />
           <div className="flex-1 overflow-y-auto pt-6 pb-20 lg:pb-4 scroll-smooth bg-background">
-            <div
-              key={pathname}
-              className="w-full animate-fade-in"
-            >
+             <div className="w-full">
               {children || <DashboardContent profile={profile} isLoading={profileLoading} onLoadingChange={() => {}} />}
             </div>
           </div>

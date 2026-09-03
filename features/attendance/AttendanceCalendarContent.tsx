@@ -5,7 +5,6 @@ import { Calendar as ShadcnCalendar, CalendarDayButton } from "@/components/ui/c
 import { cn } from "@/lib/utils"
 import { motion } from "framer-motion"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Loader2 } from "lucide-react"
 
 interface AttendanceCalendarContentProps {
     currentMonth: Date
@@ -19,7 +18,6 @@ interface AttendanceCalendarContentProps {
     setSelectedDate: (date: Date | undefined) => void
     today: Date
     monthStart: Date
-    isLoading?: boolean
 }
 
 export function AttendanceCalendarContent({
@@ -33,16 +31,10 @@ export function AttendanceCalendarContent({
     selectedDate,
     setSelectedDate,
     today,
-    monthStart,
-    isLoading
+    monthStart
 }: AttendanceCalendarContentProps) {
     return (
         <div className="flex flex-col w-full h-full relative">
-            {isLoading && (
-                <div className="absolute inset-0 bg-background/50 backdrop-blur-xs flex items-center justify-center z-30 rounded-2xl animate-in fade-in duration-200">
-                    <Loader2 className="size-10 animate-spin text-primary" />
-                </div>
-            )}
             <TooltipProvider>
                 <ShadcnCalendar
                     mode="single"
@@ -52,20 +44,20 @@ export function AttendanceCalendarContent({
                     onSelect={setSelectedDate}
                     captionLayout="dropdown"
                     showOutsideDays={false}
-                    className="p-0 border-0 w-fit h-fit mx-auto [--cell-size:2.5rem] sm:[--cell-size:3rem] md:[--cell-size:3.5rem] lg:[--cell-size:3.25rem] xl:[--cell-size:3.25rem]"
+                    className="p-4 sm:p-5 border-0 w-fit h-fit mx-auto [--cell-size:2.25rem] sm:[--cell-size:2.5rem] md:[--cell-size:2.65rem] lg:[--cell-size:2.45rem] xl:[--cell-size:2.55rem]"
                     classNames={{
                         root: "w-fit h-fit flex flex-col items-center",
-                        months: "w-fit h-fit flex flex-col items-center",
-                        month: "w-fit h-fit flex flex-col space-y-0 items-center",
-                        caption: "flex justify-center relative items-center mb-4",
+                        months: "w-fit h-fit flex flex-col items-center gap-3",
+                        month: "w-fit h-fit flex flex-col space-y-0 items-center gap-3",
+                        caption: "flex justify-center relative items-center mb-2 px-1",
                         nav: "hidden",
                         table: "w-fit border-separate border-spacing-0 flex flex-col items-center",
-                        tbody: "w-fit flex flex-col gap-4",
-                        head_row: "flex w-fit mb-4",
-                        weekday: "w-(--cell-size) mx-1.5 flex-none flex justify-center items-center font-bold text-[12px] uppercase tracking-widest text-muted-foreground",
-                        row: "flex w-fit",
-                        day: "w-(--cell-size) mx-1.5 flex-none flex items-center justify-center p-0",
-                        dropdowns: "w-full flex items-center text-sm font-medium justify-center gap-1.5 [&_[data-slot=select-trigger]]:border [&_[data-slot=select-trigger]]:border-muted/50",
+                        tbody: "w-fit flex flex-col gap-2.5",
+                        head_row: "flex w-fit mb-2 gap-2.5",
+                        weekday: "w-(--cell-size) flex-none flex justify-center items-center font-bold text-[11px] uppercase tracking-widest text-muted-foreground h-8",
+                        row: "flex w-fit gap-2.5",
+                        day: "w-(--cell-size) flex-none flex items-center justify-center p-0",
+                        dropdowns: "w-full flex items-center text-sm font-semibold justify-center gap-2 [&_[data-slot=select-trigger]]:border [&_[data-slot=select-trigger]]:border-muted/50 [&_[data-slot=select-trigger]]:h-9 [&_[data-slot=select-trigger]]:px-2.5",
                     }}
                     formatters={{
                         formatMonthDropdown: (date) => {
@@ -109,7 +101,7 @@ export function AttendanceCalendarContent({
                                 return <div className="size-(--cell-size)" />
                             }
 
-                            const isToday = modifiers.today
+                            const isToday = format(day.date, "yyyy-MM-dd") === format(today, "yyyy-MM-dd")
                             const isSelected = modifiers.selected
                             const isOffDay = modifiers.offDay
 
@@ -128,40 +120,41 @@ export function AttendanceCalendarContent({
                                             modifiers={modifiers}
                                             {...props}
                                             className={cn(
-                                                "size-(--cell-size) mx-auto p-0 rounded-2xl transition-all duration-500 relative overflow-visible flex flex-col items-center justify-center border-2 group/daybutton",
+                                                "size-(--cell-size) mx-auto !h-9 !w-9 sm:!h-10 sm:!w-10 md:!h-10 md:!w-10 lg:!h-10 lg:!w-10 xl:!h-10 xl:!w-10 p-0 rounded-xl relative overflow-visible flex flex-col items-center justify-center border-2 group/daybutton outline-none",
                                                 isSelected
-                                                    ? "border-primary shadow-xl shadow-primary/40 z-20 bg-primary"
+                                                    ? isToday
+                                                        ? "!border-primary !bg-primary !text-primary-foreground z-20 shadow-md"
+                                                        : "!border-primary shadow-xl shadow-primary/40 z-20 !bg-primary !text-primary-foreground"
                                                     : record?.status === 'verified'
-                                                        ? "border-green-500/50 bg-green-500/10 text-green-700 hover:bg-green-500/20 hover:border-green-500/70 z-10"
+                                                        ? "border-green-500/50 bg-green-500/10 text-green-700 z-10"
                                                         : record?.status === 'rejected'
-                                                            ? "border-rose-500/50 bg-rose-500/15 text-rose-700 hover:bg-rose-500/25 hover:border-rose-500/70 z-10 line-through decoration-rose-500 decoration-2"
+                                                            ? "border-rose-500/50 bg-rose-500/15 text-rose-700 z-10 line-through decoration-rose-500 decoration-2"
                                                             : record?.check_in && record?.check_out
-                                                                ? "border-primary/50 bg-primary/10 text-primary hover:bg-primary/20 hover:border-primary/70 z-10"
+                                                                ? "border-primary/50 bg-primary/10 text-primary z-10"
                                                                 : record?.check_in
-                                                                    ? "border-green-500/50 bg-green-500/10 text-green-700 hover:bg-green-500/20 hover:border-green-500/70"
+                                                                    ? "border-green-500/50 bg-green-500/10 text-green-700"
                                                                     : modifiers.leave
-                                                                        ? "border-orange-500/50 bg-orange-500/10 text-orange-700 hover:bg-orange-500/20 hover:border-orange-500/70"
+                                                                        ? "border-orange-500/50 bg-orange-500/10 text-orange-700"
                                                                         : modifiers.holiday
-                                                                            ? "border-blue-500/50 bg-blue-500/10 text-blue-700 hover:bg-blue-500/20 hover:border-blue-500/70"
+                                                                            ? "border-blue-500/50 bg-blue-500/10 text-blue-700"
                                                                             : modifiers.offDay
-                                                                                ? "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted/50 hover:text-foreground hover:border-muted-foreground/30"
+                                                                                ? "border-transparent bg-muted/40 text-muted-foreground"
                                                                                 : modifiers.absent
-                                                                                    ? "border-red-500/30 bg-red-500/10 text-red-700 hover:bg-red-500/20 hover:border-red-500/50"
+                                                                                    ? "border-red-500/30 bg-red-500/10 text-red-700"
                                                                                     : isToday
-                                                                                        ? "border-primary bg-primary/20 text-primary z-10 shadow-lg shadow-primary/5"
-                                                                                        : "bg-muted/20 border-muted/20 hover:bg-muted/30 hover:border-muted/40"
+                                                                                            ? "!border-primary bg-primary/20 !text-primary z-10"
+                                                                                        : "bg-muted/20 border-muted/20"
                                             )}
                                         >
                                             <motion.div
                                                 className="w-full h-full flex flex-col items-center justify-center relative z-10"
-                                                whileHover={{ y: -4, scale: 1.04 }}
                                                 whileTap={{ scale: 0.96 }}
                                                 transition={{ type: "spring", stiffness: 400, damping: 20 }}
                                             >
                                                 <span className={cn(
                                                     "text-base font-bold transition-colors duration-300",
-                                                    isSelected ? "text-primary-foreground" : (isToday ? "text-primary" : "text-foreground"),
-                                                    isOffDay && !isToday && !isSelected && "text-muted-foreground group-hover/daybutton:text-foreground"
+                                                    isSelected ? "!text-primary-foreground" : (isToday ? "!text-primary" : "!text-foreground"),
+                                                    isOffDay && !isToday && !isSelected && "text-muted-foreground"
                                                 )}>
                                                     {day.date.getDate()}
                                                 </span>
@@ -175,17 +168,9 @@ export function AttendanceCalendarContent({
                                                     </div>
                                                 )}
                                                 {isOffDay && (
-                                                    <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_2px,transparent_2px)] [background-size:12px_12px] opacity-10 pointer-events-none group-hover/daybutton:opacity-30 transition-opacity" />
+                                                    <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_2px,transparent_2px)] [background-size:12px_12px] opacity-10 pointer-events-none" />
                                                 )}
 
-                                                {isToday && (
-                                                    <div className={cn(
-                                                        "absolute inset-0 rounded-2xl ring-2 ring-primary ring-offset-2 ring-offset-background animate-pulse -z-10",
-                                                        isSelected ? "opacity-100" : "opacity-50"
-                                                    )} />
-                                                )}
-
-                                                <div className="absolute inset-0 rounded-2xl bg-primary opacity-0 group-hover/daybutton:opacity-[0.05] transition-opacity pointer-events-none" />
                                             </motion.div>
                                         </CalendarDayButton>
                                     </TooltipTrigger>

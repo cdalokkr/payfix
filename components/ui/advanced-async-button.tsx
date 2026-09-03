@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useLayoutEffect, useCallback, forwardRef } from "react";
+import React, { useState, useEffect, useRef, useLayoutEffect, useCallback, useMemo, forwardRef } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { 
   Loader2, 
@@ -174,7 +174,7 @@ export const AdvancedAsyncButton = forwardRef<HTMLButtonElement, AdvancedAsyncBu
   const useReducedMotionPref = respectReducedMotion && shouldReduceMotion;
 
   // Default icons
-  const defaultIcons = {
+  const defaultIcons = useMemo(() => ({
     idle: <Play className="w-4 h-4" />,
     loading: <Loader2 className="w-4 h-4" />,
     success: <CheckCircle className="w-4 h-4" />,
@@ -184,9 +184,9 @@ export const AdvancedAsyncButton = forwardRef<HTMLButtonElement, AdvancedAsyncBu
     retry: <RotateCcw className="w-4 h-4" />,
     pause: <Pause className="w-4 h-4" />,
     resume: <Play className="w-4 h-4" />
-  };
+  }), []);
 
-  const currentIcons = { ...defaultIcons, ...icons };
+  const currentIcons = useMemo(() => ({ ...defaultIcons, ...icons }), [defaultIcons, icons]);
 
   // Loading dots animation
   useEffect(() => {
@@ -253,6 +253,9 @@ export const AdvancedAsyncButton = forwardRef<HTMLButtonElement, AdvancedAsyncBu
         clearTimeout(timeoutRef.current);
       }
     };
+  // handleTimeout is declared below and intentionally captures the current
+  // state/callbacks for the timeout created by this effect.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, timeoutDuration]);
 
   // State change handler
@@ -374,7 +377,7 @@ export const AdvancedAsyncButton = forwardRef<HTMLButtonElement, AdvancedAsyncBu
   const getCurrentIcon = useCallback(() => {
     const icon = currentIcons[state];
     return icon || defaultIcons[state];
-  }, [state, currentIcons]);
+  }, [state, currentIcons, defaultIcons]);
 
   // Get button classes
   const getButtonClasses = useCallback(() => {

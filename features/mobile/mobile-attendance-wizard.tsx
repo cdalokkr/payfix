@@ -173,7 +173,7 @@ export function MobileAttendanceWizard({
         // getTodayStatus drives the clock-in/clock-out button state — must be fresh
         await utils.attendance.getTodayStatus.invalidate()
         utils.attendance.getMobileAttendance.invalidate()
-    }, [action, effectiveAction, localDate, clockIn, clockOut, utils])
+    }, [effectiveAction, localDate, clockIn, clockOut, utils])
 
     // Called when verification AND API both succeed
     const handleVerified = useCallback((result: { matched: boolean; similarity: number }) => {

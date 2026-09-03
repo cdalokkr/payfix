@@ -422,7 +422,12 @@ export const authRouter = router({
                 });
 
                 if (tenantRecord) {
-                  const tenantDbInstance = getTenantDb(tenantRecord.id, tenantRecord.database_url, tenantRecord.tenant_schema);
+                  const tenantDbInstance = getTenantDb(
+                    tenantRecord.id,
+                    tenantRecord.database_url,
+                    tenantRecord.tenant_schema,
+                    true,
+                  );
                   const tStart = performance.now();
                   await tenantDbInstance.execute(sqlTag`SELECT 1`);
                   if (process.env.NODE_ENV === 'development') {
@@ -458,9 +463,17 @@ export const authRouter = router({
         const logActivity = async () => {
           try {
             const userTenantSlug = (data as any).discoveredTenantSlug || ctx.tenant?.slug;
-            const activitySchema = (userTenantSlug && userTenantSlug !== 'primary')
-              ? (ctx.tenant?.tenantSchema || `tenant_${userTenantSlug}`)
-              : 'public';
+            let activitySchema = 'public';
+            if (userTenantSlug && userTenantSlug !== 'primary') {
+              const tenantRows = await loginCentralDb.execute(sqlTag`
+                SELECT tenant_schema
+                FROM public.tenants
+                WHERE slug = ${userTenantSlug}
+                LIMIT 1;
+              `);
+              const tenantSchema = (tenantRows[0] as any)?.tenant_schema;
+              if (tenantSchema) activitySchema = tenantSchema;
+            }
             const description = formatActivityDescription({
               action: 'login',
               actorRole: profileData?.role || 'employee',
@@ -718,94 +731,34 @@ export const authRouter = router({
       const adminUserId = authData.user.id;
 
       try {
-        // 3. Register tenant in control plane with status 'pending_setup' (NO schema provisioning)
-        const { masterDb } = await import('@/lib/db/master-connection');
-        const { tenants, tenantBranding, tenantPlans } = await import('@/lib/db/master-schema');
-        const { eq } = await import('drizzle-orm');
+        // Provision synchronously through the one canonical tenant path. The
+        // auth user is not told that signup succeeded until schema alignment,
+        // defaults, admin profile creation, metadata, and contract inspection
+        // have all completed.
+        const { provisionTenant } = await import('@/lib/tenant/provisioning');
+        const provisioned = await provisionTenant(
+          input.slug,
+          input.companyName,
+          input.adminEmail,
+          14,
+          adminUserId,
+          {
+            firstName: input.firstName,
+            lastName: input.lastName,
+            phone: input.phone,
+            country: input.country,
+            industry: input.industry,
+            teamSize: input.teamSize,
+          },
+        );
 
-        // Fetch default 'free' plan from database
-        const freePlan = await masterDb.query.tenantPlans.findFirst({
-          where: eq(tenantPlans.name, 'free')
-        });
-
-        const safeSlug = input.slug.toLowerCase().trim().replace(/[^a-z0-9-]/g, '');
-        const schemaName = `tenant_${safeSlug.replace(/-/g, '_')}`;
-        const trialStart = new Date();
-        const trialEnd = new Date();
-        trialEnd.setDate(trialStart.getDate() + 14);
-
-        const [newTenant] = await masterDb.insert(tenants).values({
-          slug: safeSlug,
-          company_name: input.companyName,
-          tenant_schema: schemaName,
-          status: 'pending_setup',
-          plan_id: freePlan?.id || null,
-          trial_start: trialStart,
-          trial_end: trialEnd,
-          trial_duration_days: 14,
-          admin_email: input.adminEmail,
-          license_expires_at: trialEnd,
-          country: input.country || null,
-          industry: input.industry || null,
-          team_size: input.teamSize || null,
-        }).returning();
-
-        // 4. Register default branding
-        await masterDb.insert(tenantBranding).values({
-          tenant_id: newTenant.id,
-          app_name: input.companyName,
-          short_name: input.companyName.substring(0, 15),
-        });
-
-        console.log(`[Signup] Tenant ${safeSlug} registered (pending_setup). Auth user: ${adminUserId}`);
-
-        // Fire background provisioning (non-blocking, fire-and-forget)
-        // This runs the full schema+table+profile setup while the user reads the success screen.
-        // If it fails, the /setup page fallback still works.
-        (async () => {
-          try {
-            const { provisionTenant } = await import('@/lib/tenant/provisioning');
-            await provisionTenant(
-              safeSlug,
-              input.companyName,
-              input.adminEmail,
-              14,
-              adminUserId,
-              {
-                firstName: input.firstName,
-                lastName: input.lastName,
-                phone: input.phone,
-                country: input.country,
-                industry: input.industry,
-                teamSize: input.teamSize,
-              },
-              undefined,
-              true, // skipRegistration — tenant record already created above
-            );
-
-            // Update tenant status: pending_setup → trial
-            await masterDb.update(tenants)
-              .set({ status: 'trial', updated_at: new Date() })
-              .where(eq(tenants.id, newTenant.id));
-
-            // Clear resolver cache so login picks up the new status
-            try {
-              const { clearResolverCache } = await import('@/lib/tenant/resolver');
-              clearResolverCache();
-            } catch {}
-
-            console.log(`[BG-Provision] ✅ Workspace ${safeSlug} auto-provisioned successfully`);
-          } catch (bgErr) {
-            console.error(`[BG-Provision] ❌ Background provisioning failed for ${safeSlug}:`, bgErr);
-            // Status stays pending_setup — user will see /setup fallback on login
-          }
-        })();
+        console.log(`[Signup] Tenant ${provisioned.slug} provisioned successfully. Auth user: ${adminUserId}`);
 
         return {
           success: true,
-          tenantId: newTenant.id,
-          slug: safeSlug,
-          message: 'Account created! Please login to set up your workspace.'
+          tenantId: provisioned.tenantId,
+          slug: provisioned.slug,
+          message: 'Account created and workspace provisioned. Please login.',
         };
       } catch (error: any) {
         console.error('[Signup] Registration failed, rolling back auth user:', error);
@@ -813,6 +766,25 @@ export const authRouter = router({
           await supabaseAdmin.auth.admin.deleteUser(adminUserId);
         } catch (deleteError) {
           console.error('[Signup] Failed to delete rolled-back auth user:', deleteError);
+        }
+        const errorChain: any[] = [];
+        const seenErrors = new Set<any>();
+        let currentError = error;
+        while (currentError && !seenErrors.has(currentError)) {
+          seenErrors.add(currentError);
+          errorChain.push(currentError);
+          currentError = currentError.cause;
+        }
+        const errorText = errorChain
+          .flatMap((chainError) => [chainError?.constraint, chainError?.detail, chainError?.message])
+          .filter(Boolean)
+          .join(' ');
+        const isUniqueViolation = errorChain.some((chainError) => chainError?.code === '23505');
+        if (isUniqueViolation && /tenant_schema|tenants?_slug|slug/i.test(errorText)) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'Subdomain is already taken. Please try another one.',
+          });
         }
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',

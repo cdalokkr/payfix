@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { router, adminProcedure, protectedProcedure, publicProcedure } from '../server'
-import { KioskDeviceService } from '@/lib/services/kiosk-device.service'
+import { KioskDeviceService, toPublicKioskDevice } from '@/lib/services/kiosk-device.service'
 
 export const kioskDevicesRouter = router({
     // Used only by an unpaired kiosk to decide whether the signed-in person
@@ -58,7 +58,7 @@ export const kioskDevicesRouter = router({
             }
             return {
                 success: true,
-                device: result.device,
+                device: toPublicKioskDevice(result.device),
                 tenantSlug: result.tenantSlug,
                 tenantSchema: result.tenantSchema,
             }
@@ -90,7 +90,7 @@ export const kioskDevicesRouter = router({
 
             return {
                 success: true,
-                device: result.device,
+                device: toPublicKioskDevice(result.device),
                 tenantSlug: result.tenantSlug,
                 tenantSchema: result.tenantSchema,
             }

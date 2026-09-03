@@ -3,6 +3,7 @@ import postgres from 'postgres';
 import * as schema from './schema';
 import { getTenantDb } from './tenant-connection';
 import { tenantStorage } from '../tenant/store';
+import { resolveTrustedTenantBySchema } from '../tenant/trusted-context';
 
 // Lazy singleton: connection is only created on first use at runtime,
 // NOT during module evaluation at build time (Vercel build has no DATABASE_URL).
@@ -30,7 +31,8 @@ function getCentralDb() {
 // Re-export centralDb as a getter-backed proxy so existing imports keep working
 export const centralDb = new Proxy({} as any, {
     get(_, prop, receiver) {
-        return Reflect.get(getCentralDb(), prop, receiver);
+        const database = getCentralDb();
+        return Reflect.get(database, prop, database);
     }
 });
 
@@ -45,22 +47,19 @@ let lastLoggedTenant = '';
 export const db = new Proxy({} as any, {
     get(target, prop, receiver) {
         const context = tenantStorage.getStore();
-        if (context && context.tenantId) {
+        if (context?.trusted && context.tenantId && context.tenantSchema) {
             // Log routing decision (only on change to avoid spam)
             if (lastLoggedTenant !== context.tenantSchema) {
                 console.log(`[DB-PROXY] Routing to tenant DB: ${context.tenantSchema} (tenant: ${context.slug})`);
                 lastLoggedTenant = context.tenantSchema || '';
             }
-            const tenantDb = getTenantDb(context.tenantId, context.databaseUrl, context.tenantSchema);
-            return Reflect.get(tenantDb, prop, receiver);
+            const tenantDb = getTenantDb(context.tenantId, context.databaseUrl, context.tenantSchema, true);
+            // Drizzle's query getter reads internal schema metadata from its
+            // receiver. Bind it to the real tenant DB, not this routing proxy.
+            return Reflect.get(tenantDb, prop, tenantDb);
         }
-        
-        // Fallback context (build time, CLI seeding, migrations, or local admin scripts)
-        if (lastLoggedTenant !== 'centralDb') {
-            console.warn('[DB-PROXY] No tenant context — falling back to centralDb (public schema)');
-            lastLoggedTenant = 'centralDb';
-        }
-        return Reflect.get(getCentralDb(), prop, receiver);
+
+        throw new Error('TENANT_CONTEXT_REQUIRED: use centralDb explicitly for control-plane operations.');
     }
 });
 
@@ -68,14 +67,11 @@ export const db = new Proxy({} as any, {
  * Run a database callback explicitly inside a specified tenant schema.
  */
 export async function runWithTenantSchema<T>(tenantSchema: string, fn: () => Promise<T>): Promise<T> {
-    const slug = tenantSchema.replace(/^tenant_/, '');
-    return tenantStorage.run({
-        tenantId: `tenant_${slug}`,
-        slug,
-        tenantSchema,
-        databaseUrl: null,
-        brandName: slug
-    }, fn);
+    const context = await resolveTrustedTenantBySchema(tenantSchema);
+    if (!context) {
+        throw new Error('TENANT_CONTEXT_REQUIRED: schema is not registered as an active tenant.');
+    }
+    return tenantStorage.run(context, fn);
 }
 
 

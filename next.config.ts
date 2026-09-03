@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // The disposable browser proof runs against the local dev origin directly.
+  // Allow its loopback host so Next.js serves client chunks instead of
+  // rendering the login form as a non-interactive HTML fallback.
+  allowedDevOrigins: ['127.0.0.1', 'localhost'],
+
   // Security Headers Configuration
   async headers() {
     // Determine if we're in production for stricter CSP
@@ -83,7 +88,6 @@ const nextConfig: NextConfig = {
               'magnetometer=()',
               'payment=()',
               'usb=()',
-              'bluetooth=()',
               'serial=()',
               'midi=()',
               'picture-in-picture=(self)',
@@ -141,8 +145,9 @@ const nextConfig: NextConfig = {
 
   // Image optimization configuration for Next.js 16
   images: {
-    // Enable modern image formats
-    formats: ['image/avif', 'image/webp'],
+    // Prefer WebP. Keep AVIF disabled until the patched image pipeline is
+    // proven in this release line; this avoids the libheif attack surface.
+    formats: ['image/webp'],
     // Remote patterns for external images (Supabase Storage, HF Spaces, etc.)
     remotePatterns: [
       {
@@ -171,7 +176,10 @@ const nextConfig: NextConfig = {
     'fflate', // Compression library used by jspdf (uses Node Worker)
   ],
 
-  // Enable experimental features for better performance (Next.js 16.2.0)
+  // Keep only supported, tenant-safe performance settings here. Cache
+  // Components and Partial Prefetching remain opt-in: authenticated layouts
+  // read request cookies/headers and the tenant key must be part of every
+  // cache identity before those features can be enabled safely.
   experimental: {
     // Optimize imports for tree-shaking heavy UI libraries
     optimizePackageImports: [
@@ -198,19 +206,11 @@ const nextConfig: NextConfig = {
       'framer-motion',
       'date-fns',
     ],
-    // Enable CSS optimization for smaller bundles
-    optimizeCss: false,
-    // Optimize React server components rendering
-    optimizeServerReact: true,
     // Cache configuration for client-side router cache
     staleTimes: {
       dynamic: 0, // 0s for dynamic authenticated routes to eliminate cross-session layout caching
       static: 180, // 3 minutes for static routes
     },
-    // Bundle all segment data into a single response per link (Next.js 16.2)
-    prefetchInlining: true,
-    // Enable TypeScript 7 native compiler CLI typechecking (Next.js 16.3)
-    useTypeScriptCli: true,
   },
 
   // Turbopack config — acknowledge webpack config coexistence (Next.js 16)
@@ -263,7 +263,7 @@ const nextConfig: NextConfig = {
     return config;
   },
 
-  // Strict TypeScript type-checking during build via TypeScript 7 engine
+  // Strict TypeScript type-checking during build
   typescript: {
     ignoreBuildErrors: false,
   },

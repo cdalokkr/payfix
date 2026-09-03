@@ -1,5 +1,8 @@
 "use client"
 
+/* Approval previews use dynamic user-uploaded URLs that next/image cannot optimize. */
+/* eslint-disable @next/next/no-img-element */
+
 import { useState, useMemo } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -267,7 +270,7 @@ export function PhotoApprovalsView() {
                                         </h5>
                                         {selectedRequest.rejection_reason && (
                                             <p className="text-[11px] font-medium text-rose-800/60 max-w-[200px]">
-                                                "{selectedRequest.rejection_reason}"
+                                                &quot;{selectedRequest.rejection_reason}&quot;
                                             </p>
                                         )}
                                         <div className="h-px w-full bg-black/5 my-1" />

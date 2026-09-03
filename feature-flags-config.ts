@@ -262,7 +262,7 @@ export const withFeatureFlag = <P extends object>(
   flagName: string,
   FallbackComponent?: React.ComponentType<P>
 ) => {
-  return (props: P) => {
+  const FeatureFlaggedComponent = (props: P) => {
     if (featureFlags.isEnabled(flagName)) {
       return React.createElement(Component, props);
     }
@@ -273,6 +273,8 @@ export const withFeatureFlag = <P extends object>(
 
     return null;
   };
+  FeatureFlaggedComponent.displayName = `withFeatureFlag(${Component.displayName || Component.name || 'Component'})`;
+  return FeatureFlaggedComponent;
 };
 
 // Server-side feature flag checking

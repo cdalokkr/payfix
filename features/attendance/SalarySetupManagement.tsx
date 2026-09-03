@@ -133,6 +133,9 @@ export function SalarySetupManagement() {
         }
         document.addEventListener('keydown', handleKeyDown)
         return () => document.removeEventListener('keydown', handleKeyDown)
+    // onSubmit is declared below and the shortcut is intentionally tied to the
+    // open state rather than recreated as mutation handlers change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sheetOpen, handleSubmit])
 
     useEffect(() => {
@@ -820,6 +823,8 @@ export function SalarySetupManagement() {
                                                             name="effectiveFromMonth"
                                                             control={control}
                                                             render={({ field: monthField }) => {
+                                                                // react-hook-form's watch API is intentionally live and is not React Compiler-memoizable.
+                                                                // eslint-disable-next-line react-hooks/incompatible-library
                                                                 const year = watch("effectiveFromYear");
                                                                 const month = watch("effectiveFromMonth");
                                                                 const selectedDate = month && year ? new Date(year, month - 1) : undefined;

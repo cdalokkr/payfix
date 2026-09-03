@@ -4,6 +4,7 @@ import type { Profile } from '@/types'
 interface ProfileContextType {
     profile: Profile | null | undefined
     isLoading: boolean
+    isInitializing: boolean
 }
 
 const ProfileContext = createContext<ProfileContextType | undefined>(undefined)

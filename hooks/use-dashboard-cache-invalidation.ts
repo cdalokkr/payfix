@@ -62,5 +62,5 @@ export function useDashboardCacheInvalidation(disabled = false) {
             profilesChannel.unsubscribe()
             activitiesChannel.unsubscribe()
         }
-    }, [utils])
+    }, [utils, disabled])
 }

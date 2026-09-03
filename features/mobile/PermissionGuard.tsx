@@ -1,5 +1,8 @@
 "use client"
 
+/* Permission illustrations are dynamic assets and do not need Next image optimization. */
+/* eslint-disable @next/next/no-img-element */
+
 import React from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"

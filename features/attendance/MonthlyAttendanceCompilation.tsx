@@ -481,7 +481,7 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                     <div className="p-8 text-center text-muted-foreground">
                         <CalendarRange className="h-12 w-12 mx-auto mb-3 opacity-30" />
                         <p className="font-medium">No data yet</p>
-                        <p className="text-sm">Click "Compile" to generate monthly attendance</p>
+                        <p className="text-sm">Click &quot;Compile&quot; to generate monthly attendance</p>
                     </div>
                 ) : (
                     <>

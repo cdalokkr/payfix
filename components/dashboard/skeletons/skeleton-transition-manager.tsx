@@ -218,6 +218,7 @@ export function useSkeletonTransition(
   } = config
 
   useEffect(() => {
+    const timeoutId = timeoutRef.current
     if (!isLoading) {
       setIsVisible(true)
       setTimeout(() => {
@@ -229,8 +230,8 @@ export function useSkeletonTransition(
     }
 
     return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current)
+      if (timeoutId) {
+        clearTimeout(timeoutId)
       }
     }
   }, [isLoading, duration, reducedMotion])

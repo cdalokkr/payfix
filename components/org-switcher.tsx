@@ -13,7 +13,6 @@ interface OrgSwitcherProps {
   onTenantSwitch: (tenantId: string) => void;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function OrgSwitcher({ tenants: _tenants, defaultTenant, onTenantSwitch: _onTenantSwitch }: OrgSwitcherProps) {
   const { state } = useSidebar();
   const isCollapsed = state === 'collapsed';
