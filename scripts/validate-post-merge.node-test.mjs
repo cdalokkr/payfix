@@ -78,7 +78,7 @@ test('runs SaaS CI for every branch push, pull request, and manual dispatch', as
   assert.doesNotMatch(ciWorkflow, /^\s+branches:/m);
 
   const testStep = ciWorkflow.match(
-    /^\s+- name: Test\n([\s\S]*?)(?=^\s+- name:|\s*$)/m,
+    /^\s+- name: Test\n([\s\S]*?)(?=^\s+- name:)/m,
   )?.[1];
   assert.ok(testStep, 'SaaS CI must define a Test step');
   assert.match(testStep, /^\s+env:\n/m);
