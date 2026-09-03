@@ -1,11 +1,7 @@
 name: SaaS CI
 
 on:
-  push:
-    branches:
-      - develop
-      - hardening/develop-camera-performance
-      
+  
   pull_request:
     branches:
       - develop
