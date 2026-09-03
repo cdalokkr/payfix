@@ -64,13 +64,10 @@ const envSchema = z.object({
       })
     }
 
-    if (!values.NEXT_PUBLIC_APP_URL) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['NEXT_PUBLIC_APP_URL'],
-        message: 'NEXT_PUBLIC_APP_URL is required in production',
-      })
-    } else if (!isProductionApplicationUrl(values.NEXT_PUBLIC_APP_URL)) {
+    if (
+      values.NEXT_PUBLIC_APP_URL &&
+      !isProductionApplicationUrl(values.NEXT_PUBLIC_APP_URL)
+    ) {
       ctx.addIssue({
         code: 'custom',
         path: ['NEXT_PUBLIC_APP_URL'],

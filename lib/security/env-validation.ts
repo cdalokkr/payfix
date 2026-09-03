@@ -126,8 +126,10 @@ export function validateEnvironment(): ValidationResult {
         }
     }
 
-    // Public configuration is optional for tests/development, but production
-    // must fail closed before serving requests or producing a build.
+    // Supabase configuration is required in production. The application URL
+    // remains optional because Vercel supplies branch/deployment URLs
+    // automatically; applications should use relative URLs unless a custom
+    // public domain is explicitly configured.
     if (process.env.NODE_ENV === 'production') {
         if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
             errors.push('NEXT_PUBLIC_SUPABASE_URL is required in production')
@@ -144,9 +146,10 @@ export function validateEnvironment(): ValidationResult {
         ) {
             errors.push('NEXT_PUBLIC_SUPABASE_URL must use HTTPS in production')
         }
-        if (!process.env.NEXT_PUBLIC_APP_URL) {
-            errors.push('NEXT_PUBLIC_APP_URL is required in production')
-        } else if (!isProductionApplicationUrl(process.env.NEXT_PUBLIC_APP_URL)) {
+        if (
+            process.env.NEXT_PUBLIC_APP_URL &&
+            !isProductionApplicationUrl(process.env.NEXT_PUBLIC_APP_URL)
+        ) {
             errors.push('NEXT_PUBLIC_APP_URL must be an HTTPS production URL')
         }
     }
