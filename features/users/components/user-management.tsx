@@ -44,9 +44,10 @@ type UsersData = RouterOutputs['admin']['users']['getUsers']
 
 interface UserManagementProps {
   initialData?: UsersData
+  tenantScope: string
 }
 
-export default function UserManagement({ initialData }: UserManagementProps) {
+export default function UserManagement({ initialData, tenantScope }: UserManagementProps) {
   const [showAddUserSheet, setShowAddUserSheet] = useState(false)
   const [editingUser, setEditingUser] = useState<Profile | null>(null)
   const [deletingUser, setDeletingUser] = useState<Profile | null>(null)
@@ -80,6 +81,7 @@ export default function UserManagement({ initialData }: UserManagementProps) {
     limit: 9999,
     getAll: true,
     status: activeTab === 'live' ? 'all' : 'deleted',
+    tenantScope,
   }, {
     initialData: activeTab === 'live' ? initialData : undefined,
     staleTime: 30000,

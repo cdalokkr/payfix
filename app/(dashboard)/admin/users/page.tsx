@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import UserManagement from '@/features/users/components/user-management'
 import { UserManagementErrorBoundary } from './user-management-error-boundary'
 import { getServerClient } from '@/lib/trpc/server-client'
+import { headers } from 'next/headers'
 
 export const metadata: Metadata = {
   title: 'Manage Users - Admin Dashboard',
@@ -12,6 +13,11 @@ export const metadata: Metadata = {
 
 export default async function UsersPage() {
   let initialData: any = undefined
+  // The proxy derives this value from the registry-backed tenant. It is only
+  // used to partition the browser cache; the server verifies it against the
+  // trusted context before querying any data.
+  const headerStore = await headers()
+  const tenantScope = headerStore.get('x-tenant-id') || 'unresolved'
 
   try {
     // Prefetch all users on the server for instant loading/hydration
@@ -20,6 +26,7 @@ export default async function UsersPage() {
       page: 1,
       limit: 9999,
       getAll: true,
+      tenantScope,
     })
   } catch (error) {
     console.error('[USERS-PAGE] Prefetch failed:', error)
@@ -28,7 +35,7 @@ export default async function UsersPage() {
 
   return (
     <UserManagementErrorBoundary>
-      <UserManagement initialData={initialData} />
+      <UserManagement initialData={initialData} tenantScope={tenantScope} />
     </UserManagementErrorBoundary>
   )
 }

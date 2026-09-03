@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, integer, boolean, numeric, jsonb, varchar } from 'drizzle-orm/pg-core';
+import { pgSchema, pgTable, uuid, text, timestamp, integer, boolean, numeric, jsonb, varchar } from 'drizzle-orm/pg-core';
 
 export const tenantStatusEnum = ['trial', 'active', 'suspended', 'cancelled'] as const;
 
@@ -84,4 +84,31 @@ export const trialTracking = pgTable('trial_tracking', {
     user_agent: text('user_agent'),
     fingerprint: text('fingerprint'), // Canvas / WebGL browser fingerprint hash
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
+/**
+ * Internal, redacted audit records for tenant ownership repairs.
+ *
+ * This intentionally lives outside public so ownership maintenance cannot
+ * become another control-plane profile data path. Access is limited by the
+ * payfix_internal schema grants in its migration.
+ */
+export const payfixInternal = pgSchema('payfix_internal');
+
+export const tenantOwnershipBackfillAudit = payfixInternal.table('tenant_ownership_backfill_audit', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    run_id: uuid('run_id').notNull(),
+    tenant_id: uuid('tenant_id').notNull(),
+    tenant_schema: varchar('tenant_schema', { length: 63 }),
+    started_at: timestamp('started_at', { withTimezone: true }).notNull(),
+    completed_at: timestamp('completed_at', { withTimezone: true }).notNull(),
+    mode: text('mode').notNull(),
+    status: text('status').notNull(),
+    total_profiles: integer('total_profiles').notNull(),
+    matching_profiles: integer('matching_profiles').notNull(),
+    missing_tenant_id: integer('missing_tenant_id').notNull(),
+    conflicting_profiles: integer('conflicting_profiles').notNull(),
+    updated_profiles: integer('updated_profiles').notNull(),
+    unresolved_conflict_count: integer('unresolved_conflict_count').notNull(),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
