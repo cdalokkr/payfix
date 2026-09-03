@@ -7,3 +7,4 @@
 - [Replit deployment config](replit-deployment-config.md) — `.replit` changes require schema validation through the workspace configuration flow, not direct edits.
 - [Vercel branch URLs](vercel-branch-urls.md) — `NEXT_PUBLIC_APP_URL` is optional; main, develop, and feature deployments use Vercel’s automatic HTTPS URLs.
 - [SaaS CI test fixtures](saas-ci-test-fixtures.md) — biometric proof tests need an explicit non-production `SESSION_SECRET` because some proofs are created during test module setup.
+- [Database integration test lifecycle](database-integration-test-lifecycle.md) — standalone tests importing app database singletons need explicit test-runner exit handling.

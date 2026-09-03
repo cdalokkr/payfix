@@ -15,6 +15,7 @@
     "test:e2e:instant": "playwright test e2e/instant-navigation.spec.ts",
     "test:watch": "jest --watch",
     "test:saas-migrations": "node --test scripts/validate-saas-migrations.node-test.mjs",
+    "test:tenant-profile-backfill-db": "node --import tsx --test --test-force-exit scripts/test-tenant-profile-backfill-database.node-test.mjs",
     "test:e2e:biometric": "tsx scripts/test-biometric-camera-e2e.ts",
     "test:e2e:tenant-registration": "tsx scripts/test-tenant-registration-contract.ts",
     "validate:saas-migrations": "node scripts/validate-saas-migrations.mjs",
