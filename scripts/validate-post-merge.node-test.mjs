@@ -76,6 +76,13 @@ test('runs SaaS CI for every branch push, pull request, and manual dispatch', as
     /^on:\n  push:\n  pull_request:\n  workflow_dispatch:\n/m,
   );
   assert.doesNotMatch(ciWorkflow, /^\s+branches:/m);
+
+  const testStep = ciWorkflow.match(
+    /^\s+- name: Test\n([\s\S]*?)(?=^\s+- name:|\s*$)/m,
+  )?.[1];
+  assert.ok(testStep, 'SaaS CI must define a Test step');
+  assert.match(testStep, /^\s+env:\n/m);
+  assert.match(testStep, /^\s+SESSION_SECRET:\s+\S+/m);
 });
 
 test('accepts pnpm deployment build and run commands', () => {

@@ -53,6 +53,9 @@ jobs:
 
       - name: Test
         run: pnpm run test --runInBand
+        env:
+          # Test-only signing fixture; never used for deployments.
+          SESSION_SECRET: ci-only-test-session-secret
 
       - name: Build with Turbopack
         run: pnpm run build:turbopack
