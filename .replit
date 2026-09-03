@@ -17,3 +17,6 @@ deploymentTarget = "autoscale"
 # pnpm is the repository's canonical package manager; see package.json.
 build = ["pnpm", "run", "build"]
 run = ["pnpm", "run", "start"]
+
+[nix]
+channel = "stable-25_05"
