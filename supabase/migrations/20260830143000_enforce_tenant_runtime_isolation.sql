@@ -32,6 +32,16 @@ BEGIN
     RAISE EXCEPTION 'Tenant schema does not exist: %', p_tenant_schema;
   END IF;
 
+  -- Legacy tenant schemas may predate the ownership column. Add it before
+  -- installing the policy so NULL or conflicting profiles fail closed until
+  -- the controlled backfill has verified their ownership.
+  IF to_regclass(format('%I.profiles', p_tenant_schema)) IS NOT NULL THEN
+    EXECUTE format(
+      'ALTER TABLE %I.profiles ADD COLUMN IF NOT EXISTS tenant_id uuid',
+      p_tenant_schema
+    );
+  END IF;
+
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = v_role::text) THEN
     EXECUTE format(
       'CREATE ROLE %I NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS',
@@ -62,6 +72,20 @@ BEGIN
     WHERE n.nspname = p_tenant_schema::text
       AND c.relkind IN ('r', 'p')
   LOOP
+    IF v_table.relname = 'profiles' THEN
+      v_predicate := format(
+        'current_setting(''app.tenant_id'', true) = %L AND current_setting(''app.tenant_schema'', true) = %L AND tenant_id = %L::uuid',
+        p_tenant_id::text,
+        p_tenant_schema::text,
+        p_tenant_id::text
+      );
+    ELSE
+      v_predicate := format(
+        'current_setting(''app.tenant_id'', true) = %L AND current_setting(''app.tenant_schema'', true) = %L',
+        p_tenant_id::text,
+        p_tenant_schema::text
+      );
+    END IF;
     EXECUTE format('ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY', p_tenant_schema, v_table.relname);
     EXECUTE format('ALTER TABLE %I.%I FORCE ROW LEVEL SECURITY', p_tenant_schema, v_table.relname);
     EXECUTE format('DROP POLICY IF EXISTS payfix_tenant_isolation ON %I.%I', p_tenant_schema, v_table.relname);
