@@ -1,10 +1,9 @@
 name: SaaS CI
 
 on:
-  
+  push:
   pull_request:
-    branches:
-      - develop
+  workflow_dispatch:
 
 permissions:
   contents: read

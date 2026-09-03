@@ -68,6 +68,16 @@ test('accepts the pnpm post-merge setup wired in .replit', async () => {
   );
 });
 
+test('runs SaaS CI for every branch push, pull request, and manual dispatch', async () => {
+  const ciWorkflow = await readFile(join(projectRoot, '.github/workflows/saas-ci.yml'), 'utf8');
+
+  assert.match(
+    ciWorkflow,
+    /^on:\n  push:\n  pull_request:\n  workflow_dispatch:\n/m,
+  );
+  assert.doesNotMatch(ciWorkflow, /^\s+branches:/m);
+});
+
 test('accepts pnpm deployment build and run commands', () => {
   assert.deepEqual(
     validatePostMergeSetup({
