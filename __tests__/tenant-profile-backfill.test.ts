@@ -94,9 +94,7 @@ function profileCounts(profiles: Profile[]) {
 }
 
 function affectedRowsResult(count: number): unknown[] & { count: number } {
-    const result = [] as unknown[] & { count: number };
-    result.count = count;
-    return result;
+    return Object.assign([], { count });
 }
 
 function createMockTenantDatabase(profiles: Profile[], beforeUpdate?: () => void) {
