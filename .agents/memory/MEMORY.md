@@ -8,3 +8,4 @@
 - [Vercel branch URLs](vercel-branch-urls.md) — `NEXT_PUBLIC_APP_URL` is optional; main, develop, and feature deployments use Vercel’s automatic HTTPS URLs.
 - [SaaS CI test fixtures](saas-ci-test-fixtures.md) — biometric proof tests need an explicit non-production `SESSION_SECRET` because some proofs are created during test module setup.
 - [Database integration test lifecycle](database-integration-test-lifecycle.md) — standalone tests importing app database singletons need explicit test-runner exit handling.
+- [Validation dependency links](validation-dependency-links.md) — a partial Node install can leave runtime links intact while test-only tools remain available only in the package store.

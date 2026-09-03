@@ -93,6 +93,12 @@ function profileCounts(profiles: Profile[]) {
     }];
 }
 
+function affectedRowsResult(count: number): unknown[] & { count: number } {
+    const result = [] as unknown[] & { count: number };
+    result.count = count;
+    return result;
+}
+
 function createMockTenantDatabase(profiles: Profile[], beforeUpdate?: () => void) {
     const execute = jest.fn(async (query: unknown) => {
         const text = queryText(query);
@@ -112,7 +118,7 @@ function createMockTenantDatabase(profiles: Profile[], beforeUpdate?: () => void
             missingProfiles.forEach((profile) => {
                 profile.tenant_id = expectedTenant.id;
             });
-            return [{ count: missingProfiles.length }];
+            return affectedRowsResult(missingProfiles.length);
         }
         if (text.includes('SELECT id::text AS profile_id')) {
             return profiles
@@ -221,7 +227,7 @@ describe('tenant profile ownership backfill', () => {
             matching_profiles: 2,
             missing_tenant_id: 0,
             conflicting_profiles: 1,
-            updated_profiles: 0,
+            updated_profiles: 1,
             unresolved_conflict_count: 1,
         })]);
         expect(JSON.stringify(auditValues)).not.toContain('email');
@@ -240,6 +246,50 @@ describe('tenant profile ownership backfill', () => {
         });
 
         exit.mockRestore();
+    });
+
+    it('reports the affected rows in both the apply report and audit record', async () => {
+        const profiles = createProfiles().filter((profile) => profile.tenant_id === null);
+        configureMockTenantDatabase(profiles);
+
+        const report = await runTenantProfileBackfill({
+            apply: true,
+            tenantSlug: expectedTenant.slug,
+        });
+
+        expect(profiles).toEqual([{
+            id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+            email: 'missing@example.com',
+            tenant_id: expectedTenant.id,
+        }]);
+        expect(report).toMatchObject({
+            mode: 'apply',
+            tenantCount: 1,
+            verified: true,
+        });
+        expect(report.tenants[0]).toMatchObject({
+            status: 'updated',
+            totalProfiles: 1,
+            matchingProfiles: 1,
+            missingTenantId: 0,
+            conflictingProfiles: 0,
+            updatedProfiles: 1,
+        });
+
+        expect(mockMasterDb.insert).toHaveBeenCalledTimes(1);
+        const auditValues = mockMasterDb.insert.mock.results[0].value.values.mock.calls[0][0];
+        expect(auditValues).toEqual([expect.objectContaining({
+            tenant_id: expectedTenant.id,
+            tenant_schema: expectedTenant.tenant_schema,
+            mode: 'apply',
+            status: 'verified',
+            total_profiles: 1,
+            matching_profiles: 1,
+            missing_tenant_id: 0,
+            conflicting_profiles: 0,
+            updated_profiles: 1,
+            unresolved_conflict_count: 0,
+        })]);
     });
 
     it('preserves and reports a conflict introduced after the initial scan', async () => {
