@@ -111,14 +111,21 @@ export function validateEnvironment(): ValidationResult {
     }
 
     // Check for accidentally exposed secrets
+    const intentionallyPublicKeyVariables = new Set([
+        'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+        'NEXT_PUBLIC_VAPID_PUBLIC_KEY',
+    ])
     const dangerousPatterns = [
         { pattern: /NEXT_PUBLIC_.*SECRET/i, message: 'Secret exposed with NEXT_PUBLIC_ prefix' },
-        { pattern: /NEXT_PUBLIC_(?!.*ANON.*KEY).*KEY/i, message: 'Non-anon key exposed with NEXT_PUBLIC_ prefix' },
+        { pattern: /NEXT_PUBLIC_.*KEY/i, message: 'Non-public key exposed with NEXT_PUBLIC_ prefix' },
         { pattern: /NEXT_PUBLIC_.*PASSWORD/i, message: 'Password exposed with NEXT_PUBLIC_ prefix' },
         { pattern: /NEXT_PUBLIC_.*TOKEN/i, message: 'Token exposed with NEXT_PUBLIC_ prefix' },
     ]
 
     for (const key of Object.keys(process.env)) {
+        if (intentionallyPublicKeyVariables.has(key)) {
+            continue
+        }
         for (const { pattern, message } of dangerousPatterns) {
             if (pattern.test(key)) {
                 securityIssues.push(`SECURITY RISK: ${message} - ${key}`)
