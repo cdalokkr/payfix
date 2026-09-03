@@ -14,6 +14,17 @@ import { TRPCError } from '@trpc/server'
 import { profiles, designations, activities, userStatusHistory } from '@/lib/db/schema'
 import { eq, or, ilike, and, ne, desc, count, sql, SQL } from 'drizzle-orm'
 
+function requireTenantId(ctx: { tenant?: { trusted?: boolean; tenantId?: string } | null }): string {
+  if (!ctx.tenant?.trusted || !ctx.tenant.tenantId) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'A valid workspace context is required.',
+    })
+  }
+
+  return ctx.tenant.tenantId
+}
+
 export const adminUsersRouter = router({
   getUsers: adminProcedure
     .input(
@@ -24,12 +35,26 @@ export const adminUsersRouter = router({
         role: z.enum(['admin', 'moderator', 'employee', 'all']).default('all'),
         status: z.enum(['active', 'deactive', 'deleted', 'all']).default('all'),
         getAll: z.boolean().default(false), // New parameter to get all users at once
+        // Cache-scope marker supplied by the server-rendered page. It is
+        // checked against the trusted context and never used to select a DB.
+        tenantScope: z.string().optional(),
       })
     )
     .query(async ({ ctx, input }) => {
       const startTime = performance.now()
+      const tenantId = requireTenantId(ctx)
 
-      let filters: (SQL | undefined)[] = [ne(profiles.id, ctx.profile.id)]
+      if (input.tenantScope && input.tenantScope !== tenantId) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Workspace context does not match the requested data scope.',
+        })
+      }
+
+      let filters: (SQL | undefined)[] = [
+        eq(profiles.tenant_id, tenantId),
+        ne(profiles.id, ctx.profile.id),
+      ]
 
       if (input.status !== 'all') {
         filters.push(eq(profiles.status, input.status))
@@ -110,10 +135,11 @@ export const adminUsersRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const tenantId = requireTenantId(ctx)
       const [data] = await ctx.db
         .update(profiles)
         .set({ role: input.role })
-        .where(eq(profiles.id, input.userId))
+        .where(and(eq(profiles.tenant_id, tenantId), eq(profiles.id, input.userId)))
         .returning()
 
       if (!data) throw new Error('User not found')
@@ -148,9 +174,10 @@ export const adminUsersRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const tenantId = requireTenantId(ctx)
       // Get current status for history tracking
       const currentProfile = await ctx.db.query.profiles.findFirst({
-        where: eq(profiles.id, input.userId),
+        where: and(eq(profiles.tenant_id, tenantId), eq(profiles.id, input.userId)),
         columns: {
           status: true,
           id: true,
@@ -170,7 +197,7 @@ export const adminUsersRouter = router({
       const [data] = await ctx.db
         .update(profiles)
         .set({ status: input.status })
-        .where(eq(profiles.id, input.userId))
+        .where(and(eq(profiles.tenant_id, tenantId), eq(profiles.id, input.userId)))
         .returning()
 
       // Record in history table
@@ -243,9 +270,14 @@ export const adminUsersRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const tenantId = requireTenantId(ctx)
       // Check if email is already taken
       const existingProfile = await ctx.db.query.profiles.findFirst({
-        where: and(eq(profiles.email, input.email), ne(profiles.id, input.userId))
+        where: and(
+          eq(profiles.tenant_id, tenantId),
+          eq(profiles.email, input.email),
+          ne(profiles.id, input.userId),
+        )
       })
 
       if (existingProfile) {
@@ -254,7 +286,7 @@ export const adminUsersRouter = router({
 
       // Fetch target user's current data
       const currentProfile = await ctx.db.query.profiles.findFirst({
-        where: eq(profiles.id, input.userId),
+        where: and(eq(profiles.tenant_id, tenantId), eq(profiles.id, input.userId)),
         columns: {
           id: true,
           email: true,
@@ -307,7 +339,7 @@ export const adminUsersRouter = router({
       const [data] = await ctx.db
         .update(profiles)
         .set(updateData)
-        .where(eq(profiles.id, input.userId))
+        .where(and(eq(profiles.tenant_id, tenantId), eq(profiles.id, input.userId)))
         .returning()
 
       // Log changes
@@ -349,6 +381,7 @@ export const adminUsersRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const tenantId = requireTenantId(ctx)
       const updateData: any = {
         updated_at: new Date()
       }
@@ -362,7 +395,7 @@ export const adminUsersRouter = router({
       const [data] = await ctx.db
         .update(profiles)
         .set(updateData)
-        .where(eq(profiles.id, input.userId))
+        .where(and(eq(profiles.tenant_id, tenantId), eq(profiles.id, input.userId)))
         .returning()
 
       if (!data) throw new Error('User not found')
@@ -402,8 +435,9 @@ export const adminUsersRouter = router({
   deleteUser: adminProcedure
     .input(z.object({ userId: z.string().uuid(), reason: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
+      const tenantId = requireTenantId(ctx)
       const targetUser = await ctx.db.query.profiles.findFirst({
-        where: eq(profiles.id, input.userId),
+        where: and(eq(profiles.tenant_id, tenantId), eq(profiles.id, input.userId)),
         columns: { email: true, status: true, id: true }
       })
 
@@ -412,7 +446,7 @@ export const adminUsersRouter = router({
       await ctx.db
         .update(profiles)
         .set({ status: 'deleted', updated_at: new Date() })
-        .where(eq(profiles.id, input.userId))
+        .where(and(eq(profiles.tenant_id, tenantId), eq(profiles.id, input.userId)))
 
       await ctx.db.insert(userStatusHistory).values({
         profile_id: input.userId,
