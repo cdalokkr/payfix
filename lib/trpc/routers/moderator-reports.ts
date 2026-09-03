@@ -5,8 +5,14 @@
 import { z } from 'zod'
 import { router, moderatorProcedure, protectedProcedure } from '../server'
 import { profiles, activities, attendance, leaves, officeSettings, officeClosures } from '@/lib/db/schema'
-import { eq, and, gte, lte, count, sql, desc, or, ilike, ne, SQL } from 'drizzle-orm'
+import { eq, and, gte, lte, lt, count, sql, desc, or, ilike, ne, SQL } from 'drizzle-orm'
 import { eachDayOfInterval, parseISO, isWithinInterval, getDay, format } from 'date-fns'
+
+function reportDate(value: string, endOfDay = false): Date {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return new Date(value)
+    const [year, month, day] = value.split('-').map(Number)
+    return new Date(year, month - 1, day + (endOfDay ? 1 : 0))
+}
 
 export const moderatorReportsRouter = router({
     // Get comprehensive reports data for moderator
@@ -20,8 +26,8 @@ export const moderatorReportsRouter = router({
         )
         .query(async ({ ctx, input }) => {
             const now = new Date()
-            const startDate = input.startDate ? new Date(input.startDate) : new Date(now.getTime() - input.days * 24 * 60 * 60 * 1000)
-            const endDate = input.endDate ? new Date(input.endDate) : now
+            const startDate = input.startDate ? reportDate(input.startDate) : new Date(now.getTime() - input.days * 24 * 60 * 60 * 1000)
+            const endDate = input.endDate ? reportDate(input.endDate, true) : now
 
             const [
                 totalUsersResult,
@@ -38,7 +44,7 @@ export const moderatorReportsRouter = router({
                 ctx.db.select({ value: count() }).from(activities),
                 ctx.db.select({ value: count() }).from(activities).where(gte(activities.created_at, new Date(new Date().setHours(0, 0, 0, 0)))),
                 ctx.db.query.activities.findMany({
-                    where: and(gte(activities.created_at, startDate), lte(activities.created_at, endDate)),
+                    where: and(gte(activities.created_at, startDate), lt(activities.created_at, endDate)),
                     columns: { activity_type: true, user_id: true }
                 }),
                 ctx.db.query.profiles.findMany({
@@ -261,8 +267,8 @@ export const moderatorReportsRouter = router({
                     filters.push(eq(activities.activity_type, input.activityType as any))
                 }
             }
-            if (input.startDate) filters.push(gte(activities.created_at, new Date(input.startDate)))
-            if (input.endDate) filters.push(lte(activities.created_at, new Date(input.endDate)))
+            if (input.startDate) filters.push(gte(activities.created_at, reportDate(input.startDate)))
+                if (input.endDate) filters.push(lt(activities.created_at, reportDate(input.endDate, true)))
             if (input.module) {
                 if (Array.isArray(input.module)) {
                     if (input.module.length > 0) filters.push(sql`${activities.module} IN ${input.module}`)
@@ -303,12 +309,13 @@ export const moderatorReportsRouter = router({
             z.object({
                 startDate: z.string().optional(),
                 endDate: z.string().optional(),
+                limit: z.number().int().min(1).max(5000).default(1000),
             })
         )
         .query(async ({ ctx, input }) => {
             let filters: any[] = []
-            if (input.startDate) filters.push(gte(activities.created_at, new Date(input.startDate)))
-            if (input.endDate) filters.push(lte(activities.created_at, new Date(input.endDate)))
+            if (input.startDate) filters.push(gte(activities.created_at, reportDate(input.startDate)))
+            if (input.endDate) filters.push(lt(activities.created_at, reportDate(input.endDate, true)))
 
             const data = await ctx.db.query.activities.findMany({
                 where: filters.length > 0 ? and(...filters) : undefined,
@@ -316,7 +323,7 @@ export const moderatorReportsRouter = router({
                     profile: true
                 },
                 orderBy: [desc(activities.created_at)],
-                limit: 1000
+                limit: input.limit
             })
 
             // Filter out admin results if any (RLS should handle it, but for safety)
@@ -469,7 +476,8 @@ export const moderatorReportsRouter = router({
         .input(z.object({
             startDate: z.string(),
             endDate: z.string(),
-            profileId: z.string().uuid().optional(),
+                profileId: z.string().uuid().optional(),
+                limit: z.number().int().min(1).max(10000).default(10000),
         }))
         .query(async ({ ctx, input }) => {
             const filters = [
@@ -488,7 +496,8 @@ export const moderatorReportsRouter = router({
                         columns: { full_name: true, first_name: true, last_name: true }
                     }
                 },
-                orderBy: [desc(attendance.date)]
+                orderBy: [desc(attendance.date)],
+                limit: input.limit
             })
 
             const settings = await ctx.db.query.officeSettings.findFirst()

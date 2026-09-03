@@ -19,14 +19,17 @@ export function createSupabaseClientSync(
   cookieStore: Awaited<ReturnType<typeof cookies>>,
   bearerToken?: string,
 ) {
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  // This client must never silently acquire elevated privileges.  Admin
+  // operations use the dedicated supabase-admin client instead.
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    throw new Error('NEXT_PUBLIC_SUPABASE_URL is not configured')
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Supabase public environment variables are not configured')
   }
 
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    supabaseUrl,
     supabaseKey,
     {
       auth: {

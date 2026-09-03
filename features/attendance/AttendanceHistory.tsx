@@ -4,19 +4,35 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { trpc } from "@/lib/trpc/client"
-import { format } from "date-fns"
+import { format, subDays } from "date-fns"
 import { Clock, Calendar } from "lucide-react"
 import { useProfile } from "@/lib/context/profile-context"
 
 export function AttendanceHistory() {
     const { profile } = useProfile()
-    const { data: history, isLoading } = trpc.attendance.getAttendance.useQuery({
-        profileId: profile?.id
+    const endDate = format(new Date(), "yyyy-MM-dd")
+    const startDate = format(subDays(new Date(), 30), "yyyy-MM-dd")
+    const { data: history, isLoading, isError, refetch } = trpc.attendance.getAttendance.useQuery({
+        profileId: profile?.id,
+        startDate,
+        endDate,
     }, {
         enabled: !!profile?.id
     })
 
     if (isLoading) return <div>Loading history...</div>
+    if (isError) {
+        return (
+            <Card className="border-none shadow-md bg-card/50 backdrop-blur-sm">
+                <CardContent className="flex flex-col items-center gap-3 py-20 text-center">
+                    <p className="text-sm text-destructive">Unable to load attendance history.</p>
+                    <button className="text-sm font-medium text-primary underline" onClick={() => refetch()}>
+                        Try again
+                    </button>
+                </CardContent>
+            </Card>
+        )
+    }
 
     return (
         <Card className="border-none shadow-md bg-card/50 backdrop-blur-sm overflow-hidden h-full">

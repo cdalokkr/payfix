@@ -68,13 +68,10 @@ self.addEventListener('fetch', (event) => {
     const { request } = event
     const url = new URL(request.url)
 
-    // Skip non-GET requests (except for offline queue)
+    // Protected attendance mutations must always reach the application server.
+    // The server-issued biometric proof is short-lived and cannot be replayed
+    // from a service-worker queue, so offline replay is intentionally disabled.
     if (request.method !== 'GET') {
-        // Handle offline POST requests for attendance
-        if (request.method === 'POST' && url.pathname.includes('/api/trpc/attendance')) {
-            event.respondWith(handleOfflineAttendance(request))
-            return
-        }
         return
     }
 
@@ -179,99 +176,6 @@ async function networkFirst(request) {
 // Check if API route is cacheable
 function isCacheableApiRoute(url) {
     return CACHEABLE_API_ROUTES.some((route) => url.includes(route))
-}
-
-// Handle offline attendance marking
-async function handleOfflineAttendance(request) {
-    try {
-        // Try network first
-        const response = await fetch(request.clone())
-        return response
-    } catch (error) {
-        // Queue for later sync
-        const body = await request.json()
-        await queueOfflineRequest({
-            url: request.url,
-            method: request.method,
-            body,
-            timestamp: Date.now(),
-        })
-
-        return new Response(
-            JSON.stringify({
-                success: true,
-                queued: true,
-                message: 'Attendance queued for sync when online',
-            }),
-            {
-                status: 202,
-                headers: { 'Content-Type': 'application/json' },
-            }
-        )
-    }
-}
-
-// Queue offline request
-async function queueOfflineRequest(requestData) {
-    const cache = await caches.open(OFFLINE_QUEUE_NAME)
-    const queueKey = `offline-${Date.now()}`
-
-    await cache.put(
-        queueKey,
-        new Response(JSON.stringify(requestData))
-    )
-
-    console.log('[SW] Queued offline request:', queueKey)
-}
-
-// Background sync event
-self.addEventListener('sync', (event) => {
-    console.log('[SW] Background sync event:', event.tag)
-
-    if (event.tag === 'sync-attendance') {
-        event.waitUntil(syncOfflineAttendance())
-    }
-})
-
-// Sync offline attendance requests
-async function syncOfflineAttendance() {
-    const cache = await caches.open(OFFLINE_QUEUE_NAME)
-    const keys = await cache.keys()
-
-    console.log('[SW] Syncing', keys.length, 'offline requests')
-
-    const results = await Promise.allSettled(
-        keys.map(async (key) => {
-            const response = await cache.match(key)
-            if (!response) return
-
-            const requestData = await response.json()
-
-            try {
-                await fetch(requestData.url, {
-                    method: requestData.method,
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(requestData.body),
-                })
-
-                // Remove from queue on success
-                await cache.delete(key)
-                console.log('[SW] Synced request:', key)
-            } catch (error) {
-                console.error('[SW] Failed to sync request:', key, error)
-                throw error
-            }
-        })
-    )
-
-    // Notify clients
-    const clients = await self.clients.matchAll()
-    clients.forEach((client) => {
-        client.postMessage({
-            type: 'SYNC_COMPLETE',
-            results,
-        })
-    })
 }
 
 // Push notification event

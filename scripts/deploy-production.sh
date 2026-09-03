@@ -1,95 +1,240 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# ============================================
-# Production Deployment Automation Script
-# ============================================
-# This script handles automated production deployment with rollback capabilities
+# Production release gate for the deployment configured in .replit.
+#
+# This script deliberately does not start a local server. A local process can
+# prove only that the workspace starts; it cannot prove that the published
+# revision is healthy. Use:
+#   ./scripts/deploy-production.sh preflight
+#   <publish using the configured deployment platform>
+#   ./scripts/deploy-production.sh verify
+#
+# A complete automated release can provide DEPLOY_COMMAND. The command is run
+# only after preflight and is followed by verification of NEXT_PUBLIC_APP_URL.
 
-set -e  # Exit on any error
+set -euo pipefail
 
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Logging functions
+ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+CONFIG_FILE="$ROOT_DIR/.replit"
+DEPLOY_ENV="${DEPLOY_ENV:-production}"
+export NODE_ENV="${NODE_ENV:-$DEPLOY_ENV}"
+PRODUCTION_URL="${PRODUCTION_URL:-${NEXT_PUBLIC_APP_URL:-}}"
+HEALTH_PATH="${PRODUCTION_HEALTH_PATH:-/api/health}"
+HEALTH_TIMEOUT_SECONDS="${HEALTH_TIMEOUT_SECONDS:-120}"
+HEALTH_RETRY_INTERVAL_SECONDS="${HEALTH_RETRY_INTERVAL_SECONDS:-5}"
+DEPLOYMENT_DIR="$ROOT_DIR/deployments/deployment-$(date +%Y%m%d-%H%M%S)"
+NEXT_VERSION=""
+NODE_VERSION=""
+NPM_VERSION=""
+
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    printf '%b[INFO]%b %s\n' "$BLUE" "$NC" "$1"
 }
 
 log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+    printf '%b[SUCCESS]%b %s\n' "$GREEN" "$NC" "$1"
 }
 
 log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
+    printf '%b[WARNING]%b %s\n' "$YELLOW" "$NC" "$1"
 }
 
 log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    printf '%b[ERROR]%b %s\n' "$RED" "$NC" "$1" >&2
 }
 
-# Configuration
-DEPLOY_ENV="${DEPLOY_ENV:-production}"
-BACKUP_SUFFIX="$(date +%Y%m%d-%H%M%S)"
-DEPLOYMENT_DIR="deployments/deployment-$BACKUP_SUFFIX"
+log_stage() {
+    printf '\n%b========== %s ==========%b\n' "$BLUE" "$1" "$NC"
+}
 
-# Pre-deployment checks
+fail() {
+    log_error "$1"
+    return 1
+}
+
+deployment_section() {
+    awk '
+        /^\[deployment\]$/ { inside = 1; next }
+        /^\[/ { inside = 0 }
+        inside { print }
+    ' "$CONFIG_FILE"
+}
+
+configured_deployment_port() {
+    sed -nE 's/^[[:space:]]*localPort[[:space:]]*=[[:space:]]*([0-9]+).*$/\1/p' "$CONFIG_FILE" | head -n 1
+}
+
+validate_production_url() {
+    if [ -z "$PRODUCTION_URL" ]; then
+        fail "NEXT_PUBLIC_APP_URL is required; refusing to deploy without the published target URL."
+        return 1
+    fi
+
+    if ! node - "$PRODUCTION_URL" <<'NODE'
+const value = process.argv[2];
+let url;
+try {
+  url = new URL(value);
+} catch {
+  process.exit(1);
+}
+
+const localHostnames = new Set(['localhost', '127.0.0.1', '::1']);
+const hostname = url.hostname.toLowerCase();
+const isProductionHost =
+  url.protocol === 'https:' &&
+  !url.username &&
+  !url.password &&
+  !localHostnames.has(hostname) &&
+  !hostname.endsWith('.local') &&
+  !hostname.endsWith('.replit.dev');
+
+process.exit(isProductionHost ? 0 : 1);
+NODE
+    then
+        fail "Production target must be a reachable HTTPS URL, not a local or development host."
+        return 1
+    fi
+}
+
+validate_required_production_environment() {
+    local missing=0
+
+    for required_var in \
+        NEXT_PUBLIC_SUPABASE_URL \
+        NEXT_PUBLIC_SUPABASE_ANON_KEY \
+        SUPABASE_SERVICE_ROLE_KEY \
+        NEXT_PUBLIC_APP_URL; do
+        if [ -z "${!required_var:-}" ]; then
+            log_error "Missing required production environment variable: $required_var"
+            missing=1
+        fi
+    done
+
+    if [ "$missing" -ne 0 ]; then
+        return 1
+    fi
+
+    if ! node - "$NEXT_PUBLIC_SUPABASE_URL" <<'NODE'
+const value = process.argv[2];
+let url;
+try {
+  url = new URL(value);
+} catch {
+  process.exit(1);
+}
+process.exit(url.protocol === 'https:' ? 0 : 1);
+NODE
+    then
+        fail "NEXT_PUBLIC_SUPABASE_URL must be a valid HTTPS URL in production."
+        return 1
+    fi
+
+    if [ "${NODE_ENV:-production}" != "production" ]; then
+        fail "NODE_ENV must be production for a production release."
+        return 1
+    fi
+
+    validate_production_url
+}
+
+validate_deployment_configuration() {
+    if [ ! -f "$CONFIG_FILE" ]; then
+        fail "Missing $CONFIG_FILE; refusing to deploy without a configured production target."
+        return 1
+    fi
+
+    local section
+    section="$(deployment_section)"
+
+    if ! grep -Eq '^[[:space:]]*deploymentTarget[[:space:]]*=[[:space:]]*"autoscale"[[:space:]]*$' <<< "$section"; then
+        fail "The configured deployment target must be autoscale in $CONFIG_FILE."
+        return 1
+    fi
+
+    if ! grep -Eq '^[[:space:]]*build[[:space:]]*=[[:space:]]*\["npm",[[:space:]]*"run",[[:space:]]*"build"\][[:space:]]*$' <<< "$section"; then
+        fail "The production build command in $CONFIG_FILE must be npm run build."
+        return 1
+    fi
+
+    if ! grep -Eq '^[[:space:]]*run[[:space:]]*=[[:space:]]*\["npm",[[:space:]]*"run",[[:space:]]*"start"\][[:space:]]*$' <<< "$section"; then
+        fail "The production run command in $CONFIG_FILE must be npm run start."
+        return 1
+    fi
+
+    local configured_port
+    configured_port="$(configured_deployment_port)"
+    if [ "$configured_port" != "8080" ]; then
+        fail "The configured production runtime port must be 8080; found ${configured_port:-missing}."
+        return 1
+    fi
+
+    log_info "Deployment target: Replit autoscale"
+    log_info "Configured runtime: npm run start on port $configured_port"
+    log_info "Health contract: $PRODUCTION_URL$HEALTH_PATH (HTTPS, HTTP 200, JSON status=healthy)"
+}
+
 pre_deployment_checks() {
-    log_info "🔍 Running pre-deployment checks..."
+    log_stage "PREFLIGHT"
+    log_info "Validating production configuration and the configured publish target..."
 
-    # Check if we're in the right directory
+    cd "$ROOT_DIR"
+
+    if [ "$DEPLOY_ENV" != "production" ]; then
+        fail "DEPLOY_ENV must be production for this release gate."
+        return 1
+    fi
+
+    validate_required_production_environment
+    validate_deployment_configuration
+
     if [ ! -f "package.json" ]; then
-        log_error "package.json not found. Please run this script from the project root."
-        exit 1
+        fail "package.json not found. Run this script from the project root."
+        return 1
     fi
 
-    # Check Node.js version
-    NODE_VERSION=$(node --version | sed 's/v//')
-    REQUIRED_NODE="18.0.0"
-    if ! [ "$(printf '%s\n' "$REQUIRED_NODE" "$NODE_VERSION" | sort -V | head -n1)" = "$REQUIRED_NODE" ]; then
-        log_error "Node.js version $NODE_VERSION is below required $REQUIRED_NODE"
-        exit 1
+    NODE_VERSION="$(node --version | sed 's/^v//')"
+    if ! printf '%s\n' "18.0.0" "$NODE_VERSION" | sort -V -C; then
+        fail "Node.js version $NODE_VERSION is below the required 18.0.0."
+        return 1
     fi
 
-    # Check npm version
-    NPM_VERSION=$(npm --version)
-    REQUIRED_NPM="8.0.0"
-    if ! [ "$(printf '%s\n' "$REQUIRED_NPM" "$NPM_VERSION" | sort -V | head -n1)" = "$REQUIRED_NPM" ]; then
-        log_warning "npm version $NPM_VERSION might be below recommended $REQUIRED_NPM"
+    NPM_VERSION="$(npm --version)"
+    if ! printf '%s\n' "8.0.0" "$NPM_VERSION" | sort -V -C; then
+        log_warning "npm version $NPM_VERSION is below the recommended 8.0.0."
     fi
 
-    # Validate Next.js version
-    NEXT_VERSION=$(npm ls next --depth=0 2>/dev/null | grep next@ | sed 's/.*next@//')
-    if [[ ! "$NEXT_VERSION" =~ ^16\. ]]; then
-        log_error "Next.js version $NEXT_VERSION is not 16.x.x"
-        exit 1
+    NEXT_VERSION="$(node -p "require('./package.json').dependencies?.next || require('./package.json').devDependencies?.next || ''")"
+    if [[ ! "$NEXT_VERSION" =~ ^\^?16\. ]]; then
+        fail "Next.js version $NEXT_VERSION is not 16.x.x."
+        return 1
     fi
 
-    log_success "✅ Pre-deployment checks passed"
+    log_success "Production preflight passed."
 }
 
-# Create deployment backup
 create_deployment_backup() {
-    log_info "📦 Creating deployment backup..."
-
+    log_info "Creating source backup before the release command..."
     mkdir -p "$DEPLOYMENT_DIR"
 
-    # Backup current production state
     cp package.json "$DEPLOYMENT_DIR/"
     cp package-lock.json "$DEPLOYMENT_DIR/"
     cp next.config.ts "$DEPLOYMENT_DIR/"
-    cp -r .next "$DEPLOYMENT_DIR/.next-backup" 2>/dev/null || true
-    cp -r public "$DEPLOYMENT_DIR/public-backup" 2>/dev/null || true
 
-    # Create deployment manifest
-    cat > "$DEPLOYMENT_DIR/manifest.json" << EOF
+    cat > "$DEPLOYMENT_DIR/manifest.json" <<EOF
 {
-  "deployment_id": "$BACKUP_SUFFIX",
+  "deployment_id": "$(basename "$DEPLOYMENT_DIR" | sed 's/^deployment-//')",
   "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "environment": "$DEPLOY_ENV",
+  "deployment_target": "replit-autoscale",
+  "production_url": "$PRODUCTION_URL",
+  "health_path": "$HEALTH_PATH",
   "next_version": "$NEXT_VERSION",
   "node_version": "$NODE_VERSION",
   "npm_version": "$NPM_VERSION",
@@ -98,188 +243,173 @@ create_deployment_backup() {
 }
 EOF
 
-    log_success "✅ Deployment backup created in: $DEPLOYMENT_DIR"
+    log_success "Source backup created at $DEPLOYMENT_DIR."
 }
 
-# Build application
 build_application() {
-    log_info "🔨 Building application for production..."
-
-    # Clean previous build
-    rm -rf .next
-
-    # Install dependencies
-    log_info "📦 Installing dependencies..."
+    log_info "Building the production artifact..."
     npm ci --production=false
-
-    # Build application
-    log_info "🏗️  Building Next.js application..."
     npm run build
 
-    # Verify build output
     if [ ! -d ".next" ]; then
-        log_error "Build failed - .next directory not found"
-        exit 1
+        fail "Production build completed without a .next directory."
+        return 1
     fi
 
-    log_success "✅ Application built successfully"
+    log_success "Production artifact built successfully."
 }
 
-# Health check function
 health_check() {
-    local endpoint="${1:-http://localhost:3000}"
-    local timeout=60
+    local endpoint="${1:?health endpoint is required}"
+    local elapsed=0
+    local response_file
+    local http_status
 
-    log_info "🏥 Running health checks on $endpoint..."
+    response_file="$(mktemp)"
 
-    # Wait for server to be ready
-    local count=0
-    while [ $count -lt $timeout ]; do
-        if curl -s --head --fail "$endpoint/api/health" > /dev/null 2>&1; then
-            # Additional health checks
-            if curl -s "$endpoint/api/health" | grep -q '"status":"healthy"'; then
-                log_success "✅ Health check passed"
-                return 0
-            fi
+    log_info "Verifying deployed revision at $endpoint..."
+
+    while [ "$elapsed" -le "$HEALTH_TIMEOUT_SECONDS" ]; do
+        http_status="$(
+            curl \
+                --silent \
+                --show-error \
+                --location \
+                --proto '=https' \
+                --proto-redir '=https' \
+                --connect-timeout 10 \
+                --max-time 20 \
+                --output "$response_file" \
+                --write-out '%{http_code}' \
+                "$endpoint" 2>/dev/null || true
+        )"
+
+        if [ "$http_status" = "200" ] && node - "$response_file" <<'NODE'
+const fs = require('node:fs');
+
+let body;
+try {
+  body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+} catch {
+  process.exit(1);
+}
+
+const checks = body && body.checks;
+const checksHealthy =
+  checks &&
+  typeof checks === 'object' &&
+  Object.values(checks).every((check) => check && check.status === 'healthy');
+
+process.exit(
+  body &&
+  body.status === 'healthy' &&
+  body.environment === 'production' &&
+  typeof body.version === 'string' &&
+  body.version.length > 0 &&
+  checksHealthy
+    ? 0
+    : 1,
+);
+NODE
+        then
+            rm -f "$response_file"
+            log_success "Post-deploy health verification passed for the published revision."
+            return 0
         fi
-        sleep 2
-        count=$((count + 2))
+
+        if [ "$elapsed" -lt "$HEALTH_TIMEOUT_SECONDS" ]; then
+            sleep "$HEALTH_RETRY_INTERVAL_SECONDS"
+        fi
+        elapsed=$((elapsed + HEALTH_RETRY_INTERVAL_SECONDS))
     done
 
-    log_error "❌ Health check failed - application not responding properly"
+    rm -f "$response_file"
+    fail "Published revision did not satisfy the production health contract within ${HEALTH_TIMEOUT_SECONDS}s."
     return 1
 }
 
-# Deploy application
 deploy_application() {
-    log_info "🚀 Deploying application..."
+    log_stage "DEPLOY"
 
-    # For this example, we'll simulate deployment
-    # In real scenario, this would involve:
-    # - Docker build/push
-    # - Kubernetes deployment
-    # - Cloud provider deployment (Vercel, AWS, etc.)
-
-    log_info "📤 Starting application server..."
-
-    # Start production server
-    npm start > /dev/null 2>&1 &
-    SERVER_PID=$!
-
-    # Wait for server to start
-    sleep 10
-
-    # Run health check
-    if ! health_check "http://localhost:3000"; then
-        log_error "❌ Deployment health check failed"
-        kill $SERVER_PID 2>/dev/null || true
-        exit 1
-    fi
-
-    log_success "✅ Application deployed successfully"
-}
-
-# Rollback function
-rollback_deployment() {
-    log_warning "🔄 Initiating deployment rollback..."
-
-    if [ -d "$DEPLOYMENT_DIR" ]; then
-        # Stop current server
-        pkill -f "npm start" || true
-
-        # Restore from backup
-        cp "$DEPLOYMENT_DIR/package.json" . 2>/dev/null || log_warning "Could not restore package.json"
-        cp "$DEPLOYMENT_DIR/package-lock.json" . 2>/dev/null || log_warning "Could not restore package-lock.json"
-        cp "$DEPLOYMENT_DIR/next.config.ts" . 2>/dev/null || log_warning "Could not restore next.config.ts"
-        cp -r "$DEPLOYMENT_DIR/.next-backup" .next 2>/dev/null || true
-        cp -r "$DEPLOYMENT_DIR/public-backup" public 2>/dev/null || true
-
-        # Reinstall and restart
-        npm install
-        npm start > /dev/null 2>&1 &
-        SERVER_PID=$!
-
-        sleep 5
-
-        if health_check "http://localhost:3000"; then
-            log_success "✅ Rollback completed successfully"
-        else
-            log_error "❌ Rollback health check failed"
-            return 1
-        fi
-    else
-        log_error "❌ Deployment backup not found: $DEPLOYMENT_DIR"
+    if [ -z "${DEPLOY_COMMAND:-}" ]; then
+        fail "DEPLOY_COMMAND is not configured. Preflight is complete, but this script will not publish implicitly or start a local server."
+        log_error "Publish using the configured Replit deployment target, then run: $0 verify"
         return 1
     fi
+
+    log_info "Running the explicitly configured production publisher..."
+    bash -lc "$DEPLOY_COMMAND"
+    log_success "Production publisher completed."
 }
 
-# Post-deployment validation
 post_deployment_validation() {
-    log_info "🧪 Running post-deployment validation..."
-
-    # Performance checks
-    log_info "📊 Checking performance metrics..."
-    # Add performance validation logic here
-
-    # Security checks
-    log_info "🔒 Running security validation..."
-    # Add security validation logic here
-
-    # Feature validation
-    log_info "✨ Validating core features..."
-    # Add feature validation logic here
-
-    log_success "✅ Post-deployment validation completed"
+    log_stage "POST-DEPLOY VERIFICATION"
+    health_check "${PRODUCTION_URL%/}${HEALTH_PATH}"
 }
 
-# Main deployment flow
-main() {
-    log_info "🚀 Starting production deployment process..."
+rollback_deployment() {
+    log_warning "Restoring the workspace source snapshot after a failed release command..."
 
-    # Trap for cleanup on error
-    trap 'log_error "Deployment failed! Check logs above."; rollback_deployment' ERR
+    if [ ! -d "$DEPLOYMENT_DIR" ]; then
+        log_warning "No source backup was created; nothing to restore."
+        return 0
+    fi
 
+    cp "$DEPLOYMENT_DIR/package.json" .
+    cp "$DEPLOYMENT_DIR/package-lock.json" .
+    cp "$DEPLOYMENT_DIR/next.config.ts" .
+    log_warning "Workspace source restored. The published service must be republished separately."
+}
+
+on_error() {
+    local status=$?
+    trap - ERR
+    log_error "Production release failed."
+    if [ -d "$DEPLOYMENT_DIR" ]; then
+        rollback_deployment || log_warning "Workspace source rollback was incomplete."
+    fi
+    exit "$status"
+}
+
+run_preflight() {
     pre_deployment_checks
-    create_deployment_backup
-    build_application
-    deploy_application
-    post_deployment_validation
-
-    log_success "🎉 Deployment completed successfully!"
-
-    # Deployment summary
-    echo ""
-    log_info "📋 Deployment Summary:"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "   Deployment ID:     $BACKUP_SUFFIX"
-    echo "   Environment:       $DEPLOY_ENV"
-    echo "   Next.js Version:   $NEXT_VERSION"
-    echo "   Node.js Version:   $NODE_VERSION"
-    echo "   Backup Location:   $DEPLOYMENT_DIR"
-    echo "   Status:           ✅ Successfully deployed"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-    log_info "📝 Next steps:"
-    echo "   1. Monitor application performance"
-    echo "   2. Check application logs"
-    echo "   3. Verify user access and functionality"
-    echo "   4. Update monitoring dashboards"
-    echo ""
-
-    log_info "🆘 Emergency rollback:"
-    echo "   Run: ./scripts/deploy-production.sh rollback"
-    echo ""
-
-    # Keep server running
-    log_info "🔄 Application server is running (PID: $SERVER_PID)"
-    wait $SERVER_PID
+    log_success "Preflight complete. No publish was performed."
 }
 
-# Handle rollback command
-if [ "$1" = "rollback" ]; then
-    rollback_deployment
-    exit $?
-fi
+run_verify() {
+    log_stage "POST-DEPLOY VERIFICATION"
+    cd "$ROOT_DIR"
+    validate_production_url
+    health_check "${PRODUCTION_URL%/}${HEALTH_PATH}"
+}
 
-# Run main deployment
-main
+main() {
+    local action="${1:-release}"
+
+    case "$action" in
+        preflight)
+            run_preflight
+            ;;
+        verify)
+            run_verify
+            ;;
+        release)
+            trap on_error ERR
+            pre_deployment_checks
+            create_deployment_backup
+            build_application
+            deploy_application
+            post_deployment_validation
+            log_success "Production release completed and the deployed revision is healthy."
+            ;;
+        rollback)
+            rollback_deployment
+            ;;
+        *)
+            log_error "Usage: $0 [preflight|release|verify|rollback]"
+            return 2
+            ;;
+    esac
+}
+
+main "$@"

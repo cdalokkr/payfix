@@ -79,7 +79,7 @@ export function MobileAttendanceWizard({
     }, [])
 
     // This is called by SelfieCapture to submit attendance in parallel with verification
-    const handleSubmitAttendance = useCallback(async () => {
+    const handleSubmitAttendance = useCallback(async (attendanceProof: string) => {
         let coords: { latitude: number | null; longitude: number | null } = { latitude: null, longitude: null }
         if (effectiveAction === 'clock_in') {
             try {
@@ -131,6 +131,7 @@ export function MobileAttendanceWizard({
             if (effectiveAction === 'clock_in') {
                 await clockIn.mutateAsync({
                     localDate,
+                    attendanceProof,
                     isExtraDay: false,
                     latitude: coords.latitude || undefined,
                     longitude: coords.longitude || undefined
@@ -138,6 +139,7 @@ export function MobileAttendanceWizard({
             } else {
                 await clockOut.mutateAsync({
                     localDate,
+                    attendanceProof,
                 })
             }
         } catch (err: any) {

@@ -10,6 +10,8 @@ import { tenantStorage } from '@/lib/tenant/store'
 import { consumeLivenessChallenge, LIVENESS_FRAME_COUNT } from '@/lib/liveness-challenge'
 import { ProfileService } from '@/lib/services/profile.service'
 import { recordBiometricVerificationAttempt } from '@/lib/services/biometric-verification-attempt.service'
+import { issueAttendanceProof } from '@/lib/biometric-attendance-proof'
+import { getLocalDateIST } from '@/lib/utils/date-utils'
 
 // Keep attendance aligned with the current shared capture contract. The
 // enrollment route accepts the migration alias as well, so an installed PWA
@@ -80,7 +82,10 @@ export async function POST(request: NextRequest) {
             return NextResponse.json(body, init)
         }
     try {
-        const { frames, selfieBase64, challenge, biometricPipelineVersion } = await request.json()
+        const { frames, selfieBase64, challenge, biometricPipelineVersion, action } = await request.json()
+        if (action !== 'clock_in' && action !== 'clock_out') {
+            return respond({ error: 'A valid attendance action is required.', code: 'ATTENDANCE_ACTION_REQUIRED' }, { status: 400 })
+        }
         auditFrameCount = Array.isArray(frames) ? frames.length : (typeof selfieBase64 === 'string' ? 1 : 0)
         auditCapturePipelineVersion = typeof biometricPipelineVersion === 'string' ? biometricPipelineVersion : null
         const capturePipeline = biometricPipelineVersion
@@ -188,6 +193,17 @@ export async function POST(request: NextRequest) {
         const similarity = Math.max(0, Math.min(1, dot / (selfieNorm * storedNorm)))
         const matched = similarity >= threshold
 
+        const attendanceProof = matched
+            ? issueAttendanceProof({
+                subject: user.id,
+                tenantId: tenant.tenantId,
+                action,
+                localDate: getLocalDateIST(),
+                verificationRequestId: requestId,
+                embeddingPipelineVersion,
+            })
+            : undefined
+
         return respond({
             matched, similarity: Math.round(similarity * 1000) / 1000, threshold, is_live: true, face_detected: true,
             canonical_portrait_base64: extraction.canonical_portrait_base64,
@@ -203,6 +219,7 @@ export async function POST(request: NextRequest) {
             },
             code: matched ? undefined : 'FACE_SIMILARITY_BELOW_THRESHOLD',
             embedding_pipeline_version: embeddingPipelineVersion,
+            attendance_proof: attendanceProof,
             error: matched ? undefined : 'Face does not match the approved profile photo.',
         })
     } catch (error) {

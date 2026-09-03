@@ -5,7 +5,34 @@ import { tenants } from '@/lib/db/master-schema';
 import { tenantStorage } from '@/lib/tenant/store';
 import { biometricDevices, employeeSettings, biometricRawLogs, attendanceSessions } from '@/lib/db/schema';
 import { AttendanceService } from '@/lib/services/attendance.service';
+import { formatDateIST, parseBiometricTimestamp } from '@/lib/utils/date-utils';
 import { eq, and } from 'drizzle-orm';
+
+type AuthenticatedTenant = {
+    id: string;
+    slug: string;
+    database_url: string | null;
+    tenant_schema: string | null;
+    company_name: string;
+};
+
+const textResponse = (body: string, status = 200) =>
+    new NextResponse(body, {
+        status,
+        headers: { 'Content-Type': 'text/plain' }
+    });
+
+async function authenticateDevice(req: NextRequest): Promise<AuthenticatedTenant | null> {
+    const header = req.headers.get('authorization');
+    // Do not accept a missing, malformed, or empty bearer credential.
+    const match = header?.match(/^Bearer[ \t]+(\S+)$/i);
+    if (!match) return null;
+
+    const tenant = await masterDb.query.tenants.findFirst({
+        where: eq(tenants.biometric_api_key, match[1])
+    });
+    return tenant ?? null;
+}
 
 /**
  * eSSL ADMS / iclock Protocol Web Listener
@@ -17,9 +44,25 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const sn = searchParams.get('SN') || searchParams.get('sn');
 
-    // Return standard eSSL ADMS handshake OK response
-    return new NextResponse('OK', {
-        headers: { 'Content-Type': 'text/plain' }
+    const tenant = await authenticateDevice(req);
+    if (!tenant || !sn) return textResponse('Unauthorized', 401);
+
+    // A valid tenant key is not sufficient: the serial must be registered in
+    // that tenant's database. Never fall back to an arbitrary tenant.
+    const tenantContext = {
+        tenantId: tenant.id,
+        slug: tenant.slug,
+        databaseUrl: tenant.database_url || null,
+        tenantSchema: tenant.tenant_schema || null,
+        brandName: tenant.company_name,
+        trusted: true,
+    };
+    return tenantStorage.run(tenantContext, async () => {
+        const device = await db.query.biometricDevices.findFirst({
+            where: eq(biometricDevices.serial_number, sn)
+        });
+        if (!device) return textResponse('Forbidden', 403);
+        return textResponse('OK');
     });
 }
 
@@ -27,28 +70,11 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
     try {
         const { searchParams } = new URL(req.url);
-        const sn = searchParams.get('SN') || searchParams.get('sn') || 'UNKNOWN_SN';
+        const sn = searchParams.get('SN') || searchParams.get('sn');
+
+        const tenant = await authenticateDevice(req);
+        if (!tenant || !sn) return textResponse('Unauthorized', 401);
         const rawText = await req.text();
-
-        // 1. Resolve Tenant by Device Serial Number or API Key in Auth header
-        const authHeader = req.headers.get('authorization');
-        let tenant: any = null;
-
-        if (authHeader && authHeader.startsWith('Bearer ')) {
-            const token = authHeader.split(' ')[1];
-            tenant = await masterDb.query.tenants.findFirst({
-                where: eq(tenants.biometric_api_key, token)
-            });
-        }
-
-        if (!tenant) {
-            // Fallback: Find tenant where biometricDevices has this serial_number
-            tenant = await masterDb.query.tenants.findFirst();
-        }
-
-        if (!tenant) {
-            return new NextResponse('OK', { headers: { 'Content-Type': 'text/plain' } });
-        }
 
         const tenantContext = {
             tenantId: tenant.id,
@@ -65,11 +91,11 @@ export async function POST(req: NextRequest) {
                 where: eq(biometricDevices.serial_number, sn)
             });
 
-            if (device) {
-                await db.update(biometricDevices)
-                    .set({ last_sync_time: new Date(), status: 'active', updated_at: new Date() })
-                    .where(eq(biometricDevices.id, device.id));
-            }
+            if (!device) return textResponse('Forbidden', 403);
+
+            await db.update(biometricDevices)
+                .set({ last_sync_time: new Date(), status: 'active', updated_at: new Date() })
+                .where(eq(biometricDevices.id, device.id));
 
             const locationId = device?.location_id || null;
 
@@ -92,8 +118,8 @@ export async function POST(req: NextRequest) {
                     });
 
                     const profileId = settings?.profile_id || null;
-                    const punchTime = new Date(timestampStr.replace(' ', 'T'));
-                    const localDate = punchTime.toISOString().split('T')[0];
+                    const punchTime = parseBiometricTimestamp(timestampStr);
+                    const localDate = formatDateIST(punchTime);
 
                     // Record raw audit log
                     await db.insert(biometricRawLogs).values({
@@ -119,7 +145,8 @@ export async function POST(req: NextRequest) {
                             await AttendanceService.clockOut({
                                 profileId,
                                 email: 'adms@essl.local',
-                                localDate
+                                localDate,
+                                source: 'biometric',
                             });
                         } else if (!activeSession && punchType === 0) {
                             await AttendanceService.clockIn({
@@ -136,13 +163,11 @@ export async function POST(req: NextRequest) {
             }
 
             // eSSL ADMS requires exact string "OK" response
-            return new NextResponse('OK', {
-                headers: { 'Content-Type': 'text/plain' }
-            });
+            return textResponse('OK');
         });
 
     } catch (err) {
-        console.error('[eSSL ADMS Listener] Error:', err);
-        return new NextResponse('OK', { headers: { 'Content-Type': 'text/plain' } });
+        console.error('[eSSL ADMS Listener] Processing error');
+        return textResponse('Internal Server Error', 500);
     }
 }

@@ -40,7 +40,7 @@ interface SelfieCaptureProps {
     faceEmbedding?: number[] | null
     onCaptured: (result: SelfieResult) => void
     onVerified: (result: { matched: boolean; similarity: number }) => void
-    onSubmitAttendance: () => Promise<void>
+    onSubmitAttendance: (attendanceProof: string) => Promise<void>
     onBack?: () => void
     mode?: 'check_in' | 'check_out'
 }
@@ -205,7 +205,15 @@ export function SelfieCapture({
         try {
             // Hard timeout — 45s allows for model loading + inference on slow mobile devices
             const result = await Promise.race([
-                FaceVerificationService.compareFaces(imageToVerify, profileImageUrl, undefined, faceEmbedding, challenge, frames),
+                FaceVerificationService.compareFaces(
+                    imageToVerify,
+                    profileImageUrl,
+                    undefined,
+                    faceEmbedding,
+                    challenge,
+                    frames,
+                    mode === 'check_out' ? 'clock_out' : 'clock_in'
+                ),
                 new Promise<never>((_, reject) =>
                     setTimeout(() => reject(new Error('TIMEOUT')), 45000)
                 ),
@@ -234,6 +242,11 @@ export function SelfieCapture({
                 setErrorMessage('The server accepted the match but did not return its canonical portrait. Please retake your selfie.')
                 return
             }
+            if (!result.attendanceProof) {
+                setStatus('verify_failed')
+                setErrorMessage('The server did not issue an attendance authorization. Please try again.')
+                return
+            }
             setProcessedPortrait(result.canonicalPortraitDataUrl)
 
             // Verification passed — now submit attendance
@@ -241,7 +254,7 @@ export function SelfieCapture({
             setApiStatus('pending')
 
             try {
-                await onSubmitAttendance()
+                await onSubmitAttendance(result.attendanceProof)
                 setApiStatus('success')
             } catch (error: any) {
                 setApiStatus('error')
@@ -275,7 +288,7 @@ export function SelfieCapture({
                 setErrorMessage(errMsg || 'Face verification failed. Please retake your selfie.')
             }
         }
-    }, [profileImageUrl, faceEmbedding, onSubmitAttendance, stopCamera, readImageDimensions])
+    }, [profileImageUrl, faceEmbedding, mode, onSubmitAttendance, stopCamera, readImageDimensions])
 
     // Capture a natural frame; the server owns face crops, alignment, and identity decisions.
     const capturePhoto = useCallback(() => {

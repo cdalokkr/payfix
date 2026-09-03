@@ -55,6 +55,25 @@ export function formatDateIST(date: Date): string {
 }
 
 /**
+ * Parse a biometric device timestamp. Device protocols commonly omit an
+ * offset and report the tenant's local time; interpret that form as IST
+ * instead of letting the server's timezone silently change the business date.
+ */
+export function parseBiometricTimestamp(value: string): Date {
+    const trimmed = value.trim()
+    const localDeviceTimestamp = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2})?$/.test(trimmed)
+    const date = new Date(
+        localDeviceTimestamp
+            ? `${trimmed.replace(' ', 'T')}+05:30`
+            : trimmed
+    )
+    if (Number.isNaN(date.getTime())) {
+        throw new Error('Invalid biometric device timestamp')
+    }
+    return date
+}
+
+/**
  * Get month start and end dates in IST timezone
  */
 export function getMonthRangeIST(year?: number, month?: number): { start: string; end: string } {

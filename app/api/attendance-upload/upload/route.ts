@@ -3,7 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { db } from '@/lib/db'
 import { profiles } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
-import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
 import { AttendanceService } from '@/lib/services/attendance.service'
 import { SalaryService } from '@/lib/services/salary.service'
 
@@ -52,10 +52,19 @@ export async function POST(request: NextRequest) {
 
         // Parse the Excel file
         const arrayBuffer = await file.arrayBuffer()
-        const workbook = XLSX.read(arrayBuffer, { type: 'array', cellDates: true })
-        const sheetName = workbook.SheetNames[0]
-        const worksheet = workbook.Sheets[sheetName]
-        const rawData: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true })
+        const workbook = new ExcelJS.Workbook()
+        await workbook.xlsx.load(arrayBuffer)
+        const worksheet = workbook.worksheets[0]
+        if (!worksheet) {
+            return NextResponse.json({ error: 'Workbook has no worksheets' }, { status: 400 })
+        }
+        const rawData: any[][] = []
+        worksheet.eachRow({ includeEmpty: true }, (row) => {
+            const values = row.values
+            if (Array.isArray(values)) {
+                rawData.push(values.slice(1).map(excelCellValue))
+            }
+        })
 
         if (rawData.length < 2) {
             return NextResponse.json({ error: 'File is empty or has no data rows' }, { status: 400 })
@@ -162,10 +171,8 @@ function normalizeExcelDate(value: any): string | null {
     // Excel serial number (numeric — typically 5 digits for modern dates, 4 for older)
     const num = Number(str)
     if (!isNaN(num) && num > 1000 && num < 100000) {
-        const parsed = XLSX.SSF.parse_date_code(num)
-        if (parsed && parsed.y) {
-            return `${parsed.y}-${String(parsed.m).padStart(2, '0')}-${String(parsed.d).padStart(2, '0')}`
-        }
+            const parsed = new Date(Date.UTC(1899, 11, 30) + num * 24 * 60 * 60 * 1000)
+            return `${parsed.getUTCFullYear()}-${String(parsed.getUTCMonth() + 1).padStart(2, '0')}-${String(parsed.getUTCDate()).padStart(2, '0')}`
     }
 
     // DD/MM/YYYY or MM/DD/YYYY — attempt parse
@@ -179,6 +186,18 @@ function normalizeExcelDate(value: any): string | null {
     }
 
     return null
+}
+
+function excelCellValue(value: unknown): unknown {
+    if (value && typeof value === 'object' && 'result' in value) {
+        return (value as { result: unknown }).result
+    }
+    if (value && typeof value === 'object' && 'richText' in value) {
+        return (value as { richText: Array<{ text: string }> }).richText
+            .map(part => part.text)
+            .join('')
+    }
+    return value
 }
 
 /**

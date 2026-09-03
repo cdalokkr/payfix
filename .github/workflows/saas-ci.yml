@@ -22,6 +22,9 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v5
 
+      - name: Validate post-merge dependency setup
+        run: node scripts/validate-post-merge.mjs
+
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:

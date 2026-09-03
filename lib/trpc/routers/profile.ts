@@ -60,27 +60,10 @@ export const profileRouter = router({
       avatarStatus: z.enum(['default', 'custom']).optional().default('custom'),
     }))
     .mutation(async ({ ctx, input }) => {
-      // Security check: only allow updating own profile picture
-      if (input.userId !== ctx.profile.id && ctx.profile.role !== 'admin') {
-        throw new TRPCError({
-          code: 'UNAUTHORIZED',
-          message: 'Unauthorized to update this profile picture'
-        })
-      }
-
-      try {
-        return await ProfileService.updateProfilePicture({
-          userId: input.userId,
-          avatarUrl: input.avatarUrl,
-          avatarStatus: input.avatarStatus,
-          actorId: ctx.profile.id
-        })
-      } catch (err: any) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: err.message || 'Failed to update profile picture'
-        })
-      }
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: 'Profile photos must be submitted through the approval workflow.'
+      })
     }),
 
   invalidateCache: protectedProcedure
@@ -266,28 +249,9 @@ export const profileRouter = router({
       embedding512: z.array(z.number()).length(512).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      try {
-        const updateData: any = {};
-        if (input.embedding.length === 512) {
-          updateData.face_embedding_512 = input.embedding;
-        } else if (input.embedding.length === 128) {
-          updateData.face_embedding = input.embedding;
-        }
-        if (input.embedding512 && input.embedding512.length === 512) {
-          updateData.face_embedding_512 = input.embedding512;
-        }
-
-        await ctx.db
-          .update(profiles)
-          .set(updateData)
-          .where(eq(profiles.id, ctx.profile.id));
-
-        return { success: true, message: 'Face embedding saved successfully.' };
-      } catch (err: any) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: err.message || 'Failed to save face embedding',
-        });
-      }
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: 'Biometric templates can only be created by the approved enrollment workflow.'
+      })
     }),
 });

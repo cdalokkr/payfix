@@ -17,11 +17,24 @@ export function ExportActions({ month, year, summaryData }: ExportActionsProps) 
   const handleExportExcel = async () => {
     try {
       setIsExportingExcel(true)
-      const XLSX = await import('xlsx')
-      const worksheet = XLSX.utils.json_to_sheet(summaryData)
-      const workbook = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(workbook, worksheet, `Payroll_${month}_${year}`)
-      XLSX.writeFile(workbook, `Payfix_Payroll_${month}_${year}.xlsx`)
+      const ExcelJS = (await import('exceljs')).default
+      const workbook = new ExcelJS.Workbook()
+      const worksheet = workbook.addWorksheet(`Payroll_${month}_${year}`)
+      const rows = summaryData.map((row) => Object.values(row))
+      const headers = summaryData.length > 0 ? Object.keys(summaryData[0]) : []
+      worksheet.addRow(headers)
+      rows.forEach((row) => worksheet.addRow(row))
+      worksheet.getRow(1).font = { bold: true }
+      const buffer = await workbook.xlsx.writeBuffer()
+      const blob = new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `Payfix_Payroll_${month}_${year}.xlsx`
+      link.click()
+      URL.revokeObjectURL(url)
     } catch (err) {
       console.error('[EXPORT] Failed to export Excel:', err)
     } finally {

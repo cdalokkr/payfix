@@ -3,3 +3,5 @@
 - [Tenant schema safety](tenant-schema-safety.md) — reconcile tenant structure only; prefer tenant_primary and use public only as a read-only fallback.
 - [Nested GitHub app](nested-github-app.md) — the Payfix app lives under the workspace’s payfix/ directory, while GitHub treats that directory as repository root.
 - [GitHub blob publishing](github-blob-publishing.md) — use direct file reads for large blobs; shell output can truncate or corrupt Git Data API uploads.
+- [Drizzle type resolution](drizzle-peer-context.md) — nested workspace package links can create a second peer instance; pin compiler imports to the root dependency context.
+- [Replit deployment config](replit-deployment-config.md) — `.replit` changes require schema validation through the workspace configuration flow, not direct edits.

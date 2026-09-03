@@ -2,6 +2,7 @@
   "name": "my-fullstack-app",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.26.1",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
@@ -10,7 +11,7 @@
     "start": "next start",
     "lint": "eslint --max-warnings=0",
     "typecheck": "tsc --noEmit",
-    "test": "pnpm run test:saas-environment && NEXT_PUBLIC_SUPABASE_URL=https://unit-test.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=unit-test-anon-key pnpm run validate:test-environment && jest",
+    "test": "pnpm run test:post-merge && pnpm run test:saas-environment && pnpm run test:release-gate && NEXT_PUBLIC_SUPABASE_URL=https://unit-test.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=unit-test-anon-key pnpm run validate:test-environment && jest",
     "test:e2e:instant": "playwright test e2e/instant-navigation.spec.ts",
     "test:watch": "jest --watch",
     "test:saas-migrations": "node --test scripts/validate-saas-migrations.node-test.mjs",
@@ -32,6 +33,8 @@
     "functions:serve": "supabase functions serve",
     "functions:deploy": "supabase functions deploy",
     "test:saas-environment": "node --test scripts/validate-test-environment.node-test.mjs",
+    "test:post-merge": "node --test scripts/validate-post-merge.node-test.mjs",
+    "test:release-gate": "node --test scripts/deploy-production.node-test.mjs",
     "validate:test-environment": "node scripts/validate-test-environment.mjs"
   },
   "dependencies": {
@@ -87,7 +90,6 @@
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",
     "uuid": "^14.0.1",
-    "xlsx": "^0.18.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {

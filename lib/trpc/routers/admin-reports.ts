@@ -5,8 +5,18 @@
 import { z } from 'zod'
 import { router, adminProcedure, protectedProcedure } from '../server'
 import { profiles, activities, attendance, userStatusHistory, leaves, designations, officeSettings, officeClosures } from '@/lib/db/schema'
-import { eq, and, gte, lte, count, sql, desc, or, ilike, ne, isNull, notInArray, between } from 'drizzle-orm'
+import { eq, and, gte, lte, lt, count, sql, desc, or, ilike, ne, isNull, notInArray, between } from 'drizzle-orm'
 import { eachDayOfInterval, parseISO, isWithinInterval, getDay, format } from 'date-fns'
+
+// Date-only values from the report UI represent a whole local calendar day.
+// Treating them as midnight UTC made the selected end day disappear in many
+// timezones. Timestamp ranges use an exclusive end boundary.
+function reportDate(value: string, endOfDay = false): Date {
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value)
+  if (!dateOnly) return new Date(value)
+  const [year, month, day] = value.split('-').map(Number)
+  return new Date(year, month - 1, day + (endOfDay ? 1 : 0))
+}
 
 export const adminReportsRouter = router({
   // Get comprehensive reports data for admin
@@ -26,9 +36,9 @@ export const adminReportsRouter = router({
 
       const now = new Date()
       const startDate = input.startDate
-        ? new Date(input.startDate)
+        ? reportDate(input.startDate)
         : new Date(now.getTime() - input.days * 24 * 60 * 60 * 1000)
-      const endDate = input.endDate ? new Date(input.endDate) : now
+      const endDate = input.endDate ? reportDate(input.endDate, true) : now
 
       const todayStart = new Date()
       todayStart.setHours(0, 0, 0, 0)
@@ -63,7 +73,7 @@ export const adminReportsRouter = router({
         ctx.db.query.activities.findMany({
           where: and(
             gte(activities.created_at, startDate),
-            lte(activities.created_at, endDate)
+            lt(activities.created_at, endDate)
           ),
           columns: { activity_type: true, user_id: true }
         }),
@@ -337,8 +347,8 @@ export const adminReportsRouter = router({
       if (!profileId) throw new Error('Unauthorized')
 
       const now = new Date()
-      const startDate = input.startDate ? new Date(input.startDate) : new Date(now.getTime() - input.days * 24 * 60 * 60 * 1000)
-      const endDate = input.endDate ? new Date(input.endDate) : now
+      const startDate = input.startDate ? reportDate(input.startDate) : new Date(now.getTime() - input.days * 24 * 60 * 60 * 1000)
+      const endDate = input.endDate ? reportDate(input.endDate, true) : now
 
       const todayStart = new Date()
       todayStart.setHours(0, 0, 0, 0)
@@ -561,8 +571,8 @@ export const adminReportsRouter = router({
         }
       }
 
-      if (input.startDate) filters.push(gte(activities.created_at, new Date(input.startDate)))
-      if (input.endDate) filters.push(lte(activities.created_at, new Date(input.endDate)))
+      if (input.startDate) filters.push(gte(activities.created_at, reportDate(input.startDate)))
+      if (input.endDate) filters.push(lt(activities.created_at, reportDate(input.endDate, true)))
 
       if (input.module) {
         if (Array.isArray(input.module)) {
@@ -675,8 +685,8 @@ export const adminReportsRouter = router({
           filters.push(eq(activities.activity_type, input.activityType as any))
         }
       }
-      if (input.startDate) filters.push(gte(activities.created_at, new Date(input.startDate)))
-      if (input.endDate) filters.push(lte(activities.created_at, new Date(input.endDate)))
+      if (input.startDate) filters.push(gte(activities.created_at, reportDate(input.startDate)))
+      if (input.endDate) filters.push(lt(activities.created_at, reportDate(input.endDate, true)))
 
       const where = and(...filters)
 
@@ -759,11 +769,12 @@ export const adminReportsRouter = router({
     .input(z.object({
       startDate: z.string().optional(),
       endDate: z.string().optional(),
+      limit: z.number().int().min(1).max(5000).default(1000),
     }))
     .query(async ({ ctx, input }) => {
       let filters: any[] = []
-      if (input.startDate) filters.push(gte(activities.created_at, new Date(input.startDate)))
-      if (input.endDate) filters.push(lte(activities.created_at, new Date(input.endDate)))
+      if (input.startDate) filters.push(gte(activities.created_at, reportDate(input.startDate)))
+      if (input.endDate) filters.push(lt(activities.created_at, reportDate(input.endDate, true)))
 
       const data = await ctx.db.query.activities.findMany({
         where: filters.length > 0 ? and(...filters) : undefined,
@@ -771,7 +782,7 @@ export const adminReportsRouter = router({
           profile: true
         },
         orderBy: [desc(activities.created_at)],
-        limit: 1000
+        limit: input.limit
       })
 
       return data || []
@@ -798,7 +809,8 @@ export const adminReportsRouter = router({
           last_name: true,
           mobile_no: true,
           role: true,
-        }
+        },
+        limit: 5000
       })
 
       // Get all attendance records in date range
@@ -916,6 +928,7 @@ export const adminReportsRouter = router({
       startDate: z.string(),
       endDate: z.string(),
       profileId: z.string().uuid().optional(),
+      limit: z.number().int().min(1).max(10000).default(10000),
     }))
     .query(async ({ ctx, input }) => {
       const filters = [
@@ -934,7 +947,8 @@ export const adminReportsRouter = router({
             columns: { full_name: true, first_name: true, last_name: true }
           }
         },
-        orderBy: [desc(attendance.date)]
+          orderBy: [desc(attendance.date)],
+          limit: input.limit
       })
 
       // Get office settings for extra hours calculation
