@@ -5,3 +5,4 @@
 - [GitHub blob publishing](github-blob-publishing.md) — use direct file reads for large blobs; shell output can truncate or corrupt Git Data API uploads.
 - [Drizzle type resolution](drizzle-peer-context.md) — nested workspace package links can create a second peer instance; pin compiler imports to the root dependency context.
 - [Replit deployment config](replit-deployment-config.md) — `.replit` changes require schema validation through the workspace configuration flow, not direct edits.
+- [Vercel branch URLs](vercel-branch-urls.md) — `NEXT_PUBLIC_APP_URL` is optional; main, develop, and feature deployments use Vercel’s automatic HTTPS URLs.
