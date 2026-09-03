@@ -26,6 +26,9 @@ jest.mock('../lib/db/master-connection', () => ({
                 findMany: jest.fn(),
             },
         },
+        insert: jest.fn(() => ({
+            values: jest.fn().mockResolvedValue([]),
+        })),
     },
 }));
 
@@ -38,6 +41,7 @@ const mockMasterDb = jest.requireMock('../lib/db/master-connection').masterDb as
             findMany: jest.Mock;
         };
     };
+    insert: jest.Mock;
 };
 
 function queryText(query: unknown): string {
@@ -171,6 +175,7 @@ describe('tenant profile ownership backfill', () => {
         expect(profiles).toEqual(before);
         expect(mockCentralDb.execute.mock.calls.some(([query]) => queryText(query).includes('UPDATE')))
             .toBe(false);
+        expect(mockMasterDb.insert).not.toHaveBeenCalled();
     });
 
     it('fills only NULL ownership, preserves conflicts, and exits non-zero', async () => {
@@ -204,6 +209,22 @@ describe('tenant profile ownership backfill', () => {
         ]);
         expect(database.execute.mock.calls.some(([query]) => queryText(query).includes('UPDATE')))
             .toBe(true);
+        expect(mockMasterDb.insert).toHaveBeenCalledTimes(1);
+        const auditValues = mockMasterDb.insert.mock.results[0].value.values.mock.calls[0][0];
+        expect(auditValues).toEqual([expect.objectContaining({
+            tenant_id: expectedTenant.id,
+            tenant_schema: expectedTenant.tenant_schema,
+            mode: 'apply',
+            status: 'partial',
+            total_profiles: 3,
+            matching_profiles: 2,
+            missing_tenant_id: 0,
+            conflicting_profiles: 1,
+            updated_profiles: 0,
+            unresolved_conflict_count: 1,
+        })]);
+        expect(JSON.stringify(auditValues)).not.toContain('email');
+        expect(JSON.stringify(auditValues)).not.toContain('database_url');
 
         const report = await runTenantProfileBackfill({
             apply: true,

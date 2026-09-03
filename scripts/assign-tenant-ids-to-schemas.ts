@@ -11,6 +11,7 @@
  */
 import './env-config';
 
+import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import postgres from 'postgres';
@@ -19,6 +20,7 @@ import { sql } from 'drizzle-orm';
 
 import { centralDb } from '../lib/db/index';
 import { masterDb } from '../lib/db/master-connection';
+import { tenantOwnershipBackfillAudit } from '../lib/db/master-schema';
 import { assertTenantSchemaName } from '../lib/tenant/schema-contract';
 
 const UUID_PATTERN =
@@ -63,6 +65,8 @@ export interface TenantProfileBackfillReport {
     tenants: TenantProfileBackfillTenantReport[];
 }
 
+type TenantOwnershipAuditStatus = 'verified' | 'partial' | 'failed';
+
 type Database = {
     execute: (query: any) => Promise<any[]>;
     transaction?: <T>(callback: (transaction: Database) => Promise<T>) => Promise<T>;
@@ -78,6 +82,59 @@ type TenantRecord = {
 
 function numberValue(value: unknown): number {
     return Number(value || 0);
+}
+
+function auditStatus(report: TenantProfileBackfillTenantReport): TenantOwnershipAuditStatus {
+    if (report.status === 'error'
+        || report.status === 'missing_schema'
+        || report.status === 'missing_profiles'
+        || report.status === 'missing_column') {
+        return 'failed';
+    }
+
+    if (report.status === 'conflicts' || report.status === 'missing') {
+        return 'partial';
+    }
+
+    return 'verified';
+}
+
+function runAuditStatus(reports: TenantProfileBackfillTenantReport[]): TenantOwnershipAuditStatus {
+    if (reports.some((report) => auditStatus(report) === 'failed')) {
+        return 'failed';
+    }
+    if (reports.some((report) => auditStatus(report) === 'partial')) {
+        return 'partial';
+    }
+    return 'verified';
+}
+
+async function persistApplyAudit(
+    reports: TenantProfileBackfillTenantReport[],
+    startedAt: string,
+    completedAt: string,
+): Promise<void> {
+    if (reports.length === 0) {
+        return;
+    }
+
+    const runId = randomUUID();
+    const status = runAuditStatus(reports);
+    await masterDb.insert(tenantOwnershipBackfillAudit).values(reports.map((report) => ({
+        run_id: runId,
+        tenant_id: report.tenantId,
+        tenant_schema: report.schemaName,
+        started_at: new Date(startedAt),
+        completed_at: new Date(completedAt),
+        mode: 'apply',
+        status,
+        total_profiles: report.totalProfiles,
+        matching_profiles: report.matchingProfiles,
+        missing_tenant_id: report.missingTenantId,
+        conflicting_profiles: report.conflictingProfiles,
+        updated_profiles: report.updatedProfiles,
+        unresolved_conflict_count: report.conflictingProfiles,
+    })));
 }
 
 function parseArgs(args: string[]): TenantProfileBackfillOptions {
@@ -346,6 +403,10 @@ export async function runTenantProfileBackfill(
             ),
         tenants: tenantReports,
     };
+
+    if (options.apply) {
+        await persistApplyAudit(report.tenants, report.startedAt, report.completedAt);
+    }
 
     if (options.reportPath) {
         const reportPath = resolve(options.reportPath);
