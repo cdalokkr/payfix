@@ -6,3 +6,4 @@
 - [Drizzle type resolution](drizzle-peer-context.md) — nested workspace package links can create a second peer instance; pin compiler imports to the root dependency context.
 - [Replit deployment config](replit-deployment-config.md) — `.replit` changes require schema validation through the workspace configuration flow, not direct edits.
 - [Vercel branch URLs](vercel-branch-urls.md) — `NEXT_PUBLIC_APP_URL` is optional; main, develop, and feature deployments use Vercel’s automatic HTTPS URLs.
+- [SaaS CI test fixtures](saas-ci-test-fixtures.md) — biometric proof tests need an explicit non-production `SESSION_SECRET` because some proofs are created during test module setup.
