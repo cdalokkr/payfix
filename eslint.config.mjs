@@ -25,7 +25,8 @@ export default defineConfig([
     },
   },
   globalIgnores([
-    '.next/**',
+    '**/.next/**',
+    '**/dist/**',
     'out/**',
     'build/**',
     'next-env.d.ts',

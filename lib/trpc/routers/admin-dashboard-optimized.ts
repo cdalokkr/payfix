@@ -107,7 +107,9 @@ export const adminDashboardRouter = router({
         // Check local request cache first (including concurrent in-progress promises)
         if (input.enableCache && input.priority === 'speed') {
           const cached = requestCache.get(cacheKey)
-          if (cached && (Date.now() < cached.expiry || cached.promise)) {
+          // An expired entry must not win over a fresh request.  The promise is
+          // useful for deduplication only while the entry is still alive.
+          if (cached && Date.now() < cached.expiry) {
             metrics.cacheHit = true
             
             // Wait for in-progress promise or reuse cached data

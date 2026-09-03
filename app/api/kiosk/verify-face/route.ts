@@ -261,6 +261,7 @@ export async function POST(request: NextRequest) {
                         profileId: best.profile.id,
                         email: best.profile.email,
                         localDate,
+                        source: 'kiosk',
                     })
                     : await AttendanceService.clockIn({
                         profileId: best.profile.id,

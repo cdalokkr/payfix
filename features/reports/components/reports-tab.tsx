@@ -166,12 +166,12 @@ const REPORTS: ReportDefinition[] = [
         fetchData: async (role, filters, utils) => {
             const activities = role === 'admin'
                 ? await utils.admin.reports.getAllActivities.fetch({
-                    startDate: filters.dateRange?.from?.toISOString(),
-                    endDate: filters.dateRange?.to?.toISOString(),
+                    startDate: filters.dateRange?.from ? formatDate(filters.dateRange.from, 'yyyy-MM-dd') : undefined,
+                    endDate: filters.dateRange?.to ? formatDate(filters.dateRange.to, 'yyyy-MM-dd') : undefined,
                 })
                 : await utils.moderator.reports.getAllActivities.fetch({
-                    startDate: filters.dateRange?.from?.toISOString(),
-                    endDate: filters.dateRange?.to?.toISOString(),
+                    startDate: filters.dateRange?.from ? formatDate(filters.dateRange.from, 'yyyy-MM-dd') : undefined,
+                    endDate: filters.dateRange?.to ? formatDate(filters.dateRange.to, 'yyyy-MM-dd') : undefined,
                 })
 
             if (!activities || activities.length === 0) {
@@ -274,12 +274,12 @@ const REPORTS: ReportDefinition[] = [
             }
             const result = role === 'admin'
                 ? await utils.admin.reports.getAttendanceSummaryReport.fetch({
-                    startDate: filters.dateRange.from.toISOString(),
-                    endDate: filters.dateRange.to.toISOString(),
+                    startDate: formatDate(filters.dateRange.from, 'yyyy-MM-dd'),
+                    endDate: formatDate(filters.dateRange.to, 'yyyy-MM-dd'),
                 })
                 : await utils.moderator.reports.getAttendanceSummaryReport.fetch({
-                    startDate: filters.dateRange.from.toISOString(),
-                    endDate: filters.dateRange.to.toISOString(),
+                    startDate: formatDate(filters.dateRange.from, 'yyyy-MM-dd'),
+                    endDate: formatDate(filters.dateRange.to, 'yyyy-MM-dd'),
                 })
 
             if (!result.data || result.data.length === 0) {
@@ -324,13 +324,13 @@ const REPORTS: ReportDefinition[] = [
             }
             const result = role === 'admin'
                 ? await utils.admin.reports.getDetailedAttendanceReport.fetch({
-                    startDate: filters.dateRange.from.toISOString(),
-                    endDate: filters.dateRange.to.toISOString(),
+                    startDate: formatDate(filters.dateRange.from, 'yyyy-MM-dd'),
+                    endDate: formatDate(filters.dateRange.to, 'yyyy-MM-dd'),
                     profileId: filters.selectedEmployee?.id,
                 })
                 : await utils.moderator.reports.getDetailedAttendanceReport.fetch({
-                    startDate: filters.dateRange.from.toISOString(),
-                    endDate: filters.dateRange.to.toISOString(),
+                    startDate: formatDate(filters.dateRange.from, 'yyyy-MM-dd'),
+                    endDate: formatDate(filters.dateRange.to, 'yyyy-MM-dd'),
                     profileId: filters.selectedEmployee?.id,
                 })
 

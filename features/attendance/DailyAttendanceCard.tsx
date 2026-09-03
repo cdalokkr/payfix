@@ -9,6 +9,7 @@ import { toast } from "sonner"
 import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 import { useProfile } from "@/lib/context/profile-context"
+import { MobileAttendanceWizard } from "@/features/mobile/mobile-attendance-wizard"
 
 export function DailyAttendanceCard({ className }: { className?: string }) {
     const { profile } = useProfile()
@@ -34,34 +35,7 @@ export function DailyAttendanceCard({ className }: { className?: string }) {
     const [currentTime, setCurrentTime] = useState(new Date())
 
     // Optimistic state to show immediate button transitions
-    const [optimisticState, setOptimisticState] = useState<'idle' | 'clocked-in' | 'marked'>('idle')
-
-    const clockInMutation = trpc.attendance.clockIn.useMutation({
-        onMutate: () => {
-            setOptimisticState('clocked-in')
-        },
-        onSuccess: () => {
-            toast.success("Clocked in successfully")
-            utils.attendance.invalidate()
-        },
-        onError: (error) => {
-            setOptimisticState('idle')
-            toast.error(error.message)
-        }
-    })
-    const clockOutMutation = trpc.attendance.clockOut.useMutation({
-        onMutate: () => {
-            setOptimisticState('marked')
-        },
-        onSuccess: () => {
-            toast.success("Clocked out successfully")
-            utils.attendance.invalidate()
-        },
-        onError: (error) => {
-            setOptimisticState('clocked-in')
-            toast.error(error.message)
-        }
-    })
+    const [verificationAction, setVerificationAction] = useState<'clock_in' | 'clock_out' | null>(null)
 
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 1000)
@@ -69,16 +43,8 @@ export function DailyAttendanceCard({ className }: { className?: string }) {
     }, [])
 
     useEffect(() => {
-        setOptimisticState('idle')
-    }, [])
-
-    useEffect(() => {
-        if (attendance) {
-            if (!clockInMutation.isPending && !clockOutMutation.isPending) {
-                setOptimisticState('idle')
-            }
-        }
-    }, [attendance, clockInMutation.isPending, clockOutMutation.isPending])
+        setVerificationAction(null)
+    }, [todayStr])
 
     const normalizeDate = (d: unknown): string => {
         if (!d) return ''
@@ -93,7 +59,7 @@ export function DailyAttendanceCard({ className }: { className?: string }) {
     const pendingRecord = attendance?.find(r => !r.check_out && normalizeDate(r.date) === todayStr)
 
     // Multi-session state determination
-    const isClockedIn = optimisticState === 'clocked-in' || (optimisticState === 'idle' && !!pendingRecord)
+    const isClockedIn = !!pendingRecord
     const totalSessionsToday = todayRecord?.total_sessions || 0
     const workingHoursToday = todayRecord?.working_hours ? Number(todayRecord.working_hours).toFixed(1) : '0.0'
 
@@ -101,20 +67,28 @@ export function DailyAttendanceCard({ className }: { className?: string }) {
     const todayClosure = closures?.find(c => c.date === todayStr)
     const isTodayHoliday = !!todayClosure
 
-    const handleClockIn = async (isExtra: boolean = false) => {
-        try {
-            await clockInMutation.mutateAsync({ localDate: todayStr, isExtraDay: isExtra })
-        } catch (error: any) {
-            // Error handled in onError
-        }
+    const handleClockIn = () => {
+        setVerificationAction('clock_in')
     }
 
-    const handleClockOut = async () => {
-        try {
-            await clockOutMutation.mutateAsync({ localDate: todayStr })
-        } catch (error: any) {
-            // Error handled in onError
-        }
+    const handleClockOut = () => {
+        setVerificationAction('clock_out')
+    }
+
+    if (verificationAction && profile) {
+        return (
+            <MobileAttendanceWizard
+                action={verificationAction}
+                profileImageUrl={profile.avatar_url}
+                profileName={profile.full_name}
+                profileEmail={profile.email}
+                onComplete={() => {
+                    setVerificationAction(null)
+                    utils.attendance.invalidate()
+                }}
+                onCancel={() => setVerificationAction(null)}
+            />
+        )
     }
 
     return (
@@ -153,12 +127,11 @@ export function DailyAttendanceCard({ className }: { className?: string }) {
                         <div className="flex flex-col items-center gap-3">
                             <button
                                 onClick={handleClockOut}
-                                disabled={clockOutMutation.isPending}
+                                disabled={verificationAction !== null}
                                 className="group relative flex items-center gap-4 px-10 py-5 rounded-2xl border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 hover:border-orange-300 transition-all duration-300 shadow-xl shadow-orange-500/10 active:scale-95 disabled:opacity-50"
                             >
                                 <LogOut className="h-7 w-7 group-hover:rotate-12 transition-transform" />
                                 <span className="text-2xl font-extrabold uppercase tracking-tight">Office - Out</span>
-                                {clockOutMutation.isPending && <Loader2 className="h-5 w-5 animate-spin ml-2" />}
                             </button>
                             <div className="flex items-center gap-2">
                                 <Badge variant="outline" className="border-orange-300 text-orange-700 font-semibold text-xs">
@@ -188,15 +161,14 @@ export function DailyAttendanceCard({ className }: { className?: string }) {
                     ) : (
                         <div className="flex flex-col items-center gap-3">
                             <button
-                                onClick={() => handleClockIn(false)}
-                                disabled={clockInMutation.isPending}
+                                onClick={handleClockIn}
+                                disabled={verificationAction !== null}
                                 className="group relative flex items-center gap-4 px-10 py-5 rounded-2xl border border-green-200 bg-green-50 text-green-700 hover:bg-green-100 hover:border-green-300 transition-all duration-300 shadow-xl shadow-green-500/10 active:scale-95 disabled:opacity-50"
                             >
                                 <LogIn className="h-7 w-7 group-hover:-rotate-12 transition-transform" />
                                 <span className="text-2xl font-extrabold uppercase tracking-tight">
                                     {totalSessionsToday > 0 ? `Session #${totalSessionsToday + 1} - In` : 'Office - In'}
                                 </span>
-                                {clockInMutation.isPending && <Loader2 className="h-5 w-5 animate-spin ml-2" />}
                             </button>
 
                             {totalSessionsToday > 0 && (

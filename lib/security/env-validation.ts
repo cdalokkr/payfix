@@ -14,19 +14,19 @@ interface EnvVariable {
 const ENV_VARIABLES: EnvVariable[] = [
     {
         name: 'NEXT_PUBLIC_SUPABASE_URL',
-        required: true,
+        required: false,
         isSecret: false,
         description: 'Supabase project URL',
     },
     {
         name: 'NEXT_PUBLIC_SUPABASE_ANON_KEY',
-        required: true,
+        required: false,
         isSecret: false,
         description: 'Supabase anonymous key (public)',
     },
     {
         name: 'SUPABASE_SERVICE_ROLE_KEY',
-        required: true,
+        required: false,
         isSecret: true,
         description: 'Supabase service role key (server-only)',
     },
@@ -49,6 +49,33 @@ interface ValidationResult {
     errors: string[]
     warnings: string[]
     securityIssues: string[]
+}
+
+function isProductionApplicationUrl(value: string): boolean {
+    try {
+        const url = new URL(value)
+        const hostname = url.hostname.toLowerCase()
+        const localHostnames = new Set(['localhost', '127.0.0.1', '::1'])
+
+        return (
+            url.protocol === 'https:' &&
+            !url.username &&
+            !url.password &&
+            !localHostnames.has(hostname) &&
+            !hostname.endsWith('.local') &&
+            !hostname.endsWith('.replit.dev')
+        )
+    } catch {
+        return false
+    }
+}
+
+function isHttpsUrl(value: string): boolean {
+    try {
+        return new URL(value).protocol === 'https:'
+    } catch {
+        return false
+    }
 }
 
 /**
@@ -84,14 +111,21 @@ export function validateEnvironment(): ValidationResult {
     }
 
     // Check for accidentally exposed secrets
+    const intentionallyPublicKeyVariables = new Set([
+        'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+        'NEXT_PUBLIC_VAPID_PUBLIC_KEY',
+    ])
     const dangerousPatterns = [
         { pattern: /NEXT_PUBLIC_.*SECRET/i, message: 'Secret exposed with NEXT_PUBLIC_ prefix' },
-        { pattern: /NEXT_PUBLIC_.*KEY(?!.*ANON)/i, message: 'Non-anon key exposed with NEXT_PUBLIC_ prefix' },
+        { pattern: /NEXT_PUBLIC_.*KEY/i, message: 'Non-public key exposed with NEXT_PUBLIC_ prefix' },
         { pattern: /NEXT_PUBLIC_.*PASSWORD/i, message: 'Password exposed with NEXT_PUBLIC_ prefix' },
         { pattern: /NEXT_PUBLIC_.*TOKEN/i, message: 'Token exposed with NEXT_PUBLIC_ prefix' },
     ]
 
     for (const key of Object.keys(process.env)) {
+        if (intentionallyPublicKeyVariables.has(key)) {
+            continue
+        }
         for (const { pattern, message } of dangerousPatterns) {
             if (pattern.test(key)) {
                 securityIssues.push(`SECURITY RISK: ${message} - ${key}`)
@@ -99,11 +133,31 @@ export function validateEnvironment(): ValidationResult {
         }
     }
 
-    // Check NODE_ENV
+    // Supabase configuration is required in production. The application URL
+    // remains optional because Vercel supplies branch/deployment URLs
+    // automatically; applications should use relative URLs unless a custom
+    // public domain is explicitly configured.
     if (process.env.NODE_ENV === 'production') {
-        // Additional production checks
+        if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+            errors.push('NEXT_PUBLIC_SUPABASE_URL is required in production')
+        }
+        if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+            errors.push('NEXT_PUBLIC_SUPABASE_ANON_KEY is required in production')
+        }
         if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
             errors.push('SUPABASE_SERVICE_ROLE_KEY is required in production')
+        }
+        if (
+            process.env.NEXT_PUBLIC_SUPABASE_URL &&
+            !isHttpsUrl(process.env.NEXT_PUBLIC_SUPABASE_URL)
+        ) {
+            errors.push('NEXT_PUBLIC_SUPABASE_URL must use HTTPS in production')
+        }
+        if (
+            process.env.NEXT_PUBLIC_APP_URL &&
+            !isProductionApplicationUrl(process.env.NEXT_PUBLIC_APP_URL)
+        ) {
+            errors.push('NEXT_PUBLIC_APP_URL must be an HTTPS production URL')
         }
     }
 

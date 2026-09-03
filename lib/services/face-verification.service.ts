@@ -25,6 +25,7 @@ export interface FaceVerificationResult {
     alignedCropDataUrl?: string;
     canonicalPortraitDataUrl?: string;
     threshold?: number;
+    attendanceProof?: string;
     verification?: {
         faceCount: number;
         embeddingDimensions: number;
@@ -182,7 +183,8 @@ export const FaceVerificationService = {
         onDebugLog?: (log: string) => void,
         preSavedEmbedding?: number[] | Float32Array | null,
         livenessChallenge?: string,
-        livenessFrames?: string[]
+        livenessFrames?: string[],
+        attendanceAction?: 'clock_in' | 'clock_out'
     ): Promise<FaceVerificationResult> {
         const debugLog: string[] = [];
         const log = (msg: string) => {
@@ -202,6 +204,7 @@ export const FaceVerificationService = {
                     frames: livenessFrames?.length ? livenessFrames : [selfieDataUrl],
                     challenge: livenessChallenge,
                     biometricPipelineVersion: BIOMETRIC_CAPTURE_PIPELINE_VERSION,
+                    action: attendanceAction,
                 }),
                 signal: AbortSignal.timeout(30000),
             });
@@ -215,6 +218,7 @@ export const FaceVerificationService = {
                     debugLog,
                     isLive: apiData.is_live === true,
                     threshold: Number(apiData.threshold || 0),
+                    attendanceProof: typeof apiData.attendance_proof === 'string' ? apiData.attendance_proof : undefined,
                     verification: apiData.verification,
                     canonicalPortraitDataUrl: typeof apiData.canonical_portrait_base64 === 'string'
                         ? apiData.canonical_portrait_base64

@@ -5,6 +5,7 @@ import { tenants } from '@/lib/db/master-schema';
 import { tenantStorage } from '@/lib/tenant/store';
 import { employeeSettings, biometricDevices, biometricRawLogs, attendanceSessions } from '@/lib/db/schema';
 import { AttendanceService } from '@/lib/services/attendance.service';
+import { formatDateIST, parseBiometricTimestamp } from '@/lib/utils/date-utils';
 import { eq, and } from 'drizzle-orm';
 
 interface PunchLog {
@@ -66,13 +67,15 @@ export async function POST(req: NextRequest) {
                 where: eq(biometricDevices.serial_number, body.deviceId)
             });
 
-            if (device) {
-                await db.update(biometricDevices)
-                    .set({ last_sync_time: new Date(), status: 'active', updated_at: new Date() })
-                    .where(eq(biometricDevices.id, device.id));
+            if (!device) {
+                return NextResponse.json({ error: 'Unregistered device for workspace.' }, { status: 403 });
             }
 
-            const locationId = device?.location_id || null;
+            await db.update(biometricDevices)
+                .set({ last_sync_time: new Date(), status: 'active', updated_at: new Date() })
+                .where(eq(biometricDevices.id, device.id));
+
+            const locationId = device.location_id || null;
 
             for (const log of body.logs) {
                 try {
@@ -82,8 +85,8 @@ export async function POST(req: NextRequest) {
                     });
 
                     const profileId = settings?.profile_id || null;
-                    const punchTime = new Date(log.timestamp);
-                    const localDate = punchTime.toISOString().split('T')[0];
+                    const punchTime = parseBiometricTimestamp(log.timestamp);
+                    const localDate = formatDateIST(punchTime);
 
                     // 1. Record raw audit log
                     await db.insert(biometricRawLogs).values({
@@ -116,7 +119,8 @@ export async function POST(req: NextRequest) {
                         await AttendanceService.clockOut({
                             profileId,
                             email: 'biometric@device.local',
-                            localDate
+                            localDate,
+                            source: 'biometric',
                         });
                     } else if (!activeSession && (log.punchType === undefined || log.punchType === 0)) {
                         // Start new attendance session

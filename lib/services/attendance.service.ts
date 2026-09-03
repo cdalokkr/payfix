@@ -7,6 +7,7 @@ import { getLocalDateIST, getLocalTimeIST12Hour } from '@/lib/utils/date-utils'
 import { differenceInMinutes } from 'date-fns'
 
 import { tenantStorage } from '@/lib/tenant/store'
+import { consumeAttendanceProof } from '@/lib/biometric-attendance-proof'
 
 // ─ One-time flag per tenant schema — skips repeated CREATE TABLE IF NOT EXISTS round-trips
 const _attendanceSchemaEnsured = new Set<string>()
@@ -307,7 +308,8 @@ export class AttendanceService {
         source = 'mobile',
         deviceId,
         locationId,
-        selfieUrl
+        selfieUrl,
+        verificationProof
     }: {
         profileId: string
         fullName?: string
@@ -320,9 +322,20 @@ export class AttendanceService {
         deviceId?: string
         locationId?: string
         selfieUrl?: string
+        verificationProof?: string
     }) {
         await AttendanceService.ensureAttendanceSchema()
         const today = localDate || getLocalDateIST()
+        if (source === 'mobile') {
+            const tenantId = tenantStorage.getStore()?.tenantId
+            const proof = consumeAttendanceProof(verificationProof, {
+                subject: profileId,
+                tenantId: tenantId || '',
+                action: 'clock_in',
+                localDate: today,
+            })
+            if (!proof) throwAppError('FORBIDDEN', 'A fresh biometric verification is required before clocking in.')
+        }
         const dayOfWeek = new Date(today).getDay()
 
         const settings = await SmartCache.getOfficeSettingsCached()
@@ -442,7 +455,7 @@ export class AttendanceService {
                 session_number: currentTotalSessions,
                 check_in: now,
                 status: 'active',
-                source: source || 'mobile',
+                    source: validSource,
                 device_id: deviceId || null,
                 location_id: locationId || null,
                 selfie_url: selfieUrl || null,
@@ -469,87 +482,84 @@ export class AttendanceService {
         profileId,
         fullName,
         email,
-        localDate
+        localDate,
+        source = 'mobile',
+        verificationProof
     }: {
         profileId: string
         fullName?: string
         email: string
         localDate?: string
+        source?: string
+        verificationProof?: string
     }) {
         await AttendanceService.ensureAttendanceSchema()
         const today = localDate || getLocalDateIST()
+        if (source === 'mobile') {
+            const tenantId = tenantStorage.getStore()?.tenantId
+            const proof = consumeAttendanceProof(verificationProof, {
+                subject: profileId,
+                tenantId: tenantId || '',
+                action: 'clock_out',
+                localDate: today,
+            })
+            if (!proof) throwAppError('FORBIDDEN', 'A fresh biometric verification is required before clocking out.')
+        }
         const now = new Date()
 
-        // Find active session
-        const activeSession = await db.query.attendanceSessions.findFirst({
-            where: and(
-                eq(attendanceSessions.profile_id, profileId),
-                eq(attendanceSessions.status, 'active')
-            ),
-            orderBy: [desc(attendanceSessions.created_at)]
-        })
+        return await db.transaction(async (tx) => {
+            const activeSession = await tx.query.attendanceSessions.findFirst({
+                where: and(
+                    eq(attendanceSessions.profile_id, profileId),
+                    eq(attendanceSessions.date, today),
+                    eq(attendanceSessions.status, 'active')
+                ),
+                orderBy: [desc(attendanceSessions.created_at)]
+            })
+            const record = await tx.query.attendance.findFirst({
+                where: and(eq(attendance.profile_id, profileId), eq(attendance.date, today))
+            })
+            if (!record && !activeSession) {
+                throwAppError('NO_CLOCK_IN_FOUND', 'No clock-in record found to clock out.')
+            }
+            const attendanceId = activeSession?.attendance_id || record?.id
+            if (!attendanceId) throwAppError('DATABASE_ERROR', 'Attendance session is missing its parent record.')
 
-        const record = await db.query.attendance.findFirst({
-            where: and(
-                eq(attendance.profile_id, profileId),
-                eq(attendance.date, today)
-            )
-        })
+            if (activeSession) {
+                const diffMins = differenceInMinutes(now, new Date(activeSession.check_in))
+                await tx.update(attendanceSessions).set({
+                    check_out: now,
+                    working_hours: (diffMins / 60).toFixed(2),
+                    status: 'completed',
+                    updated_at: now
+                }).where(eq(attendanceSessions.id, activeSession.id))
+            }
 
-        if (!record && !activeSession) {
-            throwAppError('NO_CLOCK_IN_FOUND', 'No clock-in record found to clock out.')
-        }
-
-        const attendanceId = activeSession?.attendance_id || record?.id
-
-        if (activeSession) {
-            const diffMins = differenceInMinutes(now, new Date(activeSession.check_in))
-            const sessionHours = (diffMins / 60).toFixed(2)
-
-            await db.update(attendanceSessions).set({
-                check_out: now,
-                working_hours: sessionHours,
-                status: 'completed',
-                updated_at: now
-            }).where(eq(attendanceSessions.id, activeSession.id))
-        }
-
-        // Calculate cumulative working hours across all completed sessions for this parent record
-        let totalHoursStr = record?.working_hours || '0'
-        if (attendanceId) {
-            const completedSessions = await db.query.attendanceSessions.findMany({
+            const completedSessions = await tx.query.attendanceSessions.findMany({
                 where: and(
                     eq(attendanceSessions.attendance_id, attendanceId),
                     eq(attendanceSessions.status, 'completed')
                 )
             })
-
-            const totalMins = completedSessions.reduce((acc, s) => {
-                return acc + (s.working_hours ? Math.round(Number(s.working_hours) * 60) : 0)
-            }, 0)
-
-            totalHoursStr = (totalMins / 60).toFixed(2)
-        }
-
-        const [[data]] = await Promise.all([
-            db.update(attendance).set({
+            const totalMins = completedSessions.reduce((acc, session) =>
+                acc + (session.working_hours ? Math.round(Number(session.working_hours) * 60) : 0), 0)
+            const [data] = await tx.update(attendance).set({
                 check_out: now,
                 last_check_out: now,
-                working_hours: totalHoursStr,
+                working_hours: (totalMins / 60).toFixed(2),
                 current_session_status: 'checked_out',
                 updated_at: now
-            }).where(eq(attendance.id, attendanceId!)).returning(),
-            db.insert(activities).values({
+            }).where(eq(attendance.id, attendanceId)).returning()
+            if (!data) throwAppError('DATABASE_ERROR', 'Failed to update clock-out record')
+
+            await tx.insert(activities).values({
                 user_id: profileId,
                 activity_type: 'data_edit',
                 module: 'attendance',
                 description: `Clocked out at ${getLocalTimeIST12Hour()}`,
             })
-        ])
-
-        if (!data) throwAppError('DATABASE_ERROR', 'Failed to update clock-out record')
-
-        return data
+            return data
+        })
     }
 
 

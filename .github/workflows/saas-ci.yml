@@ -1,10 +1,9 @@
 name: SaaS CI
 
 on:
-  
+  push:
   pull_request:
-    branches:
-      - develop
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -21,6 +20,9 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
+
+      - name: Validate post-merge dependency setup
+        run: node scripts/validate-post-merge.mjs
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -51,6 +53,9 @@ jobs:
 
       - name: Test
         run: pnpm run test --runInBand
+        env:
+          # Test-only signing fixture; never used for deployments.
+          SESSION_SECRET: ci-only-test-session-secret
 
       - name: Build with Turbopack
         run: pnpm run build:turbopack

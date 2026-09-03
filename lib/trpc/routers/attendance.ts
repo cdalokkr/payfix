@@ -97,9 +97,13 @@ export const attendanceRouter = router({
             localDate: z.string().optional(),
             isExtraDay: z.boolean().optional(),
             latitude: z.number().optional(),
-            longitude: z.number().optional()
+            longitude: z.number().optional(),
+            attendanceProof: z.string().min(1)
         }).optional())
         .mutation(async ({ ctx, input }) => {
+            if (!input?.attendanceProof) {
+                throw new TRPCError({ code: 'FORBIDDEN', message: 'A fresh biometric verification is required before clocking in.' })
+            }
             const result = await AttendanceService.clockIn({
                 profileId: ctx.profile.id,
                 fullName: ctx.profile.full_name || undefined,
@@ -107,7 +111,8 @@ export const attendanceRouter = router({
                 localDate: input?.localDate,
                 isExtraDay: input?.isExtraDay,
                 latitude: input?.latitude,
-                longitude: input?.longitude
+                longitude: input?.longitude,
+                verificationProof: input.attendanceProof
             })
             // Invalidate dashboard cache immediately on server
             invalidateDashboardCache()
@@ -164,14 +169,19 @@ export const attendanceRouter = router({
 
     clockOut: protectedProcedure
         .input(z.object({
-            localDate: z.string().optional()
+            localDate: z.string().optional(),
+            attendanceProof: z.string().min(1)
         }).optional())
         .mutation(async ({ ctx, input }) => {
+            if (!input?.attendanceProof) {
+                throw new TRPCError({ code: 'FORBIDDEN', message: 'A fresh biometric verification is required before clocking out.' })
+            }
             const result = await AttendanceService.clockOut({
                 profileId: ctx.profile.id,
                 fullName: ctx.profile.full_name || undefined,
                 email: ctx.profile.email,
-                localDate: input?.localDate
+                localDate: input?.localDate,
+                verificationProof: input.attendanceProof
             })
             // Invalidate dashboard cache immediately on server
             invalidateDashboardCache()

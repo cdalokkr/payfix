@@ -95,7 +95,9 @@ export class ProfileService {
         if (firstName) updateData.first_name = firstName
         if (lastName) updateData.last_name = lastName
         if (middleName !== undefined) updateData.middle_name = middleName
-        if (avatarUrl !== undefined) updateData.avatar_url = avatarUrl
+        if (avatarUrl !== undefined) {
+            throwAppError('FORBIDDEN', 'Profile photos must be submitted through the approval workflow.')
+        }
         if (mobileNo !== undefined) updateData.mobile_no = mobileNo
         if (dateOfBirth !== undefined) updateData.date_of_birth = dateOfBirth
         if (sex !== undefined) updateData.sex = sex
@@ -147,6 +149,8 @@ export class ProfileService {
         avatarStatus?: 'default' | 'custom'
         actorId: string
     }) {
+        throwAppError('FORBIDDEN', 'Profile photos must be submitted through the approval workflow.')
+        /* istanbul ignore next -- retained as a compatibility signature */
         const [updatedProfile] = await db.update(profiles)
             .set({
                 avatar_url: avatarUrl,

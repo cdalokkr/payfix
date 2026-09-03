@@ -3,7 +3,6 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { db } from '@/lib/db'
 import { profiles, officeSettings, officeClosures } from '@/lib/db/schema'
 import { eq, and, gte, lte } from 'drizzle-orm'
-import * as XLSX from 'xlsx'
 import ExcelJS from 'exceljs'
 
 export async function GET(request: NextRequest) {
@@ -73,8 +72,7 @@ export async function GET(request: NextRequest) {
 
             buffer = await generateDailyTemplateExcelJS(employees, month, year, settings, closures)
         } else if (type === 'monthly') {
-            const workbook = generateMonthlyTemplate(employees, month, year)
-            buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' })
+            buffer = await generateMonthlyTemplate(employees, month, year)
         } else {
             return NextResponse.json({ error: 'Invalid type. Must be "daily" or "monthly"' }, { status: 400 })
         }
@@ -214,58 +212,40 @@ async function generateDailyTemplateExcelJS(
 }
 
 
-function generateMonthlyTemplate(
+async function generateMonthlyTemplate(
     employees: Array<{ id: string; full_name: string | null; email: string; designation: { name: string } | null }>,
     month: number,
     year: number
-): XLSX.WorkBook {
-    const workbook = XLSX.utils.book_new()
-
-    const rows: any[][] = []
-
-    // Header row
-    rows.push([
-        'Sr',
-        'Employee Name',
-        'Email',
-        'Designation',
-        'Total Present',
-        'Total Half Days',
-        'Total Absent',
-        'Total Leaves',
-        'Extra Days'
-    ])
-
-    employees.forEach((emp, index) => {
-        rows.push([
-            index + 1,
-            emp.full_name || '',
-            emp.email,
-            emp.designation?.name || '',
-            '', // Total Present
-            '', // Total Half Days
-            '', // Total Absent
-            '', // Total Leaves
-            ''  // Extra Days
-        ])
-    })
-
-    const worksheet = XLSX.utils.aoa_to_sheet(rows)
-
-    // Set column widths
-    worksheet['!cols'] = [
-        { wch: 5 },   // Sr
-        { wch: 25 },  // Employee Name
-        { wch: 30 },  // Email
-        { wch: 20 },  // Designation
-        { wch: 16 },  // Total Present
-        { wch: 16 },  // Total Half Days
-        { wch: 16 },  // Total Absent
-        { wch: 14 },  // Total Leaves
-        { wch: 14 },  // Extra Days
+): Promise<Buffer> {
+    const workbook = new ExcelJS.Workbook()
+    const worksheet = workbook.addWorksheet('Monthly Summary')
+    worksheet.columns = [
+        { header: 'Sr', key: 'sr', width: 5 },
+        { header: 'Employee Name', key: 'name', width: 25 },
+        { header: 'Email', key: 'email', width: 30 },
+        { header: 'Designation', key: 'designation', width: 20 },
+        { header: 'Total Present', key: 'present', width: 16 },
+        { header: 'Total Half Days', key: 'halfDays', width: 16 },
+        { header: 'Total Absent', key: 'absent', width: 16 },
+        { header: 'Total Leaves', key: 'leaves', width: 14 },
+        { header: 'Extra Days', key: 'extraDays', width: 14 },
     ]
 
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Monthly Summary')
+    employees.forEach((emp, index) => {
+        worksheet.addRow({
+            sr: index + 1,
+            name: emp.full_name || '',
+            email: emp.email,
+            designation: emp.designation?.name || '',
+            present: '',
+            halfDays: '',
+            absent: '',
+            leaves: '',
+            extraDays: '',
+        })
+    })
+
+    worksheet.getRow(1).font = { bold: true }
 
     // Create and append instructions worksheet
     const instructionRows = [
@@ -285,11 +265,12 @@ function generateMonthlyTemplate(
         [1, 'John Doe', 'john@company.com', 'Developer', 22, 2, 1, 1, 0]
     ]
 
-    const instructionsWorksheet = XLSX.utils.aoa_to_sheet(instructionRows)
-    instructionsWorksheet['!cols'] = [
-        { wch: 100 }
-    ]
-    XLSX.utils.book_append_sheet(workbook, instructionsWorksheet, 'Read Me Instructions')
+    const instructionsWorksheet = workbook.addWorksheet('Read Me Instructions')
+    instructionsWorksheet.columns = [{ header: 'Instructions', key: 'instruction', width: 100 }]
+    for (const [instruction] of instructionRows) {
+        instructionsWorksheet.addRow({ instruction })
+    }
+    instructionsWorksheet.getRow(1).font = { bold: true }
 
-    return workbook
+    return Buffer.from(await workbook.xlsx.writeBuffer())
 }
