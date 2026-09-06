@@ -2,8 +2,10 @@ import { PageErrorBoundary } from '@/components/ui/error-boundary'
 import { UserDashboardStreaming } from '@/components/dashboard/user-dashboard-streaming'
 import { getServerClient } from '@/lib/trpc/server-client'
 import { DASHBOARD_QUERY_PARAMS } from '@/lib/dashboard-config'
+import { connection } from 'next/server'
 
 export default async function ModeratorDashboardPage() {
+    await connection()
     let initialData = null
 
     try {

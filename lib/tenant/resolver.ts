@@ -63,11 +63,23 @@ export async function resolveTenant(hostname: string, forceRefresh = false): Pro
     }
 
     try {
+        const isMainDomain = 
+            host === mainDomain || 
+            host === `www.${mainDomain}` || 
+            host.endsWith('.vercel.app') ||
+            host === 'localhost' ||
+            host === '127.0.0.1' ||
+            host === '10.88.130.226';
+
         let tenantRecord;
         if (isSubdomain) {
             // Find by subdomain slug
             tenantRecord = await masterDb.query.tenants.findFirst({
                 where: eq(tenants.slug, slug),
+            });
+        } else if (isMainDomain) {
+            tenantRecord = await masterDb.query.tenants.findFirst({
+                where: eq(tenants.slug, 'primary'),
             });
         } else {
             // Find by custom domain mapping or matching slug directly (e.g. for local testing)
@@ -79,33 +91,20 @@ export async function resolveTenant(hostname: string, forceRefresh = false): Pro
             });
         }
 
-        // Fallback: If no tenant is resolved, check if it's a main domain / localhost / IP.
-        // If so, fall back to the 'primary' tenant context.
-        if (!tenantRecord) {
-            const isMainDomain = 
-                host === mainDomain || 
-                host === `www.${mainDomain}` || 
-                host.endsWith('.vercel.app') ||
-                host === 'localhost' ||
-                host === '127.0.0.1' ||
-                host === '10.88.130.226';
-
-            if (isMainDomain) {
-                tenantRecord = await masterDb.query.tenants.findFirst({
-                    where: eq(tenants.slug, 'primary'),
-                });
-            }
-        }
-
         if (!tenantRecord) {
             resolverCache.set(host, { data: null, expires: Date.now() + CACHE_TTL });
             return null;
         }
 
         // Retrieve white-label branding configurations
-        const brandingRecord = await masterDb.query.tenantBranding.findFirst({
-            where: eq(tenantBranding.tenant_id, tenantRecord.id),
-        });
+        let brandingRecord: any = null;
+        try {
+            brandingRecord = await masterDb.query.tenantBranding.findFirst({
+                where: eq(tenantBranding.tenant_id, tenantRecord.id),
+            });
+        } catch (brandingErr) {
+            console.warn('[Tenant Resolver] Failed to fetch branding, using defaults:', brandingErr);
+        }
 
         const tenantData: TenantMetadata = {
             id: tenantRecord.id,

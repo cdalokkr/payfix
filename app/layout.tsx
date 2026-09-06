@@ -39,12 +39,6 @@ export const viewport: Viewport = {
   maximumScale: 1,
 }
 
-// The root layout reads tenant branding from request headers. Mark it dynamic
-// explicitly so Next never attempts static rendering or cross-tenant shell
-// reuse for a request-scoped theme.
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
-
 export const metadata: Metadata = {
   title: {
     default: 'PayFix Attendance',
@@ -80,25 +74,51 @@ export const metadata: Metadata = {
 }
 
 import Script from 'next/script'
+import { Suspense } from 'react'
 
 import { ToastProvider } from "@/components/auth/ui/Toast"
 import { headers } from 'next/headers'
 
-export default async function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+const DEFAULT_THEME = { primary: '#4f46e5', secondary: '#0f172a', logo: '/logo.png' }
+
+function ThemeStyleTag({ theme }: { theme: typeof DEFAULT_THEME }) {
+  return (
+    <style
+      dangerouslySetInnerHTML={{
+        __html: `
+          :root {
+            --primary: ${theme.primary};
+            --sidebar-primary: ${theme.primary};
+            --ring: ${theme.primary}50;
+          }
+          .dark {
+            --primary: ${theme.primary};
+            --sidebar-primary: ${theme.primary};
+            --ring: ${theme.primary}50;
+          }
+        `,
+      }}
+    />
+  )
+}
+
+async function DynamicTenantTheme() {
   const headersList = await headers()
   const themeHeader = headersList.get('x-tenant-theme')
-  
-  let theme = { primary: '#4f46e5', secondary: '#0f172a', logo: '/logo.png' }
+  let theme = DEFAULT_THEME
   if (themeHeader) {
     try {
       theme = JSON.parse(themeHeader)
     } catch {}
   }
+  return <ThemeStyleTag theme={theme} />
+}
 
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -114,23 +134,10 @@ export default async function RootLayout({
             `,
           }}
         />
-        {/* Dynamic theme style overrides */}
-        <style
-          dangerouslySetInnerHTML={{
-            __html: `
-              :root {
-                --primary: ${theme.primary};
-                --sidebar-primary: ${theme.primary};
-                --ring: ${theme.primary}50;
-              }
-              .dark {
-                --primary: ${theme.primary};
-                --sidebar-primary: ${theme.primary};
-                --ring: ${theme.primary}50;
-              }
-            `,
-          }}
-        />
+        {/* Prerender default theme styles, then stream dynamic tenant overrides without blocking App Shell */}
+        <Suspense fallback={<ThemeStyleTag theme={DEFAULT_THEME} />}>
+          <DynamicTenantTheme />
+        </Suspense>
       </head>
       <body className={`${inter.variable} ${outfit.variable} font-sans antialiased`} suppressHydrationWarning={true}>
         <ThemeProvider

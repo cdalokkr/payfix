@@ -443,6 +443,7 @@ export function LoginForm() {
           Don&apos;t have an account?{" "}
           <Link
             href="/signup"
+            prefetch={true}
             className="font-semibold text-brand-primary hover:text-brand-hover transition-colors"
           >
             Sign up

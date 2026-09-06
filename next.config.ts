@@ -176,10 +176,13 @@ const nextConfig: NextConfig = {
     'fflate', // Compression library used by jspdf (uses Node Worker)
   ],
 
-  // Keep only supported, tenant-safe performance settings here. Cache
-  // Components and Partial Prefetching remain opt-in: authenticated layouts
-  // read request cookies/headers and the tenant key must be part of every
-  // cache identity before those features can be enabled safely.
+  // Next.js 16.3+ Cache Components & Instant SPA Partial Prefetching
+  cacheComponents: true,
+  partialPrefetching: true,
+
+  // React 19 Compiler for automatic component optimization & zero re-render overhead
+  reactCompiler: true,
+
   experimental: {
     // Optimize imports for tree-shaking heavy UI libraries
     optimizePackageImports: [

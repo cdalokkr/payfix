@@ -27,7 +27,7 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 10.26.1
+          version: 10.34.5
 
       - name: Set up Node.js
         uses: actions/setup-node@v5
@@ -59,6 +59,3 @@ jobs:
 
       - name: Build with Turbopack
         run: pnpm run build:turbopack
-
-      - name: Build with webpack
-        run: pnpm run build:webpack

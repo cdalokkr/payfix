@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import DesignationManagement from '@/features/users/components/designation-management'
 import { getServerClient } from '@/lib/trpc/server-client'
+import { connection } from 'next/server'
 
 export const metadata: Metadata = {
     title: 'Manage Designations - Admin Dashboard',
@@ -9,6 +10,7 @@ export const metadata: Metadata = {
 }
 
 export default async function DesignationsPage() {
+    await connection()
     let initialData: any = undefined
 
     try {

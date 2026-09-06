@@ -29,6 +29,15 @@ function roleToDashboardPath(role: string): string {
     }
 }
 
+// In-memory proxy profile cache to eliminate 1.5-2s repeated cross-schema queries
+interface CachedProxyProfile {
+    profile: any;
+    tenant: TenantMetadata | null;
+    expiresAt: number;
+}
+const proxyProfileCache = new Map<string, CachedProxyProfile>();
+const PROXY_PROFILE_CACHE_TTL = 60 * 1000; // 60s
+
 // ============================================
 // Main Proxy Function
 // ============================================
@@ -61,7 +70,7 @@ export async function proxy(request: NextRequest) {
     // The cookie is set when a user's profile is discovered in their actual tenant.
     const preferredSlug = queryTenant || cookieTenant;
     if (preferredSlug && preferredSlug !== 'primary') {
-        tenant = await resolveTenant(preferredSlug, true);
+        tenant = await resolveTenant(preferredSlug);
         if (tenant) {
             resolvedViaFallback = true;
             if (process.env.NODE_ENV === 'development') {
@@ -72,7 +81,7 @@ export async function proxy(request: NextRequest) {
 
     // Only resolve from hostname if no preferred fallback slug was resolved
     if (!tenant) {
-        tenant = await resolveTenant(hostname, true);
+        tenant = await resolveTenant(hostname);
     }
 
     // Redirect to clean URL if tenant was passed via query parameter to prevent URL cluttering
@@ -328,98 +337,152 @@ export async function proxy(request: NextRequest) {
         const tStart = performance.now()
         let authData: { user: any } | null = null
         try {
-            const { data } = await supabase.auth.getUser()
-            authData = data
+            const { data, error: authError } = await supabase.auth.getUser()
+            if (authError) {
+                // If refresh token is missing or rotated, clear stale session gracefully without noisy stack trace
+                if (authError.message?.includes('Refresh Token') || (authError as any).code === 'refresh_token_not_found') {
+                    authData = null
+                }
+            } else {
+                authData = data
+            }
         } catch (err) {
             console.error('[PROXY-AUTH] Error fetching user session:', err)
         }
         user = authData?.user || null
 
         if (user) {
-            // Fetch full profile (including designation) dynamically from tenant schema or public fallback
-            let dbProfile: any = null;
-
-            // 1. Check tenant-specific schema FIRST if tenant context exists
-            if (tenant && tenant.tenant_schema) {
-                const { data: rpcData, error: rpcError } = await supabase.rpc('get_profile_from_schema', {
-                    schema_name: tenant.tenant_schema,
-                    user_id: user.id
-                });
-                if (!rpcError && rpcData) {
-                    dbProfile = rpcData;
-                    if (process.env.NODE_ENV === 'development') {
-                        console.log(`[PROXY-AUTH] Profile resolved via tenant schema (${tenant.tenant_schema}) for user: ${user.id}`);
-                    }
-                } else if (rpcError) {
-                    console.error('[PROXY-RPC] Error calling get_profile_from_schema:', rpcError);
+            // Check in-memory cache first to avoid 1.5-2s repeated cross-schema queries
+            const cached = proxyProfileCache.get(user.id);
+            if (cached && Date.now() < cached.expiresAt) {
+                profile = cached.profile;
+                if (cached.tenant) {
+                    tenant = cached.tenant;
+                    requestHeaders.set('x-tenant-id', cached.tenant.id);
+                    requestHeaders.set('x-tenant-slug', cached.tenant.slug);
+                    requestHeaders.set('x-tenant-db-url', cached.tenant.database_url || '');
+                    requestHeaders.set('x-tenant-schema', cached.tenant.tenant_schema || '');
+                    requestHeaders.set('x-tenant-brand', cached.tenant.branding?.app_name || cached.tenant.company_name);
+                    requestHeaders.set('x-tenant-license-expires-at', cached.tenant.license_expires_at ? new Date(cached.tenant.license_expires_at).toISOString() : '');
+                    requestHeaders.set('x-tenant-theme', JSON.stringify({
+                        primary: cached.tenant.branding?.primary_color || '#4f46e5',
+                        secondary: cached.tenant.branding?.secondary_color || '#0f172a',
+                        logo: cached.tenant.branding?.logo_url || '/logo.png'
+                    }));
                 }
-            }
+                if (process.env.NODE_ENV === 'development') {
+                    console.log(`[PROXY-AUTH] ⚡ Profile cache hit for user ${user.id} in ${(performance.now() - tStart).toFixed(2)}ms`);
+                }
+            } else {
+                // Fetch full profile (including designation) dynamically from tenant schema or public fallback
+                let dbProfile: any = null;
 
-            // 2. Cross-schema scan fallback: If profile not found in current tenant schema,
-            // scan ALL active tenant schemas in a single DB round-trip via RPC.
-            if (!dbProfile) {
-                const { data: scanResult, error: scanError } = await supabase.rpc('find_profile_across_schemas', {
-                    target_user_id: user.id
-                });
+                // 1. FAST-PATH: If navigating to a superadmin route, check public.profiles FIRST
+                if (isSuperAdminRoute) {
+                    const { data: publicProfile } = await supabase
+                        .from('profiles')
+                        .select('*, designation:designations(*)')
+                        .eq('id', user.id)
+                        .maybeSingle();
 
-                if (!scanError && scanResult) {
-                    dbProfile = scanResult;
-                    if (process.env.NODE_ENV === 'development') {
-                        console.log(`[PROXY-AUTH] Cross-schema scan found profile in: ${scanResult.tenant_schema} (slug: ${scanResult.tenant_slug})`);
-                    }
-
-                    // CRITICAL: Override tenant context to the user's actual workspace.
-                    if (scanResult.tenant_slug && scanResult.tenant_slug !== tenant?.slug) {
-                        const discoveredTenant = await resolveTenant(scanResult.tenant_slug, true);
-                        if (discoveredTenant) {
-                            tenant = discoveredTenant;
-                            // Update request headers so downstream tRPC handlers use correct tenant
-                            requestHeaders.set('x-tenant-id', discoveredTenant.id);
-                            requestHeaders.set('x-tenant-slug', discoveredTenant.slug);
-                            requestHeaders.set('x-tenant-db-url', discoveredTenant.database_url || '');
-                            requestHeaders.set('x-tenant-schema', discoveredTenant.tenant_schema || '');
-                            requestHeaders.set('x-tenant-brand', discoveredTenant.branding?.app_name || discoveredTenant.company_name);
-                            requestHeaders.set('x-tenant-license-expires-at', discoveredTenant.license_expires_at ? new Date(discoveredTenant.license_expires_at).toISOString() : '');
-                            requestHeaders.set('x-tenant-theme', JSON.stringify({
-                                primary: discoveredTenant.branding?.primary_color || '#4f46e5',
-                                secondary: discoveredTenant.branding?.secondary_color || '#0f172a',
-                                logo: discoveredTenant.branding?.logo_url || '/logo.png'
-                            }));
-                            if (process.env.NODE_ENV === 'development') {
-                                console.log(`[PROXY-TENANT] Switched tenant context: primary → ${discoveredTenant.slug} (${discoveredTenant.tenant_schema}) for user ${user.id}`);
-                            }
+                    if (publicProfile?.role === 'super_admin') {
+                        dbProfile = publicProfile;
+                        if (process.env.NODE_ENV === 'development') {
+                            console.log(`[PROXY-AUTH] ⚡ Super Admin fast-path resolved via public.profiles for user: ${user.id}`);
                         }
                     }
-                } else if (scanError) {
-                    console.error('[PROXY-AUTH] Cross-schema scan RPC error:', scanError);
                 }
-            }
 
-            // 3. Check public.profiles LAST (for platform-wide super_admin who has no tenant profile)
-            if (!dbProfile) {
-                const { data: publicProfile } = await supabase
-                    .from('profiles')
-                    .select('*, designation:designations(*)')
-                    .eq('id', user.id)
-                    .maybeSingle();
-
-                if (publicProfile?.role === 'super_admin') {
-                    dbProfile = publicProfile;
-                    if (process.env.NODE_ENV === 'development') {
-                        console.log(`[PROXY-AUTH] Super Admin resolved via public.profiles for user: ${user.id}`);
+                // 2. Check tenant-specific schema FIRST if tenant context exists
+                if (!dbProfile && tenant && tenant.tenant_schema) {
+                    const { data: rpcData, error: rpcError } = await supabase.rpc('get_profile_from_schema', {
+                        schema_name: tenant.tenant_schema,
+                        user_id: user.id
+                    });
+                    if (!rpcError && rpcData) {
+                        dbProfile = rpcData;
+                        if (process.env.NODE_ENV === 'development') {
+                            console.log(`[PROXY-AUTH] Profile resolved via tenant schema (${tenant.tenant_schema}) for user: ${user.id}`);
+                        }
+                    } else if (rpcError) {
+                        console.error('[PROXY-RPC] Error calling get_profile_from_schema:', rpcError);
                     }
                 }
-            }
 
-            profile = profile || (dbProfile ? {
-                ...dbProfile,
-                designation: Array.isArray(dbProfile.designation)
-                    ? dbProfile.designation[0] || null
-                    : dbProfile.designation
-            } : null)
+                // 3. Cross-schema scan fallback: If profile not found in current tenant schema,
+                // scan ALL active tenant schemas in a single DB round-trip via RPC.
+                if (!dbProfile) {
+                    const { data: scanResult, error: scanError } = await supabase.rpc('find_profile_across_schemas', {
+                        target_user_id: user.id
+                    });
 
-            if (process.env.NODE_ENV === 'development') {
-                console.log(`[PROXY-AUTH] Fresh profile resolution for user ${user.id} took ${(performance.now() - tStart).toFixed(2)}ms`)
+                    if (!scanError && scanResult) {
+                        dbProfile = scanResult;
+                        if (process.env.NODE_ENV === 'development') {
+                            console.log(`[PROXY-AUTH] Cross-schema scan found profile in: ${scanResult.tenant_schema} (slug: ${scanResult.tenant_slug})`);
+                        }
+
+                        // CRITICAL: Override tenant context to the user's actual workspace.
+                        if (scanResult.tenant_slug && scanResult.tenant_slug !== tenant?.slug) {
+                            const discoveredTenant = await resolveTenant(scanResult.tenant_slug);
+                            if (discoveredTenant) {
+                                tenant = discoveredTenant;
+                                // Update request headers so downstream tRPC handlers use correct tenant
+                                requestHeaders.set('x-tenant-id', discoveredTenant.id);
+                                requestHeaders.set('x-tenant-slug', discoveredTenant.slug);
+                                requestHeaders.set('x-tenant-db-url', discoveredTenant.database_url || '');
+                                requestHeaders.set('x-tenant-schema', discoveredTenant.tenant_schema || '');
+                                requestHeaders.set('x-tenant-brand', discoveredTenant.branding?.app_name || discoveredTenant.company_name);
+                                requestHeaders.set('x-tenant-license-expires-at', discoveredTenant.license_expires_at ? new Date(discoveredTenant.license_expires_at).toISOString() : '');
+                                requestHeaders.set('x-tenant-theme', JSON.stringify({
+                                    primary: discoveredTenant.branding?.primary_color || '#4f46e5',
+                                    secondary: discoveredTenant.branding?.secondary_color || '#0f172a',
+                                    logo: discoveredTenant.branding?.logo_url || '/logo.png'
+                                }));
+                                if (process.env.NODE_ENV === 'development') {
+                                    console.log(`[PROXY-TENANT] Switched tenant context: primary → ${discoveredTenant.slug} (${discoveredTenant.tenant_schema}) for user ${user.id}`);
+                                }
+                            }
+                        }
+                    } else if (scanError) {
+                        console.error('[PROXY-AUTH] Cross-schema scan RPC error:', scanError);
+                    }
+                }
+
+                // 4. Check public.profiles fallback (for platform-wide super_admin who has no tenant profile)
+                if (!dbProfile && !isSuperAdminRoute) {
+                    const { data: publicProfile } = await supabase
+                        .from('profiles')
+                        .select('*, designation:designations(*)')
+                        .eq('id', user.id)
+                        .maybeSingle();
+
+                    if (publicProfile?.role === 'super_admin') {
+                        dbProfile = publicProfile;
+                        if (process.env.NODE_ENV === 'development') {
+                            console.log(`[PROXY-AUTH] Super Admin resolved via public.profiles for user: ${user.id}`);
+                        }
+                    }
+                }
+
+                profile = profile || (dbProfile ? {
+                    ...dbProfile,
+                    designation: Array.isArray(dbProfile.designation)
+                        ? dbProfile.designation[0] || null
+                        : dbProfile.designation
+                } : null)
+
+                if (profile) {
+                    proxyProfileCache.set(user.id, {
+                        profile,
+                        tenant,
+                        expiresAt: Date.now() + PROXY_PROFILE_CACHE_TTL
+                    });
+                }
+
+                if (process.env.NODE_ENV === 'development') {
+                    console.log(`[PROXY-AUTH] Fresh profile resolution for user ${user.id} took ${(performance.now() - tStart).toFixed(2)}ms`)
+                }
             }
         }
     }
@@ -457,6 +520,9 @@ export async function proxy(request: NextRequest) {
         //   Stale detection: if cookie says 'testname' but tenant resolved to something else
         //   (tenant.slug !== cookieTenant), the profile was found elsewhere via cross-schema scan
         if (pathname.includes('auth.logout')) {
+            if (user?.id) {
+                proxyProfileCache.delete(user.id);
+            }
             response.cookies.delete('tenant_fallback');
         } else if (profile?.tenant_slug && profile.tenant_slug !== 'primary') {
             response.cookies.set('tenant_fallback', profile.tenant_slug, {

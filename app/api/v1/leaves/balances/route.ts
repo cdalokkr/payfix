@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, connection } from 'next/server'
 import { validateBearerToken } from '@/lib/security/auth-middleware'
 import { LeavesService } from '@/lib/services/leaves.service'
 
 export async function GET(req: NextRequest) {
+    await connection()
     try {
         const authHeader = req.headers.get('Authorization')
         const { user, profile } = await validateBearerToken(authHeader)
