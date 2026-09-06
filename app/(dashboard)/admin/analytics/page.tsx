@@ -3,6 +3,7 @@ import { AdminAnalyticsView } from "@/features/reports/components/admin-analytic
 import { getCachedDehydratedState } from "@/lib/trpc/hydration"
 import { HydrationBoundary } from "@tanstack/react-query"
 import { DASHBOARD_QUERY_PARAMS } from "@/lib/dashboard-config"
+import { connection } from "next/server"
 
 export const metadata: Metadata = {
     title: "Analytics | Admin Dashboard",
@@ -10,6 +11,7 @@ export const metadata: Metadata = {
 }
 
 export default async function AdminAnalyticsPage() {
+    await connection()
     // Prefetch critical data for the analytics view
     const dehydratedState = await getCachedDehydratedState(async (client, queryClient) => {
         await Promise.all([

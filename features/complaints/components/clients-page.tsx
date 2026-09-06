@@ -204,6 +204,7 @@ export default function ClientsPage() {
               </TabsList>
               <TabsContent value="active" className="mt-0 border-0 p-0 shadow-none">
                 <DataTable
+                  key="active-clients-table"
                   columns={columns}
                   data={clients}
                   isLoading={isLoading}
@@ -228,6 +229,7 @@ export default function ClientsPage() {
               </TabsContent>
               <TabsContent value="inactive" className="mt-0 border-0 p-0 shadow-none">
                 <DataTable
+                  key="inactive-clients-table"
                   columns={inactiveColumns}
                   data={clients}
                   isLoading={isLoading}

@@ -3,6 +3,7 @@ import { ModeratorAnalyticsView } from "@/features/reports/components/moderator-
 import { getCachedDehydratedState } from "@/lib/trpc/hydration"
 import { HydrationBoundary } from "@tanstack/react-query"
 import { DASHBOARD_QUERY_PARAMS } from "@/lib/dashboard-config"
+import { connection } from "next/server"
 
 export const metadata: Metadata = {
     title: "Analytics | Moderator",
@@ -10,6 +11,7 @@ export const metadata: Metadata = {
 }
 
 export default async function ModeratorAnalyticsPage() {
+    await connection()
     // Prefetch critical data for the moderator analytics view
     const dehydratedState = await getCachedDehydratedState(async (client, queryClient) => {
         await Promise.all([

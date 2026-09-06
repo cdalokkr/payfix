@@ -3,8 +3,10 @@ import EmployeeDashboard from '@/components/dashboard/employee-dashboard'
 import { DashboardPageLayout } from '@/components/dashboard/dashboard-page-layout'
 import { getServerClient } from '@/lib/trpc/server-client'
 import { DASHBOARD_QUERY_PARAMS } from '@/lib/dashboard-config'
+import { connection } from 'next/server'
 
 export default async function EmployeeDashboardPage() {
+    await connection()
     // No server-side prefetch is needed here as the client-side component performs lazy, concurrent fetching.
     // This turns the server component render into a fast, non-blocking operation.
     const initialData = null;

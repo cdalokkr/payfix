@@ -26,25 +26,30 @@ export function DataTablePagination<TData>({
 }: DataTablePaginationProps<TData>) {
     const { pageIndex, pageSize } = table.getState().pagination
     const totalRows = table.getFilteredRowModel().rows.length
-    const startRow = pageIndex * pageSize + 1
+    const pageCount = table.getPageCount()
+    const startRow = totalRows === 0 ? 0 : pageIndex * pageSize + 1
     const endRow = Math.min((pageIndex + 1) * pageSize, totalRows)
 
     return (
         <div className="flex items-center justify-between px-2">
             <div className="flex-1 text-sm text-muted-foreground">
-                Showing {startRow} to {endRow} of {totalRows} rows
+                {totalRows === 0 ? (
+                    "No rows to display"
+                ) : (
+                    <>Showing {startRow} to {endRow} of {totalRows} rows</>
+                )}
             </div>
             <div className="flex items-center space-x-6 lg:space-x-8">
                 <div className="flex items-center space-x-2">
                     <p className="text-sm font-medium">Rows per page</p>
                     <Select
-                        value={`${table.getState().pagination.pageSize}`}
+                        value={`${pageSize}`}
                         onValueChange={(value) => {
                             table.setPageSize(Number(value))
                         }}
                     >
                         <SelectTrigger className="h-8 w-[70px]">
-                            <SelectValue placeholder={table.getState().pagination.pageSize} />
+                            <SelectValue placeholder={`${pageSize}`} />
                         </SelectTrigger>
                         <SelectContent side="top">
                             {[10, 20, 30, 40, 50].map((pageSize) => (
@@ -56,8 +61,8 @@ export function DataTablePagination<TData>({
                     </Select>
                 </div>
                 <div className="flex w-[100px] items-center justify-center text-sm font-medium">
-                    Page {table.getState().pagination.pageIndex + 1} of{" "}
-                    {table.getPageCount()}
+                    Page {pageCount === 0 ? 0 : pageIndex + 1} of{" "}
+                    {pageCount}
                 </div>
                 <div className="flex items-center space-x-2">
                     <Button

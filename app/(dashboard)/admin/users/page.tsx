@@ -3,6 +3,7 @@ import UserManagement from '@/features/users/components/user-management'
 import { UserManagementErrorBoundary } from './user-management-error-boundary'
 import { getServerClient } from '@/lib/trpc/server-client'
 import { headers } from 'next/headers'
+import { connection } from 'next/server'
 
 export const metadata: Metadata = {
   title: 'Manage Users - Admin Dashboard',
@@ -12,6 +13,7 @@ export const metadata: Metadata = {
 }
 
 export default async function UsersPage() {
+  await connection()
   let initialData: any = undefined
   // The proxy derives this value from the registry-backed tenant. It is only
   // used to partition the browser cache; the server verifies it against the
