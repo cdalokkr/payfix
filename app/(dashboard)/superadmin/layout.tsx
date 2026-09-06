@@ -3,17 +3,22 @@ import { DashboardLayout } from '@/components/dashboard/dashboard-layout'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { getCachedDehydratedState } from '@/lib/trpc/hydration'
 import { HydrationBoundary } from '@tanstack/react-query'
+import { connection } from 'next/server'
 
 export const metadata: Metadata = {
   title: 'Super Admin Control Plane',
   description: 'Super admin dashboard for managing workspaces and subscription plans',
 }
 
+export const instant = false
+
 interface SuperAdminLayoutProps {
   children: React.ReactNode
 }
 
 export default async function SuperAdminLayout({ children }: SuperAdminLayoutProps) {
+  await connection()
+
   // Prefetch critical data for the dashboard to eliminate initial loading skeletons
   const dehydratedState = await getCachedDehydratedState(async (client, queryClient) => {
     await queryClient.prefetchQuery({

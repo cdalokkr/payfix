@@ -29,7 +29,7 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 10.26.1
+          version: 10.34.5
 `;
 const validReleaseWorkflow = `name: Release
 
@@ -39,9 +39,9 @@ jobs:
       - name: Install pnpm for release
         uses: pnpm/action-setup@v4
         with:
-          version: 10.26.1
+          version: 10.34.5
 `;
-const validPackageJson = JSON.stringify({ packageManager: 'pnpm@10.26.1' });
+const validPackageJson = JSON.stringify({ packageManager: 'pnpm@10.34.5' });
 const validScript = `#!/bin/bash
 set -euo pipefail
 pnpm install --offline --frozen-lockfile --prod --ignore-scripts
@@ -136,13 +136,13 @@ test('reports the workflow and configured version for a version mismatch', () =>
       { path: '.github/workflows/saas-ci.yml', content: validCiWorkflow },
       {
         path: '.github/workflows/release.yml',
-        content: validReleaseWorkflow.replace('version: 10.26.1', 'version: 10.25.0'),
+        content: validReleaseWorkflow.replace('version: 10.34.5', 'version: 10.25.0'),
       },
     ],
   });
 
   assert.deepEqual(failures, [
-    'pnpm version mismatch: package.json declares pnpm@10.26.1, but .github/workflows/release.yml configures pnpm/action-setup with version 10.25.0.',
+    'pnpm version mismatch: package.json declares pnpm@10.34.5, but .github/workflows/release.yml configures pnpm/action-setup with version 10.25.0.',
   ]);
 });
 
@@ -167,8 +167,8 @@ test('accepts a hash-suffixed package-manager declaration and quoted CI version'
       postMergeScript: validScript,
       pnpmLockfile: validLockfile,
       replitConfig: validConfig,
-      packageJson: JSON.stringify({ packageManager: 'pnpm@10.26.1+sha512.example' }),
-      ciWorkflow: validCiWorkflow.replace('version: 10.26.1', 'version: "10.26.1" # keep aligned'),
+      packageJson: JSON.stringify({ packageManager: 'pnpm@10.34.5+sha512.example' }),
+      ciWorkflow: validCiWorkflow.replace('version: 10.34.5', 'version: "10.34.5" # keep aligned'),
     }),
     [],
   );
@@ -180,11 +180,11 @@ test('reports which pnpm configuration is out of sync', () => {
     pnpmLockfile: validLockfile,
     replitConfig: validConfig,
     packageJson: validPackageJson,
-    ciWorkflow: validCiWorkflow.replace('version: 10.26.1', 'version: 10.25.0'),
+    ciWorkflow: validCiWorkflow.replace('version: 10.34.5', 'version: 10.25.0'),
   });
 
   assert.deepEqual(failures, [
-    'pnpm version mismatch: package.json declares pnpm@10.26.1, but .github/workflows/saas-ci.yml configures pnpm/action-setup with version 10.25.0.',
+    'pnpm version mismatch: package.json declares pnpm@10.34.5, but .github/workflows/saas-ci.yml configures pnpm/action-setup with version 10.25.0.',
   ]);
 });
 

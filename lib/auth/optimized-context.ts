@@ -136,8 +136,8 @@ function endAuthTiming(metrics: AuthPerformanceMetrics, additionalData?: AuthMet
     Object.assign(metrics, additionalData)
   }
 
-  // Log slow contexts for monitoring (threshold increased to 1000ms for heavy loads)
-  if (metrics.duration > 1000) {
+  // Log slow contexts for monitoring (threshold 2000ms, excluding initial process cold-start)
+  if (metrics.duration > 2000 && createContextCallCount > 1) {
     console.warn(`[AUTH-PERF] Slow authentication context: ${metrics.duration.toFixed(2)}ms`, metrics)
   }
 
@@ -262,6 +262,23 @@ async function preloadProfile(
   let result: any = null
   let resolvedTenant = tenantContext
 
+  // Control-plane fast-path: If no tenant is selected, check centralDb for super-admin FIRST
+  if (!tenantContext) {
+    const centralProfilesQuery = (centralDb as any).query?.profiles
+    const centralResult = typeof centralProfilesQuery?.findFirst === 'function'
+      ? await centralProfilesQuery.findFirst({
+          where: eq(profiles.id, profileId),
+          with: { designation: true },
+        })
+      : null
+    if (centralResult?.role === 'super_admin') {
+      return {
+        profile: mapProfile(centralResult),
+        tenant: null,
+      }
+    }
+  }
+
   if (tenantContext?.tenantSchema) {
     try {
       result = await tenantStorage.run(tenantContext, async () => {
@@ -298,8 +315,8 @@ async function preloadProfile(
     }
   }
 
-  // Public profiles are a control-plane source only for platform super-admins.
-  if (!result) {
+  // Public profiles fallback if not already checked above
+  if (!result && tenantContext) {
     const centralProfilesQuery = (centralDb as any).query?.profiles
     const centralResult = typeof centralProfilesQuery?.findFirst === 'function'
       ? await centralProfilesQuery.findFirst({
@@ -440,8 +457,10 @@ export async function createOptimizedContext(
     const cacheMatchesVerifiedRequest = Boolean(
       cachedSession &&
       cachedSession.user.id === user.id &&
-      tenantContext &&
-      cachedSession.tenantId === tenantContext.tenantId,
+      (
+        (!tenantContext && !cachedSession.tenantId) ||
+        (tenantContext && cachedSession.tenantId === tenantContext.tenantId)
+      ),
     )
     if (cacheMatchesVerifiedRequest) {
       const finalMetrics = endAuthTiming(metrics, {

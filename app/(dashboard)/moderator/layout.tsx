@@ -6,17 +6,22 @@ import { HydrationBoundary } from '@tanstack/react-query'
 
 export const metadata: Metadata = {
     title: 'Moderator Dashboard',
-    description: 'Moderator dashboard for backoffice management',
-    keywords: ['moderator', 'dashboard', 'backoffice'],
+    description: 'Administrative dashboard for system moderators',
+    keywords: ['moderator', 'dashboard', 'management'],
 }
+
+export const instant = false
 
 interface ModeratorLayoutProps {
     children: React.ReactNode
 }
 
 import { headers } from 'next/headers'
+import { connection } from 'next/server'
 
 export default async function ModeratorLayout({ children }: ModeratorLayoutProps) {
+    await connection()
+
     // Prefetch critical data for the dashboard to eliminate initial loading skeletons
     const dehydratedState = await getCachedDehydratedState(async (client, queryClient) => {
         await queryClient.prefetchQuery({

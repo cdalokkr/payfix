@@ -140,8 +140,8 @@ export const publicProcedure = t.procedure.use(tenantContextMiddleware)
 export const createCallerFactory = t.createCallerFactory
 
 export const protectedProcedure = publicProcedure.use(async ({ ctx, next }) => {
-  // Performance check - warn if context creation was slow
-  if (ctx.performance?.contextCreationTime > 200) {
+  // Performance check - warn if context creation was unusually slow (>2000ms, excluding initial cold-start)
+  if (ctx.performance?.contextCreationTime > 2000 && createContextCallCount > 1) {
     console.warn(`[AUTH-PROC] Slow context in protectedProcedure: ${ctx.performance.contextCreationTime.toFixed(2)}ms`)
   }
 

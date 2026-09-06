@@ -10,13 +10,18 @@ export const metadata: Metadata = {
   keywords: ['admin', 'dashboard', 'management', 'users'],
 }
 
+export const instant = false
+
 interface AdminLayoutProps {
   children: React.ReactNode
 }
 
 import { headers } from 'next/headers'
+import { connection } from 'next/server'
 
 export default async function AdminLayout({ children }: AdminLayoutProps) {
+  await connection()
+
   // Prefetch critical data for the dashboard to eliminate initial loading skeletons
   const dehydratedState = await getCachedDehydratedState(async (client, queryClient) => {
     await queryClient.prefetchQuery({

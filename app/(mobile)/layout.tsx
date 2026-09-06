@@ -9,9 +9,6 @@ import { PermissionGuard } from '@/features/mobile/PermissionGuard'
 import { OfflineBanner } from '@/components/ui/offline-banner'
 import { BiometricCameraPrewarm } from '@/features/mobile/biometric-camera-prewarm'
 
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
-
 export default async function MobileLayout({
     children,
 }: {

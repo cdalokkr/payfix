@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, connection } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { db } from '@/lib/db'
 import { profiles, officeSettings, officeClosures } from '@/lib/db/schema'
@@ -6,6 +6,7 @@ import { eq, and, gte, lte } from 'drizzle-orm'
 import ExcelJS from 'exceljs'
 
 export async function GET(request: NextRequest) {
+    await connection()
     try {
         // Verify user is authenticated
         const supabase = await createServerSupabaseClient()

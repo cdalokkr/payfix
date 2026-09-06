@@ -6,7 +6,8 @@ export const metadata = {
   description: 'Your license for this workspace has expired.',
 };
 
-export default function LicenseExpiredPage() {
+export default async function LicenseExpiredPage() {
+  'use cache'
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans text-slate-100">
       {/* Decorative background glows */}

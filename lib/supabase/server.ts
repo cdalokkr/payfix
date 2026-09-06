@@ -33,7 +33,7 @@ export function createSupabaseClientSync(
     supabaseKey,
     {
       auth: {
-        autoRefreshToken: true,
+        autoRefreshToken: false,
         persistSession: false,
         detectSessionInUrl: false,
       },

@@ -6,8 +6,6 @@ import { profiles } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { runWithRequestHeaders } from "@/lib/tenant/with-context"
 
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
 
 export const metadata = {
     title: 'My PaySlips - Payfix',
