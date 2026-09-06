@@ -377,6 +377,7 @@ export default function UserManagement({ initialData, tenantScope }: UserManagem
               </TabsList>
               <TabsContent value="live" className="mt-0 border-0 p-0 shadow-none">
                 <DataTable
+                  key="live-users-table"
                   columns={columns}
                   data={filteredUsers}
                   isLoading={isLoading}
@@ -393,6 +394,7 @@ export default function UserManagement({ initialData, tenantScope }: UserManagem
               </TabsContent>
               <TabsContent value="deleted" className="mt-0 border-0 p-0 shadow-none">
                 <DataTable
+                  key="deleted-users-table"
                   columns={deletedColumns}
                   data={filteredUsers}
                   isLoading={isLoading}

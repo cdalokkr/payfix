@@ -6,6 +6,8 @@ import {
     ColumnFiltersState,
     SortingState,
     VisibilityState,
+    PaginationState,
+    OnChangeFn,
     flexRender,
     getCoreRowModel,
     getFilteredRowModel,
@@ -38,6 +40,7 @@ interface DataTableProps<TData, TValue> {
     rowSelection?: RowSelectionState
     onRowSelectionChange?: React.Dispatch<React.SetStateAction<RowSelectionState>>
     hidePagination?: boolean
+    defaultPageSize?: number
     meta?: Record<string, any>
     emptyIcon?: React.ReactNode
     emptyMessage?: string
@@ -54,6 +57,7 @@ export function DataTable<TData, TValue>({
     rowSelection: externalRowSelection,
     onRowSelectionChange: externalOnRowSelectionChange,
     hidePagination = false,
+    defaultPageSize = 10,
     meta,
     emptyIcon,
     emptyMessage = "No Record Found",
@@ -68,6 +72,35 @@ export function DataTable<TData, TValue>({
     const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
     const [sorting, setSorting] = React.useState<SortingState>([])
+    const [pagination, setPagination] = React.useState<PaginationState>({
+        pageIndex: 0,
+        pageSize: hidePagination ? 10000 : defaultPageSize,
+    })
+
+    const handlePaginationChange = React.useCallback<OnChangeFn<PaginationState>>((updaterOrValue) => {
+        setPagination((old) => {
+            const next = typeof updaterOrValue === 'function' ? updaterOrValue(old) : updaterOrValue
+            // If pageSize changed, reset to first page to avoid landing on an out-of-bounds page
+            if (next.pageSize !== old.pageSize) {
+                return { ...next, pageIndex: 0 }
+            }
+            return next
+        })
+    }, [])
+
+    // Reset pagination to first page if filtered/searched data reduces total pages
+    React.useEffect(() => {
+        const maxPageIndex = Math.max(0, Math.ceil(data.length / pagination.pageSize) - 1)
+        if (pagination.pageIndex > maxPageIndex) {
+            setPagination((prev) => ({ ...prev, pageIndex: maxPageIndex }))
+        }
+    }, [data.length, pagination.pageSize, pagination.pageIndex])
+
+    React.useEffect(() => {
+        if (hidePagination) {
+            setPagination((prev) => (prev.pageSize === 10000 ? prev : { ...prev, pageSize: 10000 }))
+        }
+    }, [hidePagination])
 
     // TanStack Table's instance API is intentionally mutable and is not React Compiler-memoizable.
     // eslint-disable-next-line react-hooks/incompatible-library
@@ -79,13 +112,10 @@ export function DataTable<TData, TValue>({
             columnVisibility,
             rowSelection,
             columnFilters,
-        },
-        initialState: {
-            pagination: {
-                pageSize: hidePagination ? 10000 : 10,
-            },
+            pagination,
         },
         enableRowSelection: true,
+        onPaginationChange: handlePaginationChange,
         onRowSelectionChange: setRowSelection,
         onSortingChange: setSorting,
         onColumnFiltersChange: setColumnFilters,
@@ -280,7 +310,10 @@ export function DataTable<TData, TValue>({
             </div>
 
             {!hidePagination && table.getFilteredRowModel().rows.length > 0 && (
-                <DataTablePagination table={table} />
+                <DataTablePagination
+                    key={`pagination-${pagination.pageIndex}-${pagination.pageSize}-${table.getFilteredRowModel().rows.length}`}
+                    table={table}
+                />
             )}
         </div>
     )

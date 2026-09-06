@@ -77,16 +77,12 @@ export const adminUsersRouter = router({
 
       const where = filters.length > 0 ? and(...filters) : undefined
 
-      // Get count and users concurrently
-      const limit = input.getAll ? undefined : input.limit
-      const offset = input.getAll ? undefined : (input.page - 1) * input.limit
+      // When fetching all users for client-side table operations, skip the separate count() query
+      let total: number
+      let users: any[]
 
-      const [totalCountResult, users] = await Promise.all([
-        ctx.db
-          .select({ value: count() })
-          .from(profiles)
-          .where(where),
-        ctx.db.query.profiles.findMany({
+      if (input.getAll) {
+        users = await ctx.db.query.profiles.findMany({
           columns: {
             face_embedding: false, // Exclude heavy face embedding column for faster fetch
           },
@@ -95,12 +91,30 @@ export const adminUsersRouter = router({
             designation: true,
           },
           orderBy: [desc(profiles.created_at)],
-          limit,
-          offset,
         })
-      ])
-
-      const total = totalCountResult[0].value
+        total = users.length
+      } else {
+        const [totalCountResult, usersResult] = await Promise.all([
+          ctx.db
+            .select({ value: count() })
+            .from(profiles)
+            .where(where),
+          ctx.db.query.profiles.findMany({
+            columns: {
+              face_embedding: false,
+            },
+            where,
+            with: {
+              designation: true,
+            },
+            orderBy: [desc(profiles.created_at)],
+            limit: input.limit,
+            offset: (input.page - 1) * input.limit,
+          })
+        ])
+        total = totalCountResult[0].value
+        users = usersResult
+      }
 
       const duration = performance.now() - startTime
       if (process.env.NODE_ENV === 'development') {
