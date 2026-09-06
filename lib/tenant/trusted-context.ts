@@ -201,7 +201,7 @@ export async function resolveTrustedTenantFromRequest(request?: Request): Promis
         const lookup = isMainApplicationHost(inputs.host)
             ? inputs.fallbackSlug || inputs.host
             : inputs.host;
-        const tenant = lookup ? await resolveTenant(lookup) : null;
+        const tenant = lookup ? await resolveTenant(lookup, true) : null;
         if (!tenant) return null;
 
         if (inputs.tenantId && inputs.tenantId !== tenant.id) return null;
