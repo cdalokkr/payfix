@@ -838,7 +838,11 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
             if (category === 'dashboard_sync') {
               console.log('[REALTIME] 🚀 [Management] Sync broadcast received')
 
-              // Toast notifications removed - managed by bell icon now
+              // Invalidate attendance and salary queries for UI refresh
+              utils.attendance.getAttendance.invalidate()
+              utils.attendance.getLeaves.invalidate()
+              utils.salary.getMonthlySummaries.invalidate()
+              utils.salary.getMyPayslips.invalidate()
 
               refetch({ forceFresh: true })
             }
@@ -847,11 +851,11 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
             if (category === 'attendance_update') {
               console.log('[REALTIME] 🔔 [Management] Attendance update broadcast received:', payload?.payload?.data || payload?.payload)
 
-              // Toast notifications removed - managed by bell icon now
-
-              // Invalidate attendance queries for UI refresh
+              // Invalidate attendance and salary queries for UI refresh
               utils.attendance.getAttendance.invalidate()
               utils.attendance.getLeaves.invalidate()
+              utils.salary.getMonthlySummaries.invalidate()
+              utils.salary.getMyPayslips.invalidate()
 
               // Trigger dashboard refresh
               refetch({ forceFresh: true })
@@ -935,7 +939,10 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
             if (category === 'dashboard_sync') {
               console.log('[REALTIME] 🚀 [User] Sync broadcast received')
 
-              // Toast notifications removed - managed by bell icon now
+              // Invalidate attendance and payslip queries for UI refresh
+              utils.attendance.getAttendance.invalidate()
+              utils.attendance.getLeaves.invalidate()
+              utils.salary.getMyPayslips.invalidate()
 
               refetch({ forceFresh: true })
             }
@@ -944,10 +951,10 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
             if (category === 'attendance_update') {
               console.log('[REALTIME] 🔔 [User] Attendance update broadcast received:', payload?.payload?.data || payload?.payload)
 
-              // Toast notifications removed - managed by bell icon now
-
-              // Invalidate attendance queries for UI refresh
+              // Invalidate attendance and payslip queries for UI refresh
               utils.attendance.getAttendance.invalidate()
+              utils.attendance.getLeaves.invalidate()
+              utils.salary.getMyPayslips.invalidate()
 
               // Trigger full dashboard refresh
               refetch({ forceFresh: true })
@@ -1077,7 +1084,7 @@ export function useRoleBasedRealtimeDashboard(config: EnhancedRealtimeConfig): R
         }
       }, 100) // 100ms delay to handle Strict Mode double-mount
     }
-  }, [refetch, role, userId, channelRecreationTrigger, recreateChannel, utils.attendance.getAttendance, utils.attendance.getLeaves])
+  }, [refetch, role, userId, channelRecreationTrigger, recreateChannel, utils.attendance.getAttendance, utils.attendance.getLeaves, utils.salary.getMonthlySummaries, utils.salary.getMyPayslips])
 
   // Visibility change handler for channel reconnection on tab focus
   // PERFORMANCE FIX: Only refetch when channel is disconnected - trust realtime for connected channels

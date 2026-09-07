@@ -1,6 +1,12 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as masterSchema from './master-schema';
+import dns from 'dns';
+
+// Ensure IPv4 lookup is preferred over IPv6 (prevents getaddrinfo ENOTFOUND on dual-stack Supabase poolers)
+if (typeof dns?.setDefaultResultOrder === 'function') {
+    dns.setDefaultResultOrder('ipv4first');
+}
 
 // Lazy singleton: connection created on first use at runtime,
 // NOT during module evaluation at build time (Vercel build has no DATABASE_URL).
@@ -17,7 +23,8 @@ function getMasterDb() {
             prepare: false,
             max: 5, // Master control database queries are light and infrequent
             idle_timeout: 20,
-            connect_timeout: 15,
+            connect_timeout: 30,
+            backoff: (attempt) => Math.min(attempt * 0.25, 2),
         });
         _masterDb = drizzle(_client, { schema: masterSchema });
     }

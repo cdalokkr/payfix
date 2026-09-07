@@ -257,7 +257,8 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
         const draftCount = summaries.filter((s: any) => s.status === 'draft').length
         const setForSalaryCount = summaries.filter((s: any) => s.status === 'set_for_salary').length
         const payslipCount = summaries.filter((s: any) => s.status === 'payslip_generated').length
-        return { totalEmployees, avgPresent: Math.round(avgPresent), draftCount, setForSalaryCount, payslipCount }
+        const staleCount = summaries.filter((s: any) => s.needs_recompile).length
+        return { totalEmployees, avgPresent: Math.round(avgPresent), draftCount, setForSalaryCount, payslipCount, staleCount }
     }, [summaries])
 
     const toggleSelect = (id: string) => {
@@ -329,6 +330,31 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
 
     return (
         <div className="space-y-6">
+            {/* Real-time Recompile Warning Banner */}
+            {summaryStats && summaryStats.staleCount > 0 && (
+                <div className="flex items-start gap-3 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200">
+                    <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <div className="flex-1 text-xs">
+                        <p className="font-semibold text-sm text-amber-900 dark:text-amber-100 mb-0.5">
+                            Re-compilation Recommended ({summaryStats.staleCount} employee{summaryStats.staleCount > 1 ? 's' : ''})
+                        </p>
+                        <p className="text-amber-700 dark:text-amber-300">
+                            Attendance or leave records were modified after monthly attendance was compiled. Click &quot;Re-compile&quot; to refresh payable days and payslip calculations.
+                        </p>
+                    </div>
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-amber-500/40 bg-amber-500/20 hover:bg-amber-500/30 text-amber-900 dark:text-amber-100 shrink-0 gap-1.5 font-semibold text-xs h-8"
+                        onClick={handleStartCompilation}
+                        disabled={isCompileModalOpen && !compilationProgress.isFinished}
+                    >
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" style={{ animationDuration: '3s' }} />
+                        Re-compile All
+                    </Button>
+                </div>
+            )}
+
             {/* Controls */}
             <div className="flex flex-col sm:flex-row sm:items-end gap-4">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -376,8 +402,10 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                         <Button
                             onClick={handleStartCompilation}
                             disabled={isCompileModalOpen && !compilationProgress.isFinished}
+                            className={summaryStats && summaryStats.staleCount > 0 ? "bg-amber-600 hover:bg-amber-700 text-white font-semibold" : ""}
                         >
-                            <RefreshCw className="h-4 w-4 mr-1" />Compile
+                            <RefreshCw className={`h-4 w-4 mr-1 ${summaryStats && summaryStats.staleCount > 0 ? "animate-pulse" : ""}`} />
+                            {summaryStats && summaryStats.staleCount > 0 ? `Re-compile (${summaryStats.staleCount})` : "Compile"}
                         </Button>
                         {lastCompiledAt && (
                             <span className="text-xs text-muted-foreground flex items-center gap-1 whitespace-nowrap">
@@ -507,19 +535,34 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-1.5">
+                                        <div className="flex items-center gap-1.5 flex-wrap justify-end">
                                             {statusBadge(s.status)}
+                                            {s.needs_recompile && (
+                                                <Badge
+                                                    variant="outline"
+                                                    className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[9px] px-1.5 py-0 font-semibold flex items-center gap-1"
+                                                    title={s.recompile_reason || 'Records modified after compilation'}
+                                                >
+                                                    <AlertTriangle className="h-2.5 w-2.5" />
+                                                    Needs Re-compile
+                                                </Badge>
+                                            )}
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                className="h-7 w-7 text-orange-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20"
+                                                className={`h-7 w-7 ${
+                                                    s.needs_recompile
+                                                        ? "text-amber-600 hover:text-amber-700 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 ring-1 ring-amber-500/20"
+                                                        : "text-orange-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20"
+                                                }`}
                                                 onClick={() => handleCompileSingle(s.profile_id, s.profile?.full_name || s.profile?.email)}
                                                 disabled={compilingProfileId !== null}
+                                                title={s.needs_recompile ? `${s.recompile_reason || 'Records modified after compilation'} - click to recompile` : "Recompile Employee Attendance"}
                                             >
                                                 {compilingProfileId === s.profile_id ? (
                                                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                                 ) : (
-                                                    <RefreshCw className="h-3.5 w-3.5" />
+                                                    <RefreshCw className={`h-3.5 w-3.5 ${s.needs_recompile ? "animate-pulse" : ""}`} />
                                                 )}
                                             </Button>
                                         </div>
@@ -614,20 +657,38 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                                                     <span className="font-bold text-amber-600">{(s.salary_breakdown as any)?.extra_days || 0}</span>
                                                 </td>
                                                 <td className="p-3 text-center text-muted-foreground">{s.total_working_hours || 0}h</td>
-                                                <td className="p-3 text-center">{statusBadge(s.status)}</td>
+                                                <td className="p-3 text-center">
+                                                    <div className="flex flex-col items-center gap-1">
+                                                        {statusBadge(s.status)}
+                                                        {s.needs_recompile && (
+                                                            <Badge
+                                                                variant="outline"
+                                                                className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[9px] px-1.5 py-0 font-semibold flex items-center gap-1 whitespace-nowrap"
+                                                                title={s.recompile_reason || 'Records modified after compilation'}
+                                                            >
+                                                                <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
+                                                                Needs Re-compile
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                </td>
                                                 <td className="p-3 text-center">
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
-                                                        className="h-8 w-8 text-orange-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20"
+                                                        className={`h-8 w-8 ${
+                                                            s.needs_recompile
+                                                                ? "text-amber-600 hover:text-amber-700 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 ring-1 ring-amber-500/20"
+                                                                : "text-orange-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20"
+                                                        }`}
                                                         onClick={() => handleCompileSingle(s.profile_id, s.profile?.full_name || s.profile?.email)}
                                                         disabled={compilingProfileId !== null}
-                                                        title="Recompile Employee Attendance"
+                                                        title={s.needs_recompile ? `${s.recompile_reason || 'Records modified after compilation'} - click to recompile` : "Recompile Employee Attendance"}
                                                     >
                                                         {compilingProfileId === s.profile_id ? (
                                                             <Loader2 className="h-4 w-4 animate-spin" />
                                                         ) : (
-                                                            <RefreshCw className="h-4 w-4" />
+                                                            <RefreshCw className={`h-4 w-4 ${s.needs_recompile ? "animate-pulse" : ""}`} />
                                                         )}
                                                     </Button>
                                                 </td>

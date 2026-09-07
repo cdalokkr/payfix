@@ -743,22 +743,39 @@ export class SalaryService {
             // Count leave days within this month
             let leaveDays = 0
             for (const leave of employeeLeaves) {
-                const leaveStart = new Date(Math.max(new Date(leave.start_date).getTime(), new Date(startDate).getTime()))
-                const leaveEnd = new Date(Math.min(new Date(leave.end_date).getTime(), new Date(endDate).getTime()))
-                for (let d = new Date(leaveStart); d <= leaveEnd; d.setDate(d.getDate() + 1)) {
-                    const dayOfWeek = d.getDay()
-                    const dateStr = d.toISOString().split('T')[0]
-                    if (!offDays.includes(dayOfWeek) && !closureDates.has(dateStr)) {
-                        leaveDays += leave.is_half_day ? 0.5 : 1
+                // Safe date parsing without UTC conversion drift
+                const [sY, sM, sD] = leave.start_date.split('-').map(Number)
+                const [eY, eM, eD] = leave.end_date.split('-').map(Number)
+                const cur = new Date(sY, sM - 1, sD)
+                const end = new Date(eY, eM - 1, eD)
+
+                while (cur <= end) {
+                    const y = cur.getFullYear()
+                    const m = cur.getMonth() + 1
+                    const d = cur.getDate()
+                    const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+
+                    if (y === year && m === month && !offDays.includes(cur.getDay()) && !closureDates.has(dateStr)) {
+                        // Check if an attendance record overrides this leave day
+                        const attRecord = records.find(r => r.date === dateStr)
+                        const isOverriddenByAbsent = attRecord && (attRecord.status === 'absent' || (attRecord.remarks && attRecord.remarks.toLowerCase().includes('absent')))
+                        const isOverriddenByPresent = attRecord && Boolean(attRecord.check_in)
+
+                        if (!isOverriddenByAbsent && !isOverriddenByPresent) {
+                            leaveDays += leave.is_half_day ? 0.5 : 1
+                        }
                     }
+                    cur.setDate(cur.getDate() + 1)
                 }
             }
 
             // Add explicit leaves from attendance records (excluding those already in the leaves table to avoid double-counting)
             const explicitLeaves = records.filter(r => r.status === 'leave')
             for (const el of explicitLeaves) {
+                const isOverriddenByAbsent = el.remarks && el.remarks.toLowerCase().includes('absent')
+                const isOverriddenByPresent = Boolean(el.check_in)
                 const hasLeaveTable = employeeLeaves.some(l => el.date >= l.start_date && el.date <= l.end_date)
-                if (!hasLeaveTable) {
+                if (!hasLeaveTable && !isOverriddenByAbsent && !isOverriddenByPresent) {
                     leaveDays += el.is_half_day ? 0.5 : 1
                 }
             }
@@ -782,13 +799,14 @@ export class SalaryService {
 
             // Count explicit absents: count records explicitly marked as 'absent', OR records that have no check-in/out and are verified/pending but are not on off-days, holidays, or leaves.
             const explicitAbsents = records.filter(r => {
-                if (r.status === 'absent') return true
+                const isMarkedAbsent = r.status === 'absent' || (r.remarks && r.remarks.toLowerCase().includes('absent'))
+                if (isMarkedAbsent) return true
                 if (!r.check_in && !r.check_out) {
-                    const dateObj = new Date(r.date)
-                    const dayOfWeek = dateObj.getDay()
+                    const [y, m, d] = r.date.split('-').map(Number)
+                    const dayOfWeek = new Date(y, m - 1, d).getDay()
                     const isWeeklyOff = offDays.includes(dayOfWeek) || r.status === 'weekly_off'
                     const isHoliday = closureDates.has(r.date) || r.status === 'holiday'
-                    const hasLeave = employeeLeaves.some(l => r.date >= l.start_date && r.date <= l.end_date) || r.status === 'leave'
+                    const hasLeave = (employeeLeaves.some(l => r.date >= l.start_date && r.date <= l.end_date) || r.status === 'leave') && !isMarkedAbsent
                     if (!isWeeklyOff && !isHoliday && !hasLeave) {
                         return true
                     }
@@ -911,10 +929,94 @@ export class SalaryService {
             }
         }
 
-        return summaries.map(s => ({
-            ...s,
-            has_salary_setup: activeSetupsMap.get(s.profile_id) || false
-        }))
+        const staleMap = new Map<string, { needs_recompile: boolean; recompile_reason: string }>()
+
+        if (summaries.length > 0) {
+            const lastDay = new Date(year, month, 0).getDate()
+            const startDate = `${year}-${String(month).padStart(2, '0')}-01`
+            const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+
+            const employeeIds = summaries.map(s => s.profile_id)
+
+            // Find the earliest updated_at / created_at among summaries
+            const minTimestamp = Math.min(
+                ...summaries.map(s => new Date(s.updated_at || s.created_at || 0).getTime())
+            )
+            const minSummaryDate = new Date(minTimestamp)
+
+            try {
+                // Fetch attendance and leaves updated after minSummaryDate in target month
+                const [recentAttendance, recentLeaves] = await Promise.all([
+                    db.query.attendance.findMany({
+                        where: and(
+                            inArray(attendance.profile_id, employeeIds),
+                            gte(attendance.date, startDate),
+                            lte(attendance.date, endDate),
+                            gt(attendance.updated_at, minSummaryDate)
+                        ),
+                        columns: {
+                            profile_id: true,
+                            date: true,
+                            updated_at: true,
+                        }
+                    }),
+                    db.query.leaves.findMany({
+                        where: and(
+                            inArray(leaves.profile_id, employeeIds),
+                            lte(leaves.start_date, endDate),
+                            gte(leaves.end_date, startDate),
+                            gt(leaves.updated_at, minSummaryDate)
+                        ),
+                        columns: {
+                            profile_id: true,
+                            start_date: true,
+                            end_date: true,
+                            updated_at: true,
+                        }
+                    })
+                ])
+
+                for (const s of summaries) {
+                    const sTime = new Date(s.updated_at || s.created_at || 0).getTime()
+                    // 1000ms buffer to avoid false positives from clock differences during compilation
+                    const hasRecentAttendance = recentAttendance.some(
+                        a => a.profile_id === s.profile_id && a.updated_at && new Date(a.updated_at).getTime() > sTime + 1000
+                    )
+                    const hasRecentLeaves = recentLeaves.some(
+                        l => l.profile_id === s.profile_id && l.updated_at && new Date(l.updated_at).getTime() > sTime + 1000
+                    )
+
+                    if (hasRecentAttendance && hasRecentLeaves) {
+                        staleMap.set(s.profile_id, {
+                            needs_recompile: true,
+                            recompile_reason: 'Attendance and leave records were edited after compilation'
+                        })
+                    } else if (hasRecentAttendance) {
+                        staleMap.set(s.profile_id, {
+                            needs_recompile: true,
+                            recompile_reason: 'Attendance records were edited after compilation'
+                        })
+                    } else if (hasRecentLeaves) {
+                        staleMap.set(s.profile_id, {
+                            needs_recompile: true,
+                            recompile_reason: 'Leave status or dates were edited after compilation'
+                        })
+                    }
+                }
+            } catch (err) {
+                console.warn('[SalaryService.getMonthlySummaries] Failed to check for stale summaries:', err)
+            }
+        }
+
+        return summaries.map(s => {
+            const staleInfo = staleMap.get(s.profile_id)
+            return {
+                ...s,
+                has_salary_setup: activeSetupsMap.get(s.profile_id) || false,
+                needs_recompile: staleInfo?.needs_recompile || false,
+                recompile_reason: staleInfo?.recompile_reason || null,
+            }
+        })
     }
 
     // ==========================================

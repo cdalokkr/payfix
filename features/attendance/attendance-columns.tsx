@@ -25,9 +25,15 @@ export type DayType =
     | 'Applied Leave';
 
 export function getRecordDayType(record: any): DayType {
-    const status = record.status as string; // 'verified', 'rejected', 'pending', or virtual status
+    const status = record.status as string; // 'verified', 'rejected', 'pending', 'absent', or virtual status
     const hasCheckIn = !!record.check_in;
     const hasCheckOut = !!record.check_out;
+    const remarks = (record.remarks || '').toLowerCase();
+
+    // 1. Explicit Absent check takes precedence if status is absent or remarks indicate absent
+    if (status === 'absent' || remarks.startsWith('absent') || (remarks.includes('absent') && !hasCheckIn && !hasCheckOut)) {
+        return 'Absent';
+    }
 
     const isVerifiedOrRejected = status === 'verified' || status === 'rejected';
 
@@ -41,7 +47,6 @@ export function getRecordDayType(record: any): DayType {
                 return 'Present';
             }
         } else {
-            const remarks = (record.remarks || '').toLowerCase();
             if (remarks.includes('leave')) {
                 return 'On Leave';
             } else if (remarks.includes('weekly off') || remarks.includes('weekly_off')) {
@@ -61,7 +66,6 @@ export function getRecordDayType(record: any): DayType {
         }
 
         const isVirtual = typeof record.id === 'string' && record.id.startsWith('virtual_');
-        const remarks = (record.remarks || '').toLowerCase();
 
         if (isVirtual) {
             if (status === 'leave') {
@@ -70,12 +74,16 @@ export function getRecordDayType(record: any): DayType {
                 return 'Holiday';
             } else if (status === 'weekly_off') {
                 return 'Weekly Off';
+            } else if (status === 'absent') {
+                return 'Absent';
             } else {
                 return 'Not marked';
             }
         } else {
             // Actual record is pending
-            if (remarks.includes('leave')) {
+            if (status === 'absent') {
+                return 'Absent';
+            } else if (remarks.includes('leave')) {
                 return 'Applied Leave';
             } else if (remarks.includes('weekly off') || remarks.includes('weekly_off')) {
                 return 'Weekly Off';
@@ -244,7 +252,7 @@ export function createAttendanceColumns({
                 const dayType = getRecordDayType(record);
                 
                 const verificationState: 'pending' | 'verified' | 'rejected' = 
-                    status === 'verified' ? 'verified' : 
+                    status === 'verified' || status === 'absent' ? 'verified' : 
                     status === 'rejected' ? 'rejected' : 'pending';
 
                 const dayTypeStyles: Record<string, string> = {

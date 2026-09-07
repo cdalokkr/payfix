@@ -442,3 +442,33 @@ export async function inspectTenantSchemaContract(
             invalidVectorColumns.length === 0,
     };
 }
+
+export function isLocalOrPrivateIp(host: string): boolean {
+    return (
+        host === 'localhost' ||
+        host === '127.0.0.1' ||
+        host === '::1' ||
+        host.startsWith('192.168.') ||
+        host.startsWith('10.') ||
+        /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+    );
+}
+
+export const PRIMARY_TENANT_FALLBACK = {
+    id: 'c3e28d92-e3ea-4fe0-8efd-927ce550b666',
+    slug: 'primary',
+    company_name: 'PayFix Corporate',
+    custom_domain: null,
+    status: 'active',
+    tenant_schema: 'tenant_primary',
+    database_url: null,
+    biometric_api_key: null,
+    trial_start: new Date('2026-06-24T19:38:37.624Z'),
+    trial_end: new Date('2036-06-24T19:38:37.624Z'),
+    trial_duration_days: 3650,
+    trial_extended: false,
+    admin_email: 'admin@payfix.com',
+    license_expires_at: new Date('2036-06-24T19:38:37.624Z'),
+    branding: null,
+};
+

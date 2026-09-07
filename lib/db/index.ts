@@ -4,6 +4,11 @@ import * as schema from './schema';
 import { getTenantDb } from './tenant-connection';
 import { tenantStorage } from '../tenant/store';
 import { resolveTrustedTenantBySchema } from '../tenant/trusted-context';
+import dns from 'dns';
+
+if (typeof dns?.setDefaultResultOrder === 'function') {
+    dns.setDefaultResultOrder('ipv4first');
+}
 
 // Lazy singleton: connection is only created on first use at runtime,
 // NOT during module evaluation at build time (Vercel build has no DATABASE_URL).
@@ -21,6 +26,7 @@ function getCentralDb() {
             max: 20,
             idle_timeout: 20,
             connect_timeout: 30,
+            backoff: (attempt) => Math.min(attempt * 0.25, 2),
             max_lifetime: 60 * 30 // 30 minutes
         });
         _centralDb = drizzle(_client, { schema });
