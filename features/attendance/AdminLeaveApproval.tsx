@@ -183,16 +183,24 @@ export function AdminLeaveApproval() {
             header: "Status",
             cell: ({ row }: any) => {
                 const status = row.getValue("status") as string
+                const leave = row.original
                 return (
-                    <Badge variant={
-                        status === 'approved' ? 'success' as any :
-                        status === 'rejected' ? 'destructive' : 'secondary'
-                    } className="capitalize font-bold text-[9px] tracking-tight">
-                        {status}
-                    </Badge>
+                    <div className="flex flex-col items-start gap-1">
+                        <Badge variant={
+                            status === 'approved' ? 'success' as any :
+                            status === 'rejected' ? 'destructive' : 'secondary'
+                        } className="capitalize font-bold text-[9px] tracking-tight">
+                            {status}
+                        </Badge>
+                        {leave.has_punches && (
+                            <Badge variant="outline" className="text-[8px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 font-semibold px-1 py-0 leading-tight">
+                                Punches Detected
+                            </Badge>
+                        )}
+                    </div>
                 )
             },
-            size: 80,
+            size: 95,
         },
         {
             accessorKey: "reason",
@@ -212,34 +220,41 @@ export function AdminLeaveApproval() {
             header: () => <div className="text-right">Actions</div>,
             cell: ({ row }: any) => {
                 const leave = row.original
-                if (leave.status !== 'pending') return null
+                const isPending = leave.status === 'pending'
+                const isApproved = leave.status === 'approved'
+                const isRejected = leave.status === 'rejected'
+
                 return (
                     <div className="flex justify-end gap-1">
                         <TooltipProvider>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <ActionButton
-                                        action="verify"
-                                        variant="icon-only"
-                                        size="sm"
-                                        onClick={() => handleApproveClick(leave)}
-                                        className="h-7 w-7"
-                                    />
-                                </TooltipTrigger>
-                                <TooltipContent>Approve</TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <ActionButton
-                                        action="reject"
-                                        variant="icon-only"
-                                        size="sm"
-                                        onClick={() => handleRejectClick(leave)}
-                                        className="h-7 w-7"
-                                    />
-                                </TooltipTrigger>
-                                <TooltipContent>Reject</TooltipContent>
-                            </Tooltip>
+                            {(isPending || isRejected) && (
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <ActionButton
+                                            action="verify"
+                                            variant="icon-only"
+                                            size="sm"
+                                            onClick={() => handleApproveClick(leave)}
+                                            className="h-7 w-7"
+                                        />
+                                    </TooltipTrigger>
+                                    <TooltipContent>{isRejected ? "Re-approve" : "Approve"}</TooltipContent>
+                                </Tooltip>
+                            )}
+                            {(isPending || isApproved) && (
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <ActionButton
+                                            action="reject"
+                                            variant="icon-only"
+                                            size="sm"
+                                            onClick={() => handleRejectClick(leave)}
+                                            className="h-7 w-7"
+                                        />
+                                    </TooltipTrigger>
+                                    <TooltipContent>{isApproved ? "Reject Approved Leave" : "Reject"}</TooltipContent>
+                                </Tooltip>
+                            )}
                         </TooltipProvider>
                     </div>
                 )
@@ -443,10 +458,12 @@ export function AdminLeaveApproval() {
                             <div className="p-1.5 rounded-xl shadow-sm bg-rose-500/10 text-rose-600 dark:text-rose-500">
                                 <XCircle className="w-4 h-4" />
                             </div>
-                            Reject Leave Request
+                            {selectedLeave?.status === 'approved' ? 'Reject Approved Leave' : 'Reject Leave Request'}
                         </DialogTitle>
                         <DialogDescription className="text-xs font-medium text-muted-foreground ml-9 mt-0.5">
-                            Please provide a reason for rejecting this leave request.
+                            {selectedLeave?.status === 'approved' 
+                                ? 'Rejecting this approved leave will cancel the leave and automatically sync attendance.'
+                                : 'Please provide a reason for rejecting this leave request.'}
                         </DialogDescription>
                     </DialogHeader>
 

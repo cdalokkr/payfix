@@ -34,7 +34,8 @@ interface AttendanceEditDialogProps {
     onSave: (values: {
         checkIn: string | null
         checkOut: string | null
-        status: 'pending' | 'verified' | 'rejected'
+        status: 'pending' | 'verified' | 'rejected' | 'absent'
+        dayType: string
         isHalfDay: boolean
         isExtraDay: boolean
         remarks: string
@@ -103,9 +104,11 @@ export function AttendanceEditDialog({
         const isExtraDay = values.dayType === 'Extra Day';
         
         let remarks = values.remarks || '';
-        
+        let finalStatus: 'pending' | 'verified' | 'rejected' | 'absent' = values.status;
+
         // Auto-keyword injection to remarks for search compatibility
         if (values.dayType === 'On Leave') {
+            remarks = remarks.replace(/^absent:\s*/i, '').trim();
             if (!remarks.toLowerCase().includes('leave')) {
                 remarks = remarks ? `Leave: ${remarks}` : 'Leave';
             }
@@ -118,15 +121,23 @@ export function AttendanceEditDialog({
                 remarks = remarks ? `Holiday: ${remarks}` : 'Holiday';
             }
         } else if (values.dayType === 'Absent') {
+            remarks = remarks.replace(/^leave:\s*[^;\n]*/i, '').trim();
             if (!remarks.toLowerCase().includes('absent')) {
                 remarks = remarks ? `Absent: ${remarks}` : 'Absent';
+            }
+            finalStatus = 'absent';
+        } else if (values.dayType === 'Present') {
+            remarks = remarks.replace(/^leave:\s*[^;\n]*/i, '').trim();
+            if (finalStatus === 'pending') {
+                finalStatus = 'verified';
             }
         }
 
         onSave({
-            checkIn: values.checkIn || null,
-            checkOut: values.checkOut || null,
-            status: values.status,
+            checkIn: values.dayType === 'Absent' ? null : (values.checkIn || null),
+            checkOut: values.dayType === 'Absent' ? null : (values.checkOut || null),
+            status: finalStatus,
+            dayType: values.dayType,
             isHalfDay,
             isExtraDay,
             remarks

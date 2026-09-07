@@ -69,6 +69,8 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
         onConfirm: () => {}
     })
 
+    const utils = trpc.useUtils()
+
     const { data: summaries, isLoading, refetch } = trpc.salary.getMonthlySummaries.useQuery(
         { month, year },
         { placeholderData: (prev: any) => prev }
@@ -101,7 +103,12 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                         profileId
                     })
                     toast.success(`Compiled attendance for ${name}`)
-                    refetch()
+                    await Promise.all([
+                        refetch(),
+                        utils.salary.getMonthlySummaries.invalidate(),
+                        utils.salary.getMyPayslips.invalidate(),
+                        utils.attendance.getAttendance.invalidate()
+                    ])
                 } catch (err: any) {
                     toast.error(err.message || `Failed to compile for ${name}`)
                 } finally {
@@ -196,7 +203,12 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
             }))
 
             toast.success(`Completed attendance compilation for ${employees.length} employees`)
-            refetch()
+            await Promise.all([
+                refetch(),
+                utils.salary.getMonthlySummaries.invalidate(),
+                utils.salary.getMyPayslips.invalidate(),
+                utils.attendance.getAttendance.invalidate()
+            ])
         } catch (err: any) {
             toast.error(err.message || "Compilation failed")
             setIsCompileModalOpen(false)

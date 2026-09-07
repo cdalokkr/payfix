@@ -743,22 +743,42 @@ export class SalaryService {
             // Count leave days within this month
             let leaveDays = 0
             for (const leave of employeeLeaves) {
-                const leaveStart = new Date(Math.max(new Date(leave.start_date).getTime(), new Date(startDate).getTime()))
-                const leaveEnd = new Date(Math.min(new Date(leave.end_date).getTime(), new Date(endDate).getTime()))
-                for (let d = new Date(leaveStart); d <= leaveEnd; d.setDate(d.getDate() + 1)) {
-                    const dayOfWeek = d.getDay()
-                    const dateStr = d.toISOString().split('T')[0]
+                const effStart = leave.start_date < startDate ? startDate : leave.start_date
+                const effEnd = leave.end_date > endDate ? endDate : leave.end_date
+
+                const [sY, sM, sD] = effStart.split('-').map(Number)
+                const [eY, eM, eD] = effEnd.split('-').map(Number)
+                const cur = new Date(sY, sM - 1, sD)
+                const end = new Date(eY, eM - 1, eD)
+
+                while (cur <= end) {
+                    const y = cur.getFullYear()
+                    const m = String(cur.getMonth() + 1).padStart(2, '0')
+                    const d = String(cur.getDate()).padStart(2, '0')
+                    const dateStr = `${y}-${m}-${d}`
+                    const dayOfWeek = cur.getDay()
+
                     if (!offDays.includes(dayOfWeek) && !closureDates.has(dateStr)) {
-                        leaveDays += leave.is_half_day ? 0.5 : 1
+                        // Check if an explicit attendance record overrides this leave day
+                        const attRecord = records.find(r => r.date === dateStr)
+                        const isOverriddenByAbsent = attRecord && (attRecord.status === 'absent' || (attRecord.remarks && attRecord.remarks.toLowerCase().includes('absent')))
+                        const isOverriddenByPresent = attRecord && Boolean(attRecord.check_in)
+
+                        if (!isOverriddenByAbsent && !isOverriddenByPresent) {
+                            leaveDays += leave.is_half_day ? 0.5 : 1
+                        }
                     }
+                    cur.setDate(cur.getDate() + 1)
                 }
             }
 
             // Add explicit leaves from attendance records (excluding those already in the leaves table to avoid double-counting)
             const explicitLeaves = records.filter(r => r.status === 'leave')
             for (const el of explicitLeaves) {
+                const isOverriddenByAbsent = el.remarks && el.remarks.toLowerCase().includes('absent')
+                const isOverriddenByPresent = Boolean(el.check_in)
                 const hasLeaveTable = employeeLeaves.some(l => el.date >= l.start_date && el.date <= l.end_date)
-                if (!hasLeaveTable) {
+                if (!hasLeaveTable && !isOverriddenByAbsent && !isOverriddenByPresent) {
                     leaveDays += el.is_half_day ? 0.5 : 1
                 }
             }
@@ -782,13 +802,14 @@ export class SalaryService {
 
             // Count explicit absents: count records explicitly marked as 'absent', OR records that have no check-in/out and are verified/pending but are not on off-days, holidays, or leaves.
             const explicitAbsents = records.filter(r => {
-                if (r.status === 'absent') return true
+                const isMarkedAbsent = r.status === 'absent' || (r.remarks && r.remarks.toLowerCase().includes('absent'))
+                if (isMarkedAbsent) return true
                 if (!r.check_in && !r.check_out) {
-                    const dateObj = new Date(r.date)
-                    const dayOfWeek = dateObj.getDay()
+                    const [y, m, d] = r.date.split('-').map(Number)
+                    const dayOfWeek = new Date(y, m - 1, d).getDay()
                     const isWeeklyOff = offDays.includes(dayOfWeek) || r.status === 'weekly_off'
                     const isHoliday = closureDates.has(r.date) || r.status === 'holiday'
-                    const hasLeave = employeeLeaves.some(l => r.date >= l.start_date && r.date <= l.end_date) || r.status === 'leave'
+                    const hasLeave = (employeeLeaves.some(l => r.date >= l.start_date && r.date <= l.end_date) || r.status === 'leave') && !isMarkedAbsent
                     if (!isWeeklyOff && !isHoliday && !hasLeave) {
                         return true
                     }
