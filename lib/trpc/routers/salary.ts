@@ -7,6 +7,8 @@ import { SalaryService } from '@/lib/services/salary.service'
 import { db } from '@/lib/db'
 import { profiles } from '@/lib/db/schema'
 import { eq, and, or, inArray } from 'drizzle-orm'
+import { invalidateDashboardCache } from './admin-dashboard-optimized'
+import { broadcastServerEvent } from '@/lib/events/server-broadcaster'
 
 export const salaryRouter = router({
 
@@ -172,7 +174,25 @@ export const salaryRouter = router({
             profileId: z.string().uuid().optional(),
         }))
         .mutation(async ({ input }) => {
-            return await SalaryService.compileMonthlyAttendance(input.month, input.year, input.profileId)
+            const results = await SalaryService.compileMonthlyAttendance(input.month, input.year, input.profileId)
+            try {
+                invalidateDashboardCache()
+                await broadcastServerEvent('dashboard_sync', {
+                    action: 'compilation_update',
+                    month: input.month,
+                    year: input.year,
+                    profileId: input.profileId,
+                })
+                await broadcastServerEvent('attendance_update', {
+                    action: 'manual-update',
+                    employeeId: input.profileId || 'all',
+                    date: `${input.year}-${String(input.month).padStart(2, '0')}-01`,
+                    remarks: 'Monthly attendance compiled/recalculated'
+                })
+            } catch (broadcastErr) {
+                console.warn('[compileMonthlyAttendance] Broadcast error:', broadcastErr)
+            }
+            return results
         }),
 
     getActiveEmployeesForCompilation: moderatorProcedure

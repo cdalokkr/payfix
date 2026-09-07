@@ -465,10 +465,31 @@ export class AttendanceService {
             )
         })
         for (const l of matchingLeaves) {
-            const newLeaveStatus = status === 'verified' ? 'approved' : 'rejected'
+            const hasPunches = Boolean(data.check_in || data.check_out)
+            const isAbsent = data.status === 'absent' || (data.remarks && data.remarks.toLowerCase().includes('absent'))
+
+            let newLeaveStatus: 'approved' | 'rejected' = 'rejected'
+            let systemRemark = remarks || ''
+
+            if (status === 'verified') {
+                if (hasPunches) {
+                    newLeaveStatus = 'rejected'
+                    systemRemark = `Rejected automatically: Employee present at work on leave day (Attendance verified by ${verifierName})`
+                } else if (isAbsent) {
+                    newLeaveStatus = 'rejected'
+                    systemRemark = `Rejected automatically: Attendance on ${data.date} marked as Absent (Attendance verified by ${verifierName})`
+                } else {
+                    newLeaveStatus = 'approved'
+                    systemRemark = remarks || `Leave approved via attendance verification by ${verifierName}`
+                }
+            } else {
+                newLeaveStatus = 'rejected'
+                systemRemark = remarks || `Leave status updated to rejected via attendance verification by ${verifierName}`
+            }
+
             await db.update(leaves).set({
                 status: newLeaveStatus,
-                remarks: remarks || `Leave status updated to ${newLeaveStatus} via attendance verification by ${verifierName}`,
+                remarks: systemRemark,
                 approved_by: verifiedBy,
                 updated_at: new Date()
             }).where(eq(leaves.id, l.id))
@@ -564,10 +585,31 @@ export class AttendanceService {
                 )
             })
             for (const l of matchingLeaves) {
-                const newLeaveStatus = status === 'verified' ? 'approved' : 'rejected'
+                const hasPunches = Boolean(r.check_in || r.check_out)
+                const isAbsent = r.status === 'absent' || (r.remarks && r.remarks.toLowerCase().includes('absent'))
+
+                let newLeaveStatus: 'approved' | 'rejected' = 'rejected'
+                let systemRemark = remarks || ''
+
+                if (status === 'verified') {
+                    if (hasPunches) {
+                        newLeaveStatus = 'rejected'
+                        systemRemark = `Rejected automatically: Employee present at work on leave day (Attendance verified by ${verifierName})`
+                    } else if (isAbsent) {
+                        newLeaveStatus = 'rejected'
+                        systemRemark = `Rejected automatically: Attendance on ${r.date} marked as Absent (Attendance verified by ${verifierName})`
+                    } else {
+                        newLeaveStatus = 'approved'
+                        systemRemark = remarks || `Leave approved via bulk attendance verification by ${verifierName}`
+                    }
+                } else {
+                    newLeaveStatus = 'rejected'
+                    systemRemark = remarks || `Leave status updated to rejected via bulk attendance verification by ${verifierName}`
+                }
+
                 await db.update(leaves).set({
                     status: newLeaveStatus,
-                    remarks: remarks || `Leave status updated to ${newLeaveStatus} via bulk attendance verification by ${verifierName}`,
+                    remarks: systemRemark,
                     approved_by: verifiedBy,
                     updated_at: new Date()
                 }).where(eq(leaves.id, l.id))
@@ -592,6 +634,7 @@ export class AttendanceService {
         checkIn,
         checkOut,
         status,
+        dayType,
         isHalfDay,
         isExtraDay,
         remarks,
@@ -601,7 +644,8 @@ export class AttendanceService {
         id: string
         checkIn?: string | null
         checkOut?: string | null
-        status?: 'pending' | 'verified' | 'rejected'
+        status?: 'pending' | 'verified' | 'rejected' | 'absent'
+        dayType?: string
         isHalfDay?: boolean
         isExtraDay?: boolean
         remarks?: string
@@ -644,33 +688,44 @@ export class AttendanceService {
             updated_at: new Date()
         }
 
-        if (checkIn !== undefined) {
-            if (!checkIn) {
-                updateData.check_in = null
-            } else {
-                const parts = checkIn.split(':')
-                const h = parts[0].padStart(2, '0')
-                const m = (parts[1] || '00').padStart(2, '0')
-                updateData.check_in = new Date(`${recordDate}T${h}:${m}:00+05:30`)
-            }
-        }
+        const isAbsentRequest = dayType === 'Absent' || status === 'absent'
 
-        if (checkOut !== undefined) {
-            if (!checkOut) {
-                updateData.check_out = null
-            } else {
-                const parts = checkOut.split(':')
-                const h = parts[0].padStart(2, '0')
-                const m = (parts[1] || '00').padStart(2, '0')
-                updateData.check_out = new Date(`${recordDate}T${h}:${m}:00+05:30`)
+        if (isAbsentRequest) {
+            updateData.check_in = null
+            updateData.check_out = null
+            updateData.status = 'absent'
+            updateData.is_half_day = false
+            if (remarks) updateData.remarks = remarks
+        } else {
+            if (checkIn !== undefined) {
+                if (!checkIn) {
+                    updateData.check_in = null
+                } else {
+                    const parts = checkIn.split(':')
+                    const h = parts[0].padStart(2, '0')
+                    const m = (parts[1] || '00').padStart(2, '0')
+                    updateData.check_in = new Date(`${recordDate}T${h}:${m}:00+05:30`)
+                }
             }
+
+            if (checkOut !== undefined) {
+                if (!checkOut) {
+                    updateData.check_out = null
+                } else {
+                    const parts = checkOut.split(':')
+                    const h = parts[0].padStart(2, '0')
+                    const m = (parts[1] || '00').padStart(2, '0')
+                    updateData.check_out = new Date(`${recordDate}T${h}:${m}:00+05:30`)
+                }
+            }
+
+            if (status) updateData.status = status
+            if (isHalfDay !== undefined) updateData.is_half_day = isHalfDay
+            if (remarks) updateData.remarks = remarks
         }
 
         updateData.source = 'manual'
-        if (status) updateData.status = status
-        if (isHalfDay !== undefined) updateData.is_half_day = isHalfDay
         if (isExtraDay !== undefined) updateData.is_extra_day = isExtraDay
-        if (remarks) updateData.remarks = remarks
 
         let data: any
 
@@ -683,16 +738,18 @@ export class AttendanceService {
             const autoExtraDay = (isOffDay || isHoliday) ? true : false
 
             const resolvedExtraDay = isExtraDay !== undefined ? isExtraDay : autoExtraDay
+            const resolvedStatus = isAbsentRequest ? 'absent' : (status || 'pending')
+            const resolvedRemarks = remarks || (isAbsentRequest ? 'Marked as Absent' : `Manually created from virtual log by ${updaterName}`)
 
             const [inserted] = await db.insert(attendance).values({
                 profile_id: profileId,
                 date: recordDate,
                 check_in: updateData.check_in || null,
                 check_out: updateData.check_out || null,
-                status: status || 'pending',
-                is_half_day: isHalfDay ?? false,
+                status: resolvedStatus,
+                is_half_day: isAbsentRequest ? false : (isHalfDay ?? false),
                 is_extra_day: resolvedExtraDay,
-                remarks: remarks || `Manually created from virtual log by ${updaterName}`,
+                remarks: resolvedRemarks,
                 source: 'manual',
                 updated_at: new Date()
             }).returning()
@@ -716,10 +773,29 @@ export class AttendanceService {
             )
         })
         for (const l of matchingLeaves) {
-            const newLeaveStatus = (data.status === 'verified' || data.status === 'leave') ? 'approved' : 'rejected'
+            const hasPunches = Boolean(data.check_in || data.check_out)
+            const isAbsent = data.status === 'absent' || isAbsentRequest || (data.remarks && data.remarks.toLowerCase().includes('absent'))
+
+            let newLeaveStatus: 'approved' | 'rejected' = 'rejected'
+            let systemRemark = remarks || ''
+
+            if (isAbsent) {
+                newLeaveStatus = 'rejected'
+                systemRemark = `Rejected automatically: Attendance on ${recordDate} marked as Absent by ${updaterName}`
+            } else if (hasPunches) {
+                newLeaveStatus = 'rejected'
+                systemRemark = `Rejected automatically: Employee present at work on leave day (Attendance updated by ${updaterName})`
+            } else if (data.status === 'verified' || data.status === 'leave') {
+                newLeaveStatus = 'approved'
+                systemRemark = remarks || `Leave approved via manual attendance update by ${updaterName}`
+            } else {
+                newLeaveStatus = 'rejected'
+                systemRemark = remarks || `Leave status updated to rejected via manual attendance update by ${updaterName}`
+            }
+
             await db.update(leaves).set({
                 status: newLeaveStatus,
-                remarks: remarks || `Leave status updated to ${newLeaveStatus} via manual attendance update by ${updaterName}`,
+                remarks: systemRemark,
                 approved_by: updatedBy,
                 updated_at: new Date()
             }).where(eq(leaves.id, l.id))
