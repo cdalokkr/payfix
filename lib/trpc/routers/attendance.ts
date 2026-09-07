@@ -349,7 +349,8 @@ export const attendanceRouter = router({
             id: z.string(),
             checkIn: z.string().nullable().optional(),
             checkOut: z.string().nullable().optional(),
-            status: z.enum(['pending', 'verified', 'rejected']).optional(),
+            status: z.enum(['pending', 'verified', 'rejected', 'absent']).optional(),
+            dayType: z.string().optional(),
             isHalfDay: z.boolean().optional(),
             isExtraDay: z.boolean().optional(),
             remarks: z.string().optional(),
@@ -442,12 +443,32 @@ export const attendanceRouter = router({
         }))
         .mutation(async ({ ctx, input }) => {
             try {
-                return await LeavesService.approveLeave({
+                const result = await LeavesService.approveLeave({
                     id: input.id,
                     status: input.status,
                     remarks: input.remarks,
                     approvedBy: ctx.profile.id
                 })
+
+                // Invalidate dashboard cache immediately on server
+                invalidateDashboardCache()
+
+                // Broadcast sync event to all clients
+                broadcastServerEvent('dashboard_sync', {
+                    action: 'approve-leave',
+                    targetUserId: result.profile_id
+                }, result.profile_id)
+
+                // Broadcast attendance-specific event for real-time updates
+                broadcastServerEvent('attendance_update', {
+                    action: input.status === 'approved' ? 'leave-approved' : 'leave-rejected',
+                    employeeId: result.profile_id,
+                    performedById: ctx.profile.id,
+                    performedByName: ctx.profile.full_name,
+                    newStatus: input.status
+                }, result.profile_id)
+
+                return result
             } catch (err: any) {
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',

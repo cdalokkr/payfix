@@ -711,6 +711,7 @@ export function AdminAttendanceVerification() {
                         checkIn: data.checkIn,
                         checkOut: data.checkOut,
                         status: data.status,
+                        dayType: data.dayType,
                         remarks: data.remarks,
                         isHalfDay: data.isHalfDay,
                         isExtraDay: data.isExtraDay
