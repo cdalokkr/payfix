@@ -244,6 +244,12 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
         summaries?.filter((s: any) => s.status === 'draft') || [], [summaries]
     )
 
+    const staleSummaries = useMemo(() =>
+        summaries?.filter((s: any) => s.needs_recompile) || [], [summaries]
+    )
+
+    const hasStaleSummaries = staleSummaries.length > 0
+
     const daysInMonth = useMemo(() => new Date(year, month, 0).getDate(), [month, year])
 
     // Compute last compiled timestamp from summaries
@@ -388,8 +394,10 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                         <Button
                             onClick={handleStartCompilation}
                             disabled={isCompileModalOpen && !compilationProgress.isFinished}
+                            className={hasStaleSummaries ? "bg-amber-600 hover:bg-amber-700 text-white shadow-sm ring-2 ring-amber-500/30" : ""}
                         >
-                            <RefreshCw className="h-4 w-4 mr-1" />Compile
+                            <RefreshCw className={`h-4 w-4 mr-1 ${hasStaleSummaries ? "animate-spin-slow" : ""}`} />
+                            {hasStaleSummaries ? `Re-compile (${staleSummaries.length})` : "Compile"}
                         </Button>
                         {lastCompiledAt && (
                             <span className="text-xs text-muted-foreground flex items-center gap-1 whitespace-nowrap">
@@ -433,6 +441,40 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                     )}
                 </div>
             </div>
+
+            {/* Stale Summaries Warning Banner */}
+            {hasStaleSummaries && (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 dark:bg-amber-950/30 p-4 text-amber-900 dark:text-amber-200 shadow-sm animate-in fade-in duration-300">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-start gap-3">
+                            <div className="p-2 rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5">
+                                <AlertTriangle className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <h4 className="text-sm font-bold flex items-center gap-2 flex-wrap">
+                                    Attendance or Leave Corrections Detected
+                                    <Badge variant="outline" className="bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/40 text-[10px] font-bold">
+                                        {staleSummaries.length} {staleSummaries.length === 1 ? 'Employee' : 'Employees'} Affected
+                                    </Badge>
+                                </h4>
+                                <p className="text-xs text-amber-800/90 dark:text-amber-300/80 mt-1 leading-relaxed">
+                                    Corrections or updates were made to attendance records or leave requests after the last compilation for <strong>{MONTHS[month - 1]} {year}</strong>.
+                                    Re-compilation is required to sync updated totals and regenerate payslips.
+                                </p>
+                            </div>
+                        </div>
+                        <Button
+                            size="sm"
+                            className="bg-amber-600 hover:bg-amber-700 text-white shrink-0 font-semibold gap-1.5 shadow-sm self-start sm:self-center"
+                            onClick={handleStartCompilation}
+                            disabled={isCompileModalOpen && !compilationProgress.isFinished}
+                        >
+                            <RefreshCw className="h-3.5 w-3.5" />
+                            Re-compile All
+                        </Button>
+                    </div>
+                </div>
+            )}
 
             {/* Summary Stats Bar */}
             {summaryStats && (
@@ -519,19 +561,34 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-1.5">
+                                        <div className="flex items-center gap-1.5 flex-wrap justify-end">
                                             {statusBadge(s.status)}
+                                            {s.needs_recompile && (
+                                                <Badge
+                                                    variant="outline"
+                                                    className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[9px] px-1.5 py-0 font-semibold flex items-center gap-1"
+                                                    title={s.recompile_reason || 'Records modified after compilation'}
+                                                >
+                                                    <AlertTriangle className="h-2.5 w-2.5" />
+                                                    Needs Re-compile
+                                                </Badge>
+                                            )}
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                className="h-7 w-7 text-orange-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20"
+                                                className={`h-7 w-7 ${
+                                                    s.needs_recompile
+                                                        ? "text-amber-600 hover:text-amber-700 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 ring-1 ring-amber-500/20"
+                                                        : "text-orange-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20"
+                                                }`}
                                                 onClick={() => handleCompileSingle(s.profile_id, s.profile?.full_name || s.profile?.email)}
                                                 disabled={compilingProfileId !== null}
+                                                title={s.needs_recompile ? `${s.recompile_reason || 'Records modified after compilation'} - click to recompile` : "Recompile Employee Attendance"}
                                             >
                                                 {compilingProfileId === s.profile_id ? (
                                                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                                 ) : (
-                                                    <RefreshCw className="h-3.5 w-3.5" />
+                                                    <RefreshCw className={`h-3.5 w-3.5 ${s.needs_recompile ? "animate-pulse" : ""}`} />
                                                 )}
                                             </Button>
                                         </div>
@@ -626,20 +683,38 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                                                     <span className="font-bold text-amber-600">{(s.salary_breakdown as any)?.extra_days || 0}</span>
                                                 </td>
                                                 <td className="p-3 text-center text-muted-foreground">{s.total_working_hours || 0}h</td>
-                                                <td className="p-3 text-center">{statusBadge(s.status)}</td>
+                                                <td className="p-3 text-center">
+                                                    <div className="flex flex-col items-center gap-1">
+                                                        {statusBadge(s.status)}
+                                                        {s.needs_recompile && (
+                                                            <Badge
+                                                                variant="outline"
+                                                                className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[9px] px-1.5 py-0 font-semibold flex items-center gap-1 whitespace-nowrap"
+                                                                title={s.recompile_reason || 'Records modified after compilation'}
+                                                            >
+                                                                <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
+                                                                Needs Re-compile
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                </td>
                                                 <td className="p-3 text-center">
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
-                                                        className="h-8 w-8 text-orange-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20"
+                                                        className={`h-8 w-8 ${
+                                                            s.needs_recompile
+                                                                ? "text-amber-600 hover:text-amber-700 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 ring-1 ring-amber-500/20"
+                                                                : "text-orange-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20"
+                                                        }`}
                                                         onClick={() => handleCompileSingle(s.profile_id, s.profile?.full_name || s.profile?.email)}
                                                         disabled={compilingProfileId !== null}
-                                                        title="Recompile Employee Attendance"
+                                                        title={s.needs_recompile ? `${s.recompile_reason || 'Records modified after compilation'} - click to recompile` : "Recompile Employee Attendance"}
                                                     >
                                                         {compilingProfileId === s.profile_id ? (
                                                             <Loader2 className="h-4 w-4 animate-spin" />
                                                         ) : (
-                                                            <RefreshCw className="h-4 w-4" />
+                                                            <RefreshCw className={`h-4 w-4 ${s.needs_recompile ? "animate-pulse" : ""}`} />
                                                         )}
                                                     </Button>
                                                 </td>

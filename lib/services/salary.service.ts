@@ -932,10 +932,94 @@ export class SalaryService {
             }
         }
 
-        return summaries.map(s => ({
-            ...s,
-            has_salary_setup: activeSetupsMap.get(s.profile_id) || false
-        }))
+        const staleMap = new Map<string, { needs_recompile: boolean; recompile_reason: string }>()
+
+        if (summaries.length > 0) {
+            const lastDay = new Date(year, month, 0).getDate()
+            const startDate = `${year}-${String(month).padStart(2, '0')}-01`
+            const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+
+            const employeeIds = summaries.map(s => s.profile_id)
+
+            // Find the earliest updated_at / created_at among summaries
+            const minTimestamp = Math.min(
+                ...summaries.map(s => new Date(s.updated_at || s.created_at || 0).getTime())
+            )
+            const minSummaryDate = new Date(minTimestamp)
+
+            try {
+                // Fetch attendance and leaves updated after minSummaryDate in target month
+                const [recentAttendance, recentLeaves] = await Promise.all([
+                    db.query.attendance.findMany({
+                        where: and(
+                            inArray(attendance.profile_id, employeeIds),
+                            gte(attendance.date, startDate),
+                            lte(attendance.date, endDate),
+                            gt(attendance.updated_at, minSummaryDate)
+                        ),
+                        columns: {
+                            profile_id: true,
+                            date: true,
+                            updated_at: true,
+                        }
+                    }),
+                    db.query.leaves.findMany({
+                        where: and(
+                            inArray(leaves.profile_id, employeeIds),
+                            lte(leaves.start_date, endDate),
+                            gte(leaves.end_date, startDate),
+                            gt(leaves.updated_at, minSummaryDate)
+                        ),
+                        columns: {
+                            profile_id: true,
+                            start_date: true,
+                            end_date: true,
+                            updated_at: true,
+                        }
+                    })
+                ])
+
+                for (const s of summaries) {
+                    const sTime = new Date(s.updated_at || s.created_at || 0).getTime()
+                    // 1000ms buffer to avoid false positives from clock differences during compilation
+                    const hasRecentAttendance = recentAttendance.some(
+                        a => a.profile_id === s.profile_id && a.updated_at && new Date(a.updated_at).getTime() > sTime + 1000
+                    )
+                    const hasRecentLeaves = recentLeaves.some(
+                        l => l.profile_id === s.profile_id && l.updated_at && new Date(l.updated_at).getTime() > sTime + 1000
+                    )
+
+                    if (hasRecentAttendance && hasRecentLeaves) {
+                        staleMap.set(s.profile_id, {
+                            needs_recompile: true,
+                            recompile_reason: 'Attendance and leave records were edited after compilation'
+                        })
+                    } else if (hasRecentAttendance) {
+                        staleMap.set(s.profile_id, {
+                            needs_recompile: true,
+                            recompile_reason: 'Attendance records were edited after compilation'
+                        })
+                    } else if (hasRecentLeaves) {
+                        staleMap.set(s.profile_id, {
+                            needs_recompile: true,
+                            recompile_reason: 'Leave status or dates were edited after compilation'
+                        })
+                    }
+                }
+            } catch (err) {
+                console.warn('[SalaryService.getMonthlySummaries] Failed to check for stale summaries:', err)
+            }
+        }
+
+        return summaries.map(s => {
+            const staleInfo = staleMap.get(s.profile_id)
+            return {
+                ...s,
+                has_salary_setup: activeSetupsMap.get(s.profile_id) || false,
+                needs_recompile: staleInfo?.needs_recompile || false,
+                recompile_reason: staleInfo?.recompile_reason || null,
+            }
+        })
     }
 
     // ==========================================
