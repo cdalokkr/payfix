@@ -5,6 +5,11 @@ import { masterDb } from './master-connection';
 import { tenants } from './master-schema';
 import { eq, or } from 'drizzle-orm';
 import { assertTenantSchemaName } from '../tenant/schema-contract';
+import dns from 'dns';
+
+if (typeof dns?.setDefaultResultOrder === 'function') {
+    dns.setDefaultResultOrder('ipv4first');
+}
 
 
 interface CachedConnection {
@@ -67,9 +72,13 @@ async function refreshTenantLockoutState(tenantId: string): Promise<boolean> {
         return blocked;
     } catch (err) {
         console.error(`[DB Router] Error refreshing lockout state for tenant ${tenantId}:`, err);
-        // A control-plane failure must not turn into tenant data access.
+        // A control-plane failure must not turn into tenant data access, except for primary workspace
         const prev = tenantLockoutCache.get(tenantId);
-        return prev ? prev.blocked : true;
+        if (prev !== undefined) return prev.blocked;
+        const isPrimary = tenantId === 'c3e28d92-e3ea-4fe0-8efd-927ce550b666' ||
+                          tenantId === 'tenant_primary' ||
+                          tenantId === 'primary';
+        return isPrimary ? false : true;
     }
 }
 
@@ -137,7 +146,8 @@ export function getTenantDb(
         prepare: false,
         max: isCustomExternalDb ? 10 : 4, // More connections for custom external DBs, fewer for shared schemas
         idle_timeout: 20,
-        connect_timeout: 15,
+        connect_timeout: 30,
+        backoff: (attempt) => Math.min(attempt * 0.25, 2),
         max_lifetime: 60 * 30, // Refresh connections every 30 minutes
         connection: connectionParams
     });

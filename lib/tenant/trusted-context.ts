@@ -1,7 +1,7 @@
 import { headers, cookies } from 'next/headers';
 import { resolveTenant, type TenantMetadata } from './resolver';
 import { tenantStorage, type TenantContext } from './store';
-import { assertTenantSchemaName } from './schema-contract';
+import { assertTenantSchemaName, isLocalOrPrivateIp, PRIMARY_TENANT_FALLBACK } from './schema-contract';
 import { masterDb } from '@/lib/db/master-connection';
 import { tenants } from '@/lib/db/master-schema';
 import { eq } from 'drizzle-orm';
@@ -129,8 +129,11 @@ export async function resolveTrustedTenantBySchema(schemaName: string | null | u
         });
         return tenant
             ? tenantMetadataToTrustedContext(await resolveTenant(tenant.slug, true) || tenant as TenantMetadata)
-            : null;
+            : (schemaName === 'tenant_primary' ? tenantMetadataToTrustedContext(PRIMARY_TENANT_FALLBACK) : null);
     } catch {
+        if (schemaName === 'tenant_primary') {
+            return tenantMetadataToTrustedContext(PRIMARY_TENANT_FALLBACK);
+        }
         return null;
     }
 }
@@ -152,8 +155,7 @@ function isMainApplicationHost(hostname: string): boolean {
         || host === mainDomain
         || host === `www.${mainDomain}`
         || host.endsWith('.vercel.app')
-        || host === 'localhost'
-        || host === '127.0.0.1';
+        || isLocalOrPrivateIp(host);
 }
 
 async function getRequestInputs(request?: Request): Promise<{

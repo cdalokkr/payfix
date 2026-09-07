@@ -38,6 +38,20 @@ export interface TenantMetadata {
 const resolverCache = new Map<string, { data: TenantMetadata | null; expires: number }>();
 const CACHE_TTL = 3 * 60 * 1000; // 3 minutes cache expiration
 
+import { isLocalOrPrivateIp, PRIMARY_TENANT_FALLBACK } from './schema-contract';
+
+async function queryWithRetry<T>(queryFn: () => Promise<T>, retries = 1, delayMs = 250): Promise<T> {
+    try {
+        return await queryFn();
+    } catch (err) {
+        if (retries > 0) {
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+            return queryWithRetry(queryFn, retries - 1, delayMs * 2);
+        }
+        throw err;
+    }
+}
+
 export async function resolveTenant(hostname: string, forceRefresh = false): Promise<TenantMetadata | null> {
     // Normalize hostname and strip port if present
     const host = hostname.split(':')[0].toLowerCase().trim();
@@ -49,7 +63,7 @@ export async function resolveTenant(hostname: string, forceRefresh = false): Pro
         }
     }
 
-    const mainDomain = process.env.NEXT_PUBLIC_MAIN_DOMAIN || 'payfix.com';
+    const mainDomain = (process.env.NEXT_PUBLIC_MAIN_DOMAIN || 'payfix.com').toLowerCase();
     let isSubdomain = false;
     let slug = '';
 
@@ -62,33 +76,31 @@ export async function resolveTenant(hostname: string, forceRefresh = false): Pro
         }
     }
 
-    try {
-        const isMainDomain = 
-            host === mainDomain || 
-            host === `www.${mainDomain}` || 
-            host.endsWith('.vercel.app') ||
-            host === 'localhost' ||
-            host === '127.0.0.1' ||
-            host === '10.88.130.226';
+    const isMainDomain = 
+        host === mainDomain || 
+        host === `www.${mainDomain}` || 
+        host.endsWith('.vercel.app') ||
+        isLocalOrPrivateIp(host);
 
+    try {
         let tenantRecord;
         if (isSubdomain) {
             // Find by subdomain slug
-            tenantRecord = await masterDb.query.tenants.findFirst({
+            tenantRecord = await queryWithRetry(() => masterDb.query.tenants.findFirst({
                 where: eq(tenants.slug, slug),
-            });
+            }));
         } else if (isMainDomain) {
-            tenantRecord = await masterDb.query.tenants.findFirst({
+            tenantRecord = await queryWithRetry(() => masterDb.query.tenants.findFirst({
                 where: eq(tenants.slug, 'primary'),
-            });
+            }));
         } else {
             // Find by custom domain mapping or matching slug directly (e.g. for local testing)
-            tenantRecord = await masterDb.query.tenants.findFirst({
+            tenantRecord = await queryWithRetry(() => masterDb.query.tenants.findFirst({
                 where: or(
                     eq(tenants.custom_domain, host),
                     eq(tenants.slug, host)
                 ),
-            });
+            }));
         }
 
         if (!tenantRecord) {
@@ -99,9 +111,9 @@ export async function resolveTenant(hostname: string, forceRefresh = false): Pro
         // Retrieve white-label branding configurations
         let brandingRecord: any = null;
         try {
-            brandingRecord = await masterDb.query.tenantBranding.findFirst({
+            brandingRecord = await queryWithRetry(() => masterDb.query.tenantBranding.findFirst({
                 where: eq(tenantBranding.tenant_id, tenantRecord.id),
-            });
+            }), 1, 100);
         } catch (brandingErr) {
             console.warn('[Tenant Resolver] Failed to fetch branding, using defaults:', brandingErr);
         }
@@ -143,6 +155,21 @@ export async function resolveTenant(hostname: string, forceRefresh = false): Pro
 
     } catch (err) {
         console.error(`[Tenant Resolver] Error resolving hostname ${host}:`, err);
+
+        // Fallback 1: Return stale cached metadata if previously cached
+        const staleCached = resolverCache.get(host);
+        if (staleCached?.data) {
+            console.warn(`[Tenant Resolver] Returning stale cached tenant metadata for ${host}`);
+            return staleCached.data;
+        }
+
+        // Fallback 2: For main domain / localhost / private IP or primary slug, fallback to PRIMARY_TENANT_FALLBACK
+        if (isMainDomain || slug === 'primary' || host === 'primary') {
+            console.warn(`[Tenant Resolver] Using fallback primary tenant metadata for ${host}`);
+            resolverCache.set(host, { data: PRIMARY_TENANT_FALLBACK, expires: Date.now() + CACHE_TTL });
+            return PRIMARY_TENANT_FALLBACK;
+        }
+
         return null;
     }
 }
