@@ -185,6 +185,7 @@ const nextConfig: NextConfig = {
 
   experimental: {
     // Optimize imports for tree-shaking heavy UI libraries
+    // (Note: Next.js 16 already includes lucide-react, date-fns, and recharts by default)
     optimizePackageImports: [
       '@radix-ui/react-accordion',
       '@radix-ui/react-alert-dialog',
@@ -204,10 +205,7 @@ const nextConfig: NextConfig = {
       '@radix-ui/react-tabs',
       '@radix-ui/react-tooltip',
       '@tanstack/react-table',
-      'lucide-react',
-      'recharts',
       'framer-motion',
-      'date-fns',
     ],
     // Cache configuration for client-side router cache
     staleTimes: {
