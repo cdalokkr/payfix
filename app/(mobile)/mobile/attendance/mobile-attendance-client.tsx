@@ -18,6 +18,7 @@ interface MobileAttendanceClientProps {
 export function MobileAttendanceClient({ profile, action }: MobileAttendanceClientProps) {
     const router = useRouter()
     const [isDesktop, setIsDesktop] = useState(false)
+    const [wizardInstanceKey] = useState(() => `${action}-${Date.now()}`)
 
     useEffect(() => {
         setIsDesktop(window.innerWidth >= 1024)
@@ -31,12 +32,13 @@ export function MobileAttendanceClient({ profile, action }: MobileAttendanceClie
     }, [])
 
     const handleComplete = () => {
-        // Just navigate to dashboard - tRPC cache invalidation handles data refresh
-        router.push('/mobile')
+        // Navigate to dashboard and refresh to update session attendance counters
+        router.replace('/mobile')
+        router.refresh()
     }
 
     const handleCancel = () => {
-        router.push('/mobile')
+        router.replace('/mobile')
     }
 
     if (isDesktop) {
@@ -66,6 +68,7 @@ export function MobileAttendanceClient({ profile, action }: MobileAttendanceClie
 
     return (
         <MobileAttendanceWizard
+            key={wizardInstanceKey}
             action={action}
             profileImageUrl={profile.avatar_url}
             profileName={profile.full_name}

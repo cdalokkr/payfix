@@ -440,26 +440,30 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
 
 
                     {captureDiagnostics && (
-                        <details open={status === 'error'} className="max-h-[32vh] overflow-y-auto overscroll-contain rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2.5 text-left [scrollbar-gutter:stable]">
-                            <summary className="cursor-pointer text-xs font-bold text-sky-300">Biometric capture details</summary>
-                            <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-mono text-slate-300">
-                                <dt className="text-slate-500">Camera</dt><dd>{captureDiagnostics.cameraResolution}</dd>
-                                <dt className="text-slate-500">Natural frame</dt><dd>{captureDiagnostics.outputResolution}</dd>
-                                <dt className="text-slate-500">Format</dt><dd>{captureDiagnostics.outputMime}</dd>
-                                <dt className="text-slate-500">Payload</dt><dd>{Math.round(captureDiagnostics.outputBytes / 1024)} KB</dd>
-                                <dt className="text-slate-500">Crop</dt><dd className="col-span-1">{captureDiagnostics.cropMode}</dd>
-                            </dl>
-                            {captureDiagnostics.serverStatus && <p className="mt-2 break-words text-[10px] text-amber-200">Server: {captureDiagnostics.serverStatus}</p>}
-                            {captureDiagnostics.serverVerification && (
-                                <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-slate-700 pt-2 text-[10px] font-mono text-slate-300">
-                                    <dt className="text-slate-500">Server faces</dt><dd>{captureDiagnostics.serverVerification.faceCount}</dd>
-                                    <dt className="text-slate-500">Template</dt><dd>{captureDiagnostics.serverVerification.embeddingDimensions}-d</dd>
-                                    <dt className="text-slate-500">Liveness</dt><dd>{captureDiagnostics.serverVerification.livenessPassed ? 'Passed' : 'Failed'}</dd>
-                                    <dt className="text-slate-500">Server portrait</dt><dd>{captureDiagnostics.serverVerification.storedCanonicalPortrait ? '3:4 canonical portrait' : 'Not stored'}</dd>
-                                    <dt className="text-slate-500">Backend</dt><dd className="break-all">{captureDiagnostics.serverVerification.backend}</dd>
+                        <details open={status === 'error'} className="rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2.5 text-left transition-all">
+                            <summary className="cursor-pointer text-xs font-bold text-sky-300 select-none py-0.5 outline-none hover:text-sky-200 transition-colors">
+                                Biometric capture details
+                            </summary>
+                            <div className="mt-2 max-h-[30vh] overflow-y-auto overscroll-contain pr-1 touch-pan-y space-y-2 [scrollbar-width:thin]">
+                                <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-mono text-slate-300">
+                                    <dt className="text-slate-500">Camera</dt><dd>{captureDiagnostics.cameraResolution}</dd>
+                                    <dt className="text-slate-500">Natural frame</dt><dd>{captureDiagnostics.outputResolution}</dd>
+                                    <dt className="text-slate-500">Format</dt><dd>{captureDiagnostics.outputMime}</dd>
+                                    <dt className="text-slate-500">Payload</dt><dd>{Math.round(captureDiagnostics.outputBytes / 1024)} KB</dd>
+                                    <dt className="text-slate-500">Crop</dt><dd className="col-span-1">{captureDiagnostics.cropMode}</dd>
                                 </dl>
-                            )}
-                            {debugLogs.length > 0 && <pre className="mt-2 max-h-24 overflow-auto whitespace-pre-wrap border-t border-slate-700 pt-2 text-[9px] leading-4 text-slate-400">{debugLogs.join('\n')}</pre>}
+                                {captureDiagnostics.serverStatus && <p className="break-words text-[10px] text-amber-200">Server: {captureDiagnostics.serverStatus}</p>}
+                                {captureDiagnostics.serverVerification && (
+                                    <dl className="grid grid-cols-2 gap-x-3 gap-y-1 border-t border-slate-700 pt-2 text-[10px] font-mono text-slate-300">
+                                        <dt className="text-slate-500">Server faces</dt><dd>{captureDiagnostics.serverVerification.faceCount}</dd>
+                                        <dt className="text-slate-500">Template</dt><dd>{captureDiagnostics.serverVerification.embeddingDimensions}-d</dd>
+                                        <dt className="text-slate-500">Liveness</dt><dd>{captureDiagnostics.serverVerification.livenessPassed ? 'Passed' : 'Failed'}</dd>
+                                        <dt className="text-slate-500">Server portrait</dt><dd>{captureDiagnostics.serverVerification.storedCanonicalPortrait ? '3:4 canonical portrait' : 'Not stored'}</dd>
+                                        <dt className="text-slate-500">Backend</dt><dd className="break-all">{captureDiagnostics.serverVerification.backend}</dd>
+                                    </dl>
+                                )}
+                                {debugLogs.length > 0 && <pre className="max-h-24 overflow-y-auto whitespace-pre-wrap border-t border-slate-700 pt-2 text-[9px] leading-4 text-slate-400 touch-pan-y">{debugLogs.join('\n')}</pre>}
+                            </div>
                         </details>
                     )}
 

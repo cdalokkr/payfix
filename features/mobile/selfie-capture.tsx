@@ -334,10 +334,27 @@ export function SelfieCapture({
         }
     }, [status, capturePhoto, capturedImage, executeVerify])
 
+    const resetVerificationState = useCallback(() => {
+        setStatus('idle')
+        setErrorMessage('')
+        setCapturedImage(null)
+        setProcessedPortrait(null)
+        setCapturedAt(null)
+        setSimilarity(0)
+        setApiStatus('idle')
+        setApiError('')
+        setVerificationDetails(null)
+        setServerVerificationBackend(null)
+        setLivenessChallenge(null)
+        setCaptureResetKey(v => v + 1)
+    }, [])
+
     const handleComplete = useCallback(() => {
         if (apiStatus === 'success') {
-            // API already done, go directly to dashboard
-            onVerified({ matched: true, similarity })
+            const finalSimilarity = similarity
+            resetVerificationState()
+            stopCamera()
+            onVerified({ matched: true, similarity: finalSimilarity })
         } else if (apiStatus === 'pending') {
             // Wait for API to complete
             // The button will show spinner, user needs to wait
@@ -346,7 +363,12 @@ export function SelfieCapture({
             setStatus('verify_failed')
             setErrorMessage(apiError || 'Failed to record attendance')
         }
-    }, [apiStatus, similarity, onVerified, apiError])
+    }, [apiStatus, similarity, onVerified, apiError, resetVerificationState, stopCamera])
+
+    // Reset verification state on mode change (e.g. clock_in -> clock_out)
+    useEffect(() => {
+        resetVerificationState()
+    }, [mode, resetVerificationState])
 
     const [sessionTimeout, setSessionTimeout] = useState<number>(10)
 
@@ -420,24 +442,28 @@ export function SelfieCapture({
                                 </div>
                             </div>
                             {verificationDetails && (
-                                <details open={status === 'verify_failed'} className="max-h-[32vh] overflow-y-auto overscroll-contain rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2.5 text-left [scrollbar-gutter:stable]">
-                                    <summary className="cursor-pointer text-xs font-bold text-sky-300">Daily biometric verification details</summary>
-                                    <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-mono text-slate-300">
-                                        <dt className="text-slate-500">Camera</dt><dd>{verificationDetails.cameraResolution}</dd>
-                                        <dt className="text-slate-500">Output</dt><dd>{verificationDetails.outputResolution}</dd>
-                                        <dt className="text-slate-500">Format</dt><dd>{verificationDetails.format}</dd>
-                                        <dt className="text-slate-500">Payload</dt><dd>{Math.round(verificationDetails.payloadBytes / 1024)} KB</dd>
-                                        {verificationDetails.server && <>
-                                            <dt className="text-slate-500">Server faces</dt><dd>{verificationDetails.server.faceCount}</dd>
-                                            <dt className="text-slate-500">Template</dt><dd>{verificationDetails.server.embeddingDimensions}-d</dd>
-                                            <dt className="text-slate-500">Liveness</dt><dd>{verificationDetails.server.livenessPassed ? 'Passed' : 'Failed'}</dd>
-                                            <dt className="text-slate-500">Backend</dt><dd className="break-all">{verificationDetails.server.backend}</dd>
-                                        </>}
-                                        {typeof verificationDetails.similarity === 'number' && typeof verificationDetails.threshold === 'number' && verificationDetails.threshold > 0 && <>
-                                            <dt className="text-slate-500">Similarity</dt><dd>{(verificationDetails.similarity * 100).toFixed(1)}%</dd>
-                                            <dt className="text-slate-500">Required</dt><dd>{(verificationDetails.threshold * 100).toFixed(1)}%</dd>
-                                        </>}
-                                    </dl>
+                                <details open={status === 'verify_failed'} className="rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2.5 text-left transition-all">
+                                    <summary className="cursor-pointer text-xs font-bold text-sky-300 select-none py-0.5 outline-none hover:text-sky-200 transition-colors">
+                                        Daily biometric verification details
+                                    </summary>
+                                    <div className="mt-2 max-h-[30vh] overflow-y-auto overscroll-contain pr-1 touch-pan-y space-y-2 [scrollbar-width:thin]">
+                                        <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-mono text-slate-300">
+                                            <dt className="text-slate-500">Camera</dt><dd>{verificationDetails.cameraResolution}</dd>
+                                            <dt className="text-slate-500">Output</dt><dd>{verificationDetails.outputResolution}</dd>
+                                            <dt className="text-slate-500">Format</dt><dd>{verificationDetails.format}</dd>
+                                            <dt className="text-slate-500">Payload</dt><dd>{Math.round(verificationDetails.payloadBytes / 1024)} KB</dd>
+                                            {verificationDetails.server && <>
+                                                <dt className="text-slate-500">Server faces</dt><dd>{verificationDetails.server.faceCount}</dd>
+                                                <dt className="text-slate-500">Template</dt><dd>{verificationDetails.server.embeddingDimensions}-d</dd>
+                                                <dt className="text-slate-500">Liveness</dt><dd>{verificationDetails.server.livenessPassed ? 'Passed' : 'Failed'}</dd>
+                                                <dt className="text-slate-500">Backend</dt><dd className="break-all">{verificationDetails.server.backend}</dd>
+                                            </>}
+                                            {typeof verificationDetails.similarity === 'number' && typeof verificationDetails.threshold === 'number' && verificationDetails.threshold > 0 && <>
+                                                <dt className="text-slate-500">Similarity</dt><dd>{(verificationDetails.similarity * 100).toFixed(1)}%</dd>
+                                                <dt className="text-slate-500">Required</dt><dd>{(verificationDetails.threshold * 100).toFixed(1)}%</dd>
+                                            </>}
+                                        </dl>
+                                    </div>
                                 </details>
                             )}
 

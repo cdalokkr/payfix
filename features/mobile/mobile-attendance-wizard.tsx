@@ -221,6 +221,7 @@ export function MobileAttendanceWizard({
             >
                 {currentStep === 'selfie' && (
                     <SelfieCapture
+                        key={`selfie-${action}-${effectiveAction}`}
                         profileImageUrl={profileImageUrl}
                         profileName={profileName}
                         profileEmail={profileEmail}
