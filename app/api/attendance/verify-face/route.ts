@@ -123,7 +123,12 @@ export async function POST(request: NextRequest) {
             return respond({ error: 'Your approved profile has no valid biometric template. Please submit a new profile photo.' }, { status: 400 })
         }
 
-        const extractions = await Promise.all(submittedFrames.map(frame => FaceServiceClient.extract(frame, { includeCroppedFace: false })))
+        const extractions = await Promise.all(submittedFrames.map((frame, index) => FaceServiceClient.extract(frame, {
+            includeCroppedFace: false,
+            // Primary frame 0 produces the canonical 3:4 portrait for verification feedback.
+            // Auxiliary frames 1 & 2 validate natural liveness and 512-d embeddings without redundant JPEG alignment.
+            returnCanonicalPortrait: index === 0,
+        })))
         const frameFailure = findFrameFailure(extractions)
         if (frameFailure) {
             const failedFrame = frameFailure.result
@@ -139,6 +144,7 @@ export async function POST(request: NextRequest) {
         }
         const extraction = selectBestValidatedFrame(extractions)
         if (!extraction) return respond({ matched: false, is_live: false, error: 'No valid server-processed frame was available.', code: 'FACE_EXTRACTION_FAILED' }, { status: 400 })
+        const canonicalExtraction = extractions.find(item => item.canonical_portrait_base64 && item.canonical_portrait_aspect_ratio === '3:4') || extraction
         const selfie = averageNormalizedEmbeddings(extractions.map(item =>
             item.embedding_512 || (item.embedding?.length === 512 ? item.embedding : [])
         ))
@@ -165,14 +171,14 @@ export async function POST(request: NextRequest) {
         if (extraction.is_live !== true) {
             return respond({
                 matched: false, similarity: 0, is_live: false, face_detected: true,
-                canonical_portrait_base64: extraction.canonical_portrait_base64 || null,
-                canonical_portrait_aspect_ratio: extraction.canonical_portrait_aspect_ratio || null,
+                canonical_portrait_base64: canonicalExtraction.canonical_portrait_base64 || null,
+                canonical_portrait_aspect_ratio: canonicalExtraction.canonical_portrait_aspect_ratio || null,
                 error: 'Liveness verification failed. Please retake your selfie.',
                 diagnostics: extraction.diagnostics,
                 quality_score: extraction.quality_score ?? null,
             })
         }
-        if (!extraction.canonical_portrait_base64 || extraction.canonical_portrait_aspect_ratio !== '3:4') {
+        if (!canonicalExtraction.canonical_portrait_base64 || canonicalExtraction.canonical_portrait_aspect_ratio !== '3:4') {
             return respond({
                 matched: false, similarity: 0, is_live: false, face_detected: true,
                 error: 'The server did not return a canonical verification portrait. Please try again.',
@@ -206,8 +212,8 @@ export async function POST(request: NextRequest) {
 
         return respond({
             matched, similarity: Math.round(similarity * 1000) / 1000, threshold, is_live: true, face_detected: true,
-            canonical_portrait_base64: extraction.canonical_portrait_base64,
-            canonical_portrait_aspect_ratio: extraction.canonical_portrait_aspect_ratio,
+            canonical_portrait_base64: canonicalExtraction.canonical_portrait_base64,
+            canonical_portrait_aspect_ratio: canonicalExtraction.canonical_portrait_aspect_ratio,
             method: 'arcface-512-server', diagnostics: extraction.diagnostics,
             quality_score: extraction.quality_score ?? null,
             verification: {

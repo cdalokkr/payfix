@@ -503,6 +503,14 @@ export function ExpressKioskApp() {
         return frames;
     };
 
+    const dismissVerificationResult = useCallback(() => {
+        setVerificationResult(null);
+        setCapturedFreezeUrl(null);
+        setCanonicalPortraitUrl(null);
+        setIsScanning(false);
+        setVerificationStage('');
+    }, []);
+
     // Instant Face Verification Scan & Overlay Flow (Continuous Staff Scanning)
     const handleFaceScan = useCallback(async (overrideSnapshotUrl?: string) => {
         if (isScanning || !modelsReady || !isPaired) return;
@@ -620,9 +628,8 @@ export function ExpressKioskApp() {
                         setCanonicalPortraitUrl(null);
                         setIsScanning(false);
                         setVerificationStage('');
-                    // Keep rejection diagnostics visible long enough for a
-                    // kiosk user or supervisor to read the failure reason.
-                    }, 6000);
+                    // Auto-dismiss rejection diagnostics after 3.5s (or on instant tap)
+                    }, 3500);
                     return;
                 }
 
@@ -665,15 +672,15 @@ export function ExpressKioskApp() {
                 // The paired server has already verified the face and recorded the
                 // attendance event. There is deliberately no offline punch fallback.
 
-                // Auto-reset result after six seconds so the portrait and
-                // verification details are readable before the next scan.
+                // Auto-reset result after 2.5 seconds (or instant tap) so the next
+                // employee in queue can scan immediately without waiting.
                 setTimeout(() => {
                     setVerificationResult(null);
                     setCapturedFreezeUrl(null);
                     setCanonicalPortraitUrl(null);
                     setIsScanning(false);
                     setVerificationStage('');
-                }, 6000);
+                }, 2500);
 
 
         } catch (err) {
@@ -1225,7 +1232,11 @@ export function ExpressKioskApp() {
                         }
                         >
                             {verificationResult && (
-                            <div className="absolute bottom-4 inset-x-4 z-30 flex flex-col items-center justify-center animate-in zoom-in-95 fade-in duration-200">
+                            <div 
+                                onClick={dismissVerificationResult}
+                                title="Tap to dismiss and scan next employee"
+                                className="absolute bottom-4 inset-x-4 z-30 flex flex-col items-center justify-center animate-in zoom-in-95 fade-in duration-200 cursor-pointer select-none active:scale-[0.98] transition-transform"
+                            >
                                 {verificationResult.matched ? (
                                     <div className="w-full max-w-sm p-4 bg-slate-950/95 border-2 border-emerald-500/70 rounded-2xl backdrop-blur-md shadow-2xl space-y-2 text-center">
                                         <div className="flex items-center justify-center gap-2 text-emerald-400 font-black text-sm">

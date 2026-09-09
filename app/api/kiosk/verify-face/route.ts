@@ -10,6 +10,7 @@ import { getLocalDateIST } from '@/lib/utils/date-utils'
 import { consumeLivenessChallenge, LIVENESS_FRAME_COUNT } from '@/lib/liveness-challenge'
 import { ProfileService } from '@/lib/services/profile.service'
 import { recordBiometricVerificationAttempt } from '@/lib/services/biometric-verification-attempt.service'
+import { getCachedKioskCandidates } from '@/lib/services/kiosk-candidate-cache'
 
 // v1 remains accepted for already-installed kiosk terminals. New kiosk builds
 // send the shared v2 contract used by enrollment and PWA attendance.
@@ -134,7 +135,12 @@ export async function POST(request: NextRequest) {
         }
 
         const extractionStartedAt = Date.now()
-        const extractions = await Promise.all(submittedFrames.map(frame => FaceServiceClient.extract(frame, { includeCroppedFace: false })))
+        const extractions = await Promise.all(submittedFrames.map((frame, index) => FaceServiceClient.extract(frame, {
+            includeCroppedFace: false,
+            // Only primary frame 0 generates the canonical 3:4 portrait for verification feedback.
+            // Auxiliary frames 1 & 2 validate natural liveness and 512-d embeddings without redundant JPEG alignment.
+            returnCanonicalPortrait: index === 0,
+        })))
         const extractionDurationMs = Date.now() - extractionStartedAt
         const extraction = extractions[0]
         const earlyCanonicalPortrait = extraction?.canonical_portrait_base64 || null
@@ -198,16 +204,18 @@ export async function POST(request: NextRequest) {
 
         return await runWithTenantSchema(pairingInfo.tenantSchema, async () => {
             await ProfileService.ensurePhotoRequestsSchema()
-            const candidates = await db.query.profiles.findMany({
-                where: eq(profiles.status, 'active'),
-                columns: {
-                    id: true,
-                    full_name: true,
-                    email: true,
-                    avatar_url: true,
-                    face_embedding_512: true,
-                    face_embedding_pipeline_version: true,
-                },
+            const candidates = await getCachedKioskCandidates(pairingInfo.tenantSchema, async () => {
+                return await db.query.profiles.findMany({
+                    where: eq(profiles.status, 'active'),
+                    columns: {
+                        id: true,
+                        full_name: true,
+                        email: true,
+                        avatar_url: true,
+                        face_embedding_512: true,
+                        face_embedding_pipeline_version: true,
+                    },
+                })
             })
             const matches = candidates
                 .map(profile => {
