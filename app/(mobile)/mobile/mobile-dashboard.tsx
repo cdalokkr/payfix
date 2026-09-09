@@ -155,7 +155,7 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
             const cachedTime = sessionStorage.getItem('mobileGeofenceTimestamp') || localStorage.getItem('mobileGeofenceTimestamp')
             if (cached && cachedTime) {
                 const age = Date.now() - Number(cachedTime)
-                if (age < 300000) { // 5 minutes validity
+                if (age < 30000) { // 30 seconds validity for strict on-site security
                     return JSON.parse(cached)
                 }
             }
@@ -170,7 +170,7 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
             const cachedTime = sessionStorage.getItem('mobileGeofenceTimestamp') || localStorage.getItem('mobileGeofenceTimestamp')
             if (cached && cachedTime) {
                 const age = Date.now() - Number(cachedTime)
-                if (age < 300000) { // 5 minutes validity
+                if (age < 30000) { // 30 seconds validity for strict on-site security
                     return JSON.parse(cached)
                 }
             }
@@ -229,14 +229,14 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
             const existingGeofence = getStoredGeofence()
             const existingCoords = getStoredCoords()
 
-            // If we have an ultra-fresh geofence result (< 90s), keep it without re-querying
+            // If we have an ultra-fresh geofence result (< 15s), keep it without re-querying
             if (existingGeofence && existingCoords) {
                 const cachedTime = Number(sessionStorage.getItem('mobileGeofenceTimestamp') || localStorage.getItem('mobileGeofenceTimestamp') || 0)
-                if (Date.now() - cachedTime < 90000) {
+                if (Date.now() - cachedTime < 15000) {
                     setIsLocChecking(false)
                     return
                 }
-                // Between 90s and 5m: display existing result immediately, refresh silently in background
+                // Between 15s and 30s: display existing result immediately, refresh silently in background
                 setIsLocChecking(false)
             }
 
@@ -246,13 +246,12 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
             }
 
             try {
-                // Request OS fused location with 5-minute cache allowance (maximumAge: 300000).
-                // On iOS/Android, this returns the cached GPS/Wi-Fi fix instantly (< 50ms) instead of waiting for cold satellite lock.
+                // Request live GPS location with max 15-second cache allowance
                 const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
                     navigator.geolocation.getCurrentPosition(resolve, reject, {
                         enableHighAccuracy: true,
                         timeout: 3500,
-                        maximumAge: 300000,
+                        maximumAge: 15000,
                     })
                 })
 
@@ -286,14 +285,14 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
                     localStorage.setItem('mobileGeofenceTimestamp', nowTs)
                 } catch {}
             } catch (err) {
-                // If high-accuracy/fast lookup timed out, fallback to low accuracy / cell tower
+                // If high-accuracy/fast lookup timed out, fallback to cell tower/Wi-Fi
                 if (!isCancelled && !existingGeofence) {
                     try {
                         const fallbackPos = await new Promise<GeolocationPosition>((resolve, reject) => {
                             navigator.geolocation.getCurrentPosition(resolve, reject, {
                                 enableHighAccuracy: false,
                                 timeout: 4000,
-                                maximumAge: 600000
+                                maximumAge: 30000
                             })
                         })
                         if (isCancelled) return
@@ -327,8 +326,18 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
 
         resolveLocation()
 
+        const handleFocusOrVisibility = () => {
+            if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+                resolveLocation()
+            }
+        }
+        window.addEventListener('focus', handleFocusOrVisibility)
+        document.addEventListener('visibilitychange', handleFocusOrVisibility)
+
         return () => {
             isCancelled = true
+            window.removeEventListener('focus', handleFocusOrVisibility)
+            document.removeEventListener('visibilitychange', handleFocusOrVisibility)
         }
     }, [utils, isPwa, isReady, hasNoPhoto, profile.role])
 
