@@ -61,10 +61,11 @@ interface ProfilePhotoCaptureProps {
     profileId: string
     profileData: ProfileData
     preWarmedStream?: MediaStream | null
+    onClose?: () => void
     onSuccess?: () => void
 }
 
-export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, onSuccess }: ProfilePhotoCaptureProps) {
+export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, onClose, onSuccess }: ProfilePhotoCaptureProps) {
     const router = useRouter()
     const supabase = createClient()
     const createPhotoRequest = trpc.profile.createPhotoUpdateRequest.useMutation()
@@ -383,12 +384,14 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
     // Handle back button
     const handleBack = useCallback(() => {
         stopCamera()
-        if (onSuccess) {
+        if (onClose) {
+            onClose()
+        } else if (onSuccess) {
             onSuccess()
         } else {
             router.back()
         }
-    }, [stopCamera, router, onSuccess])
+    }, [stopCamera, router, onClose, onSuccess])
 
 
     const [sessionTimeout, setSessionTimeout] = useState<number>(30)
@@ -522,17 +525,17 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
                     )}
 
                     {status === 'captured' && !isUploading && (
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-2 gap-3 sticky bottom-0 pt-3 pb-1 bg-slate-950/95 backdrop-blur-md z-10">
                             <Button
                                 onClick={handleRetake}
-                                className="h-12 rounded-2xl border border-white/20 bg-slate-800 hover:bg-slate-700 text-white font-extrabold text-sm shadow-md"
+                                className="h-12 rounded-2xl border border-white/20 bg-slate-800 hover:bg-slate-700 text-white font-extrabold text-sm shadow-md cursor-pointer"
                             >
                                 <IconRefresh className="w-4 h-4 mr-2 text-sky-400" />
                                 Retake
                             </Button>
                             <Button
                                 onClick={handleUpload}
-                                className="h-12 rounded-2xl bg-sky-500 hover:bg-sky-400 text-white font-black text-sm shadow-lg shadow-sky-500/25"
+                                className="h-12 rounded-2xl bg-sky-500 hover:bg-sky-400 text-white font-black text-sm shadow-lg shadow-sky-500/25 cursor-pointer"
                             >
                                 <IconCheck className="w-4 h-4 mr-2" />
                                 Submit
@@ -568,26 +571,14 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
         >
 
 
-            {/* Captured Selfie Photo Preview Overlay (Stays 100% continuous without black screen) */}
-
-            {capturedImage && status !== 'streaming' && status !== 'idle' && (
-                <div className="absolute inset-0 z-25 bg-slate-950 flex items-center justify-center overflow-hidden">
-                    <img
-                        src={capturedImage}
-                        alt="Captured Selfie Preview"
-                        className="w-full h-full object-cover"
-                    />
-
-                    {/* Uploading & Vector Extraction Spinner Overlay */}
-                    {status === 'uploading' && (
-                        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-950/65 backdrop-blur-md p-6 text-center text-white">
-                            <div className="p-6 bg-slate-900/90 border border-white/15 rounded-3xl space-y-3 shadow-2xl flex flex-col items-center max-w-xs animate-in zoom-in-95">
-                                <IconRefresh className="w-10 h-10 text-sky-400 animate-spin" />
-                                <p className="text-sm font-bold text-white">Submitting Profile Photo...</p>
-                                <p className="text-xs text-slate-300">Server validating frames and creating the 3:4 portrait</p>
-                            </div>
-                        </div>
-                    )}
+            {/* Uploading & Vector Extraction Spinner Overlay */}
+            {status === 'uploading' && (
+                <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-slate-950/75 backdrop-blur-sm p-6 text-center text-white pointer-events-auto">
+                    <div className="p-6 bg-slate-900/95 border border-white/15 rounded-3xl space-y-3 shadow-2xl flex flex-col items-center max-w-xs animate-in zoom-in-95">
+                        <IconRefresh className="w-10 h-10 text-sky-400 animate-spin" />
+                        <p className="text-sm font-bold text-white">Submitting Profile Photo...</p>
+                        <p className="text-xs text-slate-300">Server validating frames and creating the 3:4 portrait</p>
+                    </div>
                 </div>
             )}
 

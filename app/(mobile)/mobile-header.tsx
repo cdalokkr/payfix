@@ -224,27 +224,26 @@ export function MobileHeader({ profile }: MobileHeaderProps) {
             />
 
             {/* Seamless Profile Selfie Capture Popup Modal (Dynamic full-screen mobile camera) */}
-            <Dialog open={isPhotoCaptureOpen} onOpenChange={(open) => !open && setIsPhotoCaptureOpen(false)}>
-                <DialogContent className="w-full max-w-lg h-[100dvh] sm:h-auto sm:max-h-[92vh] p-0 bg-slate-950 border-0 sm:border sm:border-slate-800 text-slate-100 overflow-hidden rounded-none sm:rounded-3xl z-[70] [&>button]:hidden flex flex-col">
-
+            {isPhotoCaptureOpen && (
+                <div className="fixed inset-0 z-[100] w-screen h-[100dvh] bg-slate-950 flex flex-col overflow-hidden">
                     <ProfilePhotoCapture
                         profileId={activeProfile.id}
                         profileData={{
                             fullName: activeProfile.full_name || 'User',
                             email: activeProfile.email,
-                            role: 'employee',
+                            role: (activeProfile as any)?.role || 'employee',
                             avatarUrl: activeProfile.avatar_url,
                             avatarStatus: activeProfile.avatar_url ? 'custom' : 'default'
                         }}
-
+                        onClose={() => setIsPhotoCaptureOpen(false)}
                         onSuccess={() => {
                             setIsPhotoCaptureOpen(false)
                             utils.profile.invalidate()
                             utils.attendance.invalidate()
                         }}
                     />
-                </DialogContent>
-            </Dialog>
+                </div>
+            )}
         </>
     )
 }

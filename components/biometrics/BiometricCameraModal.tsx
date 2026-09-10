@@ -485,7 +485,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
       </div>
 
       {/* Dynamic responsive camera viewport: scales fluidly to fill mobile screen without distortion */}
-      <div className="relative w-full flex-1 min-h-0 bg-black overflow-hidden flex items-center justify-center sm:my-1 sm:rounded-2xl sm:border sm:border-slate-800/60">
+      <div className={`relative w-full ${activeCleanPortraitUrl ? 'h-[38dvh] max-h-[38dvh] shrink-0 bg-slate-950' : 'flex-1 min-h-0 bg-black'} overflow-hidden flex items-center justify-center sm:my-1 sm:rounded-2xl sm:border sm:border-slate-800/60`}>
         {/* Instant HTML Video Element */}
         <video
           ref={videoRef}
@@ -507,12 +507,12 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
         {/* Natural portrait freeze preview (WITHOUT Mask/Overlay) */}
         {activeCleanPortraitUrl ? (
-          <div className="absolute inset-0 z-10 bg-slate-950 flex flex-col items-center justify-center p-3 animate-in zoom-in-95 fade-in duration-200">
-            <div className="relative h-[90%] max-h-[46dvh] aspect-[3/4] rounded-3xl overflow-hidden border-2 border-emerald-500/70 shadow-2xl bg-black">
+          <div className="absolute inset-0 z-10 bg-slate-950 flex flex-col items-center justify-center p-2 animate-in zoom-in-95 fade-in duration-200">
+            <div className="relative h-[94%] aspect-[3/4] rounded-3xl overflow-hidden border-2 border-emerald-500/70 shadow-2xl bg-black flex items-center justify-center">
               <img
                 src={activeCleanPortraitUrl}
                 alt={processedPreviewUrl ? "Server-processed 3:4 verification portrait" : "Natural camera portrait"}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-contain"
               />
               <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-slate-950/85 border border-emerald-500/50 backdrop-blur-md text-[10.5px] font-mono font-bold text-emerald-300 flex items-center gap-1.5 shadow-lg">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -776,7 +776,11 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
       {/* 4. Dedicated Touch-Scrollable Footer Slot Container */}
       {footerSlot && (
-        <div className="w-full bg-slate-950 p-4 border-t border-slate-900 z-30 shrink-0 max-h-[48dvh] sm:max-h-[42vh] overflow-y-auto overscroll-contain touch-pan-y [scrollbar-width:thin] [-webkit-overflow-scrolling:touch]">
+        <div className={`w-full bg-slate-950 p-4 border-t border-slate-900 z-30 ${
+          activeCleanPortraitUrl
+            ? 'flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y [scrollbar-width:thin] [-webkit-overflow-scrolling:touch]'
+            : 'shrink-0 max-h-[48dvh] sm:max-h-[42vh] overflow-y-auto overscroll-contain touch-pan-y [scrollbar-width:thin] [-webkit-overflow-scrolling:touch]'
+        }`}>
           {footerSlot}
         </div>
       )}
