@@ -468,6 +468,15 @@ export class AttendanceService {
                 activity_type: 'data_create',
                 module: 'attendance',
                 description: `Clocked in (Session #${currentTotalSessions}) at ${getLocalTimeIST12Hour()}${isExtraDay ? ' (Extra Work)' : ''}${locationName ? ` from ${locationName}` : ''}`,
+                metadata: {
+                    attendance_id: record.id,
+                    session_number: currentTotalSessions,
+                    location_name: locationName,
+                    latitude: latitude ? String(latitude) : null,
+                    longitude: longitude ? String(longitude) : null,
+                    is_extra_day: isExtraDay,
+                    timestamp: now.toISOString(),
+                }
             })
             return record
         })
@@ -596,6 +605,14 @@ export class AttendanceService {
                 activity_type: 'data_edit',
                 module: 'attendance',
                 description: `Clocked out at ${getLocalTimeIST12Hour()}${locationName ? ` from ${locationName}` : ''}`,
+                metadata: {
+                    attendance_id: attendanceId,
+                    working_hours: (totalMins / 60).toFixed(2),
+                    location_name: locationName,
+                    latitude: latitude ? String(latitude) : null,
+                    longitude: longitude ? String(longitude) : null,
+                    timestamp: now.toISOString(),
+                }
             })
             return data
         })

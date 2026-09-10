@@ -355,6 +355,7 @@ export const profilePhotoRequests = pgTable('profile_photo_requests', {
     pending_face_embedding_512: vector512('pending_face_embedding_512'),
     pending_face_embedding_pipeline_version: text('pending_face_embedding_pipeline_version'),
     pending_face_embedding: vector128('pending_face_embedding'),
+    diagnostics: jsonb('diagnostics'),
     status: text('status').notNull().default('pending'), // 'pending', 'approved', 'rejected'
     reviewed_by: uuid('reviewed_by').references(() => profiles.id, { onDelete: 'set null' }),
     reviewed_at: timestamp('reviewed_at', { withTimezone: true }),

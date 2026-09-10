@@ -343,9 +343,27 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
             if (typeof result.enrollmentProof !== 'string') {
                 throw new Error('The server did not provide a secure enrollment proof. Please retake the selfie.')
             }
+
+            const comprehensiveDiagnostics = {
+                client: {
+                    camera_resolution: captureDiagnostics?.cameraResolution || (videoRef.current?.videoWidth ? `${videoRef.current.videoWidth} × ${videoRef.current.videoHeight}` : '640 × 480'),
+                    frame_resolution: captureDiagnostics?.outputResolution || 'Unknown',
+                    payload_bytes: captureDiagnostics?.outputBytes || 0,
+                    mime_type: captureDiagnostics?.outputMime || 'image/jpeg',
+                    captured_at: new Date().toISOString(),
+                },
+                server_verification: result.verification || null,
+                cloud_run_diagnostics: result.diagnostics || null,
+                liveness: {
+                    passed: result.verification?.livenessPassed ?? true,
+                    pipeline_version: result.verification?.embeddingPipelineVersion || BIOMETRIC_CAPTURE_PIPELINE_VERSION,
+                }
+            }
+
             await createPhotoRequest.mutateAsync({
                 pendingPhotoUrl: result.path,
                 enrollmentProof: result.enrollmentProof,
+                diagnostics: comprehensiveDiagnostics,
             })
             setStatus('submitted')
             toast.success('Photo submitted for admin approval!')
@@ -444,7 +462,7 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
                             <summary className="cursor-pointer text-xs font-bold text-sky-300 select-none py-0.5 outline-none hover:text-sky-200 transition-colors">
                                 Biometric capture details
                             </summary>
-                            <div className="mt-2 max-h-[30vh] overflow-y-auto overscroll-contain pr-1 touch-pan-y space-y-2 [scrollbar-width:thin]">
+                            <div className="mt-2 space-y-2 pr-1">
                                 <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-mono text-slate-300">
                                     <dt className="text-slate-500">Camera</dt><dd>{captureDiagnostics.cameraResolution}</dd>
                                     <dt className="text-slate-500">Natural frame</dt><dd>{captureDiagnostics.outputResolution}</dd>
@@ -462,7 +480,7 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
                                         <dt className="text-slate-500">Backend</dt><dd className="break-all">{captureDiagnostics.serverVerification.backend}</dd>
                                     </dl>
                                 )}
-                                {debugLogs.length > 0 && <pre className="max-h-24 overflow-y-auto whitespace-pre-wrap border-t border-slate-700 pt-2 text-[9px] leading-4 text-slate-400 touch-pan-y">{debugLogs.join('\n')}</pre>}
+                                {debugLogs.length > 0 && <pre className="whitespace-pre-wrap border-t border-slate-700 pt-2 text-[9px] leading-4 text-slate-400">{debugLogs.join('\n')}</pre>}
                             </div>
                         </details>
                     )}

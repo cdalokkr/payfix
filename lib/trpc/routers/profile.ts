@@ -155,6 +155,7 @@ export const profileRouter = router({
     .input(z.object({
       pendingPhotoUrl: z.string().min(1),
       enrollmentProof: z.string().min(1),
+      diagnostics: z.record(z.string(), z.any()).optional().nullable(),
     }))
     .mutation(async ({ ctx, input }) => {
       try {
@@ -162,6 +163,7 @@ export const profileRouter = router({
           profileId: ctx.profile.id,
           pendingPhotoUrl: input.pendingPhotoUrl,
           enrollmentProof: input.enrollmentProof,
+          diagnostics: input.diagnostics,
         })
       } catch (err: any) {
         throw new TRPCError({

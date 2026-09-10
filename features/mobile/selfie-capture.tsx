@@ -407,8 +407,8 @@ export function SelfieCapture({
     }, [stopCamera])
 
     return (
-        <div className="fixed inset-0 z-[70] bg-slate-950/80 backdrop-blur-md flex flex-col items-center justify-center p-3 sm:p-6 overflow-hidden">
-            <div className="w-full max-w-md">
+        <div className="fixed inset-0 z-[70] bg-slate-950 sm:bg-slate-950/80 sm:backdrop-blur-md flex flex-col items-center justify-center p-0 sm:p-4 overflow-hidden">
+            <div className="w-full h-[100dvh] sm:h-auto sm:max-w-md sm:max-h-[92vh] flex flex-col overflow-hidden">
                 <BiometricCameraModal
                     isOpen={true}
                     onClose={onBack || (() => {})}
@@ -446,7 +446,7 @@ export function SelfieCapture({
                                     <summary className="cursor-pointer text-xs font-bold text-sky-300 select-none py-0.5 outline-none hover:text-sky-200 transition-colors">
                                         Daily biometric verification details
                                     </summary>
-                                    <div className="mt-2 max-h-[30vh] overflow-y-auto overscroll-contain pr-1 touch-pan-y space-y-2 [scrollbar-width:thin]">
+                                    <div className="mt-2 space-y-2 pr-1">
                                         <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-mono text-slate-300">
                                             <dt className="text-slate-500">Camera</dt><dd>{verificationDetails.cameraResolution}</dd>
                                             <dt className="text-slate-500">Output</dt><dd>{verificationDetails.outputResolution}</dd>

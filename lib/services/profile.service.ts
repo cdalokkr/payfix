@@ -32,7 +32,8 @@ export class ProfileService {
                     ADD COLUMN IF NOT EXISTS "pending_face_embedding_512" vector(512),
                     ADD COLUMN IF NOT EXISTS "pending_face_embedding" vector(128),
                     ADD COLUMN IF NOT EXISTS "pending_face_embedding_pipeline_version" text,
-                    ADD COLUMN IF NOT EXISTS "pending_photo_sha256" text;
+                    ADD COLUMN IF NOT EXISTS "pending_photo_sha256" text,
+                    ADD COLUMN IF NOT EXISTS "diagnostics" jsonb;
 
                 ALTER TABLE IF EXISTS "profiles"
                     ADD COLUMN IF NOT EXISTS "face_embedding_512" vector(512),
@@ -215,10 +216,12 @@ export class ProfileService {
         profileId,
         pendingPhotoUrl,
         enrollmentProof,
+        diagnostics,
     }: {
         profileId: string
         pendingPhotoUrl: string
         enrollmentProof: string
+        diagnostics?: Record<string, any> | null
     }) {
         await ProfileService.ensurePhotoRequestsSchema()
         if (!tenantStorage.getStore()?.tenantId) throwAppError('FORBIDDEN', 'Tenant context is required for profile photo enrollment.')
@@ -246,6 +249,12 @@ export class ProfileService {
             pending_photo_sha256: verifiedEnrollment.portraitSha256,
             pending_face_embedding_512: verifiedEnrollment.embedding512,
             pending_face_embedding_pipeline_version: verifiedEnrollment.embeddingPipelineVersion,
+            diagnostics: diagnostics || {
+                captured_at: new Date().toISOString(),
+                portrait_sha256: verifiedEnrollment.portraitSha256,
+                pipeline_version: verifiedEnrollment.embeddingPipelineVersion,
+                embedding_512_dim: verifiedEnrollment.embedding512?.length || 512,
+            },
             status: 'pending'
         }
 
@@ -255,7 +264,16 @@ export class ProfileService {
             user_id: profileId,
             activity_type: 'profile_update',
             module: 'profile',
-            description: 'Requested profile photo update (pending approval)'
+            description: 'Requested biometric profile photo update (pending approval)',
+            metadata: {
+                photo_request_id: request.id,
+                pipeline_version: verifiedEnrollment.embeddingPipelineVersion,
+                portrait_sha256: verifiedEnrollment.portraitSha256,
+                camera_resolution: (diagnostics as any)?.client?.camera_resolution || (diagnostics as any)?.cameraResolution,
+                payload_bytes: (diagnostics as any)?.client?.payload_bytes || (diagnostics as any)?.outputBytes,
+                liveness_passed: (diagnostics as any)?.liveness?.passed ?? true,
+                captured_at: (diagnostics as any)?.client?.captured_at || new Date().toISOString(),
+            }
         })
 
         return request
