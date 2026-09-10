@@ -377,7 +377,7 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
         } finally {
             setIsUploading(false)
         }
-    }, [capturedImage, livenessChallenge, livenessFrames, profileId, addLog, createPhotoRequest])
+    }, [capturedImage, livenessChallenge, livenessFrames, profileId, addLog, createPhotoRequest, captureDiagnostics])
 
 
     // Handle back button
