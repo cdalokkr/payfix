@@ -12,9 +12,15 @@ export class ProfileService {
     /**
      * Ensure profile_photo_requests table exists in the current tenant schema.
      * Safe to call multiple times — uses IF NOT EXISTS.
+     */
+    private static isSchemaEnsured = false
+
+    /**
+     * Cache schema assurance in memory so DDL queries are not executed on every attendance punch.
      * Mirrors the ensureAttendanceSchema() pattern from AttendanceService.
      */
     static async ensurePhotoRequestsSchema() {
+        if (this.isSchemaEnsured) return
         try {
             await db.execute(sql`
                 CREATE TABLE IF NOT EXISTS "profile_photo_requests" (
@@ -42,6 +48,7 @@ export class ProfileService {
                     ADD COLUMN IF NOT EXISTS "face_enrolled_at" timestamp with time zone,
                     ADD COLUMN IF NOT EXISTS "face_photo_url" text;
             `)
+            this.isSchemaEnsured = true
         } catch (e) {
             // Ignore — table already exists or concurrent creation
         }

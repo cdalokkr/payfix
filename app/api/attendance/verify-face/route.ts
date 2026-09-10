@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
                                 : body?.error
                                     ? 'request_rejected'
                                     : 'request_failed'
-            await recordBiometricVerificationAttempt({
+            void Promise.resolve(recordBiometricVerificationAttempt({
                 source: 'pwa',
                 profileId: auditProfileId,
                 outcome,
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
                     : (typeof body?.diagnostics?.backend_engine === 'string' ? body.diagnostics.backend_engine : null),
                 processingMs: Date.now() - auditStartedAt,
                 requestId,
-            })
+            })).catch(err => console.error('[BIOMETRIC_AUDIT_LOG_ERROR]', err))
             return NextResponse.json(body, init)
         }
     try {

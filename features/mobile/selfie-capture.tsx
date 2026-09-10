@@ -38,6 +38,7 @@ interface SelfieCaptureProps {
     profileName?: string | null
     profileEmail?: string | null
     faceEmbedding?: number[] | null
+    preWarmedStream?: MediaStream | null
     onCaptured: (result: SelfieResult) => void
     onVerified: (result: { matched: boolean; similarity: number }) => void
     onSubmitAttendance: (attendanceProof: string) => Promise<void>
@@ -71,6 +72,7 @@ export function SelfieCapture({
     profileName,
     profileEmail,
     faceEmbedding,
+    preWarmedStream,
     onCaptured,
     onVerified,
     onSubmitAttendance,
@@ -127,10 +129,43 @@ export function SelfieCapture({
         setVerificationDuration('')
         setLivenessChallenge(null)
         setCaptureResetKey(value => value + 1)
+        setSessionTimeout(20)
         setStatus('streaming')
     }, [])
 
+    const cachedChallengeRef = useRef<string | null>(null)
+    const isFetchingChallengeRef = useRef(false)
+
+    // Pre-fetch challenge in background while streaming so capture starts with 0ms roundtrip delay
+    const prefetchChallenge = useCallback(async () => {
+        if (cachedChallengeRef.current || isFetchingChallengeRef.current) return
+        isFetchingChallengeRef.current = true
+        try {
+            const response = await fetch('/api/biometric/challenge', { method: 'POST' })
+            const result = await response.json().catch(() => ({}))
+            if (response.ok && typeof result.challenge === 'string') {
+                cachedChallengeRef.current = result.challenge
+                setLivenessChallenge(result.challenge)
+            }
+        } catch {
+            // Ignore prefetch error — fallback will fetch on demand
+        } finally {
+            isFetchingChallengeRef.current = false
+        }
+    }, [])
+
+    useEffect(() => {
+        if (status === 'streaming' && !cachedChallengeRef.current) {
+            void prefetchChallenge()
+        }
+    }, [status, prefetchChallenge])
+
     const getLivenessChallenge = useCallback(async () => {
+        if (cachedChallengeRef.current) {
+            const challenge = cachedChallengeRef.current
+            cachedChallengeRef.current = null
+            return challenge
+        }
         const response = await fetch('/api/biometric/challenge', { method: 'POST' })
         const result = await response.json().catch(() => ({}))
         if (!response.ok || typeof result.challenge !== 'string') throw new Error(result.error || 'Could not start liveness verification.')
@@ -146,7 +181,7 @@ export function SelfieCapture({
             const capture = captureNaturalBiometricFrame(video)
             if (!capture) return []
             frames.push(capture.dataUrl)
-            if (index < 2) await new Promise(resolve => setTimeout(resolve, 260))
+            if (index < 2) await new Promise(resolve => setTimeout(resolve, 130))
         }
         return frames
     }, [])
@@ -347,6 +382,7 @@ export function SelfieCapture({
         setServerVerificationBackend(null)
         setLivenessChallenge(null)
         setCaptureResetKey(v => v + 1)
+        setSessionTimeout(20)
     }, [])
 
     const handleComplete = useCallback(() => {
@@ -370,17 +406,21 @@ export function SelfieCapture({
         resetVerificationState()
     }, [mode, resetVerificationState])
 
-    const [sessionTimeout, setSessionTimeout] = useState<number>(10)
+    const [sessionTimeout, setSessionTimeout] = useState<number>(20)
+    const [resultCountdown, setResultCountdown] = useState<number>(4)
 
-    // 10-Second Auto-Capture Timer (Automatically captures selfie at 10s if not captured manually or via blink)
+    // 20-Second Auto-Capture Timer
+    // While > 10s: User can manually capture or blink.
+    // When <= 10s: Manual button is disabled and displays "Auto Capture in Xs 📸" to prevent race conditions.
+    // When hits 0s: Automatically captures frame for verification.
     useEffect(() => {
         if (status === 'streaming' && !capturedImage) {
-            setSessionTimeout(10)
+            setSessionTimeout(20)
             const interval = setInterval(() => {
                 setSessionTimeout(prev => {
                     if (prev <= 1) {
                         clearInterval(interval)
-                        toast.info("10s Auto-Capture triggered 📸")
+                        toast.info("Auto-Capture triggered 📸")
                         capturePhoto()
                         return 0
                     }
@@ -394,13 +434,31 @@ export function SelfieCapture({
     // Auto-verify immediately after capture (no confirm step)
     useEffect(() => {
         if (status === 'captured' && capturedImage && capturedAt) {
-            // Small delay for UX - let user see their captured photo briefly
+            // Generous delay for UX - let user see their captured photo clearly before verifying
             const timer = setTimeout(() => {
                 handleProceed()
-            }, 500)
+            }, 1200)
             return () => clearTimeout(timer)
         }
     }, [status, capturedImage, capturedAt, handleProceed])
+
+    // Verification Result Auto-Complete Timer: Gives user 4 seconds to view clear verification results
+    useEffect(() => {
+        if (status === 'verified' && apiStatus === 'success') {
+            setResultCountdown(4)
+            const interval = setInterval(() => {
+                setResultCountdown(prev => {
+                    if (prev <= 1) {
+                        clearInterval(interval)
+                        handleComplete()
+                        return 0
+                    }
+                    return prev - 1
+                })
+            }, 1000)
+            return () => clearInterval(interval)
+        }
+    }, [status, apiStatus, handleComplete])
 
     useEffect(() => {
         return () => stopCamera()
@@ -415,6 +473,7 @@ export function SelfieCapture({
                     title="Identify Yourself"
                     icon={<IconScanFace className="w-5 h-5 text-sky-400" />}
                     videoRefOut={videoRef}
+                    warmedStream={preWarmedStream}
                     onVideoReady={() => setStatus(current => current === 'idle' ? 'streaming' : current)}
                     serverVerificationBackend={serverVerificationBackend}
                     timerSeconds={!capturedImage && status !== 'verified' ? sessionTimeout : undefined}
@@ -470,15 +529,26 @@ export function SelfieCapture({
                             {(status === 'idle' || status === 'streaming') && (
                                 <Button
                                     onClick={handleProceed}
-                                    disabled={status !== 'streaming'}
+                                    disabled={status !== 'streaming' || sessionTimeout <= 10}
                                     size="lg"
-                                    className="w-full h-14 rounded-2xl bg-sky-500 text-white font-black text-base hover:bg-sky-400 shadow-lg shadow-sky-500/25 transition-all active:scale-95 cursor-pointer disabled:opacity-65 disabled:cursor-wait"
+                                    className={`w-full h-14 rounded-2xl font-black text-base transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed ${
+                                        sessionTimeout <= 10 && status === 'streaming'
+                                            ? 'bg-amber-500/90 text-white shadow-lg shadow-amber-500/20 opacity-90'
+                                            : 'bg-sky-500 text-white hover:bg-sky-400 shadow-lg shadow-sky-500/25 disabled:opacity-65 disabled:cursor-wait'
+                                    }`}
                                 >
                                     {status === 'streaming' ? (
-                                        <>
-                                            <IconScanFace className="w-5 h-5 mr-2" />
-                                            IDENTIFY NOW
-                                        </>
+                                        sessionTimeout <= 10 ? (
+                                            <>
+                                                <IconCamera className="w-5 h-5 mr-2 animate-pulse" />
+                                                Auto Capture in {sessionTimeout}s 📸
+                                            </>
+                                        ) : (
+                                            <>
+                                                <IconScanFace className="w-5 h-5 mr-2" />
+                                                IDENTIFY NOW
+                                            </>
+                                        )
                                     ) : (
                                         <>
                                             <IconLoader2 className="w-5 h-5 mr-2 animate-spin" />
@@ -491,11 +561,21 @@ export function SelfieCapture({
                             {status === 'verified' && (
                                 <Button
                                     onClick={handleComplete}
+                                    disabled={apiStatus === 'pending'}
                                     size="lg"
-                                    className="w-full h-14 rounded-2xl bg-emerald-500 text-white font-black text-base hover:bg-emerald-400 shadow-lg shadow-emerald-500/25 transition-all active:scale-95 cursor-pointer"
+                                    className="w-full h-14 rounded-2xl bg-emerald-500 text-white font-black text-base hover:bg-emerald-400 shadow-lg shadow-emerald-500/25 transition-all active:scale-95 cursor-pointer disabled:opacity-65"
                                 >
-                                    <IconCheck className="w-5 h-5 mr-2" />
-                                    DONE
+                                    {apiStatus === 'pending' ? (
+                                        <>
+                                            <IconLoader2 className="w-5 h-5 mr-2 animate-spin" />
+                                            RECORDING ATTENDANCE…
+                                        </>
+                                    ) : (
+                                        <>
+                                            <IconCheck className="w-5 h-5 mr-2" />
+                                            DONE ({resultCountdown}s)
+                                        </>
+                                    )}
                                 </Button>
                             )}
                         </div>
@@ -535,6 +615,9 @@ export function SelfieCapture({
                                             <span>Duration: {verificationDuration}</span>
                                         </>
                                     )}
+                                </div>
+                                <div className="text-[10px] text-emerald-400 font-mono pt-1">
+                                    {apiStatus === 'pending' ? 'Recording attendance...' : `Returning to dashboard in ${resultCountdown}s...`}
                                 </div>
                             </div>
                         </div>

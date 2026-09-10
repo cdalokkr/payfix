@@ -23,6 +23,7 @@ import { trpc } from "@/lib/trpc/client"
 import { SelfieCapture, type SelfieResult } from "./selfie-capture"
 import { format } from "date-fns"
 import { usePwaCheck } from "@/hooks/use-pwa-check"
+import { prewarmBiometricCamera, takePrewarmedBiometricCamera } from "@/lib/biometric-camera-prewarm"
 
 type WizardStep = 'locating' | 'outside_office' | 'selfie' | 'submitting' | 'complete' | 'error'
 
@@ -93,6 +94,8 @@ export function MobileAttendanceWizard({
     const verifyOfficeLocation = useCallback(async () => {
         setIsRetryingLocation(true)
         setErrorMessage('')
+        // Pre-warm camera hardware in background during location check so camera starts in <50ms once verified
+        void prewarmBiometricCamera()
         try {
             if (typeof window === 'undefined' || !navigator.geolocation) {
                 setOutsideDetails({
@@ -412,6 +415,7 @@ export function MobileAttendanceWizard({
                         profileImageUrl={profileImageUrl}
                         profileName={profileName}
                         profileEmail={profileEmail}
+                        preWarmedStream={takePrewarmedBiometricCamera()}
                         onCaptured={handleSelfieCaptured}
                         onVerified={handleVerified}
                         onSubmitAttendance={handleSubmitAttendance}

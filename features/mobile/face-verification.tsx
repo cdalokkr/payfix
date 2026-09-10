@@ -103,13 +103,13 @@ export function FaceVerification({
                 toast.success(`Verified! Match: ${FaceVerificationService.formatSimilarity(result.similarity)}`)
                 addDebugLog('✅ Verification successful!')
 
-                // Auto proceed after success
+                // Auto proceed after success - 3.5s display time to give user clear confirmation
                 setTimeout(() => {
                     onVerified({
                         matched: true,
                         similarity: result.similarity,
                     })
-                }, 1000)
+                }, 3500)
             } else {
                 setStatus('error')
                 setErrorMessage(result.error || 'Verification failed - face does not match profile')
