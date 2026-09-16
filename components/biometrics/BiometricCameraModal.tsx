@@ -524,10 +524,10 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
 
         {/* 2. Unified Single Spacious Oval Face Mask & Outside Dimmed Backdrop (Only during live camera preview) */}
         {!hasError && !activeCleanPortraitUrl && (
-          <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-between p-4">
+          <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-between pt-5 sm:pt-6 pb-1 px-3">
             {/* Single Spacious Oval Mask Reticle Container (Responsive to dynamic screen height & width) */}
             <div
-              className={`relative my-auto w-[82vw] max-w-[320px] max-h-[48dvh] aspect-[1/1.24] rounded-full transition-all duration-300 flex items-center justify-center shadow-[0_0_0_9999px_rgba(2,6,23,0.70)]`}
+              className={`relative my-auto translate-y-1 sm:translate-y-1.5 w-[82vw] max-w-[320px] max-h-[48dvh] aspect-[1/1.24] rounded-full transition-all duration-300 flex items-center justify-center shadow-[0_0_0_9999px_rgba(2,6,23,0.70)]`}
             >
               {/* Paytm / KYC Biometric Single Oval Face Mask SVG */}
               <svg
@@ -673,46 +673,46 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
             </div>
 
             {/* 3. Real-time Status Badge & Dynamic Flow Guidance Indicator Overlay */}
-            <div className="z-30 mb-1 rounded-full bg-slate-900/95 px-4 py-2 backdrop-blur-md border border-slate-700 shadow-xl flex items-center gap-2">
+            <div className="z-30 mb-1 rounded-full bg-slate-900/95 px-3 py-1 backdrop-blur-md border border-slate-700 shadow-xl flex items-center gap-1.5">
               {isProcessing ? (
                 <>
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-sky-400/30 border-t-sky-400 shrink-0" />
-                  <p className="text-xs font-bold text-sky-300">
+                  <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-sky-400/30 border-t-sky-400 shrink-0" />
+                  <p className="text-[11px] font-bold text-sky-300">
                     {statusText || 'Verifying face biometrics...'}
                   </p>
                 </>
               ) : !isStreamPlaying ? (
                 <>
-                  <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-sky-400/30 border-t-sky-400 shrink-0" />
-                  <p className="text-xs font-bold text-sky-300">
+                  <div className="h-3 w-3 animate-spin rounded-full border-2 border-sky-400/30 border-t-sky-400 shrink-0" />
+                  <p className="text-[11px] font-bold text-sky-300">
                     Starting HD Camera...
                   </p>
                 </>
               ) : isBlinkConfirmed ? (
                 <>
-                  <div className="h-3 w-3 rounded-full bg-emerald-400 animate-ping shrink-0" />
-                  <p className="text-xs font-black text-emerald-400">
+                  <div className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
+                  <p className="text-[11px] font-black text-emerald-400">
                     {statusText || 'Blink Verified! Capturing... 📸'}
                   </p>
                 </>
               ) : isAligned ? (
                 <>
-                  <span className="text-sm">👁️</span>
-                  <p className="text-xs font-black text-emerald-300 animate-pulse">
+                  <span className="text-xs">👁️</span>
+                  <p className="text-[11px] font-black text-emerald-300 animate-pulse">
                     {statusText || 'Blink your eyes to capture'}
                   </p>
                 </>
               ) : (
                 <>
-                  <div className="h-2.5 w-2.5 rounded-full bg-sky-400 shrink-0" />
-                  <p className="text-xs font-bold text-sky-300">
+                  <div className="h-2 w-2 rounded-full bg-sky-400 shrink-0" />
+                  <p className="text-[11px] font-bold text-sky-300">
                     {statusText || livenessStatus.prompt || 'Position face in mask'}
                   </p>
                 </>
               )}
             </div>
             {startupStartedAtRef.current !== null && startupNow !== null && (
-              <div className="z-30 mb-2 rounded-xl bg-slate-950/90 px-3 py-1.5 text-[9px] font-mono text-slate-300 border border-slate-700/80">
+              <div className="z-30 mb-0.5 rounded-lg bg-slate-950/90 px-2.5 py-1 text-[8.5px] font-mono text-slate-300 border border-slate-700/80">
                 <div className="font-bold text-sky-300">
                   {startupReadyMs !== null ? 'Camera ready in' : 'Camera startup'}:{' '}
                   {((startupReadyMs ?? (startupNow - startupStartedAtRef.current)) / 1000).toFixed(1)}s

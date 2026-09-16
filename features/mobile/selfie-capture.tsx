@@ -632,9 +632,6 @@ export function SelfieCapture({
                                         </>
                                     )}
                                 </div>
-                                <div className="text-[10px] text-emerald-400 font-mono pt-1">
-                                    {apiStatus === 'pending' ? 'Recording attendance...' : isNavigating ? 'Returning to dashboard...' : `Returning to dashboard in ${resultCountdown}s...`}
-                                </div>
                             </div>
                         </div>
                     )}
