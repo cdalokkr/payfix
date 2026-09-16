@@ -50,6 +50,7 @@ import { isDefaultAvatar } from "@/lib/utils/avatar-helper"
 import { FaceVerificationService } from "@/lib/services/face-verification.service"
 import { FaceApiBrowserService } from "@/lib/services/faceapi-browser.service"
 import { MediaPipeMeshService } from "@/lib/services/mediapipe-mesh.service"
+import { prewarmBiometricCamera } from "@/lib/biometric-camera-prewarm"
 
 function getHardwareAccelerationInfo(): { backend: string; isGpu: boolean } {
     if (typeof window === 'undefined') return { backend: 'CPU', isGpu: false };
@@ -96,6 +97,11 @@ interface MobileDashboardProps {
         id: string
         check_in: string | null
         check_out: string | null
+        first_check_in?: string | null
+        last_check_out?: string | null
+        current_session_status?: string | null
+        total_sessions?: number
+        working_hours?: string | null
         status: string
     } | null
     isPwaServer?: boolean
@@ -198,7 +204,8 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
     const { data: todayAttendance } = trpc.attendance.getMobileAttendance.useQuery(undefined, {
         initialData: initialAttendance,
         staleTime: 0, // Consider data always stale so it refetches on invalidation
-        refetchOnWindowFocus: false,
+        refetchOnMount: 'always', // Always fetch fresh data on mount even if initialData was provided
+        refetchOnWindowFocus: true,
     })
 
     // Fetch office settings and closures for holiday check
@@ -604,6 +611,9 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
                                                     <Link
                                                         href={`/mobile/attendance?action=${isClockedIn ? 'clock_out' : 'clock_in'}`}
                                                         prefetch={false}
+                                                        onPointerDown={() => void prewarmBiometricCamera()}
+                                                        onTouchStart={() => void prewarmBiometricCamera()}
+                                                        onMouseEnter={() => void prewarmBiometricCamera()}
                                                         className={`flex items-center justify-center gap-2.5 w-full h-11 px-3.5 rounded-xl border transition-all shadow-md active:scale-98 backdrop-blur-md
                                                             ${isClockedIn
                                                                 ? 'bg-rose-500/20 border-rose-400/35 hover:bg-rose-500/30 text-white'

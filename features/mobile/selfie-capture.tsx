@@ -385,10 +385,12 @@ export function SelfieCapture({
         setSessionTimeout(20)
     }, [])
 
+    const [isNavigating, setIsNavigating] = useState(false)
+
     const handleComplete = useCallback(() => {
         if (apiStatus === 'success') {
             const finalSimilarity = similarity
-            resetVerificationState()
+            setIsNavigating(true)
             stopCamera()
             onVerified({ matched: true, similarity: finalSimilarity })
         } else if (apiStatus === 'pending') {
@@ -399,7 +401,7 @@ export function SelfieCapture({
             setStatus('verify_failed')
             setErrorMessage(apiError || 'Failed to record attendance')
         }
-    }, [apiStatus, similarity, onVerified, apiError, resetVerificationState, stopCamera])
+    }, [apiStatus, similarity, onVerified, apiError, stopCamera])
 
     // Reset verification state on mode change (e.g. clock_in -> clock_out)
     useEffect(() => {
@@ -444,7 +446,7 @@ export function SelfieCapture({
 
     // Verification Result Auto-Complete Timer: Gives user 4 seconds to view clear verification results
     useEffect(() => {
-        if (status === 'verified' && apiStatus === 'success') {
+        if (status === 'verified' && apiStatus === 'success' && !isNavigating) {
             setResultCountdown(4)
             const interval = setInterval(() => {
                 setResultCountdown(prev => {
@@ -458,7 +460,7 @@ export function SelfieCapture({
             }, 1000)
             return () => clearInterval(interval)
         }
-    }, [status, apiStatus, handleComplete])
+    }, [status, apiStatus, isNavigating, handleComplete])
 
     useEffect(() => {
         return () => stopCamera()
@@ -559,25 +561,30 @@ export function SelfieCapture({
                             )}
 
                             {status === 'verified' && (
-                                <Button
-                                    onClick={handleComplete}
-                                    disabled={apiStatus === 'pending'}
-                                    size="lg"
-                                    className="w-full h-14 rounded-2xl bg-emerald-500 text-white font-black text-base hover:bg-emerald-400 shadow-lg shadow-emerald-500/25 transition-all active:scale-95 cursor-pointer disabled:opacity-65"
-                                >
-                                    {apiStatus === 'pending' ? (
-                                        <>
-                                            <IconLoader2 className="w-5 h-5 mr-2 animate-spin" />
-                                            RECORDING ATTENDANCE…
-                                        </>
-                                    ) : (
-                                        <>
-                                            <IconCheck className="w-5 h-5 mr-2" />
-                                            DONE ({resultCountdown}s)
-                                        </>
-                                    )}
-                                </Button>
-                            )}
+                                 <Button
+                                     onClick={handleComplete}
+                                     disabled={apiStatus === 'pending' || isNavigating}
+                                     size="lg"
+                                     className="w-full h-14 rounded-2xl bg-emerald-500 text-white font-black text-base hover:bg-emerald-400 shadow-lg shadow-emerald-500/25 transition-all active:scale-95 cursor-pointer disabled:opacity-65"
+                                 >
+                                     {apiStatus === 'pending' ? (
+                                         <>
+                                             <IconLoader2 className="w-5 h-5 mr-2 animate-spin" />
+                                             RECORDING ATTENDANCE…
+                                         </>
+                                     ) : isNavigating ? (
+                                         <>
+                                             <IconLoader2 className="w-5 h-5 mr-2 animate-spin" />
+                                             RETURNING TO DASHBOARD…
+                                         </>
+                                     ) : (
+                                         <>
+                                             <IconCheck className="w-5 h-5 mr-2" />
+                                             DONE ({resultCountdown}s)
+                                         </>
+                                     )}
+                                 </Button>
+                             )}
                         </div>
                     }
                 >
@@ -617,7 +624,7 @@ export function SelfieCapture({
                                     )}
                                 </div>
                                 <div className="text-[10px] text-emerald-400 font-mono pt-1">
-                                    {apiStatus === 'pending' ? 'Recording attendance...' : `Returning to dashboard in ${resultCountdown}s...`}
+                                    {apiStatus === 'pending' ? 'Recording attendance...' : isNavigating ? 'Returning to dashboard...' : `Returning to dashboard in ${resultCountdown}s...`}
                                 </div>
                             </div>
                         </div>

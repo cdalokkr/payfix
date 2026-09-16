@@ -5,6 +5,9 @@ import { useState, useEffect } from 'react'
 import { MobileAttendanceWizard } from '@/features/mobile/mobile-attendance-wizard'
 import { Button } from '@/components/ui/button'
 
+import { trpc } from '@/lib/trpc/client'
+import { Loader2 } from 'lucide-react'
+
 interface MobileAttendanceClientProps {
     profile: {
         id: string
@@ -17,7 +20,9 @@ interface MobileAttendanceClientProps {
 
 export function MobileAttendanceClient({ profile, action }: MobileAttendanceClientProps) {
     const router = useRouter()
+    const utils = trpc.useUtils()
     const [isDesktop, setIsDesktop] = useState(false)
+    const [isCompleting, setIsCompleting] = useState(false)
     const [wizardInstanceKey] = useState(() => `${action}-${Date.now()}`)
 
     useEffect(() => {
@@ -32,6 +37,10 @@ export function MobileAttendanceClient({ profile, action }: MobileAttendanceClie
     }, [])
 
     const handleComplete = () => {
+        setIsCompleting(true)
+        // Invalidate attendance queries so Today's Attendance card on dashboard updates immediately
+        void utils.attendance.getMobileAttendance.invalidate()
+        void utils.attendance.getTodayStatus.invalidate()
         // Navigate to dashboard and refresh to update session attendance counters
         router.replace('/mobile')
         router.refresh()
@@ -39,6 +48,20 @@ export function MobileAttendanceClient({ profile, action }: MobileAttendanceClie
 
     const handleCancel = () => {
         router.replace('/mobile')
+    }
+
+    if (isCompleting) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border dark:border-slate-800 rounded-[2.5rem] shadow-2xl max-w-sm mx-auto space-y-4">
+                <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 shadow-lg shadow-emerald-500/10">
+                    <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+                </div>
+                <div className="space-y-1">
+                    <h3 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">Updating Dashboard...</h3>
+                    <p className="text-xs text-muted-foreground font-medium">Returning to home screen</p>
+                </div>
+            </div>
+        )
     }
 
     if (isDesktop) {

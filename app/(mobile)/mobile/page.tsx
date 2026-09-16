@@ -51,6 +51,10 @@ export default async function MobilePage() {
                 id: attRecord.id,
                 check_in: attRecord.check_in ? new Date(attRecord.check_in).toISOString() : null,
                 check_out: attRecord.check_out ? new Date(attRecord.check_out).toISOString() : null,
+                first_check_in: attRecord.first_check_in ? new Date(attRecord.first_check_in).toISOString() : null,
+                last_check_out: attRecord.last_check_out ? new Date(attRecord.last_check_out).toISOString() : null,
+                total_sessions: attRecord.total_sessions || 0,
+                working_hours: attRecord.working_hours ? String(attRecord.working_hours) : null,
                 status: attRecord.status,
                 current_session_status: attRecord.current_session_status || null,
                 date: attRecord.date
