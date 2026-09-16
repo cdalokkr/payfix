@@ -411,19 +411,28 @@ export function SelfieCapture({
     const [sessionTimeout, setSessionTimeout] = useState<number>(20)
     const [resultCountdown, setResultCountdown] = useState<number>(4)
 
+    const capturePhotoRef = useRef(capturePhoto)
+    useEffect(() => {
+        capturePhotoRef.current = capturePhoto
+    }, [capturePhoto])
+
+    // Reset timer to 20s when a retake or reset key changes
+    useEffect(() => {
+        setSessionTimeout(20)
+    }, [captureResetKey])
+
     // 20-Second Auto-Capture Timer
-    // While > 10s: User can manually capture or blink.
-    // When <= 10s: Manual button is disabled and displays "Auto Capture in Xs 📸" to prevent race conditions.
+    // While > 5s: User can manually capture or blink.
+    // When <= 5s: Manual button is disabled and displays "Auto Capture in Xs 📸" to prevent race conditions.
     // When hits 0s: Automatically captures frame for verification.
     useEffect(() => {
         if (status === 'streaming' && !capturedImage) {
-            setSessionTimeout(20)
             const interval = setInterval(() => {
                 setSessionTimeout(prev => {
                     if (prev <= 1) {
                         clearInterval(interval)
                         toast.info("Auto-Capture triggered 📸")
-                        capturePhoto()
+                        capturePhotoRef.current()
                         return 0
                     }
                     return prev - 1
@@ -431,7 +440,7 @@ export function SelfieCapture({
             }, 1000)
             return () => clearInterval(interval)
         }
-    }, [status, capturedImage, capturePhoto])
+    }, [status, capturedImage])
 
     // Auto-verify immediately after capture (no confirm step)
     useEffect(() => {
@@ -531,16 +540,16 @@ export function SelfieCapture({
                             {(status === 'idle' || status === 'streaming') && (
                                 <Button
                                     onClick={handleProceed}
-                                    disabled={status !== 'streaming' || sessionTimeout <= 10}
+                                    disabled={status !== 'streaming' || sessionTimeout <= 5}
                                     size="lg"
                                     className={`w-full h-14 rounded-2xl font-black text-base transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed ${
-                                        sessionTimeout <= 10 && status === 'streaming'
+                                        sessionTimeout <= 5 && status === 'streaming'
                                             ? 'bg-amber-500/90 text-white shadow-lg shadow-amber-500/20 opacity-90'
                                             : 'bg-sky-500 text-white hover:bg-sky-400 shadow-lg shadow-sky-500/25 disabled:opacity-65 disabled:cursor-wait'
                                     }`}
                                 >
                                     {status === 'streaming' ? (
-                                        sessionTimeout <= 10 ? (
+                                        sessionTimeout <= 5 ? (
                                             <>
                                                 <IconCamera className="w-5 h-5 mr-2 animate-pulse" />
                                                 Auto Capture in {sessionTimeout}s 📸

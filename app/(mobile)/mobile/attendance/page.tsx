@@ -75,6 +75,7 @@ export default async function MobileAttendancePage({ searchParams }: PageProps) 
 
     return (
         <MobileAttendanceClient
+            key={action}
             profile={profile!}
             action={action}
         />

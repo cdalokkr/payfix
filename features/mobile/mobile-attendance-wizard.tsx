@@ -323,10 +323,14 @@ export function MobileAttendanceWizard({
             throw new Error('Attendance could not be recorded because the server connection was lost. Please verify again while online.')
         }
 
-        // Invalidate BOTH queries for real-time UI update
-        // getTodayStatus drives the clock-in/clock-out button state — must be fresh
-        await utils.attendance.getTodayStatus.invalidate()
-        await utils.attendance.getMobileAttendance.invalidate()
+        // Invalidate and eagerly pre-refetch BOTH queries in background right now!
+        // This ensures the fresh punch data is loaded into the cache while the user views the 4s verification success card!
+        await Promise.all([
+            utils.attendance.getTodayStatus.invalidate(),
+            utils.attendance.getMobileAttendance.invalidate(),
+        ])
+        void utils.attendance.getTodayStatus.refetch()
+        void utils.attendance.getMobileAttendance.refetch()
     }, [sessionAction, localDate, verifiedCoords, clockIn, clockOut, utils])
 
     // Called when verification AND API both succeed
