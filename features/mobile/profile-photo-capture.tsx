@@ -61,10 +61,11 @@ interface ProfilePhotoCaptureProps {
     profileId: string
     profileData: ProfileData
     preWarmedStream?: MediaStream | null
+    onClose?: () => void
     onSuccess?: () => void
 }
 
-export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, onSuccess }: ProfilePhotoCaptureProps) {
+export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, onClose, onSuccess }: ProfilePhotoCaptureProps) {
     const router = useRouter()
     const supabase = createClient()
     const createPhotoRequest = trpc.profile.createPhotoUpdateRequest.useMutation()
@@ -343,9 +344,27 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
             if (typeof result.enrollmentProof !== 'string') {
                 throw new Error('The server did not provide a secure enrollment proof. Please retake the selfie.')
             }
+
+            const comprehensiveDiagnostics = {
+                client: {
+                    camera_resolution: captureDiagnostics?.cameraResolution || (videoRef.current?.videoWidth ? `${videoRef.current.videoWidth} × ${videoRef.current.videoHeight}` : '640 × 480'),
+                    frame_resolution: captureDiagnostics?.outputResolution || 'Unknown',
+                    payload_bytes: captureDiagnostics?.outputBytes || 0,
+                    mime_type: captureDiagnostics?.outputMime || 'image/jpeg',
+                    captured_at: new Date().toISOString(),
+                },
+                server_verification: result.verification || null,
+                cloud_run_diagnostics: result.diagnostics || null,
+                liveness: {
+                    passed: result.verification?.livenessPassed ?? true,
+                    pipeline_version: result.verification?.embeddingPipelineVersion || BIOMETRIC_CAPTURE_PIPELINE_VERSION,
+                }
+            }
+
             await createPhotoRequest.mutateAsync({
                 pendingPhotoUrl: result.path,
                 enrollmentProof: result.enrollmentProof,
+                diagnostics: comprehensiveDiagnostics,
             })
             setStatus('submitted')
             toast.success('Photo submitted for admin approval!')
@@ -359,18 +378,20 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
         } finally {
             setIsUploading(false)
         }
-    }, [capturedImage, livenessChallenge, livenessFrames, profileId, addLog, createPhotoRequest])
+    }, [capturedImage, livenessChallenge, livenessFrames, profileId, addLog, createPhotoRequest, captureDiagnostics])
 
 
     // Handle back button
     const handleBack = useCallback(() => {
         stopCamera()
-        if (onSuccess) {
+        if (onClose) {
+            onClose()
+        } else if (onSuccess) {
             onSuccess()
         } else {
             router.back()
         }
-    }, [stopCamera, router, onSuccess])
+    }, [stopCamera, router, onClose, onSuccess])
 
 
     const [sessionTimeout, setSessionTimeout] = useState<number>(30)
@@ -440,26 +461,30 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
 
 
                     {captureDiagnostics && (
-                        <details open={status === 'error'} className="max-h-[32vh] overflow-y-auto overscroll-contain rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2.5 text-left [scrollbar-gutter:stable]">
-                            <summary className="cursor-pointer text-xs font-bold text-sky-300">Biometric capture details</summary>
-                            <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-mono text-slate-300">
-                                <dt className="text-slate-500">Camera</dt><dd>{captureDiagnostics.cameraResolution}</dd>
-                                <dt className="text-slate-500">Natural frame</dt><dd>{captureDiagnostics.outputResolution}</dd>
-                                <dt className="text-slate-500">Format</dt><dd>{captureDiagnostics.outputMime}</dd>
-                                <dt className="text-slate-500">Payload</dt><dd>{Math.round(captureDiagnostics.outputBytes / 1024)} KB</dd>
-                                <dt className="text-slate-500">Crop</dt><dd className="col-span-1">{captureDiagnostics.cropMode}</dd>
-                            </dl>
-                            {captureDiagnostics.serverStatus && <p className="mt-2 break-words text-[10px] text-amber-200">Server: {captureDiagnostics.serverStatus}</p>}
-                            {captureDiagnostics.serverVerification && (
-                                <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-slate-700 pt-2 text-[10px] font-mono text-slate-300">
-                                    <dt className="text-slate-500">Server faces</dt><dd>{captureDiagnostics.serverVerification.faceCount}</dd>
-                                    <dt className="text-slate-500">Template</dt><dd>{captureDiagnostics.serverVerification.embeddingDimensions}-d</dd>
-                                    <dt className="text-slate-500">Liveness</dt><dd>{captureDiagnostics.serverVerification.livenessPassed ? 'Passed' : 'Failed'}</dd>
-                                    <dt className="text-slate-500">Server portrait</dt><dd>{captureDiagnostics.serverVerification.storedCanonicalPortrait ? '3:4 canonical portrait' : 'Not stored'}</dd>
-                                    <dt className="text-slate-500">Backend</dt><dd className="break-all">{captureDiagnostics.serverVerification.backend}</dd>
+                        <details open={status === 'error'} className="rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2.5 text-left transition-all">
+                            <summary className="cursor-pointer text-xs font-bold text-sky-300 select-none py-0.5 outline-none hover:text-sky-200 transition-colors">
+                                Biometric capture details
+                            </summary>
+                            <div className="mt-2 space-y-2 pr-1">
+                                <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-mono text-slate-300">
+                                    <dt className="text-slate-500">Camera</dt><dd>{captureDiagnostics.cameraResolution}</dd>
+                                    <dt className="text-slate-500">Natural frame</dt><dd>{captureDiagnostics.outputResolution}</dd>
+                                    <dt className="text-slate-500">Format</dt><dd>{captureDiagnostics.outputMime}</dd>
+                                    <dt className="text-slate-500">Payload</dt><dd>{Math.round(captureDiagnostics.outputBytes / 1024)} KB</dd>
+                                    <dt className="text-slate-500">Crop</dt><dd className="col-span-1">{captureDiagnostics.cropMode}</dd>
                                 </dl>
-                            )}
-                            {debugLogs.length > 0 && <pre className="mt-2 max-h-24 overflow-auto whitespace-pre-wrap border-t border-slate-700 pt-2 text-[9px] leading-4 text-slate-400">{debugLogs.join('\n')}</pre>}
+                                {captureDiagnostics.serverStatus && <p className="break-words text-[10px] text-amber-200">Server: {captureDiagnostics.serverStatus}</p>}
+                                {captureDiagnostics.serverVerification && (
+                                    <dl className="grid grid-cols-2 gap-x-3 gap-y-1 border-t border-slate-700 pt-2 text-[10px] font-mono text-slate-300">
+                                        <dt className="text-slate-500">Server faces</dt><dd>{captureDiagnostics.serverVerification.faceCount}</dd>
+                                        <dt className="text-slate-500">Template</dt><dd>{captureDiagnostics.serverVerification.embeddingDimensions}-d</dd>
+                                        <dt className="text-slate-500">Liveness</dt><dd>{captureDiagnostics.serverVerification.livenessPassed ? 'Passed' : 'Failed'}</dd>
+                                        <dt className="text-slate-500">Server portrait</dt><dd>{captureDiagnostics.serverVerification.storedCanonicalPortrait ? '3:4 canonical portrait' : 'Not stored'}</dd>
+                                        <dt className="text-slate-500">Backend</dt><dd className="break-all">{captureDiagnostics.serverVerification.backend}</dd>
+                                    </dl>
+                                )}
+                                {debugLogs.length > 0 && <pre className="whitespace-pre-wrap border-t border-slate-700 pt-2 text-[9px] leading-4 text-slate-400">{debugLogs.join('\n')}</pre>}
+                            </div>
                         </details>
                     )}
 
@@ -500,17 +525,17 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
                     )}
 
                     {status === 'captured' && !isUploading && (
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-2 gap-3 sticky bottom-0 pt-3 pb-1 bg-slate-950/95 backdrop-blur-md z-10">
                             <Button
                                 onClick={handleRetake}
-                                className="h-12 rounded-2xl border border-white/20 bg-slate-800 hover:bg-slate-700 text-white font-extrabold text-sm shadow-md"
+                                className="h-12 rounded-2xl border border-white/20 bg-slate-800 hover:bg-slate-700 text-white font-extrabold text-sm shadow-md cursor-pointer"
                             >
                                 <IconRefresh className="w-4 h-4 mr-2 text-sky-400" />
                                 Retake
                             </Button>
                             <Button
                                 onClick={handleUpload}
-                                className="h-12 rounded-2xl bg-sky-500 hover:bg-sky-400 text-white font-black text-sm shadow-lg shadow-sky-500/25"
+                                className="h-12 rounded-2xl bg-sky-500 hover:bg-sky-400 text-white font-black text-sm shadow-lg shadow-sky-500/25 cursor-pointer"
                             >
                                 <IconCheck className="w-4 h-4 mr-2" />
                                 Submit
@@ -546,26 +571,14 @@ export function ProfilePhotoCapture({ profileId, profileData, preWarmedStream, o
         >
 
 
-            {/* Captured Selfie Photo Preview Overlay (Stays 100% continuous without black screen) */}
-
-            {capturedImage && status !== 'streaming' && status !== 'idle' && (
-                <div className="absolute inset-0 z-25 bg-slate-950 flex items-center justify-center overflow-hidden">
-                    <img
-                        src={capturedImage}
-                        alt="Captured Selfie Preview"
-                        className="w-full h-full object-cover"
-                    />
-
-                    {/* Uploading & Vector Extraction Spinner Overlay */}
-                    {status === 'uploading' && (
-                        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-950/65 backdrop-blur-md p-6 text-center text-white">
-                            <div className="p-6 bg-slate-900/90 border border-white/15 rounded-3xl space-y-3 shadow-2xl flex flex-col items-center max-w-xs animate-in zoom-in-95">
-                                <IconRefresh className="w-10 h-10 text-sky-400 animate-spin" />
-                                <p className="text-sm font-bold text-white">Submitting Profile Photo...</p>
-                                <p className="text-xs text-slate-300">Server validating frames and creating the 3:4 portrait</p>
-                            </div>
-                        </div>
-                    )}
+            {/* Uploading & Vector Extraction Spinner Overlay */}
+            {status === 'uploading' && (
+                <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-slate-950/75 backdrop-blur-sm p-6 text-center text-white pointer-events-auto">
+                    <div className="p-6 bg-slate-900/95 border border-white/15 rounded-3xl space-y-3 shadow-2xl flex flex-col items-center max-w-xs animate-in zoom-in-95">
+                        <IconRefresh className="w-10 h-10 text-sky-400 animate-spin" />
+                        <p className="text-sm font-bold text-white">Submitting Profile Photo...</p>
+                        <p className="text-xs text-slate-300">Server validating frames and creating the 3:4 portrait</p>
+                    </div>
                 </div>
             )}
 

@@ -38,6 +38,7 @@ interface SelfieCaptureProps {
     profileName?: string | null
     profileEmail?: string | null
     faceEmbedding?: number[] | null
+    preWarmedStream?: MediaStream | null
     onCaptured: (result: SelfieResult) => void
     onVerified: (result: { matched: boolean; similarity: number }) => void
     onSubmitAttendance: (attendanceProof: string) => Promise<void>
@@ -71,6 +72,7 @@ export function SelfieCapture({
     profileName,
     profileEmail,
     faceEmbedding,
+    preWarmedStream,
     onCaptured,
     onVerified,
     onSubmitAttendance,
@@ -127,10 +129,43 @@ export function SelfieCapture({
         setVerificationDuration('')
         setLivenessChallenge(null)
         setCaptureResetKey(value => value + 1)
+        setSessionTimeout(20)
         setStatus('streaming')
     }, [])
 
+    const cachedChallengeRef = useRef<string | null>(null)
+    const isFetchingChallengeRef = useRef(false)
+
+    // Pre-fetch challenge in background while streaming so capture starts with 0ms roundtrip delay
+    const prefetchChallenge = useCallback(async () => {
+        if (cachedChallengeRef.current || isFetchingChallengeRef.current) return
+        isFetchingChallengeRef.current = true
+        try {
+            const response = await fetch('/api/biometric/challenge', { method: 'POST' })
+            const result = await response.json().catch(() => ({}))
+            if (response.ok && typeof result.challenge === 'string') {
+                cachedChallengeRef.current = result.challenge
+                setLivenessChallenge(result.challenge)
+            }
+        } catch {
+            // Ignore prefetch error — fallback will fetch on demand
+        } finally {
+            isFetchingChallengeRef.current = false
+        }
+    }, [])
+
+    useEffect(() => {
+        if (status === 'streaming' && !cachedChallengeRef.current) {
+            void prefetchChallenge()
+        }
+    }, [status, prefetchChallenge])
+
     const getLivenessChallenge = useCallback(async () => {
+        if (cachedChallengeRef.current) {
+            const challenge = cachedChallengeRef.current
+            cachedChallengeRef.current = null
+            return challenge
+        }
         const response = await fetch('/api/biometric/challenge', { method: 'POST' })
         const result = await response.json().catch(() => ({}))
         if (!response.ok || typeof result.challenge !== 'string') throw new Error(result.error || 'Could not start liveness verification.')
@@ -146,7 +181,7 @@ export function SelfieCapture({
             const capture = captureNaturalBiometricFrame(video)
             if (!capture) return []
             frames.push(capture.dataUrl)
-            if (index < 2) await new Promise(resolve => setTimeout(resolve, 260))
+            if (index < 2) await new Promise(resolve => setTimeout(resolve, 130))
         }
         return frames
     }, [])
@@ -334,10 +369,30 @@ export function SelfieCapture({
         }
     }, [status, capturePhoto, capturedImage, executeVerify])
 
+    const resetVerificationState = useCallback(() => {
+        setStatus('idle')
+        setErrorMessage('')
+        setCapturedImage(null)
+        setProcessedPortrait(null)
+        setCapturedAt(null)
+        setSimilarity(0)
+        setApiStatus('idle')
+        setApiError('')
+        setVerificationDetails(null)
+        setServerVerificationBackend(null)
+        setLivenessChallenge(null)
+        setCaptureResetKey(v => v + 1)
+        setSessionTimeout(20)
+    }, [])
+
+    const [isNavigating, setIsNavigating] = useState(false)
+
     const handleComplete = useCallback(() => {
         if (apiStatus === 'success') {
-            // API already done, go directly to dashboard
-            onVerified({ matched: true, similarity })
+            const finalSimilarity = similarity
+            setIsNavigating(true)
+            stopCamera()
+            onVerified({ matched: true, similarity: finalSimilarity })
         } else if (apiStatus === 'pending') {
             // Wait for API to complete
             // The button will show spinner, user needs to wait
@@ -346,20 +401,38 @@ export function SelfieCapture({
             setStatus('verify_failed')
             setErrorMessage(apiError || 'Failed to record attendance')
         }
-    }, [apiStatus, similarity, onVerified, apiError])
+    }, [apiStatus, similarity, onVerified, apiError, stopCamera])
 
-    const [sessionTimeout, setSessionTimeout] = useState<number>(10)
+    // Reset verification state on mode change (e.g. clock_in -> clock_out)
+    useEffect(() => {
+        resetVerificationState()
+    }, [mode, resetVerificationState])
 
-    // 10-Second Auto-Capture Timer (Automatically captures selfie at 10s if not captured manually or via blink)
+    const [sessionTimeout, setSessionTimeout] = useState<number>(20)
+    const [resultCountdown, setResultCountdown] = useState<number>(4)
+
+    const capturePhotoRef = useRef(capturePhoto)
+    useEffect(() => {
+        capturePhotoRef.current = capturePhoto
+    }, [capturePhoto])
+
+    // Reset timer to 20s when a retake or reset key changes
+    useEffect(() => {
+        setSessionTimeout(20)
+    }, [captureResetKey])
+
+    // 20-Second Auto-Capture Timer
+    // While > 5s: User can manually capture or blink.
+    // When <= 5s: Manual button is disabled and displays "Auto Capture in Xs 📸" to prevent race conditions.
+    // When hits 0s: Automatically captures frame for verification.
     useEffect(() => {
         if (status === 'streaming' && !capturedImage) {
-            setSessionTimeout(10)
             const interval = setInterval(() => {
                 setSessionTimeout(prev => {
                     if (prev <= 1) {
                         clearInterval(interval)
-                        toast.info("10s Auto-Capture triggered 📸")
-                        capturePhoto()
+                        toast.info("Auto-Capture triggered 📸")
+                        capturePhotoRef.current()
                         return 0
                     }
                     return prev - 1
@@ -367,32 +440,51 @@ export function SelfieCapture({
             }, 1000)
             return () => clearInterval(interval)
         }
-    }, [status, capturedImage, capturePhoto])
+    }, [status, capturedImage])
 
     // Auto-verify immediately after capture (no confirm step)
     useEffect(() => {
         if (status === 'captured' && capturedImage && capturedAt) {
-            // Small delay for UX - let user see their captured photo briefly
+            // Generous delay for UX - let user see their captured photo clearly before verifying
             const timer = setTimeout(() => {
                 handleProceed()
-            }, 500)
+            }, 1200)
             return () => clearTimeout(timer)
         }
     }, [status, capturedImage, capturedAt, handleProceed])
+
+    // Verification Result Auto-Complete Timer: Gives user 4 seconds to view clear verification results
+    useEffect(() => {
+        if (status === 'verified' && apiStatus === 'success' && !isNavigating) {
+            setResultCountdown(4)
+            const interval = setInterval(() => {
+                setResultCountdown(prev => {
+                    if (prev <= 1) {
+                        clearInterval(interval)
+                        handleComplete()
+                        return 0
+                    }
+                    return prev - 1
+                })
+            }, 1000)
+            return () => clearInterval(interval)
+        }
+    }, [status, apiStatus, isNavigating, handleComplete])
 
     useEffect(() => {
         return () => stopCamera()
     }, [stopCamera])
 
     return (
-        <div className="fixed inset-0 z-[70] bg-slate-950/80 backdrop-blur-md flex flex-col items-center justify-center p-3 sm:p-6 overflow-hidden">
-            <div className="w-full max-w-md">
+        <div className="fixed inset-0 z-[70] bg-slate-950 sm:bg-slate-950/80 sm:backdrop-blur-md flex flex-col items-center justify-center p-0 sm:p-4 overflow-hidden">
+            <div className="w-full h-[100dvh] sm:h-auto sm:max-w-md sm:max-h-[92vh] flex flex-col overflow-hidden">
                 <BiometricCameraModal
                     isOpen={true}
                     onClose={onBack || (() => {})}
                     title="Identify Yourself"
                     icon={<IconScanFace className="w-5 h-5 text-sky-400" />}
                     videoRefOut={videoRef}
+                    warmedStream={preWarmedStream}
                     onVideoReady={() => setStatus(current => current === 'idle' ? 'streaming' : current)}
                     serverVerificationBackend={serverVerificationBackend}
                     timerSeconds={!capturedImage && status !== 'verified' ? sessionTimeout : undefined}
@@ -420,39 +512,54 @@ export function SelfieCapture({
                                 </div>
                             </div>
                             {verificationDetails && (
-                                <details open={status === 'verify_failed'} className="max-h-[32vh] overflow-y-auto overscroll-contain rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2.5 text-left [scrollbar-gutter:stable]">
-                                    <summary className="cursor-pointer text-xs font-bold text-sky-300">Daily biometric verification details</summary>
-                                    <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-mono text-slate-300">
-                                        <dt className="text-slate-500">Camera</dt><dd>{verificationDetails.cameraResolution}</dd>
-                                        <dt className="text-slate-500">Output</dt><dd>{verificationDetails.outputResolution}</dd>
-                                        <dt className="text-slate-500">Format</dt><dd>{verificationDetails.format}</dd>
-                                        <dt className="text-slate-500">Payload</dt><dd>{Math.round(verificationDetails.payloadBytes / 1024)} KB</dd>
-                                        {verificationDetails.server && <>
-                                            <dt className="text-slate-500">Server faces</dt><dd>{verificationDetails.server.faceCount}</dd>
-                                            <dt className="text-slate-500">Template</dt><dd>{verificationDetails.server.embeddingDimensions}-d</dd>
-                                            <dt className="text-slate-500">Liveness</dt><dd>{verificationDetails.server.livenessPassed ? 'Passed' : 'Failed'}</dd>
-                                            <dt className="text-slate-500">Backend</dt><dd className="break-all">{verificationDetails.server.backend}</dd>
-                                        </>}
-                                        {typeof verificationDetails.similarity === 'number' && typeof verificationDetails.threshold === 'number' && verificationDetails.threshold > 0 && <>
-                                            <dt className="text-slate-500">Similarity</dt><dd>{(verificationDetails.similarity * 100).toFixed(1)}%</dd>
-                                            <dt className="text-slate-500">Required</dt><dd>{(verificationDetails.threshold * 100).toFixed(1)}%</dd>
-                                        </>}
-                                    </dl>
+                                <details open={status === 'verify_failed'} className="rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2.5 text-left transition-all">
+                                    <summary className="cursor-pointer text-xs font-bold text-sky-300 select-none py-0.5 outline-none hover:text-sky-200 transition-colors">
+                                        Daily biometric verification details
+                                    </summary>
+                                    <div className="mt-2 space-y-2 pr-1">
+                                        <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-mono text-slate-300">
+                                            <dt className="text-slate-500">Camera</dt><dd>{verificationDetails.cameraResolution}</dd>
+                                            <dt className="text-slate-500">Output</dt><dd>{verificationDetails.outputResolution}</dd>
+                                            <dt className="text-slate-500">Format</dt><dd>{verificationDetails.format}</dd>
+                                            <dt className="text-slate-500">Payload</dt><dd>{Math.round(verificationDetails.payloadBytes / 1024)} KB</dd>
+                                            {verificationDetails.server && <>
+                                                <dt className="text-slate-500">Server faces</dt><dd>{verificationDetails.server.faceCount}</dd>
+                                                <dt className="text-slate-500">Template</dt><dd>{verificationDetails.server.embeddingDimensions}-d</dd>
+                                                <dt className="text-slate-500">Liveness</dt><dd>{verificationDetails.server.livenessPassed ? 'Passed' : 'Failed'}</dd>
+                                                <dt className="text-slate-500">Backend</dt><dd className="break-all">{verificationDetails.server.backend}</dd>
+                                            </>}
+                                            {typeof verificationDetails.similarity === 'number' && typeof verificationDetails.threshold === 'number' && verificationDetails.threshold > 0 && <>
+                                                <dt className="text-slate-500">Similarity</dt><dd>{(verificationDetails.similarity * 100).toFixed(1)}%</dd>
+                                                <dt className="text-slate-500">Required</dt><dd>{(verificationDetails.threshold * 100).toFixed(1)}%</dd>
+                                            </>}
+                                        </dl>
+                                    </div>
                                 </details>
                             )}
 
                             {(status === 'idle' || status === 'streaming') && (
                                 <Button
                                     onClick={handleProceed}
-                                    disabled={status !== 'streaming'}
+                                    disabled={status !== 'streaming' || sessionTimeout <= 5}
                                     size="lg"
-                                    className="w-full h-14 rounded-2xl bg-sky-500 text-white font-black text-base hover:bg-sky-400 shadow-lg shadow-sky-500/25 transition-all active:scale-95 cursor-pointer disabled:opacity-65 disabled:cursor-wait"
+                                    className={`w-full h-14 rounded-2xl font-black text-base transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed ${
+                                        sessionTimeout <= 5 && status === 'streaming'
+                                            ? 'bg-amber-500/90 text-white shadow-lg shadow-amber-500/20 opacity-90'
+                                            : 'bg-sky-500 text-white hover:bg-sky-400 shadow-lg shadow-sky-500/25 disabled:opacity-65 disabled:cursor-wait'
+                                    }`}
                                 >
                                     {status === 'streaming' ? (
-                                        <>
-                                            <IconScanFace className="w-5 h-5 mr-2" />
-                                            IDENTIFY NOW
-                                        </>
+                                        sessionTimeout <= 5 ? (
+                                            <>
+                                                <IconCamera className="w-5 h-5 mr-2 animate-pulse" />
+                                                Auto Capture in {sessionTimeout}s 📸
+                                            </>
+                                        ) : (
+                                            <>
+                                                <IconScanFace className="w-5 h-5 mr-2" />
+                                                IDENTIFY NOW
+                                            </>
+                                        )
                                     ) : (
                                         <>
                                             <IconLoader2 className="w-5 h-5 mr-2 animate-spin" />
@@ -463,15 +570,30 @@ export function SelfieCapture({
                             )}
 
                             {status === 'verified' && (
-                                <Button
-                                    onClick={handleComplete}
-                                    size="lg"
-                                    className="w-full h-14 rounded-2xl bg-emerald-500 text-white font-black text-base hover:bg-emerald-400 shadow-lg shadow-emerald-500/25 transition-all active:scale-95 cursor-pointer"
-                                >
-                                    <IconCheck className="w-5 h-5 mr-2" />
-                                    DONE
-                                </Button>
-                            )}
+                                 <Button
+                                     onClick={handleComplete}
+                                     disabled={apiStatus === 'pending' || isNavigating}
+                                     size="lg"
+                                     className="w-full h-14 rounded-2xl bg-emerald-500 text-white font-black text-base hover:bg-emerald-400 shadow-lg shadow-emerald-500/25 transition-all active:scale-95 cursor-pointer disabled:opacity-65"
+                                 >
+                                     {apiStatus === 'pending' ? (
+                                         <>
+                                             <IconLoader2 className="w-5 h-5 mr-2 animate-spin" />
+                                             RECORDING ATTENDANCE…
+                                         </>
+                                     ) : isNavigating ? (
+                                         <>
+                                             <IconLoader2 className="w-5 h-5 mr-2 animate-spin" />
+                                             RETURNING TO DASHBOARD…
+                                         </>
+                                     ) : (
+                                         <>
+                                             <IconCheck className="w-5 h-5 mr-2" />
+                                             DONE ({resultCountdown}s)
+                                         </>
+                                     )}
+                                 </Button>
+                             )}
                         </div>
                     }
                 >

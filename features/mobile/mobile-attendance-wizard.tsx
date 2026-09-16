@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useCallback } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -14,13 +14,18 @@ import {
     X as IconX,
     ArrowLeft as IconArrowLeft,
     Sparkles as IconSparkles,
+    MapPin as IconMapPin,
+    MapPinOff as IconMapPinOff,
+    AlertTriangle as IconAlertTriangle,
+    RefreshCw as IconRefreshCw,
 } from "lucide-react"
 import { trpc } from "@/lib/trpc/client"
 import { SelfieCapture, type SelfieResult } from "./selfie-capture"
 import { format } from "date-fns"
 import { usePwaCheck } from "@/hooks/use-pwa-check"
+import { prewarmBiometricCamera, takePrewarmedBiometricCamera } from "@/lib/biometric-camera-prewarm"
 
-type WizardStep = 'selfie' | 'submitting' | 'complete' | 'error'
+type WizardStep = 'locating' | 'outside_office' | 'selfie' | 'submitting' | 'complete' | 'error'
 
 interface MobileAttendanceWizardProps {
     action: 'clock_in' | 'clock_out'
@@ -32,8 +37,39 @@ interface MobileAttendanceWizardProps {
 }
 
 const STEPS = [
+    { id: 'locating', label: 'Location', icon: IconMapPin },
     { id: 'selfie', label: 'Verify', icon: IconCamera },
 ]
+
+function getStoredGeofence() {
+    if (typeof window === 'undefined') return null
+    try {
+        const cached = sessionStorage.getItem('mobileGeofenceResult') || localStorage.getItem('mobileGeofenceResult')
+        const cachedTime = sessionStorage.getItem('mobileGeofenceTimestamp') || localStorage.getItem('mobileGeofenceTimestamp')
+        if (cached && cachedTime) {
+            const age = Date.now() - Number(cachedTime)
+            if (age < 30000) { // 30 seconds validity
+                return JSON.parse(cached)
+            }
+        }
+    } catch {}
+    return null
+}
+
+function getStoredCoords(): { lat: number; lng: number } | null {
+    if (typeof window === 'undefined') return null
+    try {
+        const cached = sessionStorage.getItem('mobileUserCoords') || localStorage.getItem('mobileUserCoords')
+        const cachedTime = sessionStorage.getItem('mobileGeofenceTimestamp') || localStorage.getItem('mobileGeofenceTimestamp')
+        if (cached && cachedTime) {
+            const age = Date.now() - Number(cachedTime)
+            if (age < 30000) { // 30 seconds validity
+                return JSON.parse(cached)
+            }
+        }
+    } catch {}
+    return null
+}
 
 export function MobileAttendanceWizard({
     action,
@@ -44,19 +80,52 @@ export function MobileAttendanceWizard({
     onCancel,
 }: MobileAttendanceWizardProps) {
     const { isPwa, isReady } = usePwaCheck()
-    const [currentStep, setCurrentStep] = useState<WizardStep>('selfie')
+
+    // Lock session action on mount so subsequent query invalidations in background NEVER remount SelfieCapture mid-verification
+    const [sessionAction] = useState<'clock_in' | 'clock_out'>(() => action)
+
+    const initialGeofence = getStoredGeofence()
+    const initialCoords = getStoredCoords()
+    const isInitiallyAllowed = initialGeofence?.isAllowed === true && !!initialCoords
+
+    const [currentStep, setCurrentStep] = useState<WizardStep>(() => {
+        if (isInitiallyAllowed) return 'selfie'
+        if (initialGeofence && !initialGeofence.isAllowed) return 'outside_office'
+        return 'locating'
+    })
     const [errorMessage, setErrorMessage] = useState('')
+    const [verifiedCoords, setVerifiedCoords] = useState<{ latitude: number; longitude: number } | null>(() => {
+        if (isInitiallyAllowed && initialCoords) {
+            return { latitude: initialCoords.lat, longitude: initialCoords.lng }
+        }
+        return null
+    })
+    const [verifiedOfficeName, setVerifiedOfficeName] = useState<string | null>(() => {
+        if (isInitiallyAllowed && initialGeofence?.withinOffice?.name) {
+            return initialGeofence.withinOffice.name
+        }
+        return null
+    })
+    const [outsideDetails, setOutsideDetails] = useState<{
+        nearestOfficeName?: string
+        distanceMeters?: number
+        userCoords?: { latitude: number; longitude: number }
+        reason?: string
+    } | null>(() => {
+        if (initialGeofence && !initialGeofence.isAllowed) {
+            return {
+                nearestOfficeName: initialGeofence.nearestOffice?.name,
+                distanceMeters: initialGeofence.nearestOffice?.distance,
+                userCoords: initialCoords ? { latitude: initialCoords.lat, longitude: initialCoords.lng } : undefined,
+                reason: 'You are outside the designated office boundary.'
+            }
+        }
+        return null
+    })
+    const [isRetryingLocation, setIsRetryingLocation] = useState(false)
+
     const utils = trpc.useUtils()
     const localDate = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Kolkata' })
-
-    // Client-side status check — double-safety net to guarantee action matches real DB state
-    const { data: serverTodayStatus } = trpc.attendance.getTodayStatus.useQuery({ localDate })
-
-    const effectiveAction: 'clock_in' | 'clock_out' = serverTodayStatus?.status === 'clocked_in'
-        ? 'clock_out'
-        : serverTodayStatus?.status === 'not_clocked_in'
-            ? 'clock_in'
-            : action
 
     // Clock in mutation
     const clockIn = trpc.attendance.clockIn.useMutation({
@@ -74,52 +143,133 @@ export function MobileAttendanceWizard({
         },
     })
 
+    // Pre-verification GPS Location Gate: Verify presence before/during camera session
+    const verifyOfficeLocation = useCallback(async (isBackgroundRecheck = false) => {
+        if (!isBackgroundRecheck) {
+            setIsRetryingLocation(true)
+            setErrorMessage('')
+        }
+        // Pre-warm camera hardware in background during location check so camera starts in <50ms once verified
+        void prewarmBiometricCamera()
+        try {
+            if (typeof window === 'undefined' || !navigator.geolocation) {
+                if (!isBackgroundRecheck) {
+                    setOutsideDetails({
+                        reason: 'Geolocation is not supported or accessible on this device.'
+                    })
+                    setCurrentStep('outside_office')
+                }
+                return
+            }
+
+            // Request fresh GPS coordinates
+            const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                    enableHighAccuracy: true,
+                    timeout: 8000,
+                    maximumAge: 15000,
+                })
+            })
+
+            const lat = pos.coords.latitude
+            const lng = pos.coords.longitude
+
+            // Verify position against authorized office geofences via server-side Haversine check
+            const geofenceResult = await utils.officeLocations.checkGeofence.fetch({
+                latitude: lat,
+                longitude: lng,
+            })
+
+            // Update session cache with fresh verified position
+            try {
+                sessionStorage.setItem('mobileUserCoords', JSON.stringify({ lat, lng }))
+                sessionStorage.setItem('mobileGeofenceResult', JSON.stringify(geofenceResult))
+                sessionStorage.setItem('mobileGeofenceTimestamp', Date.now().toString())
+            } catch {}
+
+            if (!geofenceResult.isAllowed) {
+                // User is outside the authorized perimeter — block camera verification immediately!
+                setOutsideDetails({
+                    nearestOfficeName: geofenceResult.nearestOffice?.name,
+                    distanceMeters: geofenceResult.nearestOffice?.distance,
+                    userCoords: { latitude: lat, longitude: lng },
+                    reason: 'You are outside the designated office boundary.'
+                })
+                setCurrentStep('outside_office')
+                return
+            }
+
+            // Inside verified office zone: advance to biometric selfie camera step
+            setVerifiedCoords({ latitude: lat, longitude: lng })
+            setVerifiedOfficeName(geofenceResult.withinOffice?.name || null)
+            setCurrentStep(prev => prev === 'locating' ? 'selfie' : prev)
+        } catch (err: any) {
+            if (isBackgroundRecheck) {
+                // Background update failure should not interrupt ongoing selfie session if cache was valid
+                console.warn('[WIZARD] Background location re-check skipped:', err)
+                return
+            }
+            console.error('[WIZARD] Geolocation pre-gate error:', err)
+            let errorMsg = 'Failed to obtain live GPS location.'
+            if (err?.code === 1) { // PERMISSION_DENIED
+                errorMsg = 'Location permission was denied. Please allow location access in your browser settings to verify your presence at the office.'
+            } else if (err?.code === 2) { // POSITION_UNAVAILABLE
+                errorMsg = 'GPS signal unavailable. Please ensure your device location is turned on and try again.'
+            } else if (err?.code === 3) { // TIMEOUT
+                errorMsg = 'Location acquisition timed out. Please check your GPS signal and retry.'
+            }
+            setOutsideDetails({
+                reason: errorMsg
+            })
+            setCurrentStep('outside_office')
+        } finally {
+            if (!isBackgroundRecheck) {
+                setIsRetryingLocation(false)
+            }
+        }
+    }, [utils])
+
+    useEffect(() => {
+        // Pre-warm camera hardware as early as possible
+        void prewarmBiometricCamera()
+
+        if (!isReady) return
+
+        // If already validated on-site via fresh geofence cache (<30s), run silent background update without blocking UI
+        if (isInitiallyAllowed) {
+            void verifyOfficeLocation(true)
+        } else {
+            void verifyOfficeLocation(false)
+        }
+    }, [isReady, isInitiallyAllowed, verifyOfficeLocation])
+
     const handleSelfieCaptured = useCallback((result: SelfieResult) => {
         // Selfie captured but not verified yet - this is now handled in selfie-capture
     }, [])
 
     // This is called by SelfieCapture to submit attendance in parallel with verification
     const handleSubmitAttendance = useCallback(async (attendanceProof: string) => {
-        let coords: { latitude: number | null; longitude: number | null } = { latitude: null, longitude: null }
-        if (effectiveAction === 'clock_in') {
-            try {
-                // Try to reuse fresh cached coordinates from sessionStorage (less than 1 minute old)
-                let cachedCoords: { lat: number; lng: number } | null = null
-                if (typeof window !== 'undefined') {
-                    const cachedCoordsStr = sessionStorage.getItem('mobileUserCoords')
-                    const cachedTimeStr = sessionStorage.getItem('mobileGeofenceTimestamp')
-                    if (cachedCoordsStr && cachedTimeStr) {
-                        const age = Date.now() - Number(cachedTimeStr)
-                        if (age < 60000) { // 1 minute is extremely fresh for location verification
-                            const parsed = JSON.parse(cachedCoordsStr)
-                            if (parsed && typeof parsed.lat === 'number' && typeof parsed.lng === 'number') {
-                                console.log('[WIZARD] Reusing fresh cached coordinates for clock_in:', parsed)
-                                coords = {
-                                    latitude: parsed.lat,
-                                    longitude: parsed.lng
-                                }
-                            }
-                        }
-                    }
-                }
+        let coords: { latitude: number | null; longitude: number | null } = {
+            latitude: verifiedCoords?.latitude ?? null,
+            longitude: verifiedCoords?.longitude ?? null,
+        }
 
-                // Fallback to fresh GPS query if cached coordinates are missing or stale
-                if (!coords.latitude && 'geolocation' in navigator) {
-                    const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-                        navigator.geolocation.getCurrentPosition(resolve, reject, {
-                            enableHighAccuracy: true,
-                            timeout: 5000,
-                            maximumAge: 0
-                        })
+        // Live fallback if verifiedCoords was somehow missing
+        if (!coords.latitude && typeof window !== 'undefined' && 'geolocation' in navigator) {
+            try {
+                const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(resolve, reject, {
+                        enableHighAccuracy: true,
+                        timeout: 5000,
+                        maximumAge: 10000,
                     })
-                    coords = {
-                        latitude: pos.coords.latitude,
-                        longitude: pos.coords.longitude
-                    }
+                })
+                coords = {
+                    latitude: pos.coords.latitude,
+                    longitude: pos.coords.longitude,
                 }
             } catch (err) {
-                console.warn('Failed to get location:', err)
-                // Proceed without location
+                console.warn('[WIZARD] Live fallback location acquisition failed:', err)
             }
         }
 
@@ -128,18 +278,20 @@ export function MobileAttendanceWizard({
         }
 
         try {
-            if (effectiveAction === 'clock_in') {
+            if (sessionAction === 'clock_in') {
                 await clockIn.mutateAsync({
                     localDate,
                     attendanceProof,
                     isExtraDay: false,
                     latitude: coords.latitude || undefined,
-                    longitude: coords.longitude || undefined
+                    longitude: coords.longitude || undefined,
                 })
             } else {
                 await clockOut.mutateAsync({
                     localDate,
                     attendanceProof,
+                    latitude: coords.latitude || undefined,
+                    longitude: coords.longitude || undefined,
                 })
             }
         } catch (err: any) {
@@ -171,17 +323,21 @@ export function MobileAttendanceWizard({
             throw new Error('Attendance could not be recorded because the server connection was lost. Please verify again while online.')
         }
 
-        // Invalidate BOTH queries for real-time UI update
-        // getTodayStatus drives the clock-in/clock-out button state — must be fresh
-        await utils.attendance.getTodayStatus.invalidate()
-        utils.attendance.getMobileAttendance.invalidate()
-    }, [effectiveAction, localDate, clockIn, clockOut, utils])
+        // Invalidate and eagerly pre-refetch BOTH queries in background right now!
+        // This ensures the fresh punch data is loaded into the cache while the user views the 4s verification success card!
+        await Promise.all([
+            utils.attendance.getTodayStatus.invalidate(),
+            utils.attendance.getMobileAttendance.invalidate(),
+        ])
+        void utils.attendance.getTodayStatus.refetch()
+        void utils.attendance.getMobileAttendance.refetch()
+    }, [sessionAction, localDate, verifiedCoords, clockIn, clockOut, utils])
 
     // Called when verification AND API both succeed
     const handleVerified = useCallback((result: { matched: boolean; similarity: number }) => {
-        toast.success(effectiveAction === 'clock_in' ? 'Successfully clocked in!' : 'Successfully clocked out!')
+        toast.success(sessionAction === 'clock_in' ? 'Successfully clocked in!' : 'Successfully clocked out!')
         onComplete()
-    }, [effectiveAction, onComplete])
+    }, [sessionAction, onComplete])
 
     const handleBack = useCallback(() => {
         onCancel()
@@ -189,7 +345,8 @@ export function MobileAttendanceWizard({
 
     const getProgress = () => {
         switch (currentStep) {
-            case 'selfie': return 50
+            case 'locating': return 25
+            case 'selfie': return 60
             case 'submitting': return 90
             case 'complete': return 100
             default: return 0
@@ -219,16 +376,127 @@ export function MobileAttendanceWizard({
                 animate={{ opacity: 1, scale: 1 }}
                 className="relative"
             >
+                {/* STEP: Mandatory Location Verification Radar */}
+                {currentStep === 'locating' && (
+                    <Card className="rounded-[2.5rem] border-none shadow-2xl overflow-hidden bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl">
+                        <CardContent className="py-16 px-6 text-center space-y-6">
+                            <div className="relative mx-auto w-24 h-24 flex items-center justify-center">
+                                <motion.div
+                                    animate={{ scale: [1, 1.4, 1], opacity: [0.3, 0.7, 0.3] }}
+                                    transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                                    className="absolute inset-0 rounded-full bg-primary/20"
+                                />
+                                <motion.div
+                                    animate={{ scale: [1, 1.8, 1], opacity: [0.1, 0.4, 0.1] }}
+                                    transition={{ duration: 2, repeat: Infinity, ease: "easeInOut", delay: 0.3 }}
+                                    className="absolute inset-0 rounded-full bg-primary/10"
+                                />
+                                <div className="relative z-10 w-16 h-16 rounded-2xl bg-gradient-to-tr from-primary to-primary/80 flex items-center justify-center shadow-lg shadow-primary/25">
+                                    <IconMapPin className="w-8 h-8 text-white animate-bounce" />
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-[11px] font-black uppercase tracking-wider">
+                                    <IconLoader2 className="w-3.5 h-3.5 animate-spin" />
+                                    <span>GPS Verification</span>
+                                </div>
+                                <h3 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">Locating Office Area...</h3>
+                                <p className="text-xs text-muted-foreground font-medium max-w-xs mx-auto">
+                                    Verifying on-site office presence before starting biometric camera verification.
+                                </p>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/* STEP: Outside Office Area Blocking Card (Camera NEVER opens) */}
+                {currentStep === 'outside_office' && (
+                    <Card className="rounded-[2.5rem] border border-destructive/20 shadow-2xl overflow-hidden bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl">
+                        <CardContent className="py-10 px-6 text-center space-y-6">
+                            <div className="relative mx-auto w-20 h-20 flex items-center justify-center">
+                                <div className="absolute inset-0 rounded-full bg-destructive/10 animate-ping opacity-60" />
+                                <div className="relative z-10 w-16 h-16 rounded-2xl bg-gradient-to-tr from-destructive to-destructive/80 flex items-center justify-center shadow-lg shadow-destructive/20">
+                                    <IconMapPinOff className="w-8 h-8 text-white" />
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-destructive/10 text-destructive text-[11px] font-black uppercase tracking-wider">
+                                    <IconAlertTriangle className="w-3.5 h-3.5" />
+                                    <span>Geofence Restricted</span>
+                                </div>
+                                <h3 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">Outside Office Area</h3>
+                                <p className="text-xs text-muted-foreground font-medium max-w-xs mx-auto leading-relaxed">
+                                    {outsideDetails?.reason || 'Attendance verification can only be completed while physically inside an authorized office location.'}
+                                </p>
+                            </div>
+
+                            {outsideDetails?.nearestOfficeName && (
+                                <div className="p-4 rounded-2xl bg-muted/50 border border-border/50 text-left space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Nearest Office</span>
+                                        <span className="text-[11px] font-black text-destructive bg-destructive/10 px-2 py-0.5 rounded-md">
+                                            {outsideDetails.distanceMeters && outsideDetails.distanceMeters >= 1000
+                                                ? `${(outsideDetails.distanceMeters / 1000).toFixed(1)} km away`
+                                                : `${outsideDetails.distanceMeters || 0} m away`}
+                                        </span>
+                                    </div>
+                                    <div className="text-sm font-black text-foreground">
+                                        {outsideDetails.nearestOfficeName}
+                                    </div>
+                                    {outsideDetails.userCoords && (
+                                        <div className="text-[10px] text-muted-foreground font-mono">
+                                            GPS: {outsideDetails.userCoords.latitude.toFixed(5)}, {outsideDetails.userCoords.longitude.toFixed(5)}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="space-y-2.5 pt-2">
+                                <Button
+                                    onClick={() => verifyOfficeLocation(false)}
+                                    disabled={isRetryingLocation}
+                                    className="w-full h-12 rounded-2xl font-bold gap-2 shadow-md"
+                                >
+                                    {isRetryingLocation ? (
+                                        <>
+                                            <IconLoader2 className="w-4 h-4 animate-spin" />
+                                            Checking Location...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <IconRefreshCw className="w-4 h-4" />
+                                            Retry Location Check
+                                        </>
+                                    )}
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    onClick={onCancel}
+                                    className="w-full h-12 rounded-2xl font-semibold border-border/60 hover:bg-muted/50"
+                                >
+                                    <IconArrowLeft className="w-4 h-4 mr-1.5" />
+                                    Return to Dashboard
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/* STEP: Biometric Selfie Verification (Only reachable if location confirmed inside office) */}
                 {currentStep === 'selfie' && (
                     <SelfieCapture
+                        key={`selfie-${sessionAction}`}
                         profileImageUrl={profileImageUrl}
                         profileName={profileName}
                         profileEmail={profileEmail}
+                        preWarmedStream={takePrewarmedBiometricCamera()}
                         onCaptured={handleSelfieCaptured}
                         onVerified={handleVerified}
                         onSubmitAttendance={handleSubmitAttendance}
                         onBack={handleBack}
-                        mode={action === 'clock_out' ? 'check_out' : 'check_in'}
+                        mode={sessionAction === 'clock_out' ? 'check_out' : 'check_in'}
                     />
                 )}
 
@@ -305,7 +573,7 @@ export function MobileAttendanceWizard({
                             </p>
                             <div className="space-y-3">
                                 <Button
-                                    onClick={() => setCurrentStep('selfie')}
+                                    onClick={() => verifyOfficeLocation()}
                                     className="w-full h-14 rounded-2xl bg-destructive hover:bg-destructive/90 font-black shadow-lg"
                                 >
                                     Try Again

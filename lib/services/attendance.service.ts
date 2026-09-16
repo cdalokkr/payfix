@@ -388,7 +388,7 @@ export class AttendanceService {
         } else if (source === 'mobile') {
             // Strict Geofencing: If office locations exist, location is MANDATORY for mobile punches
             if (activeLocations.length > 0) {
-                throwAppError('FORBIDDEN', 'Location access is required to clock in at an office location.')
+                throwAppError('FORBIDDEN', 'Location access is required to clock in.')
             }
         }
 
@@ -468,6 +468,15 @@ export class AttendanceService {
                 activity_type: 'data_create',
                 module: 'attendance',
                 description: `Clocked in (Session #${currentTotalSessions}) at ${getLocalTimeIST12Hour()}${isExtraDay ? ' (Extra Work)' : ''}${locationName ? ` from ${locationName}` : ''}`,
+                metadata: {
+                    attendance_id: record.id,
+                    session_number: currentTotalSessions,
+                    location_name: locationName,
+                    latitude: latitude ? String(latitude) : null,
+                    longitude: longitude ? String(longitude) : null,
+                    is_extra_day: isExtraDay,
+                    timestamp: now.toISOString(),
+                }
             })
             return record
         })
@@ -483,6 +492,8 @@ export class AttendanceService {
         fullName,
         email,
         localDate,
+        latitude,
+        longitude,
         source = 'mobile',
         verificationProof
     }: {
@@ -490,6 +501,8 @@ export class AttendanceService {
         fullName?: string
         email: string
         localDate?: string
+        latitude?: number
+        longitude?: number
         source?: string
         verificationProof?: string
     }) {
@@ -505,6 +518,38 @@ export class AttendanceService {
             })
             if (!proof) throwAppError('FORBIDDEN', 'A fresh biometric verification is required before clocking out.')
         }
+
+        // Resolve location name & Validate Geofence for clock-out
+        let locationName: string | null = null
+        const activeLocations = await SmartCache.getOfficeLocationsCached()
+
+        if (latitude && longitude) {
+            try {
+                const { getDistanceFromLatLonInMeters } = await import('@/lib/utils/geo-utils')
+                for (const office of activeLocations) {
+                    const dist = getDistanceFromLatLonInMeters(
+                        latitude,
+                        longitude,
+                        Number(office.latitude),
+                        Number(office.longitude)
+                    )
+                    if (dist <= (office.radius_meters || 200)) {
+                        locationName = office.name
+                        break
+                    }
+                }
+
+                if (!locationName && activeLocations.length > 0) {
+                    throwAppError('FORBIDDEN', 'You are outside the allowed office location range.')
+                }
+            } catch (err: any) {
+                if (err?.code === 'FORBIDDEN') throw err
+                console.error('[ATTENDANCE] Error calculating distance to office locations for clock-out:', err)
+            }
+        } else if (activeLocations.length > 0 && source === 'mobile') {
+            throwAppError('FORBIDDEN', 'Location access is required to clock out.')
+        }
+
         const now = new Date()
 
         return await db.transaction(async (tx) => {
@@ -530,6 +575,9 @@ export class AttendanceService {
                 await tx.update(attendanceSessions).set({
                     check_out: now,
                     working_hours: (diffMins / 60).toFixed(2),
+                    checkout_latitude: latitude ? String(latitude) : null,
+                    checkout_longitude: longitude ? String(longitude) : null,
+                    checkout_location_name: locationName,
                     status: 'completed',
                     updated_at: now
                 }).where(eq(attendanceSessions.id, activeSession.id))
@@ -556,7 +604,15 @@ export class AttendanceService {
                 user_id: profileId,
                 activity_type: 'data_edit',
                 module: 'attendance',
-                description: `Clocked out at ${getLocalTimeIST12Hour()}`,
+                description: `Clocked out at ${getLocalTimeIST12Hour()}${locationName ? ` from ${locationName}` : ''}`,
+                metadata: {
+                    attendance_id: attendanceId,
+                    working_hours: (totalMins / 60).toFixed(2),
+                    location_name: locationName,
+                    latitude: latitude ? String(latitude) : null,
+                    longitude: longitude ? String(longitude) : null,
+                    timestamp: now.toISOString(),
+                }
             })
             return data
         })

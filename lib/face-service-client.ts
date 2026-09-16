@@ -53,6 +53,12 @@ export interface FaceExtractOptions {
      * saves a second large base64 image on every service response.
      */
     includeCroppedFace?: boolean
+    /**
+     * If false, skips canonical 3:4 portrait landmark alignment and JPEG encoding.
+     * Use false on auxiliary liveness frames to save server CPU cycles and response payload.
+     * Default: true
+     */
+    returnCanonicalPortrait?: boolean
 }
 
 export class FaceServiceClient {
@@ -112,16 +118,17 @@ export class FaceServiceClient {
 
         // 1. Try Direct REST /extract first
         try {
+            const returnCanonicalPortrait = options.returnCanonicalPortrait ?? true
             const resp = await fetch(`${baseUrl}/extract`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', ...this.getAuthHeaders() },
+                headers: { 'Content-Type': 'application/json', Connection: 'keep-alive', ...this.getAuthHeaders() },
                 body: JSON.stringify({
                     image_base64: serviceImageBase64,
                     require_512: true,
-                    require_128: true,
+                    require_128: false,
                     check_liveness: true,
                     return_cropped_face: options.includeCroppedFace === true,
-                    return_canonical_portrait: true,
+                    return_canonical_portrait: returnCanonicalPortrait,
                 }),
                 signal: AbortSignal.timeout(12000)
             })

@@ -13,6 +13,9 @@ export interface PhotoRequest {
     id: string
     profile_id: string
     pending_photo_url: string
+    pending_face_embedding_pipeline_version?: string | null
+    pending_photo_sha256?: string | null
+    diagnostics?: Record<string, any> | null
     status: string
     reviewed_by: string | null
     reviewed_at: string | Date | null

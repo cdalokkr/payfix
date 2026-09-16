@@ -27,7 +27,8 @@ import {
     Clock as IconClock,
     CheckCircle2 as IconCircleCheck,
     XCircle as IconCircleX,
-    RefreshCw as IconRefresh
+    RefreshCw as IconRefresh,
+    Terminal as IconTerminal
 } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { DashboardPageLayout } from "@/components/dashboard/dashboard-page-layout"
@@ -231,6 +232,69 @@ export function PhotoApprovalsView() {
                                             Requested {selectedRequest.created_at ? formatDistanceToNow(new Date(selectedRequest.created_at), { addSuffix: true }) : 'Unknown'}
                                         </p>
                                     </div>
+                                </div>
+
+                                {/* Biometric Diagnostics (Debug for Admin & Moderator) */}
+                                <div className="px-6">
+                                    <details className="rounded-2xl border border-primary/15 bg-slate-950/80 p-4 text-left transition-all group open:ring-1 open:ring-primary/30">
+                                        <summary className="cursor-pointer text-xs font-bold text-sky-400 flex items-center justify-between select-none outline-none hover:text-sky-300 transition-colors">
+                                            <span className="flex items-center gap-2">
+                                                <IconTerminal className="w-3.5 h-3.5 text-sky-400" />
+                                                Biometric Diagnostics (Debug)
+                                            </span>
+                                            <Badge variant="outline" className="text-[9px] font-mono border-sky-500/30 text-sky-300">
+                                                {selectedRequest.diagnostics?.server_verification?.embeddingDimensions || 512}-d ArcFace
+                                            </Badge>
+                                        </summary>
+                                        <div className="mt-3.5 space-y-3 pt-2 border-t border-slate-800 text-[11px] font-mono text-slate-300">
+                                            <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                                                <span className="text-slate-500 font-sans text-[10px] uppercase tracking-wider">Camera</span>
+                                                <span className="text-right text-slate-200">{selectedRequest.diagnostics?.client?.camera_resolution || '640 × 480 (standard)'}</span>
+
+                                                <span className="text-slate-500 font-sans text-[10px] uppercase tracking-wider">Payload Size</span>
+                                                <span className="text-right text-slate-200">
+                                                    {selectedRequest.diagnostics?.client?.payload_bytes
+                                                        ? `${Math.round(selectedRequest.diagnostics.client.payload_bytes / 1024)} KB`
+                                                        : (selectedRequest.diagnostics?.server_verification?.imageBytes
+                                                            ? `${Math.round(selectedRequest.diagnostics.server_verification.imageBytes / 1024)} KB`
+                                                            : 'Optimized')}
+                                                </span>
+
+                                                <span className="text-slate-500 font-sans text-[10px] uppercase tracking-wider">Liveness Status</span>
+                                                <span className="text-right text-emerald-400 font-bold">
+                                                    {selectedRequest.diagnostics?.liveness?.passed !== false ? 'Verified (Live)' : 'Failed'}
+                                                </span>
+
+                                                <span className="text-slate-500 font-sans text-[10px] uppercase tracking-wider">Pipeline Version</span>
+                                                <span className="text-right text-sky-300">
+                                                    {selectedRequest.pending_face_embedding_pipeline_version || selectedRequest.diagnostics?.liveness?.pipeline_version || 'arcface-512d-v2'}
+                                                </span>
+
+                                                <span className="text-slate-500 font-sans text-[10px] uppercase tracking-wider">Cloud Run Engine</span>
+                                                <span className="text-right text-slate-300 truncate" title={selectedRequest.diagnostics?.server_verification?.backend || selectedRequest.diagnostics?.cloud_run_diagnostics?.backend_engine || 'onnxruntime-cpu'}>
+                                                    {selectedRequest.diagnostics?.server_verification?.backend || selectedRequest.diagnostics?.cloud_run_diagnostics?.backend_engine || 'Cloud Run ONNX'}
+                                                </span>
+
+                                                {selectedRequest.pending_photo_sha256 && (
+                                                    <>
+                                                        <span className="text-slate-500 font-sans text-[10px] uppercase tracking-wider">SHA-256 Hash</span>
+                                                        <span className="text-right text-[10px] text-slate-400 truncate" title={selectedRequest.pending_photo_sha256}>
+                                                            {selectedRequest.pending_photo_sha256.slice(0, 12)}…
+                                                        </span>
+                                                    </>
+                                                )}
+                                            </div>
+
+                                            {selectedRequest.diagnostics?.cloud_run_diagnostics && (
+                                                <div className="pt-2 border-t border-slate-800/80">
+                                                    <span className="text-[9px] text-slate-500 uppercase tracking-widest block mb-1">Inference Diagnostics</span>
+                                                    <pre className="p-2 rounded-lg bg-slate-900 border border-slate-800 text-[9px] text-slate-400 overflow-x-auto whitespace-pre-wrap">
+                                                        {JSON.stringify(selectedRequest.diagnostics.cloud_run_diagnostics, null, 2)}
+                                                    </pre>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </details>
                                 </div>
                             </div>
 

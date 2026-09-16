@@ -35,7 +35,9 @@ import {
     Calendar as IconCalendar,
     ChevronRight as IconChevronRight,
     ShieldCheck as IconShieldCheck,
+    Activity as IconActivity,
 } from "lucide-react"
+import { formatDistanceToNow } from 'date-fns'
 import { trpc } from '@/lib/trpc/client'
 import { changePasswordSchema, ChangePasswordInput } from "@/lib/validations/auth"
 
@@ -66,6 +68,8 @@ export function MobileProfileClient({ profile }: MobileProfileClientProps) {
 
     // Query for pending photo request
     const { data: pendingRequest } = trpc.profile.getMyPendingPhotoRequest.useQuery()
+    // Query for employee activity history
+    const { data: activities = [], isLoading: isActivitiesLoading } = trpc.profile.getActivities.useQuery({ limit: 20 })
     const utils = trpc.useUtils()
 
     // Profile update mutation (note: not currently used in this view since edit goes to separate page)
@@ -207,13 +211,17 @@ export function MobileProfileClient({ profile }: MobileProfileClientProps) {
 
             {/* Tabs Section */}
             <Tabs defaultValue="profile" value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="w-full grid grid-cols-2 h-12 rounded-2xl bg-muted/50 p-1">
-                    <TabsTrigger value="profile" className="rounded-xl text-sm font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                        <IconUser className="w-4 h-4 mr-2" />
+                <TabsList className="w-full grid grid-cols-3 h-12 rounded-2xl bg-muted/50 p-1">
+                    <TabsTrigger value="profile" className="rounded-xl text-xs sm:text-sm font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                        <IconUser className="w-4 h-4 mr-1.5" />
                         Profile
                     </TabsTrigger>
-                    <TabsTrigger value="security" className="rounded-xl text-sm font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                        <IconShieldCheck className="w-4 h-4 mr-2" />
+                    <TabsTrigger value="activity" className="rounded-xl text-xs sm:text-sm font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                        <IconActivity className="w-4 h-4 mr-1.5" />
+                        Activity
+                    </TabsTrigger>
+                    <TabsTrigger value="security" className="rounded-xl text-xs sm:text-sm font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                        <IconShieldCheck className="w-4 h-4 mr-1.5" />
                         Security
                     </TabsTrigger>
                 </TabsList>
@@ -292,6 +300,82 @@ export function MobileProfileClient({ profile }: MobileProfileClientProps) {
                                         <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Date of Birth</p>
                                         <p className="font-semibold">{formatDate(profile.date_of_birth)}</p>
                                     </div>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* Activity Tab */}
+                <TabsContent value="activity" className="mt-4 space-y-4">
+                    <Card>
+                        <CardHeader className="pb-3">
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="text-lg flex items-center gap-2">
+                                    <IconActivity className="w-5 h-5 text-primary" />
+                                    Activity History
+                                </CardTitle>
+                                {activities.length > 0 && (
+                                    <span className="text-xs font-mono text-muted-foreground">
+                                        {activities.length} recent
+                                    </span>
+                                )}
+                            </div>
+                            <CardDescription className="text-xs">
+                                Recent biometric verifications, attendance, and account events
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            {isActivitiesLoading ? (
+                                <div className="flex items-center justify-center py-8 text-muted-foreground gap-2">
+                                    <IconLoader2 className="w-5 h-5 animate-spin text-primary" />
+                                    <span className="text-sm">Loading activity logs...</span>
+                                </div>
+                            ) : activities.length === 0 ? (
+                                <div className="text-center py-8 text-muted-foreground text-sm">
+                                    No recent activity recorded
+                                </div>
+                            ) : (
+                                <div className="space-y-2.5">
+                                    {activities.map((act: any) => (
+                                        <div
+                                            key={act.id}
+                                            className="p-3.5 rounded-2xl bg-muted/30 border border-muted-foreground/10 space-y-1.5"
+                                        >
+                                            <div className="flex items-start justify-between gap-2">
+                                                <p className="text-sm font-semibold text-foreground leading-snug">
+                                                    {act.description}
+                                                </p>
+                                                <span className="text-[10px] text-muted-foreground whitespace-nowrap font-mono shrink-0">
+                                                    {act.created_at ? formatDistanceToNow(new Date(act.created_at), { addSuffix: true }) : ''}
+                                                </span>
+                                            </div>
+                                            {act.metadata && Object.keys(act.metadata).length > 0 && (
+                                                <div className="flex flex-wrap gap-1.5 pt-1">
+                                                    {act.metadata.camera_resolution && (
+                                                        <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-400 font-mono">
+                                                            Cam: {act.metadata.camera_resolution}
+                                                        </span>
+                                                    )}
+                                                    {act.metadata.location_name && (
+                                                        <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 font-mono">
+                                                            📍 {act.metadata.location_name}
+                                                        </span>
+                                                    )}
+                                                    {act.metadata.pipeline_version && (
+                                                        <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-400 font-mono">
+                                                            {act.metadata.pipeline_version}
+                                                        </span>
+                                                    )}
+                                                    {act.metadata.working_hours && (
+                                                        <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 font-mono">
+                                                            ⏱️ {act.metadata.working_hours}h
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
                                 </div>
                             )}
                         </CardContent>

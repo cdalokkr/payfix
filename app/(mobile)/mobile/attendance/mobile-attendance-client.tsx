@@ -5,6 +5,9 @@ import { useState, useEffect } from 'react'
 import { MobileAttendanceWizard } from '@/features/mobile/mobile-attendance-wizard'
 import { Button } from '@/components/ui/button'
 
+import { trpc } from '@/lib/trpc/client'
+import { Loader2 } from 'lucide-react'
+
 interface MobileAttendanceClientProps {
     profile: {
         id: string
@@ -17,6 +20,7 @@ interface MobileAttendanceClientProps {
 
 export function MobileAttendanceClient({ profile, action }: MobileAttendanceClientProps) {
     const router = useRouter()
+    const utils = trpc.useUtils()
     const [isDesktop, setIsDesktop] = useState(false)
 
     useEffect(() => {
@@ -30,13 +34,20 @@ export function MobileAttendanceClient({ profile, action }: MobileAttendanceClie
         return () => window.removeEventListener('resize', handleResize)
     }, [])
 
+    useEffect(() => {
+        router.prefetch('/mobile')
+    }, [router])
+
     const handleComplete = () => {
-        // Just navigate to dashboard - tRPC cache invalidation handles data refresh
-        router.push('/mobile')
+        // Ensure cache is refreshed and transition immediately to mobile dashboard
+        void utils.attendance.getMobileAttendance.invalidate()
+        void utils.attendance.getTodayStatus.invalidate()
+        router.replace('/mobile')
+        router.refresh()
     }
 
     const handleCancel = () => {
-        router.push('/mobile')
+        router.replace('/mobile')
     }
 
     if (isDesktop) {
@@ -66,6 +77,7 @@ export function MobileAttendanceClient({ profile, action }: MobileAttendanceClie
 
     return (
         <MobileAttendanceWizard
+            key={`${action}-${profile.id}`}
             action={action}
             profileImageUrl={profile.avatar_url}
             profileName={profile.full_name}

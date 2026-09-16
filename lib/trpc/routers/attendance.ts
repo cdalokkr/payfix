@@ -170,6 +170,8 @@ export const attendanceRouter = router({
     clockOut: protectedProcedure
         .input(z.object({
             localDate: z.string().optional(),
+            latitude: z.number().optional(),
+            longitude: z.number().optional(),
             attendanceProof: z.string().min(1)
         }).optional())
         .mutation(async ({ ctx, input }) => {
@@ -181,6 +183,8 @@ export const attendanceRouter = router({
                 fullName: ctx.profile.full_name || undefined,
                 email: ctx.profile.email,
                 localDate: input?.localDate,
+                latitude: input?.latitude,
+                longitude: input?.longitude,
                 verificationProof: input.attendanceProof
             })
             // Invalidate dashboard cache immediately on server

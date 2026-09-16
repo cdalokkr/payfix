@@ -34,9 +34,14 @@ export async function POST(request: NextRequest) {
         }
         const challengeResult = consumeLivenessChallenge(challenge, user.id, 'enrollment')
         if (!challengeResult.ok) return NextResponse.json({ error: 'Liveness challenge failed or expired.', code: challengeResult.code }, { status: 403 })
-        const extractions = await Promise.all(submittedFrames.map(frame => FaceServiceClient.extract(
+        const extractions = await Promise.all(submittedFrames.map((frame, index) => FaceServiceClient.extract(
             frame.replace(/^data:image\/(?:jpeg|png|webp);base64,/, ''),
-            { includeCroppedFace: false }
+            {
+                includeCroppedFace: false,
+                // Primary frame 0 produces the canonical 3:4 portrait for profile storage.
+                // Auxiliary frames 1 & 2 validate natural liveness and 512-d embeddings without redundant JPEG alignment.
+                returnCanonicalPortrait: index === 0,
+            }
         )))
         const frameFailure = findFrameFailure(extractions)
         if (frameFailure) {
@@ -48,6 +53,7 @@ export async function POST(request: NextRequest) {
         }
         const extraction = selectBestValidatedFrame(extractions)
         if (!extraction) return NextResponse.json({ error: 'No valid server-processed frame was available.', code: 'FACE_EXTRACTION_FAILED' }, { status: 400 })
+        const canonicalExtraction = extractions.find(item => item.canonical_portrait_base64 && item.canonical_portrait_aspect_ratio === '3:4') || extraction
         const embedding = averageNormalizedEmbeddings(extractions.map(item =>
             item.embedding_512 || (item.embedding?.length === 512 ? item.embedding : [])
         ))
@@ -65,13 +71,13 @@ export async function POST(request: NextRequest) {
         if (extraction.is_live !== true) {
             return NextResponse.json({ error: 'Liveness verification failed. Please capture a new selfie.', code: 'LIVENESS_FAILED', diagnostics: extraction.diagnostics }, { status: 400 })
         }
-        if (!extraction.canonical_portrait_base64 || extraction.canonical_portrait_aspect_ratio !== '3:4') {
+        if (!canonicalExtraction.canonical_portrait_base64 || canonicalExtraction.canonical_portrait_aspect_ratio !== '3:4') {
             return NextResponse.json({ error: 'The server did not return a canonical profile portrait. Please retake the selfie.', code: 'CANONICAL_PORTRAIT_MISSING' }, { status: 502 })
         }
 
         // Store only the server-generated 3:4 portrait for review and profile display.
         // The original natural capture stays in request memory and is discarded after this response.
-        const fileToUpload = Buffer.from(extraction.canonical_portrait_base64.split(',')[1], 'base64')
+        const fileToUpload = Buffer.from(canonicalExtraction.canonical_portrait_base64.split(',')[1], 'base64')
         const contentType = 'image/jpeg'
         const extension = 'jpg'
         console.info('[UPLOAD-API] Profile selfie accepted', {
@@ -109,7 +115,7 @@ export async function POST(request: NextRequest) {
                 imageBytes: fileToUpload.byteLength,
                 mimeType: contentType,
                 storedCanonicalPortrait: true,
-                canonicalPortraitAspectRatio: extraction.canonical_portrait_aspect_ratio,
+                canonicalPortraitAspectRatio: canonicalExtraction.canonical_portrait_aspect_ratio,
                 capturePipeline,
                 faceCount: extraction.face_count,
                 embeddingDimensions: embedding.length,
