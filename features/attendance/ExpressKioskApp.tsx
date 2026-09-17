@@ -10,7 +10,7 @@ import { Progress } from '@/components/ui/progress';
 import {
     AlertCircle, Camera, CheckCircle2, CheckCheck, XCircle, RefreshCw, Wifi, WifiOff,
     Zap, ScanFace, UserX, Key, MapPin, Tablet, ShieldCheck, LogOut, Sparkles, Clock, X,
-    Maximize2, User, Cpu
+    Maximize2, User, Cpu, Activity, ChevronRight
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { KioskIndexedDBService } from '@/lib/services/kiosk-idb.service';
@@ -145,6 +145,7 @@ export function ExpressKioskApp() {
     const [canonicalPortraitUrl, setCanonicalPortraitUrl] = useState<string | null>(null);
     const [captureDiagnostics, setCaptureDiagnostics] = useState<KioskCaptureDiagnostics | null>(null);
     const [hardwareInfo] = useState(() => getHardwareAccelerationInfo());
+    const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState<boolean>(false);
 
     const [modelsLoading, setModelsLoading] = useState<boolean>(false);
     const [modelsReady, setModelsReady] = useState<boolean>(false);
@@ -485,6 +486,7 @@ export function ExpressKioskApp() {
         setCaptureDiagnostics(null);
         setScanError(null);
         setVerificationStage('');
+        setIsDiagnosticsOpen(false);
 
     };
 
@@ -503,6 +505,7 @@ export function ExpressKioskApp() {
         setScanError(null);
         setVerificationStage('');
         setCameraActive(false);
+        setIsDiagnosticsOpen(false);
     }, []);
 
     const clearLocalPairing = useCallback(() => {
@@ -1295,48 +1298,6 @@ export function ExpressKioskApp() {
                                 || verificationStage === 'Finalizing attendance…'
                             }
                             enableAutoBlinkCapture={!isScanning && isVerificationModalOpen}
-                            capturedPreviewUrl={capturedFreezeUrl}
-                            processedPreviewUrl={canonicalPortraitUrl}
-                            diagnosticsSlot={
-                                <details
-                                    open={Boolean(verificationResult && !verificationResult.matched)}
-                                    className="max-h-[26vh] overflow-y-auto overscroll-contain rounded-2xl border border-sky-500/25 bg-slate-950/90 text-left shadow-xl [scrollbar-gutter:stable]"
-                                >
-                                    <summary className="cursor-pointer list-none px-4 py-2 text-xs font-bold text-sky-300 select-none">
-                                        {verificationResult ? '▼ Biometric verification details' : '▶ Biometric capture details'}
-                                    </summary>
-                                    <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 border-t border-slate-800 px-4 py-2.5 text-[10px] font-mono text-slate-300">
-                                        <span className="text-slate-500">Camera</span>
-                                        <span>{captureDiagnostics ? `${captureDiagnostics.cameraWidth} × ${captureDiagnostics.cameraHeight}` : '—'}</span>
-                                        <span className="text-slate-500">Output</span>
-                                        <span>{captureDiagnostics ? `${captureDiagnostics.outputWidth} × ${captureDiagnostics.outputHeight} natural frame` : 'Reading captured frame…'}</span>
-                                        <span className="text-slate-500">Format</span>
-                                        <span>image/jpeg</span>
-                                        <span className="text-slate-500">Payload</span>
-                                        <span>{captureDiagnostics ? `${Math.round(captureDiagnostics.payloadBytes / 1024)} KB/frame · ${Math.round((captureDiagnostics.payloadBytes * 3) / 1024)} KB session` : 'pending'}</span>
-                                        <span className="text-slate-500">Capture</span>
-                                        <span>Natural portrait · 3-frame capture</span>
-                                        <span className="text-slate-500">Server faces</span>
-                                        <span>{verificationResult?.faceCount ?? 'pending'}</span>
-                                        <span className="text-slate-500">Template</span>
-                                        <span>{verificationResult?.embeddingDimensions ? `${verificationResult.embeddingDimensions}-d` : 'pending'}</span>
-                                        <span className="text-slate-500">Liveness</span>
-                                        <span>{verificationResult ? (verificationResult.livenessPassed ? 'Passed' : 'Failed') : 'pending'}</span>
-                                        <span className="text-slate-500">Backend</span>
-                                        <span className="max-w-[180px] truncate">{verificationResult?.serverBackend || (isScanning ? 'pending' : '—')}</span>
-                                        <span className="text-slate-500">AI processing</span>
-                                        <span>{verificationResult?.serverProcessingMs ? `${(verificationResult.serverProcessingMs / 1000).toFixed(1)}s` : 'pending'}</span>
-                                        {verificationResult?.similarity && typeof verificationResult.threshold === 'number' && <>
-                                            <span className="text-slate-500">Similarity</span>
-                                            <span>{verificationResult.similarity}</span>
-                                            <span className="text-slate-500">Required</span>
-                                            <span>{(verificationResult.threshold * 100).toFixed(1)}%</span>
-                                        </>}
-                                        <span className="text-slate-500">Canonical</span>
-                                        <span>{canonicalPortraitUrl ? '3:4 server portrait' : 'pending'}</span>
-                                    </div>
-                                </details>
-                            }
                             onAutoCapture={(dataUrl) => {
                                 if (!isScanning) {
                                     toast.success('Camera frame captured. Verifying attendance...');
@@ -1344,7 +1305,22 @@ export function ExpressKioskApp() {
                                 }
                             }}
                             footerSlot={
-                                <div className="w-full flex items-center justify-center">
+                                <div className="w-full flex flex-col gap-2">
+                                    {/* Compact Fixed-Height Diagnostics Trigger Button (Zero Camera Resizing) */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsDiagnosticsOpen(true)}
+                                        className="w-full flex items-center justify-between px-3.5 py-1.5 rounded-xl border border-sky-500/25 bg-slate-900/80 hover:bg-slate-800/90 text-xs font-bold text-sky-300 transition-colors cursor-pointer"
+                                    >
+                                        <span className="flex items-center gap-2">
+                                            <Activity className="w-3.5 h-3.5 text-sky-400" />
+                                            {verificationResult ? 'Biometric verification details' : 'Biometric capture details'}
+                                        </span>
+                                        <span className="text-[10px] font-mono text-sky-400/80 flex items-center gap-1">
+                                            View info <ChevronRight className="w-3.5 h-3.5" />
+                                        </span>
+                                    </button>
+
                                     <Button
                                         onClick={() => handleFaceScan()}
                                         disabled={isScanning || !cameraActive || !modelsReady}
@@ -1435,6 +1411,18 @@ export function ExpressKioskApp() {
                                                     Duration: {verificationResult.duration}
                                                 </div>
                                             )}
+                                            <div className="pt-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setIsDiagnosticsOpen(true);
+                                                    }}
+                                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-950/80 border border-rose-500/40 text-[10px] font-mono text-rose-300 hover:bg-rose-900/80 transition-colors cursor-pointer"
+                                                >
+                                                    <Activity className="w-3 h-3 text-rose-400" /> View Biometric Failure Diagnostics
+                                                </button>
+                                            </div>
                                             <p className="text-[10px] text-slate-400 pt-0.5">
                                                 Tap to dismiss or try scanning again.
                                             </p>
@@ -1443,6 +1431,90 @@ export function ExpressKioskApp() {
                                 </div>
                             )}
                         </BiometricCameraModal>
+
+                        {/* Biometric Capture & AI Diagnostics Slide-Up Drawer Overlay (Zero layout shift on camera) */}
+                        {isDiagnosticsOpen && (
+                            <div 
+                                className="fixed inset-0 z-[80] bg-slate-950/75 backdrop-blur-sm flex flex-col justify-end sm:justify-center items-center p-0 sm:p-4 animate-in fade-in duration-200"
+                                onClick={() => setIsDiagnosticsOpen(false)}
+                            >
+                                <div 
+                                    className="w-full max-w-md bg-slate-900/95 border border-sky-500/30 rounded-t-3xl sm:rounded-3xl shadow-2xl p-5 overflow-hidden animate-in slide-in-from-bottom-5 duration-200 text-left"
+                                    onClick={(e) => e.stopPropagation()}
+                                >
+                                    <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="w-8 h-8 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center">
+                                                <Activity className="w-4 h-4 text-sky-400" />
+                                            </div>
+                                            <div>
+                                                <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                                                    Biometric Capture &amp; AI Details
+                                                </h4>
+                                                <p className="text-[10px] text-slate-400">
+                                                    Live telemetry &amp; verification parameters
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsDiagnosticsOpen(false)}
+                                            className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </div>
+
+                                    <div className="mt-3 max-h-[50vh] overflow-y-auto overscroll-contain pr-1">
+                                        <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 text-[11px] font-mono text-slate-300">
+                                            <span className="text-slate-500">Camera</span>
+                                            <span>{captureDiagnostics ? `${captureDiagnostics.cameraWidth} × ${captureDiagnostics.cameraHeight}` : '—'}</span>
+                                            <span className="text-slate-500">Output</span>
+                                            <span>{captureDiagnostics ? `${captureDiagnostics.outputWidth} × ${captureDiagnostics.outputHeight} natural frame` : 'Reading captured frame…'}</span>
+                                            <span className="text-slate-500">Format</span>
+                                            <span>image/jpeg</span>
+                                            <span className="text-slate-500">Payload</span>
+                                            <span>{captureDiagnostics ? `${Math.round(captureDiagnostics.payloadBytes / 1024)} KB/frame · ${Math.round((captureDiagnostics.payloadBytes * 3) / 1024)} KB session` : 'pending'}</span>
+                                            <span className="text-slate-500">Capture</span>
+                                            <span>Natural portrait · 3-frame capture</span>
+                                            <span className="text-slate-500">Server faces</span>
+                                            <span>{verificationResult?.faceCount ?? 'pending'}</span>
+                                            <span className="text-slate-500">Template</span>
+                                            <span>{verificationResult?.embeddingDimensions ? `${verificationResult.embeddingDimensions}-d` : 'pending'}</span>
+                                            <span className="text-slate-500">Liveness</span>
+                                            <span className={verificationResult ? (verificationResult.livenessPassed ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold') : ''}>
+                                                {verificationResult ? (verificationResult.livenessPassed ? 'Passed' : 'Failed') : 'pending'}
+                                            </span>
+                                            <span className="text-slate-500">Backend</span>
+                                            <span className="max-w-[180px] truncate">{verificationResult?.serverBackend || (isScanning ? 'pending' : '—')}</span>
+                                            <span className="text-slate-500">AI processing</span>
+                                            <span>{verificationResult?.serverProcessingMs ? `${(verificationResult.serverProcessingMs / 1000).toFixed(1)}s` : 'pending'}</span>
+                                            {verificationResult?.similarity && typeof verificationResult.threshold === 'number' && (
+                                                <>
+                                                    <span className="text-slate-500">Similarity</span>
+                                                    <span className="text-emerald-300 font-bold">{verificationResult.similarity}</span>
+                                                    <span className="text-slate-500">Required</span>
+                                                    <span>{(verificationResult.threshold * 100).toFixed(1)}%</span>
+                                                </>
+                                            )}
+                                            <span className="text-slate-500">Canonical</span>
+                                            <span>{canonicalPortraitUrl ? '3:4 server portrait' : 'Natural portrait'}</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-4 pt-3 border-t border-slate-800">
+                                        <Button
+                                            type="button"
+                                            onClick={() => setIsDiagnosticsOpen(false)}
+                                            variant="outline"
+                                            className="w-full h-10 rounded-xl border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-xs font-bold cursor-pointer"
+                                        >
+                                            Dismiss Details
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

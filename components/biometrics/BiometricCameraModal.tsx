@@ -527,11 +527,12 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-between pt-5 sm:pt-6 pb-1 px-3">
             {/* Single Spacious Oval Mask Reticle Container (Responsive to dynamic screen height & width) */}
             <div
-              className={`relative my-auto translate-y-1 sm:translate-y-1.5 w-[82vw] max-w-[320px] max-h-[48dvh] aspect-[1/1.24] rounded-full transition-all duration-300 flex items-center justify-center shadow-[0_0_0_9999px_rgba(2,6,23,0.70)]`}
+              className={`relative my-auto translate-y-1 sm:translate-y-1.5 w-[82vw] max-w-[320px] max-h-[48dvh] aspect-[1/1.24] transition-all duration-300 flex items-center justify-center`}
             >
               {/* Paytm / KYC Biometric Single Oval Face Mask SVG */}
               <svg
                 className="absolute inset-0 w-full h-full pointer-events-none z-20"
+                style={{ overflow: 'visible' }}
                 viewBox="0 0 300 372"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
@@ -549,10 +550,17 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                   </linearGradient>
                 </defs>
 
-                {/* 1. Base Oval Mask Outline - Dim Matte Black Background Ring */}
+                {/* Outside Dimmed Backdrop: Shifts seamlessly onto the exact OVAL_PATH border with zero gap */}
+                <path
+                  fillRule="evenodd"
+                  d={`M -4000 -4000 L 4300 -4000 L 4300 4400 L -4000 4400 Z ${OVAL_PATH}`}
+                  fill="rgba(2, 6, 23, 0.70)"
+                />
+
+                {/* 1. Base Oval Mask Outline - Dim Matte Black Background Ring directly on the overlay border */}
                 <path
                   d={OVAL_PATH}
-                  stroke="rgba(15, 23, 42, 0.85)"
+                  stroke="rgba(15, 23, 42, 0.90)"
                   strokeWidth="5.5"
                   strokeDasharray="none"
                   strokeOpacity="1.0"
@@ -657,19 +665,35 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                   strokeLinecap="round"
                   strokeOpacity={isAligned ? 0.9 : 0.5}
                 />
-              </svg>
 
-              {/* Top & Bottom Accent Alignment Markers */}
-              <div
-                className={`absolute -top-1 left-1/2 h-3 w-8 -translate-x-1/2 rounded-full transition-colors z-30 ${
-                  isAligned ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.9)]' : 'bg-sky-400/90 shadow-[0_0_10px_rgba(56,189,248,0.8)]'
-                }`}
-              />
-              <div
-                className={`absolute -bottom-1 left-1/2 h-3 w-8 -translate-x-1/2 rounded-full transition-colors z-30 ${
-                  isAligned ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.9)]' : 'bg-sky-400/90 shadow-[0_0_10px_rgba(56,189,248,0.8)]'
-                }`}
-              />
+                {/* Top Accent Alignment Marker directly on the oval top apex (Y=20) */}
+                <rect
+                  x="134"
+                  y="14"
+                  width="32"
+                  height="12"
+                  rx="6"
+                  fill={isAligned ? '#34d399' : '#38bdf8'}
+                  style={{
+                    filter: isAligned ? 'drop-shadow(0 0 8px rgba(52, 211, 153, 0.9))' : 'drop-shadow(0 0 8px rgba(56, 189, 248, 0.8))',
+                    transition: 'fill 0.3s ease',
+                  }}
+                />
+
+                {/* Bottom Accent Alignment Marker directly on the oval bottom apex (Y=352) */}
+                <rect
+                  x="134"
+                  y="346"
+                  width="32"
+                  height="12"
+                  rx="6"
+                  fill={isAligned ? '#34d399' : '#38bdf8'}
+                  style={{
+                    filter: isAligned ? 'drop-shadow(0 0 8px rgba(52, 211, 153, 0.9))' : 'drop-shadow(0 0 8px rgba(56, 189, 248, 0.8))',
+                    transition: 'fill 0.3s ease',
+                  }}
+                />
+              </svg>
             </div>
 
             {/* 3. Real-time Status Badge & Dynamic Flow Guidance Indicator Overlay */}
