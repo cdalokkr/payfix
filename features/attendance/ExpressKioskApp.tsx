@@ -1306,7 +1306,7 @@ export function ExpressKioskApp() {
                             enableAutoBlinkCapture={!isScanning && isVerificationModalOpen}
                             capturedPreviewUrl={capturedFreezeUrl}
                             freezeInViewport={true}
-                            reticleClassName="w-[90vw] max-w-[370px] max-h-[58dvh] aspect-[1/1.24]"
+                            reticleClassName="w-[90vw] max-w-[370px] max-h-[58dvh] aspect-[1/1.24] translate-y-7 sm:translate-y-9"
                             onAutoCapture={(dataUrl) => {
                                 if (!isScanning) {
                                     toast.success('Camera frame captured. Verifying attendance...');

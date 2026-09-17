@@ -511,7 +511,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           <img
             src={activeCleanPortraitUrl}
             alt="Captured verification selfie"
-            className="absolute inset-0 h-full w-full object-cover transform -scale-x-100 z-10 animate-in fade-in duration-150"
+            className="absolute inset-0 h-full w-full object-cover z-10 animate-in fade-in duration-150"
           />
         )}
 
@@ -542,7 +542,11 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-between pt-5 sm:pt-6 pb-1 px-3">
             {/* Single Spacious Oval Mask Reticle Container (Responsive to dynamic screen height & width) */}
             <div
-              className={`relative my-auto translate-y-1 sm:translate-y-1.5 ${reticleClassName || 'w-[82vw] max-w-[320px] max-h-[48dvh] aspect-[1/1.24]'} transition-all duration-300 flex items-center justify-center`}
+              className={`relative my-auto ${
+                reticleClassName && /translate-y-/.test(reticleClassName)
+                  ? ''
+                  : 'translate-y-5 sm:translate-y-7'
+              } ${reticleClassName || 'w-[82vw] max-w-[320px] max-h-[48dvh] aspect-[1/1.24]'} transition-all duration-300 flex items-center justify-center`}
             >
               {/* Paytm / KYC Biometric Single Oval Face Mask SVG */}
               <svg
