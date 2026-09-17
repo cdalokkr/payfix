@@ -40,6 +40,10 @@ interface BiometricCameraModalProps {
   onAutoCapture?: (dataUrl: string) => void;
   /** Advances when a parent discards a failed capture and returns to live camera. */
   captureResetKey?: number;
+  /** Custom class for oval reticle container sizing (e.g. spacious kiosk sizing). */
+  reticleClassName?: string;
+  /** Keep camera viewport full-size and display captured selfie in place rather than shrinking to 38dvh. */
+  freezeInViewport?: boolean;
 }
 
 export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
@@ -68,6 +72,8 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   capturedCroppedUrl,
   onAutoCapture,
   captureResetKey = 0,
+  reticleClassName,
+  freezeInViewport = false,
 }) => {
   const internalVideoRef = useRef<HTMLVideoElement | null>(null);
   const videoRef = videoRefOut || internalVideoRef;
@@ -485,7 +491,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
       </div>
 
       {/* Dynamic responsive camera viewport: scales fluidly to fill mobile screen without distortion */}
-      <div className={`relative w-full ${activeCleanPortraitUrl ? 'h-[38dvh] max-h-[38dvh] shrink-0 bg-slate-950' : 'flex-1 min-h-0 bg-black'} overflow-hidden flex items-center justify-center sm:my-1 sm:rounded-2xl sm:border sm:border-slate-800/60`}>
+      <div className={`relative w-full ${(activeCleanPortraitUrl && !freezeInViewport) ? 'h-[38dvh] max-h-[38dvh] shrink-0 bg-slate-950' : 'flex-1 min-h-0 bg-black'} overflow-hidden flex items-center justify-center sm:my-1 sm:rounded-2xl sm:border sm:border-slate-800/60`}>
         {/* Instant HTML Video Element */}
         <video
           ref={videoRef}
@@ -500,13 +506,22 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           className="absolute inset-0 h-full w-full object-cover transform -scale-x-100"
         />
 
+        {/* In-place full-viewport captured selfie freeze (matches mirrored video framing) */}
+        {freezeInViewport && activeCleanPortraitUrl && (
+          <img
+            src={activeCleanPortraitUrl}
+            alt="Captured verification selfie"
+            className="absolute inset-0 h-full w-full object-cover transform -scale-x-100 z-10 animate-in fade-in duration-150"
+          />
+        )}
+
         {/* Green Flash Animation on Blink Success */}
         {flashSuccess && (
           <div className="absolute inset-0 z-40 bg-emerald-500/35 animate-in fade-in duration-100 backdrop-blur-[2px]" />
         )}
 
-        {/* Natural portrait freeze preview (WITHOUT Mask/Overlay) */}
-        {activeCleanPortraitUrl ? (
+        {/* Natural portrait freeze preview (WITHOUT Mask/Overlay) for non-in-viewport callers */}
+        {(activeCleanPortraitUrl && !freezeInViewport) ? (
           <div className="absolute inset-0 z-10 bg-slate-950 flex flex-col items-center justify-center p-2 animate-in zoom-in-95 fade-in duration-200">
             <div className="relative h-[94%] aspect-[3/4] rounded-3xl overflow-hidden border-2 border-emerald-500/70 shadow-2xl bg-black flex items-center justify-center">
               <img
@@ -522,12 +537,12 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           </div>
         ) : null}
 
-        {/* 2. Unified Single Spacious Oval Face Mask & Outside Dimmed Backdrop (Only during live camera preview) */}
-        {!hasError && !activeCleanPortraitUrl && (
+        {/* 2. Unified Single Spacious Oval Face Mask & Outside Dimmed Backdrop */}
+        {!hasError && (!activeCleanPortraitUrl || freezeInViewport) && (
           <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-between pt-5 sm:pt-6 pb-1 px-3">
             {/* Single Spacious Oval Mask Reticle Container (Responsive to dynamic screen height & width) */}
             <div
-              className={`relative my-auto translate-y-1 sm:translate-y-1.5 w-[82vw] max-w-[320px] max-h-[48dvh] aspect-[1/1.24] transition-all duration-300 flex items-center justify-center`}
+              className={`relative my-auto translate-y-1 sm:translate-y-1.5 ${reticleClassName || 'w-[82vw] max-w-[320px] max-h-[48dvh] aspect-[1/1.24]'} transition-all duration-300 flex items-center justify-center`}
             >
               {/* Paytm / KYC Biometric Single Oval Face Mask SVG */}
               <svg
@@ -801,7 +816,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
       {/* 4. Dedicated Touch-Scrollable Footer Slot Container */}
       {footerSlot && (
         <div className={`w-full bg-slate-950 p-4 border-t border-slate-900 z-30 ${
-          activeCleanPortraitUrl
+          (activeCleanPortraitUrl && !freezeInViewport)
             ? 'flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y [scrollbar-width:thin] [-webkit-overflow-scrolling:touch]'
             : 'shrink-0 max-h-[48dvh] sm:max-h-[42vh] overflow-y-auto overscroll-contain touch-pan-y [scrollbar-width:thin] [-webkit-overflow-scrolling:touch]'
         }`}>

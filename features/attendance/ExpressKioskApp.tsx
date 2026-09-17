@@ -172,6 +172,7 @@ export function ExpressKioskApp() {
     }, []);
 
     const scanAbortControllerRef = useRef<AbortController | null>(null);
+    const autoDismissTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
         if (!isScanning) {
@@ -479,6 +480,10 @@ export function ExpressKioskApp() {
             return;
         }
 
+        if (autoDismissTimerRef.current) {
+            clearTimeout(autoDismissTimerRef.current);
+            autoDismissTimerRef.current = null;
+        }
         setIsVerificationModalOpen(true);
         setVerificationResult(null);
         setCapturedFreezeUrl(null);
@@ -492,6 +497,10 @@ export function ExpressKioskApp() {
 
     // Close Verification Modal Flow
     const closeVerificationModal = useCallback(() => {
+        if (autoDismissTimerRef.current) {
+            clearTimeout(autoDismissTimerRef.current);
+            autoDismissTimerRef.current = null;
+        }
         if (scanAbortControllerRef.current) {
             scanAbortControllerRef.current.abort();
             scanAbortControllerRef.current = null;
@@ -554,6 +563,10 @@ export function ExpressKioskApp() {
     };
 
     const dismissVerificationResult = useCallback(() => {
+        if (autoDismissTimerRef.current) {
+            clearTimeout(autoDismissTimerRef.current);
+            autoDismissTimerRef.current = null;
+        }
         setVerificationResult(null);
         setCapturedFreezeUrl(null);
         setCanonicalPortraitUrl(null);
@@ -672,13 +685,9 @@ export function ExpressKioskApp() {
                         serverBackend: serverResult.verification?.backend,
                         serverProcessingMs: serverResult.verification?.processingMs,
                     });
-                    setTimeout(() => {
-                        setVerificationResult(null);
-                        setCapturedFreezeUrl(null);
-                        setCanonicalPortraitUrl(null);
-                        setIsScanning(false);
-                        setVerificationStage('');
-                    // Auto-dismiss rejection diagnostics after 3.5s (or on instant tap)
+                    if (autoDismissTimerRef.current) clearTimeout(autoDismissTimerRef.current);
+                    autoDismissTimerRef.current = setTimeout(() => {
+                        dismissVerificationResult();
                     }, 3500);
                     return;
                 }
@@ -749,15 +758,12 @@ export function ExpressKioskApp() {
                 // The paired server has already verified the face and recorded the
                 // attendance event. There is deliberately no offline punch fallback.
 
-                // Auto-reset result after 2.5 seconds (or instant tap) so the next
+                // Auto-reset result after 3.5 seconds (or instant tap) so the next
                 // employee in queue can scan immediately without waiting.
-                setTimeout(() => {
-                    setVerificationResult(null);
-                    setCapturedFreezeUrl(null);
-                    setCanonicalPortraitUrl(null);
-                    setIsScanning(false);
-                    setVerificationStage('');
-                }, 2500);
+                if (autoDismissTimerRef.current) clearTimeout(autoDismissTimerRef.current);
+                autoDismissTimerRef.current = setTimeout(() => {
+                    dismissVerificationResult();
+                }, 3500);
 
 
         } catch (err) {
@@ -1298,6 +1304,9 @@ export function ExpressKioskApp() {
                                 || verificationStage === 'Finalizing attendance…'
                             }
                             enableAutoBlinkCapture={!isScanning && isVerificationModalOpen}
+                            capturedPreviewUrl={capturedFreezeUrl}
+                            freezeInViewport={true}
+                            reticleClassName="w-[90vw] max-w-[370px] max-h-[58dvh] aspect-[1/1.24]"
                             onAutoCapture={(dataUrl) => {
                                 if (!isScanning) {
                                     toast.success('Camera frame captured. Verifying attendance...');
