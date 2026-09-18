@@ -62,6 +62,33 @@ export function validateBiometricCameraFrame(width: number, height: number) {
   };
 }
 
+/**
+ * Locks the active camera video track to 1.0x optical zoom (or minimum optical zoom).
+ * Prevents Android devices (Xiaomi, Realme, Vivo, Samsung) with dual-FOV or portrait selfie defaults
+ * from opening in a digitally zoomed or cropped mode.
+ */
+export async function lockCameraHardwareZoom(stream: MediaStream | null | undefined): Promise<void> {
+  if (!stream || !stream.active) return;
+  try {
+    const track = stream.getVideoTracks()[0];
+    if (!track) return;
+    const capabilities = (typeof track.getCapabilities === 'function' ? track.getCapabilities() : {}) as any;
+    if (capabilities && capabilities.zoom) {
+      const minZoom = typeof capabilities.zoom.min === 'number' ? Math.max(1, capabilities.zoom.min) : 1;
+      const currentSettings = (typeof track.getSettings === 'function' ? track.getSettings() : {}) as any;
+      if (currentSettings.zoom !== minZoom) {
+        await track.applyConstraints({
+          advanced: [{ zoom: minZoom } as any],
+        });
+      }
+    }
+  } catch (err) {
+    // Non-fatal if device driver does not permit setting zoom
+    console.debug('[BiometricCamera] Hardware zoom lock not supported by driver:', err);
+  }
+}
+
+
 /** Shared detector options – keep identical everywhere */
 export const FACE_DETECT_OPTIONS = {
   inputSize: BIOMETRIC_CAMERA_CONFIG.inputSize,

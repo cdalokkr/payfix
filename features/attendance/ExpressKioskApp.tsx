@@ -1006,12 +1006,6 @@ export function ExpressKioskApp() {
                         <span className="text-[10px] text-slate-400 mt-0.5">{currentDate}</span>
                     </div>
 
-                    {/* Hardware Acceleration Status Badge (WebGL GPU / CPU) */}
-                    <Badge variant="outline" className={hardwareInfo.isGpu ? "bg-sky-500/10 text-sky-400 border-sky-500/30 px-2.5 py-0.5 font-semibold text-xs flex items-center gap-1" : "bg-amber-500/10 text-amber-400 border-amber-500/30 px-2.5 py-0.5 font-semibold text-xs flex items-center gap-1"}>
-                        <Cpu className="h-3 w-3" /> {hardwareInfo.backend}
-                    </Badge>
-
-
                     {/* Online / Offline Status Badge */}
                     {isOnline ? (
                         <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 px-2.5 py-0.5 font-semibold text-xs flex items-center gap-1">

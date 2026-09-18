@@ -1,6 +1,6 @@
 'use client'
 
-import { BIOMETRIC_CAMERA_CONSTRAINTS } from './face-pipeline'
+import { BIOMETRIC_CAMERA_CONSTRAINTS, lockCameraHardwareZoom } from './face-pipeline'
 
 let warmedStream: MediaStream | null = null
 let warming: Promise<MediaStream | null> | null = null
@@ -14,7 +14,8 @@ export function prewarmBiometricCamera(): Promise<MediaStream | null> {
   warming = navigator.mediaDevices.getUserMedia({
     video: BIOMETRIC_CAMERA_CONSTRAINTS,
     audio: false,
-  }).then(stream => {
+  }).then(async (stream) => {
+    await lockCameraHardwareZoom(stream)
     warmedStream = stream
     return stream
   }).catch(() => null).finally(() => {

@@ -5,7 +5,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { X, RefreshCw, AlertCircle } from 'lucide-react';
-import { BIOMETRIC_CAMERA_CONFIG, BIOMETRIC_CAMERA_CONSTRAINTS, captureNaturalBiometricFrame, validateBiometricCameraFrame } from '@/lib/face-pipeline';
+import { BIOMETRIC_CAMERA_CONFIG, BIOMETRIC_CAMERA_CONSTRAINTS, captureNaturalBiometricFrame, validateBiometricCameraFrame, lockCameraHardwareZoom } from '@/lib/face-pipeline';
 import { MediaPipeMeshService, InMaskLivenessStatus } from '@/lib/services/mediapipe-mesh.service';
 import { FaceApiBrowserService } from '@/lib/services/faceapi-browser.service';
 import { takePrewarmedBiometricCamera } from '@/lib/biometric-camera-prewarm';
@@ -203,6 +203,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
     // Fast-path: use pre-warmed stream if active
     if (warmedStream && warmedStream.active) {
       streamRef.current = warmedStream;
+      void lockCameraHardwareZoom(warmedStream);
       markStartup('stream');
       isCapturingRef.current = false;
       isEvaluatingRef.current = false;
@@ -226,6 +227,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
     // Stream is active — DO NOT STOP stream!
     if (streamRef.current && streamRef.current.active) {
       setIsStreamPlaying(false);
+      void lockCameraHardwareZoom(streamRef.current);
       const video = videoRef.current;
       if (video && video.srcObject !== streamRef.current) {
         video.srcObject = streamRef.current;
@@ -255,6 +257,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
       }
 
       streamRef.current = stream;
+      void lockCameraHardwareZoom(stream);
       markStartup('stream');
       setIsStreamPlaying(false);
 
