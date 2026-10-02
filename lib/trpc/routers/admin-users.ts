@@ -557,15 +557,11 @@ export const adminUsersRouter = router({
 
       const normalizedEmail = input.email.trim().toLowerCase()
 
-      // Check if user already exists using Drizzle
+      // Check if user already exists using Drizzle (exact case-normalized comparison without wildcard issues)
       const existingProfile = await ctx.db.query.profiles.findFirst({
         where: and(
           eq(profiles.tenant_id, tenantId),
-          or(
-            eq(profiles.email, input.email),
-            eq(profiles.email, normalizedEmail),
-            ilike(profiles.email, normalizedEmail)
-          )
+          sql`LOWER(${profiles.email}) = ${normalizedEmail}`
         ),
         columns: { id: true }
       })
