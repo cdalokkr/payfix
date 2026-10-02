@@ -44,6 +44,8 @@ export interface OfficeLocation {
 
 export interface GeofenceResult {
     isAllowed: boolean
+    noLocationsConfigured?: boolean
+    reason?: string
     nearestOffice?: {
         id: string
         name: string
@@ -101,9 +103,11 @@ export const GeofenceService = {
         const locations = await this.getActiveLocations()
 
         if (locations.length === 0) {
-            // No office locations configured - allow by default
+            // No office locations configured - strictly disallow attendance marking
             return {
-                isAllowed: true,
+                isAllowed: false,
+                noLocationsConfigured: true,
+                reason: 'No office locations configured. Attendance marking is restricted until an office location is added by the administrator.',
             }
         }
 
@@ -142,8 +146,10 @@ export const GeofenceService = {
 
         return {
             isAllowed: !!withinOffice,
+            noLocationsConfigured: false,
             nearestOffice,
             withinOffice,
+            reason: withinOffice ? undefined : 'You are outside the designated office boundary.',
         }
     },
 

@@ -111,13 +111,17 @@ export function MobileAttendanceWizard({
         distanceMeters?: number
         userCoords?: { latitude: number; longitude: number }
         reason?: string
+        noLocationsConfigured?: boolean
     } | null>(() => {
         if (initialGeofence && !initialGeofence.isAllowed) {
             return {
                 nearestOfficeName: initialGeofence.nearestOffice?.name,
                 distanceMeters: initialGeofence.nearestOffice?.distance,
                 userCoords: initialCoords ? { latitude: initialCoords.lat, longitude: initialCoords.lng } : undefined,
-                reason: 'You are outside the designated office boundary.'
+                reason: initialGeofence.noLocationsConfigured
+                    ? 'No office locations configured for this workspace. Please contact your administrator.'
+                    : 'You are outside the designated office boundary.',
+                noLocationsConfigured: !!initialGeofence.noLocationsConfigured,
             }
         }
         return null
@@ -188,12 +192,15 @@ export function MobileAttendanceWizard({
             } catch {}
 
             if (!geofenceResult.isAllowed) {
-                // User is outside the authorized perimeter — block camera verification immediately!
+                // User is outside the authorized perimeter or no office is configured — block camera verification immediately!
                 setOutsideDetails({
                     nearestOfficeName: geofenceResult.nearestOffice?.name,
                     distanceMeters: geofenceResult.nearestOffice?.distance,
                     userCoords: { latitude: lat, longitude: lng },
-                    reason: 'You are outside the designated office boundary.'
+                    reason: geofenceResult.noLocationsConfigured
+                        ? 'No office locations configured for this workspace. Please contact your administrator.'
+                        : (geofenceResult.reason || 'You are outside the designated office boundary.'),
+                    noLocationsConfigured: !!geofenceResult.noLocationsConfigured,
                 })
                 setCurrentStep('outside_office')
                 return
@@ -426,7 +433,9 @@ export function MobileAttendanceWizard({
                                     <IconAlertTriangle className="w-3.5 h-3.5" />
                                     <span>Geofence Restricted</span>
                                 </div>
-                                <h3 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">Outside Office Area</h3>
+                                <h3 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+                                    {outsideDetails?.noLocationsConfigured ? 'No Office Location Set Up' : 'Outside Office Area'}
+                                </h3>
                                 <p className="text-xs text-muted-foreground font-medium max-w-xs mx-auto leading-relaxed">
                                     {outsideDetails?.reason || 'Attendance verification can only be completed while physically inside an authorized office location.'}
                                 </p>

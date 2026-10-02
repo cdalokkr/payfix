@@ -254,7 +254,7 @@ export function LocationVerification({ onVerified, onSkip }: LocationVerificatio
                 </div>
                 <CardTitle>
                     {status === 'success' ? 'Location Verified' :
-                        status === 'error' ? 'Outside Office Area' :
+                        status === 'error' ? (geofenceResult?.noLocationsConfigured ? 'No Office Setup' : 'Outside Office Area') :
                             'Verifying Location'}
                 </CardTitle>
                 <CardDescription>

@@ -80,7 +80,16 @@ describe('proof-gated attendance mutations', () => {
     return { attendanceRecord, insert }
   }
 
-  async function clockIn(attendanceProof: string | undefined, date = localDate, coords?: { lat: number; lng: number }) {
+  const mockOffice = {
+    id: 'office-1',
+    name: 'Main HQ',
+    latitude: '19.0760000',
+    longitude: '72.8777000',
+    radius_meters: 200,
+    is_active: true,
+  }
+
+  async function clockIn(attendanceProof: string | undefined, date = localDate, coords: { lat?: number; lng?: number } | null = { lat: 19.07605, lng: 72.87775 }) {
     return runWithTenant(tenant, () => AttendanceService.clockIn({
       profileId,
       email: 'employee@example.com',
@@ -91,7 +100,7 @@ describe('proof-gated attendance mutations', () => {
     }))
   }
 
-  async function clockOut(attendanceProof: string | undefined, date = localDate, coords?: { lat: number; lng: number }) {
+  async function clockOut(attendanceProof: string | undefined, date = localDate, coords: { lat?: number; lng?: number } | null = { lat: 19.07605, lng: 72.87775 }) {
     return runWithTenant(tenant, () => AttendanceService.clockOut({
       profileId,
       email: 'employee@example.com',
@@ -145,7 +154,7 @@ describe('proof-gated attendance mutations', () => {
     process.env.SESSION_SECRET = 'test-session-secret'
     jest.mocked(SmartCache.getOfficeSettingsCached).mockResolvedValue({ off_days: [] } as never)
     jest.mocked(SmartCache.getOfficeClosuresCached).mockResolvedValue([] as never)
-    jest.mocked(SmartCache.getOfficeLocationsCached).mockResolvedValue([] as never)
+    jest.mocked(SmartCache.getOfficeLocationsCached).mockResolvedValue([mockOffice] as never)
   })
 
   it('accepts a fresh proof and passes the mutation through to attendance storage', async () => {
@@ -213,8 +222,26 @@ describe('proof-gated attendance mutations', () => {
       jest.mocked(SmartCache.getOfficeLocationsCached).mockResolvedValue([mockOffice] as never)
     })
 
-    it('rejects mobile clock-in when coordinates are missing and office locations exist', async () => {
+    it('rejects mobile clock-in when no office locations are configured in the workspace', async () => {
+      jest.mocked(SmartCache.getOfficeLocationsCached).mockResolvedValue([] as never)
       await expect(clockIn(proof())).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: expect.stringContaining('No office locations configured. Office check-in is not allowed until an office location is set up by your administrator.'),
+      })
+      expect(mockedTransaction).not.toHaveBeenCalled()
+    })
+
+    it('rejects mobile clock-out when no office locations are configured in the workspace', async () => {
+      jest.mocked(SmartCache.getOfficeLocationsCached).mockResolvedValue([] as never)
+      await expect(clockOut(proof('clock_out'))).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: expect.stringContaining('No office locations configured. Office check-out is not allowed until an office location is set up by your administrator.'),
+      })
+      expect(mockedTransaction).not.toHaveBeenCalled()
+    })
+
+    it('rejects mobile clock-in when coordinates are missing and office locations exist', async () => {
+      await expect(clockIn(proof(), localDate, null)).rejects.toMatchObject({
         code: 'FORBIDDEN',
         message: expect.stringContaining('Location access is required to clock in.'),
       })
@@ -238,7 +265,7 @@ describe('proof-gated attendance mutations', () => {
     })
 
     it('rejects mobile clock-out when coordinates are missing and office locations exist', async () => {
-      await expect(clockOut(proof('clock_out'))).rejects.toMatchObject({
+      await expect(clockOut(proof('clock_out'), localDate, null)).rejects.toMatchObject({
         code: 'FORBIDDEN',
         message: expect.stringContaining('Location access is required to clock out.'),
       })
