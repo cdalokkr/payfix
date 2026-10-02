@@ -2,6 +2,7 @@ import { sql, eq } from 'drizzle-orm';
 import { masterDb } from '@/lib/db/master-connection';
 import { tenants, tenantBranding, tenantPlans } from '@/lib/db/master-schema';
 import { centralDb } from '@/lib/db';
+import { configureTenantDatabaseSecurity } from '@/lib/db/tenant-security';
 import {
     assertTenantSchemaName,
     CANONICAL_TENANT_TABLES,
@@ -636,22 +637,32 @@ export async function provisionTenant(
             console.log(`[Provisioning] Schema ${schemaName} provisioned (skipRegistration=true, tenant record already exists).`);
         }
 
-        // Ensure newly provisioned admin profile in workspace schema has tenant_id assigned
-        if (adminUserId) {
-            let finalTenantId = tenantId !== 'existing' ? tenantId : registeredTenantId;
-            if (!finalTenantId) {
-                const existing = await masterDb.query.tenants.findFirst({
-                    where: eq(tenants.slug, safeSlug),
-                    columns: { id: true },
-                });
-                finalTenantId = existing?.id;
-            }
-            if (finalTenantId) {
+        let finalTenantId = tenantId !== 'existing' ? tenantId : registeredTenantId;
+        if (!finalTenantId) {
+            const existing = await masterDb.query.tenants.findFirst({
+                where: eq(tenants.slug, safeSlug),
+                columns: { id: true },
+            });
+            finalTenantId = existing?.id;
+        }
+
+        if (finalTenantId) {
+            // 1. Ensure newly provisioned admin profile in workspace schema has tenant_id assigned
+            if (adminUserId) {
                 await centralDb.execute(sql`
                     UPDATE ${sql.raw(schemaName)}.profiles
                     SET tenant_id = ${finalTenantId}
                     WHERE (id = ${adminUserId} OR tenant_id IS NULL);
                 `);
+            }
+
+            // 2. Configure RLS tenant isolation security policies & role grants
+            try {
+                onProgress?.('configuring_security', 'Configuring security policies...');
+                await configureTenantDatabaseSecurity(finalTenantId, schemaName);
+                console.log(`[Provisioning] Configured database security policies for tenant ${finalTenantId} on ${schemaName}`);
+            } catch (secErr) {
+                console.error(`[Provisioning] Failed to configure database security for ${schemaName}:`, secErr);
             }
         }
         
