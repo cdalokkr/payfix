@@ -635,6 +635,25 @@ export async function provisionTenant(
             onProgress?.('registering', 'Finalizing workspace...');
             console.log(`[Provisioning] Schema ${schemaName} provisioned (skipRegistration=true, tenant record already exists).`);
         }
+
+        // Ensure newly provisioned admin profile in workspace schema has tenant_id assigned
+        if (adminUserId) {
+            let finalTenantId = tenantId !== 'existing' ? tenantId : registeredTenantId;
+            if (!finalTenantId) {
+                const existing = await masterDb.query.tenants.findFirst({
+                    where: eq(tenants.slug, safeSlug),
+                    columns: { id: true },
+                });
+                finalTenantId = existing?.id;
+            }
+            if (finalTenantId) {
+                await centralDb.execute(sql`
+                    UPDATE ${sql.raw(schemaName)}.profiles
+                    SET tenant_id = ${finalTenantId}
+                    WHERE (id = ${adminUserId} OR tenant_id IS NULL);
+                `);
+            }
+        }
         
         return {
             success: true,

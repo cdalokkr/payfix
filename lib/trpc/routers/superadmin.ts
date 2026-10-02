@@ -492,7 +492,8 @@ export const superadminRouter = router({
 
             // Also update Supabase Auth user email/metadata if available
             try {
-              await ctx.supabase.auth.admin.updateUserById(adminUserId, {
+              const supabaseAdmin = createSupabaseAdminClient();
+              await supabaseAdmin.auth.admin.updateUserById(adminUserId, {
                 email: input.adminEmail,
                 user_metadata: { full_name: input.adminName },
               });

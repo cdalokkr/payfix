@@ -12,6 +12,7 @@ import { masterDb } from '@/lib/db/master-connection'
 import { tenants, tenantPlans } from '@/lib/db/master-schema'
 import { TRPCError } from '@trpc/server'
 import { profiles, designations, activities, userStatusHistory } from '@/lib/db/schema'
+import { createSupabaseAdminClient } from '@/lib/auth/supabase-admin'
 import { eq, or, ilike, and, ne, desc, count, sql, SQL } from 'drizzle-orm'
 
 function requireTenantId(ctx: { tenant?: { trusted?: boolean; tenantId?: string } | null }): string {
@@ -318,12 +319,16 @@ export const adminUsersRouter = router({
       if (!currentProfile) throw new Error('User not found')
 
       // Update auth email if changed (profiles.id = auth.users.id)
-      if (currentProfile.email !== input.email && currentProfile.id && ctx.supabase) {
-        const { error: authError } = await ctx.supabase.auth.admin.updateUserById(
+      if (currentProfile.email !== input.email && currentProfile.id) {
+        const supabaseAdmin = createSupabaseAdminClient()
+        const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
           currentProfile.id,
           { email: input.email, email_confirm: true }
         )
-        if (authError) throw new Error(`Auth update failed: ${authError.message}`)
+        if (authError) throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Auth update failed: ${authError.message}`,
+        })
       }
 
       const constructFullName = (f: string, m?: string, l?: string) =>
@@ -492,7 +497,6 @@ export const adminUsersRouter = router({
     .input(createUserSchema)
     .mutation(async ({ ctx, input }) => {
       const tenantId = requireTenantId(ctx)
-      if (!ctx.supabase) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Supabase client not available' })
 
       // 1. Enforce Plan Limits check if tenant context is present
       if (tenantId) {
@@ -520,7 +524,7 @@ export const adminUsersRouter = router({
               const currentEmployees = await ctx.db
                 .select({ count: count() })
                 .from(profiles)
-                .where(and(eq(profiles.tenant_id, tenantId), eq(profiles.role, 'employee')));
+                .where(and(eq(profiles.tenant_id, tenantId), eq(profiles.role, 'employee'), ne(profiles.status, 'deleted')));
 
               const empCount = currentEmployees[0]?.count || 0;
               if (empCount >= maxEmployees) {
@@ -533,7 +537,7 @@ export const adminUsersRouter = router({
               const currentModerators = await ctx.db
                 .select({ count: count() })
                 .from(profiles)
-                .where(and(eq(profiles.tenant_id, tenantId), eq(profiles.role, 'moderator')));
+                .where(and(eq(profiles.tenant_id, tenantId), eq(profiles.role, 'moderator'), ne(profiles.status, 'deleted')));
 
               const modCount = currentModerators[0]?.count || 0;
               if (modCount >= maxModerators) {
@@ -551,9 +555,18 @@ export const adminUsersRouter = router({
         }
       }
 
+      const normalizedEmail = input.email.trim().toLowerCase()
+
       // Check if user already exists using Drizzle
       const existingProfile = await ctx.db.query.profiles.findFirst({
-        where: and(eq(profiles.tenant_id, tenantId), eq(profiles.email, input.email)),
+        where: and(
+          eq(profiles.tenant_id, tenantId),
+          or(
+            eq(profiles.email, input.email),
+            eq(profiles.email, normalizedEmail),
+            ilike(profiles.email, normalizedEmail)
+          )
+        ),
         columns: { id: true }
       })
 
@@ -564,43 +577,89 @@ export const adminUsersRouter = router({
         });
       }
 
-      // Create auth user (Keep Supabase for Auth)
-      const { data: authData, error: authError } = await ctx.supabase.auth.admin.createUser({
-        email: input.email,
-        password: input.password,
-        email_confirm: true,
-      })
-
-      if (authError) throw new Error(`Failed to create auth user: ${authError.message}`)
-
       const constructFullName = (f: string, m?: string, l?: string) =>
         [f, m, l].filter(s => s && s.trim()).join(' ')
 
       const fullName = constructFullName(input.firstName, input.middleName, input.lastName)
 
+      // Create auth user using dedicated Supabase admin client
+      const supabaseAdmin = createSupabaseAdminClient()
+      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        email: normalizedEmail,
+        password: input.password,
+        email_confirm: true,
+        user_metadata: {
+          full_name: fullName,
+          status: 'active',
+        },
+      })
+
+      if (authError) {
+        if (authError.message?.toLowerCase().includes('already') || authError.status === 422) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: `A user with email ${input.email} already exists`,
+          });
+        }
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Failed to create auth user: ${authError.message}`,
+        });
+      }
+
+      if (!authData?.user) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to create auth user: No user returned',
+        });
+      }
+
       // Create the profile using Drizzle
-      const [profileData] = await ctx.db.insert(profiles).values({
-        id: authData.user!.id,
-         tenant_id: tenantId,
-        email: input.email,
-        first_name: input.firstName,
-        middle_name: input.middleName,
-        last_name: input.lastName,
-        full_name: fullName,
-        mobile_no: input.mobileNo,
-        date_of_birth: input.dateOfBirth,
-        sex: input.sex,
-        role: input.role,
-        designation_id: input.designationId,
-        allowed_modules: input.allowedModules,
-        avatar_url: getDefaultAvatarUrl(input.sex),
-        status: 'active',
-      }).returning()
+      let profileData: any
+      try {
+        const [inserted] = await ctx.db.insert(profiles).values({
+          id: authData.user.id,
+          tenant_id: tenantId,
+          email: normalizedEmail,
+          first_name: input.firstName,
+          middle_name: input.middleName,
+          last_name: input.lastName,
+          full_name: fullName,
+          mobile_no: input.mobileNo,
+          date_of_birth: input.dateOfBirth,
+          sex: input.sex,
+          role: input.role,
+          designation_id: input.designationId,
+          allowed_modules: input.allowedModules,
+          avatar_url: getDefaultAvatarUrl(input.sex),
+          status: 'active',
+        }).returning()
+
+        profileData = inserted
+      } catch (insertError: any) {
+        // Rollback: delete the auth user if profile insertion fails
+        try {
+          await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
+        } catch (rollbackErr) {
+          console.error('[CreateUser] Failed to rollback auth user:', rollbackErr)
+        }
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: insertError?.message ? `Failed to create user profile: ${insertError.message}` : 'Failed to create user profile',
+        })
+      }
 
       if (!profileData) {
         // Rollback: delete the auth user if profile creation fails
-        await ctx.supabase.auth.admin.deleteUser(authData.user!.id)
-        throw new Error('Profile creation error: No data returned')
+        try {
+          await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
+        } catch (rollbackErr) {
+          console.error('[CreateUser] Failed to rollback auth user:', rollbackErr)
+        }
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Profile creation error: No data returned',
+        })
       }
 
       await ctx.db.insert(activities).values({
@@ -611,10 +670,10 @@ export const adminUsersRouter = router({
           action: 'create',
           actorRole: ctx.profile.role || 'admin',
           actorEmail: ctx.user.email || '',
-          targetEmail: input.email,
+          targetEmail: normalizedEmail,
           module: 'users'
         }),
-        metadata: { new_user_id: authData.user!.id },
+        metadata: { new_user_id: authData.user.id },
       })
 
       return profileData
@@ -717,7 +776,6 @@ export const adminUsersRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const tenantId = requireTenantId(ctx)
-      if (!ctx.supabase) throw new Error('Supabase client not available')
 
       // 1. Get the user's profile to find the auth user_id using Drizzle
       const profile = await ctx.db.query.profiles.findFirst({
@@ -726,16 +784,23 @@ export const adminUsersRouter = router({
       })
 
       if (!profile || !profile.id) {
-        throw new Error('User profile not found')
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'User profile not found',
+        })
       }
 
-      // 2. Update the password in Supabase Auth
-      const { error: authError } = await ctx.supabase.auth.admin.updateUserById(
+      // 2. Update the password in Supabase Auth using dedicated admin client
+      const supabaseAdmin = createSupabaseAdminClient()
+      const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
         profile.id,
         { password: input.password }
       )
 
-      if (authError) throw new Error(`Failed to reset password: ${authError.message}`)
+      if (authError) throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: `Failed to reset password: ${authError.message}`,
+      })
 
       // 3. Log the activity
       await ctx.db.insert(activities).values({

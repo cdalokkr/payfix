@@ -387,8 +387,9 @@ export function ModernAddUserForm({
       // Enhanced error message handling
       if (error.message.includes('already exists')) {
         errorMessage = 'A user with this email already exists'
-      } else if (error.message.includes('Failed to create auth user')) {
-        errorMessage = 'Failed to create authentication user. Please check the email format.'
+      } else if (error.message.includes('Failed to create auth user') || error.message.includes('Failed to create authentication user')) {
+        const cleanMsg = error.message.replace(/^Failed to create (auth|authentication) user:\s*/i, '').trim()
+        errorMessage = cleanMsg ? `Failed to create authentication user: ${cleanMsg}` : 'Failed to create authentication user. Please try again.'
       } else if (error.message.includes('Profile creation error')) {
         errorMessage = 'Failed to create user profile. Please try again.'
       } else if (error.message.includes('invalid input syntax for type date') || error.message.includes('invalid_date')) {
