@@ -392,6 +392,13 @@ export const employeeNavItems: NavGroup[] = [
     icon: "UserPen",
     items: [
       {
+        title: "Reports",
+        href: "/employee/reports",
+        icon: "BarChart3",
+        moduleId: "reports",
+        description: "Your personal activity reports and analytics"
+      },
+      {
         title: "Profile",
         href: "/employee/profile",
         icon: "UserCog",
