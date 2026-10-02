@@ -353,7 +353,36 @@ export class AttendanceService {
         // Get active office locations (for potential validation)
         const activeLocations = await SmartCache.getOfficeLocationsCached()
 
-        if (latitude && longitude) {
+        if (source === 'mobile') {
+            // Strict Geofencing: If no office location is setup, employee cannot mark attendance
+            if (activeLocations.length === 0) {
+                throwAppError('FORBIDDEN', 'No office locations configured. Office check-in is not allowed until an office location is set up by your administrator.')
+            }
+
+            // Strict Geofencing: Location access is mandatory for mobile punches
+            if (latitude === undefined || latitude === null || longitude === undefined || longitude === null) {
+                throwAppError('FORBIDDEN', 'Location access is required to clock in.')
+            }
+
+            const { getDistanceFromLatLonInMeters } = await import('@/lib/utils/geo-utils')
+            for (const office of activeLocations) {
+                const dist = getDistanceFromLatLonInMeters(
+                    latitude,
+                    longitude,
+                    Number(office.latitude),
+                    Number(office.longitude)
+                )
+
+                if (dist <= (office.radius_meters || 200)) {
+                    locationName = office.name
+                    break
+                }
+            }
+
+            if (!locationName) {
+                throwAppError('FORBIDDEN', 'You are outside the allowed office location range.')
+            }
+        } else if (latitude && longitude) {
             try {
                 // Dynamically import geo-utils
                 const { getDistanceFromLatLonInMeters } = await import('@/lib/utils/geo-utils')
@@ -374,21 +403,12 @@ export class AttendanceService {
                 }
 
                 if (!locationName) {
-                    // Strict Geofencing: If office locations exist, user MUST be at an office
-                    if (activeLocations.length > 0) {
-                        throwAppError('FORBIDDEN', 'You are outside the allowed office location range.')
-                    }
-                    locationName = 'Remote'
+                    locationName = activeLocations.length > 0 ? 'Remote' : 'Office'
                 }
             } catch (err: any) {
                 if (err?.code === 'FORBIDDEN') throw err
                 console.error('Error resolving location:', err)
                 locationName = 'Unknown'
-            }
-        } else if (source === 'mobile') {
-            // Strict Geofencing: If office locations exist, location is MANDATORY for mobile punches
-            if (activeLocations.length > 0) {
-                throwAppError('FORBIDDEN', 'Location access is required to clock in.')
             }
         }
 
@@ -523,7 +543,35 @@ export class AttendanceService {
         let locationName: string | null = null
         const activeLocations = await SmartCache.getOfficeLocationsCached()
 
-        if (latitude && longitude) {
+        if (source === 'mobile') {
+            // Strict Geofencing: If no office location is setup, employee cannot mark attendance
+            if (activeLocations.length === 0) {
+                throwAppError('FORBIDDEN', 'No office locations configured. Office check-out is not allowed until an office location is set up by your administrator.')
+            }
+
+            // Strict Geofencing: Location access is mandatory for mobile punches
+            if (latitude === undefined || latitude === null || longitude === undefined || longitude === null) {
+                throwAppError('FORBIDDEN', 'Location access is required to clock out.')
+            }
+
+            const { getDistanceFromLatLonInMeters } = await import('@/lib/utils/geo-utils')
+            for (const office of activeLocations) {
+                const dist = getDistanceFromLatLonInMeters(
+                    latitude,
+                    longitude,
+                    Number(office.latitude),
+                    Number(office.longitude)
+                )
+                if (dist <= (office.radius_meters || 200)) {
+                    locationName = office.name
+                    break
+                }
+            }
+
+            if (!locationName) {
+                throwAppError('FORBIDDEN', 'You are outside the allowed office location range.')
+            }
+        } else if (latitude && longitude) {
             try {
                 const { getDistanceFromLatLonInMeters } = await import('@/lib/utils/geo-utils')
                 for (const office of activeLocations) {
@@ -538,16 +586,10 @@ export class AttendanceService {
                         break
                     }
                 }
-
-                if (!locationName && activeLocations.length > 0) {
-                    throwAppError('FORBIDDEN', 'You are outside the allowed office location range.')
-                }
             } catch (err: any) {
                 if (err?.code === 'FORBIDDEN') throw err
                 console.error('[ATTENDANCE] Error calculating distance to office locations for clock-out:', err)
             }
-        } else if (activeLocations.length > 0 && source === 'mobile') {
-            throwAppError('FORBIDDEN', 'Location access is required to clock out.')
         }
 
         const now = new Date()

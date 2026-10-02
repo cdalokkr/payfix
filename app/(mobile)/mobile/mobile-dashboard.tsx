@@ -186,6 +186,8 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
 
     const [geofenceResult, setGeofenceResult] = useState<{
         isAllowed: boolean
+        noLocationsConfigured?: boolean
+        reason?: string
         nearestOffice?: { id: string; name: string; distance: number }
         withinOffice?: { id: string; name: string; distance: number }
     } | null>(() => getStoredGeofence())
@@ -538,7 +540,7 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
                                                         <MapPinOff className="w-3.5 h-3.5 text-white" />
                                                     </div>
                                                     <span className="text-[10px] font-black uppercase tracking-wider text-white">
-                                                        Outside Office Area
+                                                        {geofenceResult?.noLocationsConfigured ? 'No Office Setup' : 'Outside Office Area'}
                                                     </span>
                                                 </>
                                             )}
@@ -553,10 +555,12 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
                                                     </div>
                                                     <div>
                                                         <p className="text-[11px] font-black uppercase tracking-widest text-white">
-                                                            Outside Office Perimeter
+                                                            {geofenceResult?.noLocationsConfigured ? 'No Office Location Set Up' : 'Outside Office Perimeter'}
                                                         </p>
                                                         <p className="text-[9px] font-medium text-white/60">
-                                                            Attendance marking is restricted
+                                                            {geofenceResult?.noLocationsConfigured
+                                                                ? 'Attendance marking is restricted until an office location is added'
+                                                                : 'Attendance marking is restricted'}
                                                         </p>
                                                     </div>
                                                 </div>
