@@ -1,3 +1,19 @@
+const mockCreateUser = jest.fn()
+const mockDeleteUser = jest.fn()
+const mockUpdateUserById = jest.fn()
+
+jest.mock('@/lib/auth/supabase-admin', () => ({
+  createSupabaseAdminClient: () => ({
+    auth: {
+      admin: {
+        createUser: mockCreateUser,
+        deleteUser: mockDeleteUser,
+        updateUserById: mockUpdateUserById,
+      },
+    },
+  }),
+}))
+
 import { createCallerFactory } from '../server'
 import { adminUsersRouter } from './admin-users'
 
@@ -35,16 +51,30 @@ function profile(id: string, tenantId: string, email: string) {
 
 function contextFor(tenantId: string, tenantProfiles: ReturnType<typeof profile>[]) {
   const findMany = jest.fn(async () => tenantProfiles)
-  const countWhere = jest.fn(async () => [{ value: tenantProfiles.length }])
+  const findFirst = jest.fn(async () => null)
+  const countWhere = jest.fn(async () => [{ value: tenantProfiles.length, count: tenantProfiles.length }])
+  const insertReturning = jest.fn(async () => [{
+    id: 'new-auth-id',
+    tenant_id: tenantId,
+    email: 'newuser@example.com',
+    role: 'employee',
+    status: 'active',
+  }])
   const db = {
     select: jest.fn(() => ({
       from: jest.fn(() => ({
         where: countWhere,
       })),
     })),
+    insert: jest.fn(() => ({
+      values: jest.fn(() => ({
+        returning: insertReturning,
+      })),
+    })),
     query: {
       profiles: {
         findMany,
+        findFirst,
       },
     },
   }
@@ -129,5 +159,103 @@ describe('admin user tenant isolation', () => {
     })
 
     expect(context.db.query.profiles.findMany).not.toHaveBeenCalled()
+  })
+
+  it('creates an auth user using dedicated Supabase admin client and inserts tenant profile', async () => {
+    mockCreateUser.mockResolvedValueOnce({
+      data: { user: { id: 'auth-user-123', email: 'staff@acme.example' } },
+      error: null,
+    })
+
+    const context = contextFor(TENANT_A, [])
+    const caller = createCaller(context)
+
+    const result = await caller.createUser({
+      email: 'staff@acme.example',
+      password: 'Password@123',
+      confirmPassword: 'Password@123',
+      firstName: 'Staff',
+      lastName: 'Member',
+      mobileNo: '9876543210',
+      dateOfBirth: '1995-01-01',
+      role: 'employee',
+      designationId: '33333333-3333-4333-8333-333333333333',
+      sex: 'male',
+    })
+
+    expect(mockCreateUser).toHaveBeenCalledWith({
+      email: 'staff@acme.example',
+      password: 'Password@123',
+      email_confirm: true,
+      user_metadata: {
+        full_name: 'Staff Member',
+        status: 'active',
+      },
+    })
+    expect(result).toBeDefined()
+    expect(context.db.insert).toHaveBeenCalled()
+  })
+
+  it('translates auth already-registered error to CONFLICT TRPCError', async () => {
+    mockCreateUser.mockResolvedValueOnce({
+      data: { user: null },
+      error: { message: 'A user with this email address has already been registered', status: 422 },
+    })
+
+    const context = contextFor(TENANT_A, [])
+    const caller = createCaller(context)
+
+    await expect(caller.createUser({
+      email: 'existing@acme.example',
+      password: 'Password@123',
+      confirmPassword: 'Password@123',
+      firstName: 'Existing',
+      lastName: 'Member',
+      mobileNo: '9876543210',
+      dateOfBirth: '1995-01-01',
+      role: 'employee',
+      designationId: '33333333-3333-4333-8333-333333333333',
+      sex: 'male',
+    })).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: 'A user with email existing@acme.example already exists',
+    })
+  })
+
+  it('rolls back created auth user if profile creation fails', async () => {
+    mockCreateUser.mockResolvedValueOnce({
+      data: { user: { id: 'rollback-user-id', email: 'fail@acme.example' } },
+      error: null,
+    })
+    mockDeleteUser.mockResolvedValueOnce({ data: {}, error: null })
+
+    const context = contextFor(TENANT_A, [])
+    // Make profile insert fail
+    context.db.insert = jest.fn(() => ({
+      values: jest.fn(() => ({
+        returning: jest.fn(async () => {
+          throw new Error('Database connection failed during insert')
+        }),
+      })),
+    }))
+    const caller = createCaller(context)
+
+    await expect(caller.createUser({
+      email: 'fail@acme.example',
+      password: 'Password@123',
+      confirmPassword: 'Password@123',
+      firstName: 'Fail',
+      lastName: 'Insert',
+      mobileNo: '9876543210',
+      dateOfBirth: '1995-01-01',
+      role: 'employee',
+      designationId: '33333333-3333-4333-8333-333333333333',
+      sex: 'male',
+    })).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to create user profile: Database connection failed during insert',
+    })
+
+    expect(mockDeleteUser).toHaveBeenCalledWith('rollback-user-id')
   })
 })
