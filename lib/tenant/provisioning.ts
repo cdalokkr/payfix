@@ -657,12 +657,13 @@ export async function provisionTenant(
             }
 
             // 2. Configure RLS tenant isolation security policies & role grants
+            onProgress?.('configuring_security', 'Configuring security policies...');
             try {
-                onProgress?.('configuring_security', 'Configuring security policies...');
                 await configureTenantDatabaseSecurity(finalTenantId, schemaName);
                 console.log(`[Provisioning] Configured database security policies for tenant ${finalTenantId} on ${schemaName}`);
-            } catch (secErr) {
+            } catch (secErr: any) {
                 console.error(`[Provisioning] Failed to configure database security for ${schemaName}:`, secErr);
+                throw new Error(`Failed to configure database security policies for workspace ${schemaName}: ${secErr?.message || secErr}`);
             }
         }
         
