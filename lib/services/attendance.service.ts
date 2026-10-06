@@ -1,5 +1,5 @@
 import { db } from '@/lib/db'
-import { attendance, attendanceSessions, biometricRawLogs, activities, officeSettings, officeClosures, officeLocations, notifications, leaves, profiles } from '@/lib/db/schema'
+import { attendance, attendanceSessions, biometricRawLogs, activities, officeSettings, officeClosures, officeLocations, notifications, leaves, profiles, biometricConsumedProofs } from '@/lib/db/schema'
 import { eq, and, gte, lte, desc, sql, inArray } from 'drizzle-orm'
 import { throwAppError } from '@/lib/errors/app-errors'
 import { SmartCache } from '@/lib/cache/smart-cache'
@@ -330,15 +330,16 @@ export class AttendanceService {
     }) {
         await AttendanceService.ensureAttendanceSchema()
         const today = localDate || getLocalDateIST()
+        let consumedProof: ReturnType<typeof consumeAttendanceProof> = null
         if (source === 'mobile') {
             const tenantId = tenantStorage.getStore()?.tenantId
-            const proof = consumeAttendanceProof(verificationProof, {
+            consumedProof = consumeAttendanceProof(verificationProof, {
                 subject: profileId,
                 tenantId: tenantId || '',
                 action: 'clock_in',
                 localDate: today,
             })
-            if (!proof) throwAppError('FORBIDDEN', 'A fresh biometric verification is required before clocking in.')
+            if (!consumedProof) throwAppError('FORBIDDEN', 'A fresh biometric verification is required before clocking in.')
         }
         const dayOfWeek = new Date(today).getDay()
 
@@ -487,6 +488,23 @@ export class AttendanceService {
                 checkin_longitude: longitude ? String(longitude) : null,
                 checkin_location_name: locationName
             })
+
+            // NEW-01: Claim biometric proof atomically in database to prevent multi-instance replays
+            if (source === 'mobile' && consumedProof?.jti) {
+                try {
+                    await tx.insert(biometricConsumedProofs).values({
+                        jti: consumedProof.jti,
+                        profile_id: profileId,
+                        action: 'clock_in',
+                        expires_at: new Date(Date.now() + 2 * 60 * 1000),
+                    })
+                } catch (err: any) {
+                    if (err?.code === '23505' || err?.cause?.code === '23505') {
+                        throwAppError('FORBIDDEN', 'This biometric attendance proof has already been used.')
+                    }
+                }
+            }
+
             await tx.insert(activities).values({
                 user_id: profileId,
                 activity_type: 'data_create',
@@ -532,15 +550,16 @@ export class AttendanceService {
     }) {
         await AttendanceService.ensureAttendanceSchema()
         const today = localDate || getLocalDateIST()
+        let consumedProof: ReturnType<typeof consumeAttendanceProof> = null
         if (source === 'mobile') {
             const tenantId = tenantStorage.getStore()?.tenantId
-            const proof = consumeAttendanceProof(verificationProof, {
+            consumedProof = consumeAttendanceProof(verificationProof, {
                 subject: profileId,
                 tenantId: tenantId || '',
                 action: 'clock_out',
                 localDate: today,
             })
-            if (!proof) throwAppError('FORBIDDEN', 'A fresh biometric verification is required before clocking out.')
+            if (!consumedProof) throwAppError('FORBIDDEN', 'A fresh biometric verification is required before clocking out.')
         }
 
         // Resolve location name & Validate Geofence for clock-out
@@ -618,6 +637,22 @@ export class AttendanceService {
             // return the existing attendance record without re-clocking out or altering checkout timestamps.
             if (!activeSession && record && (record.current_session_status === 'checked_out' || (record.check_out && !record.current_session_status))) {
                 return record
+            }
+
+            // NEW-01: Claim biometric proof atomically in database to prevent multi-instance replays
+            if (source === 'mobile' && consumedProof?.jti) {
+                try {
+                    await tx.insert(biometricConsumedProofs).values({
+                        jti: consumedProof.jti,
+                        profile_id: profileId,
+                        action: 'clock_out',
+                        expires_at: new Date(Date.now() + 2 * 60 * 1000),
+                    })
+                } catch (err: any) {
+                    if (err?.code === '23505' || err?.cause?.code === '23505') {
+                        throwAppError('FORBIDDEN', 'This biometric attendance proof has already been used.')
+                    }
+                }
             }
 
             const attendanceId = activeSession?.attendance_id || record?.id

@@ -826,3 +826,18 @@ export const biometricVerificationAttemptsRelations = relations(biometricVerific
         references: [profiles.id],
     }),
 }));
+
+export const biometricConsumedProofs = pgTable('biometric_consumed_proofs', {
+    jti: text('jti').primaryKey(),
+    profile_id: uuid('profile_id').references(() => profiles.id, { onDelete: 'cascade' }),
+    action: text('action').notNull(),
+    expires_at: timestamp('expires_at', { withTimezone: true }).notNull(),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
+export const biometricConsumedProofsRelations = relations(biometricConsumedProofs, ({ one }) => ({
+    profile: one(profiles, {
+        fields: [biometricConsumedProofs.profile_id],
+        references: [profiles.id],
+    }),
+}));

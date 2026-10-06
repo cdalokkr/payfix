@@ -41,6 +41,7 @@ export const CANONICAL_TENANT_TABLES = [
     'call_logs',
     'salary_payments',
     'biometric_verification_attempts',
+    'biometric_consumed_proofs',
 ] as const;
 
 export type CanonicalTenantTable = (typeof CANONICAL_TENANT_TABLES)[number];
@@ -180,6 +181,9 @@ export const CANONICAL_TENANT_COLUMNS: Record<CanonicalTenantTable, readonly str
         'quality_diagnostics', 'capture_pipeline_version', 'embedding_pipeline_version',
         'backend_engine', 'processing_ms', 'request_id', 'created_at',
     ],
+    biometric_consumed_proofs: [
+        'jti', 'profile_id', 'action', 'expires_at', 'created_at',
+    ],
 };
 
 export const TENANT_REQUIRED_INDEXES = [
@@ -246,6 +250,7 @@ export const TENANT_REQUIRED_FOREIGN_KEYS = [
     ['call_logs', 'called_by', 'profiles', 'id'],
     ['salary_payments', 'summary_id', 'monthly_attendance_summary', 'id'],
     ['salary_payments', 'paid_by', 'profiles', 'id'],
+    ['biometric_consumed_proofs', 'profile_id', 'profiles', 'id'],
 ] as const;
 
 export interface TenantSchemaContractReport {
