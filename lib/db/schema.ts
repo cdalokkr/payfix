@@ -775,9 +775,12 @@ export const salaryPayments = pgTable('salary_payments', {
     pay_reference_no: text('pay_reference_no'),
     payment_remarks: text('payment_remarks'),
     paid_by: uuid('paid_by').references(() => profiles.id, { onDelete: 'set null' }),
+    idempotency_key: text('idempotency_key'),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
-});
+}, (table) => [
+    uniqueIndex('salary_payments_idempotency_key_idx').on(table.idempotency_key),
+]);
 
 export const salaryPaymentsRelations = relations(salaryPayments, ({ one }) => ({
     summary: one(monthlyAttendanceSummary, {

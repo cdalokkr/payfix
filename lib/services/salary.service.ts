@@ -1406,6 +1406,7 @@ export class SalaryService {
         payReferenceNo,
         paymentRemarks,
         paidBy,
+        idempotencyKey,
     }: {
         summaryId: string
         paidAmount: number
@@ -1414,61 +1415,82 @@ export class SalaryService {
         payReferenceNo?: string
         paymentRemarks?: string
         paidBy: string
+        idempotencyKey?: string
     }) {
-        const summary = await db.query.monthlyAttendanceSummary.findFirst({
-            where: eq(monthlyAttendanceSummary.id, summaryId),
-            with: {
-                payments: true
+        return await db.transaction(async (tx) => {
+            // 1. Idempotency check: if an idempotency key was supplied, check if payment already recorded
+            if (idempotencyKey) {
+                const existingPayment = await tx.query.salaryPayments.findFirst({
+                    where: eq(salaryPayments.idempotency_key, idempotencyKey)
+                })
+                if (existingPayment) {
+                    const existingSummary = await tx.query.monthlyAttendanceSummary.findFirst({
+                        where: eq(monthlyAttendanceSummary.id, summaryId)
+                    })
+                    if (existingSummary) return existingSummary
+                }
             }
-        })
 
-        if (!summary) {
-            throw new TRPCError({ code: 'NOT_FOUND', message: 'Payslip summary not found' })
-        }
-        if (summary.status !== 'payslip_generated') {
-            throw new TRPCError({ code: 'BAD_REQUEST', message: 'Payslip must be generated before marking as paid' })
-        }
+            // 2. Lock the summary row with FOR UPDATE to prevent concurrent payment races
+            const [summary] = await tx
+                .select()
+                .from(monthlyAttendanceSummary)
+                .where(eq(monthlyAttendanceSummary.id, summaryId))
+                .for('update')
 
-        const netSalary = Number(summary.take_home) || 0
-        const existingPaymentsSum = summary.payments?.reduce((s, p) => s + (Number(p.amount) || 0), 0) || 0
-        const remainingBalance = netSalary - existingPaymentsSum
+            if (!summary) {
+                throw new TRPCError({ code: 'NOT_FOUND', message: 'Payslip summary not found' })
+            }
+            if (summary.status !== 'payslip_generated') {
+                throw new TRPCError({ code: 'BAD_REQUEST', message: 'Payslip must be generated before marking as paid' })
+            }
 
-        if (Number(paidAmount.toFixed(2)) > Number(remainingBalance.toFixed(2))) {
-            throw new TRPCError({
-                code: 'BAD_REQUEST',
-                message: `Payment amount of ${paidAmount} exceeds the remaining balance of ${remainingBalance}`
+            // 3. Calculate remaining balance inside the lock
+            const currentPayments = await tx.query.salaryPayments.findMany({
+                where: eq(salaryPayments.summary_id, summaryId)
             })
-        }
+            const existingPaymentsSum = currentPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0)
+            const netSalary = Number(summary.take_home) || 0
+            const remainingBalance = netSalary - existingPaymentsSum
 
-        // 1. Insert new payment record
-        await db.insert(salaryPayments).values({
-            summary_id: summaryId,
-            amount: String(paidAmount),
-            paid_mode: paidMode,
-            pay_date: payDate,
-            pay_reference_no: payReferenceNo || null,
-            payment_remarks: paymentRemarks || null,
-            paid_by: paidBy,
-            created_at: new Date(),
-            updated_at: new Date()
+            if (Number(paidAmount.toFixed(2)) > Number(remainingBalance.toFixed(2))) {
+                throw new TRPCError({
+                    code: 'BAD_REQUEST',
+                    message: `Payment amount of ${paidAmount} exceeds the remaining balance of ${remainingBalance}`
+                })
+            }
+
+            // 4. Insert new payment record
+            await tx.insert(salaryPayments).values({
+                summary_id: summaryId,
+                amount: String(paidAmount),
+                paid_mode: paidMode,
+                pay_date: payDate,
+                pay_reference_no: payReferenceNo || null,
+                payment_remarks: paymentRemarks || null,
+                paid_by: paidBy,
+                idempotency_key: idempotencyKey || null,
+                created_at: new Date(),
+                updated_at: new Date()
+            })
+
+            // 5. Calculate new total paid
+            const newTotalPaid = existingPaymentsSum + paidAmount
+
+            // 6. Update monthlyAttendanceSummary with denormalized payment details
+            const [updated] = await tx.update(monthlyAttendanceSummary).set({
+                paid_amount: String(newTotalPaid),
+                paid_mode: paidMode,
+                pay_date: payDate,
+                pay_reference_no: payReferenceNo || null,
+                payment_remarks: paymentRemarks || null,
+                paid_by: paidBy,
+                paid_at: new Date(),
+                updated_at: new Date(),
+            }).where(eq(monthlyAttendanceSummary.id, summaryId)).returning()
+
+            return updated
         })
-
-        // 2. Calculate new total paid
-        const newTotalPaid = existingPaymentsSum + paidAmount
-
-        // 3. Update monthlyAttendanceSummary with denormalized payment details
-        const [updated] = await db.update(monthlyAttendanceSummary).set({
-            paid_amount: String(newTotalPaid),
-            paid_mode: paidMode,
-            pay_date: payDate,
-            pay_reference_no: payReferenceNo || null,
-            payment_remarks: paymentRemarks || null,
-            paid_by: paidBy,
-            paid_at: new Date(),
-            updated_at: new Date(),
-        }).where(eq(monthlyAttendanceSummary.id, summaryId)).returning()
-
-        return updated
     }
 
     /** Get salary passbook/paybook for an employee (self-service) */

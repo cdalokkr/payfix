@@ -172,7 +172,7 @@ export const CANONICAL_TENANT_COLUMNS: Record<CanonicalTenantTable, readonly str
     ],
     salary_payments: [
         'id', 'summary_id', 'amount', 'paid_mode', 'pay_date', 'pay_reference_no',
-        'payment_remarks', 'paid_by', 'created_at', 'updated_at',
+        'payment_remarks', 'paid_by', 'idempotency_key', 'created_at', 'updated_at',
     ],
     biometric_verification_attempts: [
         'id', 'profile_id', 'source', 'outcome', 'similarity', 'threshold',
@@ -197,6 +197,7 @@ export const TENANT_REQUIRED_INDEXES = [
     ['biometric_verification_attempts', 'biometric_verification_attempts_created_idx'],
     ['kiosk_devices', 'kiosk_devices_terminal_id_idx'],
     ['monthly_attendance_summary', 'monthly_attendance_summary_profile_month_year_idx'],
+    ['salary_payments', 'salary_payments_idempotency_key_idx'],
 ] as const;
 
 export const TENANT_REQUIRED_FOREIGN_KEYS = [
