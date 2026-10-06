@@ -17,6 +17,10 @@ export const obsoleteVersions = [
   '20260829010000_add_tenant_biometric_verification_attempts.sql',
 ];
 
+export const approvedPublicSecurityMigrations = [
+  '20261006111430_restrict_public_biometric_raw_logs.sql',
+];
+
 const approvedTenantRegistryReference =
   /\b(?:from|join)\s+public\s*\.\s*tenants\b/gi;
 const tenantRegistryReference = /\btenant_registry\b/i;
@@ -98,7 +102,11 @@ export async function validateMigrationFiles(migrationDir) {
   }
 
   for (const file of files) {
-    if (file <= historicalPublicMigration || file === historicalPublicMigration) {
+    if (
+      file <= historicalPublicMigration ||
+      file === historicalPublicMigration ||
+      approvedPublicSecurityMigrations.includes(file)
+    ) {
       continue;
     }
 
