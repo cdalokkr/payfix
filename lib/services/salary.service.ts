@@ -876,6 +876,20 @@ export class SalaryService {
                     total_extra_hours: totalExtraHours.toFixed(2),
                     salary_breakdown: { extra_days: extraDays, source: 'compiled' },
                     status: 'draft',
+                }).onConflictDoUpdate({
+                    target: [monthlyAttendanceSummary.profile_id, monthlyAttendanceSummary.month, monthlyAttendanceSummary.year],
+                    set: {
+                        total_working_days: totalWorkingDays,
+                        total_present_days: presentDays,
+                        total_absent_days: absentDays,
+                        total_half_days: halfDays,
+                        total_leaves: Math.round(leaveDays),
+                        total_working_hours: totalWorkingHours.toFixed(2),
+                        total_extra_hours: totalExtraHours.toFixed(2),
+                        salary_breakdown: { extra_days: extraDays, source: 'compiled' },
+                        updated_at: new Date(),
+                    },
+                    where: eq(monthlyAttendanceSummary.status, 'draft'),
                 }).returning()
                 results.push(newSummary)
             }

@@ -196,6 +196,7 @@ export const TENANT_REQUIRED_INDEXES = [
     ['biometric_verification_attempts', 'biometric_verification_attempts_profile_created_idx'],
     ['biometric_verification_attempts', 'biometric_verification_attempts_created_idx'],
     ['kiosk_devices', 'kiosk_devices_terminal_id_idx'],
+    ['monthly_attendance_summary', 'monthly_attendance_summary_profile_month_year_idx'],
 ] as const;
 
 export const TENANT_REQUIRED_FOREIGN_KEYS = [

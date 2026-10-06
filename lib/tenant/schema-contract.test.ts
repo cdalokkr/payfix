@@ -58,6 +58,7 @@ describe('tenant schema contract', () => {
                 ['profiles', 'profiles_face_embedding_hnsw_idx'],
                 ['biometric_verification_attempts', 'biometric_verification_attempts_created_idx'],
                 ['attendance_sessions', 'attendance_sessions_one_active_per_profile_day'],
+                ['monthly_attendance_summary', 'monthly_attendance_summary_profile_month_year_idx'],
             ]),
         );
         expect(TENANT_REQUIRED_FOREIGN_KEYS.length).toBeGreaterThan(40);

@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, varchar, date, numeric, integer, boolean, pgEnum, jsonb, real } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, varchar, date, numeric, integer, boolean, pgEnum, jsonb, real, uniqueIndex } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // Enums
@@ -431,7 +431,9 @@ export const monthlyAttendanceSummary = pgTable('monthly_attendance_summary', {
     paid_at: timestamp('paid_at', { withTimezone: true }),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
-});
+}, (table) => [
+    uniqueIndex('monthly_attendance_summary_profile_month_year_idx').on(table.profile_id, table.month, table.year),
+]);
 
 // ============================================
 // Complaint & Ticket Management Tables
