@@ -144,7 +144,7 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                 ['Employee Name', profile.full_name || '—', 'Month Days', bd?.total_working_days || '—'],
                 ['Designation', profile.designation?.name || '—', 'Present Days', slip.total_present_days || '—'],
                 ['Email', profile.email || '—', 'Half Days', bd?.half_days || '0'],
-                ['Month / Year', `${monthName} ${slip.year}`, 'Leaves', slip.total_leaves || '—'],
+                ['Month / Year', `${monthName} ${slip.year}`, 'Leaves', slip.total_leaves != null ? String(Number(slip.total_leaves)) : '—'],
                 ['Status', slip.paid_mode ? 'Paid' : 'Unpaid', 'Absent Days', bd?.absent_days || '—'],
                 ['', '', 'Extra Days', bd?.extra_days || '0'],
             ];
@@ -494,7 +494,7 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                                                  </div>
                                                  <div className="flex flex-col items-center justify-center py-2 px-0 rounded-xl border border-blue-100 dark:border-blue-950/40 bg-blue-50/30 dark:bg-blue-950/15">
                                                      <span className="text-[9px] font-black uppercase tracking-tighter text-blue-600/70 dark:text-blue-500/50">Leave</span>
-                                                     <span className="text-sm font-black text-blue-600 dark:text-blue-400 mt-0.5">{slip.total_leaves ?? '—'}</span>
+                                                     <span className="text-sm font-black text-blue-600 dark:text-blue-400 mt-0.5">{slip.total_leaves != null ? String(Number(slip.total_leaves)) : '—'}</span>
                                                  </div>
                                                  <div className="flex flex-col items-center justify-center py-2 px-0 rounded-xl border border-rose-100 dark:border-rose-950/40 bg-rose-50/30 dark:bg-rose-950/15">
                                                      <span className="text-[9px] font-black uppercase tracking-tighter text-rose-600/70 dark:text-rose-500/50">Absent</span>

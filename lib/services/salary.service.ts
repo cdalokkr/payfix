@@ -388,7 +388,7 @@ export class SalaryService {
                 total_present_days: metrics.presentDays,
                 total_absent_days: metrics.absentDays,
                 total_half_days: metrics.halfDays,
-                total_leaves: metrics.leaveDays,
+                total_leaves: String(metrics.leaveDays),
                 total_working_hours: metrics.totalWorkingHours.toFixed(2),
                 total_extra_hours: metrics.totalExtraHours.toFixed(2),
                 salary_breakdown: {
@@ -416,7 +416,7 @@ export class SalaryService {
                     total_present_days: metrics.presentDays,
                     total_absent_days: metrics.absentDays,
                     total_half_days: metrics.halfDays,
-                    total_leaves: metrics.leaveDays,
+                    total_leaves: String(metrics.leaveDays),
                     total_working_hours: metrics.totalWorkingHours.toFixed(2),
                     total_extra_hours: metrics.totalExtraHours.toFixed(2),
                     updated_at: new Date(),
@@ -543,7 +543,7 @@ export class SalaryService {
                 total_present_days: metrics.presentDays,
                 total_absent_days: metrics.absentDays,
                 total_half_days: metrics.halfDays,
-                total_leaves: metrics.leaveDays,
+                total_leaves: String(metrics.leaveDays),
                 total_working_hours: metrics.totalWorkingHours.toFixed(2),
                 total_extra_hours: metrics.totalExtraHours.toFixed(2),
                 gross_salary: grossSalary.toFixed(2),
@@ -707,17 +707,9 @@ export class SalaryService {
 
         const closureDates = new Set(closures.map(c => c.date))
 
-        // Calculate working days & required working days
-        const totalWorkingDays = lastDay // Month calendar days is the default working days
-        let requiredWorkingDays = 0
-        for (let d = 1; d <= lastDay; d++) {
-            const dateObj = new Date(year, month - 1, d)
-            const dayOfWeek = dateObj.getDay()
-            const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-            if (!offDays.includes(dayOfWeek) && !closureDates.has(dateStr)) {
-                requiredWorkingDays++
-            }
-        }
+        // PAY-01: Company policy enforces per-day salary rate strictly calculated from
+        // the total calendar days in the month (e.g. 28/29 for Feb, 30 for Apr/Jun/Sep/Nov, 31 for Jan/Mar/May/Jul/Aug/Oct/Dec).
+        const totalWorkingDays = lastDay
 
         const results: any[] = []
 
@@ -852,7 +844,7 @@ export class SalaryService {
                         presentDays,
                         halfDays,
                         absentDays,
-                        leaveDays: Math.round(leaveDays),
+                        leaveDays,
                         totalWorkingHours,
                         totalExtraHours,
                         extraDays,
@@ -871,7 +863,7 @@ export class SalaryService {
                     total_present_days: presentDays,
                     total_absent_days: absentDays,
                     total_half_days: halfDays,
-                    total_leaves: Math.round(leaveDays),
+                    total_leaves: String(leaveDays),
                     total_working_hours: totalWorkingHours.toFixed(2),
                     total_extra_hours: totalExtraHours.toFixed(2),
                     salary_breakdown: { extra_days: extraDays, source: 'compiled' },
@@ -883,7 +875,7 @@ export class SalaryService {
                         total_present_days: presentDays,
                         total_absent_days: absentDays,
                         total_half_days: halfDays,
-                        total_leaves: Math.round(leaveDays),
+                        total_leaves: String(leaveDays),
                         total_working_hours: totalWorkingHours.toFixed(2),
                         total_extra_hours: totalExtraHours.toFixed(2),
                         salary_breakdown: { extra_days: extraDays, source: 'compiled' },
@@ -1607,7 +1599,7 @@ export class SalaryService {
                                         total_present_days: record.totalPresent,
                                         total_half_days: record.totalHalfDays,
                                         total_absent_days: record.totalAbsent,
-                                        total_leaves: record.totalLeaves,
+                                        total_leaves: String(record.totalLeaves),
                                         salary_breakdown: {
                                             ...currentBD,
                                             extra_days: record.extraDays,
@@ -1658,7 +1650,7 @@ export class SalaryService {
                             total_present_days: record.totalPresent,
                             total_half_days: record.totalHalfDays,
                             total_absent_days: record.totalAbsent,
-                            total_leaves: record.totalLeaves,
+                            total_leaves: String(record.totalLeaves),
                             salary_breakdown: { extra_days: record.extraDays, source: 'excel_upload' },
                             status: 'draft',
                         })

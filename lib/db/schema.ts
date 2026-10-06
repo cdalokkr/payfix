@@ -410,7 +410,7 @@ export const monthlyAttendanceSummary = pgTable('monthly_attendance_summary', {
     total_present_days: integer('total_present_days').notNull().default(0),
     total_absent_days: integer('total_absent_days').notNull().default(0),
     total_half_days: integer('total_half_days').notNull().default(0),
-    total_leaves: integer('total_leaves').notNull().default(0),
+    total_leaves: numeric('total_leaves', { precision: 5, scale: 1 }).notNull().default('0'),
     total_working_hours: numeric('total_working_hours', { precision: 8, scale: 2 }).default('0'),
     total_extra_hours: numeric('total_extra_hours', { precision: 8, scale: 2 }).default('0'),
     status: text('status').notNull().default('draft'), // 'draft' | 'set_for_salary' | 'payslip_generated'

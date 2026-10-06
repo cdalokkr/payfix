@@ -508,6 +508,23 @@ async function processMonthlyUpload(
             continue
         }
 
+        // Validate total leaves: non-negative and valid multiple of 0.5 (half-day leaves)
+        const rawLeaves = row[7]
+        if (rawLeaves !== undefined && rawLeaves !== null && rawLeaves !== '') {
+            if (isNaN(totalLeaves) || totalLeaves < 0 || (Math.round(totalLeaves * 10) % 5 !== 0)) {
+                const errReason = `Invalid total leaves "${rawLeaves}". Must be a non-negative multiple of 0.5 (e.g. 0.5, 1.0, 1.5).`
+                errors.push(`Row ${rowNum}: ${errReason}`)
+                skippedRows++
+                skippedRecords.push({
+                    rowNum,
+                    employeeName: profile.full_name || 'Unknown',
+                    email,
+                    reason: errReason
+                })
+                continue
+            }
+        }
+
         // Skip rows where all numeric fields are 0/empty
         if (totalPresent === 0 && totalAbsent === 0 && totalHalfDays === 0 && totalLeaves === 0 && extraDays === 0) {
             skippedRows++
