@@ -228,6 +228,10 @@ export class AttendanceService {
     static async ensureAttendanceSchema() {
         const schemaKey = tenantStorage.getStore()?.tenantSchema || 'public'
         if (_attendanceSchemaEnsured.has(schemaKey)) return // Skip if already ensured this process lifetime
+        if (process.env.ALLOW_RUNTIME_SCHEMA_FALLBACK !== 'true') {
+            _attendanceSchemaEnsured.add(schemaKey)
+            return
+        }
         try {
             await db.execute(sql`
                 DO $$ 

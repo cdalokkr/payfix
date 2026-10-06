@@ -40,6 +40,7 @@ describe('tenant schema contract', () => {
                 'pending_photo_sha256',
                 'pending_face_embedding_512',
                 'pending_face_embedding_pipeline_version',
+                'diagnostics',
             ]),
         );
         expect(CANONICAL_TENANT_COLUMNS.kiosk_devices).toEqual(
@@ -56,6 +57,7 @@ describe('tenant schema contract', () => {
             expect.arrayContaining([
                 ['profiles', 'profiles_face_embedding_hnsw_idx'],
                 ['biometric_verification_attempts', 'biometric_verification_attempts_created_idx'],
+                ['attendance_sessions', 'attendance_sessions_one_active_per_profile_day'],
             ]),
         );
         expect(TENANT_REQUIRED_FOREIGN_KEYS.length).toBeGreaterThan(40);

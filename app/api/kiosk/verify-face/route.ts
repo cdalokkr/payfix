@@ -8,7 +8,6 @@ import { getKioskSessionCredential, KioskDeviceService } from '@/lib/services/ki
 import { getDistanceFromLatLonInMeters } from '@/lib/utils/geo-utils'
 import { getLocalDateIST } from '@/lib/utils/date-utils'
 import { consumeLivenessChallenge, LIVENESS_FRAME_COUNT } from '@/lib/liveness-challenge'
-import { ProfileService } from '@/lib/services/profile.service'
 import { recordBiometricVerificationAttempt } from '@/lib/services/biometric-verification-attempt.service'
 import { getCachedKioskCandidates } from '@/lib/services/kiosk-candidate-cache'
 
@@ -203,7 +202,6 @@ export async function POST(request: NextRequest) {
         }
 
         return await runWithTenantSchema(pairingInfo.tenantSchema, async () => {
-            await ProfileService.ensurePhotoRequestsSchema()
             const candidates = await getCachedKioskCandidates(pairingInfo.tenantSchema, async () => {
                 return await db.query.profiles.findMany({
                     where: eq(profiles.status, 'active'),

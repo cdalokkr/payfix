@@ -105,7 +105,7 @@ export const CANONICAL_TENANT_COLUMNS: Record<CanonicalTenantTable, readonly str
         'id', 'profile_id', 'pending_photo_url', 'pending_photo_sha256',
         'pending_face_embedding_512', 'pending_face_embedding_pipeline_version',
         'pending_face_embedding', 'status', 'reviewed_by', 'reviewed_at',
-        'rejection_reason', 'created_at',
+        'rejection_reason', 'diagnostics', 'created_at',
     ],
     attendance_sessions: [
         'id', 'attendance_id', 'profile_id', 'date', 'session_number', 'check_in',
@@ -186,6 +186,7 @@ export const TENANT_REQUIRED_INDEXES = [
     ['profiles', 'profiles_face_embedding_hnsw_idx'],
     ['attendance_sessions', 'attendance_sessions_attendance_id_idx'],
     ['attendance_sessions', 'attendance_sessions_profile_date_checkin_idx'],
+    ['attendance_sessions', 'attendance_sessions_one_active_per_profile_day'],
     ['biometric_raw_logs', 'biometric_raw_logs_profile_id_idx'],
     ['kiosk_devices', 'kiosk_devices_created_by_idx'],
     ['kiosk_devices', 'kiosk_devices_location_id_idx'],

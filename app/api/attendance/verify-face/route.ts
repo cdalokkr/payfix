@@ -8,7 +8,6 @@ import { findFrameFailure, hasDistinctNaturalFrames, selectBestValidatedFrame } 
 import { runWithRequestHeaders } from '@/lib/tenant/with-context'
 import { tenantStorage } from '@/lib/tenant/store'
 import { consumeLivenessChallenge, LIVENESS_FRAME_COUNT } from '@/lib/liveness-challenge'
-import { ProfileService } from '@/lib/services/profile.service'
 import { recordBiometricVerificationAttempt } from '@/lib/services/biometric-verification-attempt.service'
 import { issueAttendanceProof } from '@/lib/biometric-attendance-proof'
 import { getLocalDateIST } from '@/lib/utils/date-utils'
@@ -111,9 +110,6 @@ export async function POST(request: NextRequest) {
         const challengeResult = consumeLivenessChallenge(challenge, user.id, 'attendance')
         if (!challengeResult.ok) return respond({ matched: false, is_live: false, error: 'Liveness challenge failed or expired.', code: challengeResult.code }, { status: 403 })
 
-        // Versioning was added after the first develop templates were created.
-        // Ensure the additive columns exist before requesting them from Drizzle.
-        await ProfileService.ensurePhotoRequestsSchema()
         const profile = await db.query.profiles.findFirst({
             where: eq(profiles.id, user.id),
             columns: { face_embedding_512: true, face_embedding_pipeline_version: true },

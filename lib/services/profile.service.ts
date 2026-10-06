@@ -21,6 +21,10 @@ export class ProfileService {
      */
     static async ensurePhotoRequestsSchema() {
         if (this.isSchemaEnsured) return
+        if (process.env.ALLOW_RUNTIME_SCHEMA_FALLBACK !== 'true') {
+            this.isSchemaEnsured = true
+            return
+        }
         try {
             await db.execute(sql`
                 CREATE TABLE IF NOT EXISTS "profile_photo_requests" (

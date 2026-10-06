@@ -63,6 +63,10 @@ export class KioskDeviceService {
     static async ensureSchema() {
         const schemaKey = tenantStorage.getStore()?.tenantSchema || 'kiosk_schema'
         if (_kioskSchemaEnsured.has(schemaKey)) return // Skip if already ensured this process lifetime
+        if (process.env.ALLOW_RUNTIME_SCHEMA_FALLBACK !== 'true') {
+            _kioskSchemaEnsured.add(schemaKey)
+            return
+        }
         try {
             await db.execute(sql`
                 CREATE TABLE IF NOT EXISTS "kiosk_devices" (
