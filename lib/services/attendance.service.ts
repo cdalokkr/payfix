@@ -613,12 +613,20 @@ export class AttendanceService {
             if (!record && !activeSession) {
                 throwAppError('NO_CLOCK_IN_FOUND', 'No clock-in record found to clock out.')
             }
+
+            // Idempotent return: If there is no active session and the user is already checked out,
+            // return the existing attendance record without re-clocking out or altering checkout timestamps.
+            if (!activeSession && record && (record.current_session_status === 'checked_out' || (record.check_out && !record.current_session_status))) {
+                return record
+            }
+
             const attendanceId = activeSession?.attendance_id || record?.id
             if (!attendanceId) throwAppError('DATABASE_ERROR', 'Attendance session is missing its parent record.')
 
+            let updatedSession = null
             if (activeSession) {
-                const diffMins = differenceInMinutes(now, new Date(activeSession.check_in))
-                await tx.update(attendanceSessions).set({
+                const diffMins = Math.max(0, differenceInMinutes(now, new Date(activeSession.check_in)))
+                const [sessionResult] = await tx.update(attendanceSessions).set({
                     check_out: now,
                     working_hours: (diffMins / 60).toFixed(2),
                     checkout_latitude: latitude ? String(latitude) : null,
@@ -626,7 +634,20 @@ export class AttendanceService {
                     checkout_location_name: locationName,
                     status: 'completed',
                     updated_at: now
-                }).where(eq(attendanceSessions.id, activeSession.id))
+                }).where(and(
+                    eq(attendanceSessions.id, activeSession.id),
+                    eq(attendanceSessions.status, 'active')
+                )).returning()
+                updatedSession = sessionResult
+            }
+
+            // If an active session was found initially but could not be transitioned to completed
+            // (e.g. concurrent clock-out already finished it), return the updated record idempotently.
+            if (activeSession && !updatedSession) {
+                const refreshedRecord = await tx.query.attendance.findFirst({
+                    where: and(eq(attendance.profile_id, profileId), eq(attendance.date, today))
+                })
+                if (refreshedRecord) return refreshedRecord
             }
 
             const completedSessions = await tx.query.attendanceSessions.findMany({
