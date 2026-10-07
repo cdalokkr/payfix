@@ -1,5 +1,5 @@
 import { db } from '@/lib/db'
-import { attendance, attendanceSessions, biometricRawLogs, activities, officeSettings, officeClosures, officeLocations, notifications, leaves, profiles } from '@/lib/db/schema'
+import { attendance, attendanceSessions, biometricRawLogs, activities, officeSettings, officeClosures, officeLocations, notifications, leaves, profiles, biometricConsumedProofs } from '@/lib/db/schema'
 import { eq, and, gte, lte, desc, sql, inArray } from 'drizzle-orm'
 import { throwAppError } from '@/lib/errors/app-errors'
 import { SmartCache } from '@/lib/cache/smart-cache'
@@ -228,6 +228,10 @@ export class AttendanceService {
     static async ensureAttendanceSchema() {
         const schemaKey = tenantStorage.getStore()?.tenantSchema || 'public'
         if (_attendanceSchemaEnsured.has(schemaKey)) return // Skip if already ensured this process lifetime
+        if (process.env.ALLOW_RUNTIME_SCHEMA_FALLBACK !== 'true') {
+            _attendanceSchemaEnsured.add(schemaKey)
+            return
+        }
         try {
             await db.execute(sql`
                 DO $$ 
@@ -326,15 +330,16 @@ export class AttendanceService {
     }) {
         await AttendanceService.ensureAttendanceSchema()
         const today = localDate || getLocalDateIST()
+        let consumedProof: ReturnType<typeof consumeAttendanceProof> = null
         if (source === 'mobile') {
             const tenantId = tenantStorage.getStore()?.tenantId
-            const proof = consumeAttendanceProof(verificationProof, {
+            consumedProof = consumeAttendanceProof(verificationProof, {
                 subject: profileId,
                 tenantId: tenantId || '',
                 action: 'clock_in',
                 localDate: today,
             })
-            if (!proof) throwAppError('FORBIDDEN', 'A fresh biometric verification is required before clocking in.')
+            if (!consumedProof) throwAppError('FORBIDDEN', 'A fresh biometric verification is required before clocking in.')
         }
         const dayOfWeek = new Date(today).getDay()
 
@@ -483,6 +488,23 @@ export class AttendanceService {
                 checkin_longitude: longitude ? String(longitude) : null,
                 checkin_location_name: locationName
             })
+
+            // NEW-01: Claim biometric proof atomically in database to prevent multi-instance replays
+            if (source === 'mobile' && consumedProof?.jti) {
+                try {
+                    await tx.insert(biometricConsumedProofs).values({
+                        jti: consumedProof.jti,
+                        profile_id: profileId,
+                        action: 'clock_in',
+                        expires_at: new Date(Date.now() + 2 * 60 * 1000),
+                    })
+                } catch (err: any) {
+                    if (err?.code === '23505' || err?.cause?.code === '23505') {
+                        throwAppError('FORBIDDEN', 'This biometric attendance proof has already been used.')
+                    }
+                }
+            }
+
             await tx.insert(activities).values({
                 user_id: profileId,
                 activity_type: 'data_create',
@@ -528,15 +550,16 @@ export class AttendanceService {
     }) {
         await AttendanceService.ensureAttendanceSchema()
         const today = localDate || getLocalDateIST()
+        let consumedProof: ReturnType<typeof consumeAttendanceProof> = null
         if (source === 'mobile') {
             const tenantId = tenantStorage.getStore()?.tenantId
-            const proof = consumeAttendanceProof(verificationProof, {
+            consumedProof = consumeAttendanceProof(verificationProof, {
                 subject: profileId,
                 tenantId: tenantId || '',
                 action: 'clock_out',
                 localDate: today,
             })
-            if (!proof) throwAppError('FORBIDDEN', 'A fresh biometric verification is required before clocking out.')
+            if (!consumedProof) throwAppError('FORBIDDEN', 'A fresh biometric verification is required before clocking out.')
         }
 
         // Resolve location name & Validate Geofence for clock-out
@@ -609,12 +632,36 @@ export class AttendanceService {
             if (!record && !activeSession) {
                 throwAppError('NO_CLOCK_IN_FOUND', 'No clock-in record found to clock out.')
             }
+
+            // Idempotent return: If there is no active session and the user is already checked out,
+            // return the existing attendance record without re-clocking out or altering checkout timestamps.
+            if (!activeSession && record && (record.current_session_status === 'checked_out' || (record.check_out && !record.current_session_status))) {
+                return record
+            }
+
+            // NEW-01: Claim biometric proof atomically in database to prevent multi-instance replays
+            if (source === 'mobile' && consumedProof?.jti) {
+                try {
+                    await tx.insert(biometricConsumedProofs).values({
+                        jti: consumedProof.jti,
+                        profile_id: profileId,
+                        action: 'clock_out',
+                        expires_at: new Date(Date.now() + 2 * 60 * 1000),
+                    })
+                } catch (err: any) {
+                    if (err?.code === '23505' || err?.cause?.code === '23505') {
+                        throwAppError('FORBIDDEN', 'This biometric attendance proof has already been used.')
+                    }
+                }
+            }
+
             const attendanceId = activeSession?.attendance_id || record?.id
             if (!attendanceId) throwAppError('DATABASE_ERROR', 'Attendance session is missing its parent record.')
 
+            let updatedSession = null
             if (activeSession) {
-                const diffMins = differenceInMinutes(now, new Date(activeSession.check_in))
-                await tx.update(attendanceSessions).set({
+                const diffMins = Math.max(0, differenceInMinutes(now, new Date(activeSession.check_in)))
+                const [sessionResult] = await tx.update(attendanceSessions).set({
                     check_out: now,
                     working_hours: (diffMins / 60).toFixed(2),
                     checkout_latitude: latitude ? String(latitude) : null,
@@ -622,7 +669,20 @@ export class AttendanceService {
                     checkout_location_name: locationName,
                     status: 'completed',
                     updated_at: now
-                }).where(eq(attendanceSessions.id, activeSession.id))
+                }).where(and(
+                    eq(attendanceSessions.id, activeSession.id),
+                    eq(attendanceSessions.status, 'active')
+                )).returning()
+                updatedSession = sessionResult
+            }
+
+            // If an active session was found initially but could not be transitioned to completed
+            // (e.g. concurrent clock-out already finished it), return the updated record idempotently.
+            if (activeSession && !updatedSession) {
+                const refreshedRecord = await tx.query.attendance.findFirst({
+                    where: and(eq(attendance.profile_id, profileId), eq(attendance.date, today))
+                })
+                if (refreshedRecord) return refreshedRecord
             }
 
             const completedSessions = await tx.query.attendanceSessions.findMany({

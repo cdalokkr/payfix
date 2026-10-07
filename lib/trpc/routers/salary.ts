@@ -279,6 +279,7 @@ export const salaryRouter = router({
             payDate: z.string(),
             payReferenceNo: z.string().optional(),
             paymentRemarks: z.string().optional(),
+            idempotencyKey: z.string().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
             return await SalaryService.markSalaryPaid({

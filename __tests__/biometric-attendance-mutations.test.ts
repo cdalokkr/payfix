@@ -287,5 +287,33 @@ describe('proof-gated attendance mutations', () => {
       await expect(clockOut(proof('clock_out'), localDate, { lat: 19.07605, lng: 72.87775 })).resolves.toEqual(attendanceRecord)
       expect(mockedTransaction).toHaveBeenCalledTimes(1)
     })
+
+    it('returns existing attendance record idempotently when user is already checked out', async () => {
+      const alreadyCheckedOutRecord = {
+        id: 'attendance-1',
+        profile_id: profileId,
+        date: localDate,
+        current_session_status: 'checked_out',
+        check_out: new Date('2026-09-03T18:00:00.000Z'),
+      }
+      const tx = {
+        query: {
+          attendanceSessions: {
+            findFirst: jest.fn().mockResolvedValue(null), // no active session
+          },
+          attendance: {
+            findFirst: jest.fn().mockResolvedValue(alreadyCheckedOutRecord),
+          },
+        },
+        update: jest.fn(),
+        insert: jest.fn(),
+      }
+      mockedTransaction.mockImplementation(async (callback) => callback(tx as never))
+
+      await expect(clockOut(proof('clock_out'), localDate, { lat: 19.07605, lng: 72.87775 })).resolves.toEqual(alreadyCheckedOutRecord)
+      // Must not update attendance or insert duplicate activity
+      expect(tx.update).not.toHaveBeenCalled()
+      expect(tx.insert).not.toHaveBeenCalled()
+    })
   })
 })

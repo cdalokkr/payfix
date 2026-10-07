@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { validateMigrationSql } from './validate-saas-migrations.mjs';
+import { validateMigrationSql, approvedPublicSecurityMigrations } from './validate-saas-migrations.mjs';
 
 function failures(sql) {
   return validateMigrationSql(sql, 'fixture.sql');
@@ -93,3 +93,11 @@ test('ignores public references in SQL comments', () => {
     [],
   );
 });
+
+test('tracks approved public security hardening migrations', () => {
+  assert.ok(
+    approvedPublicSecurityMigrations.includes(
+      '20261006111430_restrict_public_biometric_raw_logs.sql',
+    ),
+  );
+});

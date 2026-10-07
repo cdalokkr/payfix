@@ -41,6 +41,7 @@ export const CANONICAL_TENANT_TABLES = [
     'call_logs',
     'salary_payments',
     'biometric_verification_attempts',
+    'biometric_consumed_proofs',
 ] as const;
 
 export type CanonicalTenantTable = (typeof CANONICAL_TENANT_TABLES)[number];
@@ -105,7 +106,7 @@ export const CANONICAL_TENANT_COLUMNS: Record<CanonicalTenantTable, readonly str
         'id', 'profile_id', 'pending_photo_url', 'pending_photo_sha256',
         'pending_face_embedding_512', 'pending_face_embedding_pipeline_version',
         'pending_face_embedding', 'status', 'reviewed_by', 'reviewed_at',
-        'rejection_reason', 'created_at',
+        'rejection_reason', 'diagnostics', 'created_at',
     ],
     attendance_sessions: [
         'id', 'attendance_id', 'profile_id', 'date', 'session_number', 'check_in',
@@ -172,7 +173,7 @@ export const CANONICAL_TENANT_COLUMNS: Record<CanonicalTenantTable, readonly str
     ],
     salary_payments: [
         'id', 'summary_id', 'amount', 'paid_mode', 'pay_date', 'pay_reference_no',
-        'payment_remarks', 'paid_by', 'created_at', 'updated_at',
+        'payment_remarks', 'paid_by', 'idempotency_key', 'created_at', 'updated_at',
     ],
     biometric_verification_attempts: [
         'id', 'profile_id', 'source', 'outcome', 'similarity', 'threshold',
@@ -180,12 +181,16 @@ export const CANONICAL_TENANT_COLUMNS: Record<CanonicalTenantTable, readonly str
         'quality_diagnostics', 'capture_pipeline_version', 'embedding_pipeline_version',
         'backend_engine', 'processing_ms', 'request_id', 'created_at',
     ],
+    biometric_consumed_proofs: [
+        'jti', 'profile_id', 'action', 'expires_at', 'created_at',
+    ],
 };
 
 export const TENANT_REQUIRED_INDEXES = [
     ['profiles', 'profiles_face_embedding_hnsw_idx'],
     ['attendance_sessions', 'attendance_sessions_attendance_id_idx'],
     ['attendance_sessions', 'attendance_sessions_profile_date_checkin_idx'],
+    ['attendance_sessions', 'attendance_sessions_one_active_per_profile_day'],
     ['biometric_raw_logs', 'biometric_raw_logs_profile_id_idx'],
     ['kiosk_devices', 'kiosk_devices_created_by_idx'],
     ['kiosk_devices', 'kiosk_devices_location_id_idx'],
@@ -195,6 +200,8 @@ export const TENANT_REQUIRED_INDEXES = [
     ['biometric_verification_attempts', 'biometric_verification_attempts_profile_created_idx'],
     ['biometric_verification_attempts', 'biometric_verification_attempts_created_idx'],
     ['kiosk_devices', 'kiosk_devices_terminal_id_idx'],
+    ['monthly_attendance_summary', 'monthly_attendance_summary_profile_month_year_idx'],
+    ['salary_payments', 'salary_payments_idempotency_key_idx'],
 ] as const;
 
 export const TENANT_REQUIRED_FOREIGN_KEYS = [
@@ -243,6 +250,7 @@ export const TENANT_REQUIRED_FOREIGN_KEYS = [
     ['call_logs', 'called_by', 'profiles', 'id'],
     ['salary_payments', 'summary_id', 'monthly_attendance_summary', 'id'],
     ['salary_payments', 'paid_by', 'profiles', 'id'],
+    ['biometric_consumed_proofs', 'profile_id', 'profiles', 'id'],
 ] as const;
 
 export interface TenantSchemaContractReport {

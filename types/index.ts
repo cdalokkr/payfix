@@ -241,7 +241,7 @@ export interface MonthlyAttendanceSummary {
   total_present_days: number
   total_absent_days: number
   total_half_days: number
-  total_leaves: number
+  total_leaves: number | string
   total_working_hours: string | null
   total_extra_hours: string | null
   status: 'draft' | 'set_for_salary' | 'payslip_generated'

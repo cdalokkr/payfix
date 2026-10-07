@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, varchar, date, numeric, integer, boolean, pgEnum, jsonb, real } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, varchar, date, numeric, integer, boolean, pgEnum, jsonb, real, uniqueIndex } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // Enums
@@ -410,7 +410,7 @@ export const monthlyAttendanceSummary = pgTable('monthly_attendance_summary', {
     total_present_days: integer('total_present_days').notNull().default(0),
     total_absent_days: integer('total_absent_days').notNull().default(0),
     total_half_days: integer('total_half_days').notNull().default(0),
-    total_leaves: integer('total_leaves').notNull().default(0),
+    total_leaves: numeric('total_leaves', { precision: 5, scale: 1 }).notNull().default('0'),
     total_working_hours: numeric('total_working_hours', { precision: 8, scale: 2 }).default('0'),
     total_extra_hours: numeric('total_extra_hours', { precision: 8, scale: 2 }).default('0'),
     status: text('status').notNull().default('draft'), // 'draft' | 'set_for_salary' | 'payslip_generated'
@@ -431,7 +431,9 @@ export const monthlyAttendanceSummary = pgTable('monthly_attendance_summary', {
     paid_at: timestamp('paid_at', { withTimezone: true }),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
-});
+}, (table) => [
+    uniqueIndex('monthly_attendance_summary_profile_month_year_idx').on(table.profile_id, table.month, table.year),
+]);
 
 // ============================================
 // Complaint & Ticket Management Tables
@@ -773,9 +775,12 @@ export const salaryPayments = pgTable('salary_payments', {
     pay_reference_no: text('pay_reference_no'),
     payment_remarks: text('payment_remarks'),
     paid_by: uuid('paid_by').references(() => profiles.id, { onDelete: 'set null' }),
+    idempotency_key: text('idempotency_key'),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
-});
+}, (table) => [
+    uniqueIndex('salary_payments_idempotency_key_idx').on(table.idempotency_key),
+]);
 
 export const salaryPaymentsRelations = relations(salaryPayments, ({ one }) => ({
     summary: one(monthlyAttendanceSummary, {
@@ -818,6 +823,21 @@ export const biometricRawLogsRelations = relations(biometricRawLogs, ({ one }) =
 export const biometricVerificationAttemptsRelations = relations(biometricVerificationAttempts, ({ one }) => ({
     profile: one(profiles, {
         fields: [biometricVerificationAttempts.profile_id],
+        references: [profiles.id],
+    }),
+}));
+
+export const biometricConsumedProofs = pgTable('biometric_consumed_proofs', {
+    jti: text('jti').primaryKey(),
+    profile_id: uuid('profile_id').references(() => profiles.id, { onDelete: 'cascade' }),
+    action: text('action').notNull(),
+    expires_at: timestamp('expires_at', { withTimezone: true }).notNull(),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
+export const biometricConsumedProofsRelations = relations(biometricConsumedProofs, ({ one }) => ({
+    profile: one(profiles, {
+        fields: [biometricConsumedProofs.profile_id],
         references: [profiles.id],
     }),
 }));

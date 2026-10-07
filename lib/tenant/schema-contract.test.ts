@@ -20,9 +20,10 @@ const alignmentMigration = readFileSync(
 
 describe('tenant schema contract', () => {
     it('contains every tenant business table and excludes control-plane tables', () => {
-        expect(CANONICAL_TENANT_TABLES).toHaveLength(30);
+        expect(CANONICAL_TENANT_TABLES).toHaveLength(31);
         expect(CANONICAL_TENANT_TABLES).toContain('biometric_verification_attempts');
         expect(CANONICAL_TENANT_TABLES).toContain('salary_payments');
+        expect(CANONICAL_TENANT_TABLES).toContain('biometric_consumed_proofs');
         expect(CANONICAL_TENANT_TABLES).not.toContain('tenants' as never);
         expect(CANONICAL_TENANT_TABLES).not.toContain('tenant_branding' as never);
     });
@@ -40,6 +41,7 @@ describe('tenant schema contract', () => {
                 'pending_photo_sha256',
                 'pending_face_embedding_512',
                 'pending_face_embedding_pipeline_version',
+                'diagnostics',
             ]),
         );
         expect(CANONICAL_TENANT_COLUMNS.kiosk_devices).toEqual(
@@ -52,10 +54,16 @@ describe('tenant schema contract', () => {
                 'credential_expires_at',
             ]),
         );
+        expect(CANONICAL_TENANT_COLUMNS.salary_payments).toEqual(
+            expect.arrayContaining(['idempotency_key']),
+        );
         expect(TENANT_REQUIRED_INDEXES).toEqual(
             expect.arrayContaining([
                 ['profiles', 'profiles_face_embedding_hnsw_idx'],
                 ['biometric_verification_attempts', 'biometric_verification_attempts_created_idx'],
+                ['attendance_sessions', 'attendance_sessions_one_active_per_profile_day'],
+                ['monthly_attendance_summary', 'monthly_attendance_summary_profile_month_year_idx'],
+                ['salary_payments', 'salary_payments_idempotency_key_idx'],
             ]),
         );
         expect(TENANT_REQUIRED_FOREIGN_KEYS.length).toBeGreaterThan(40);

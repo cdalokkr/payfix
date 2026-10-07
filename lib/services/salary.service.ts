@@ -388,7 +388,7 @@ export class SalaryService {
                 total_present_days: metrics.presentDays,
                 total_absent_days: metrics.absentDays,
                 total_half_days: metrics.halfDays,
-                total_leaves: metrics.leaveDays,
+                total_leaves: String(metrics.leaveDays),
                 total_working_hours: metrics.totalWorkingHours.toFixed(2),
                 total_extra_hours: metrics.totalExtraHours.toFixed(2),
                 salary_breakdown: {
@@ -416,7 +416,7 @@ export class SalaryService {
                     total_present_days: metrics.presentDays,
                     total_absent_days: metrics.absentDays,
                     total_half_days: metrics.halfDays,
-                    total_leaves: metrics.leaveDays,
+                    total_leaves: String(metrics.leaveDays),
                     total_working_hours: metrics.totalWorkingHours.toFixed(2),
                     total_extra_hours: metrics.totalExtraHours.toFixed(2),
                     updated_at: new Date(),
@@ -543,7 +543,7 @@ export class SalaryService {
                 total_present_days: metrics.presentDays,
                 total_absent_days: metrics.absentDays,
                 total_half_days: metrics.halfDays,
-                total_leaves: metrics.leaveDays,
+                total_leaves: String(metrics.leaveDays),
                 total_working_hours: metrics.totalWorkingHours.toFixed(2),
                 total_extra_hours: metrics.totalExtraHours.toFixed(2),
                 gross_salary: grossSalary.toFixed(2),
@@ -707,17 +707,9 @@ export class SalaryService {
 
         const closureDates = new Set(closures.map(c => c.date))
 
-        // Calculate working days & required working days
-        const totalWorkingDays = lastDay // Month calendar days is the default working days
-        let requiredWorkingDays = 0
-        for (let d = 1; d <= lastDay; d++) {
-            const dateObj = new Date(year, month - 1, d)
-            const dayOfWeek = dateObj.getDay()
-            const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-            if (!offDays.includes(dayOfWeek) && !closureDates.has(dateStr)) {
-                requiredWorkingDays++
-            }
-        }
+        // PAY-01: Company policy enforces per-day salary rate strictly calculated from
+        // the total calendar days in the month (e.g. 28/29 for Feb, 30 for Apr/Jun/Sep/Nov, 31 for Jan/Mar/May/Jul/Aug/Oct/Dec).
+        const totalWorkingDays = lastDay
 
         const results: any[] = []
 
@@ -852,7 +844,7 @@ export class SalaryService {
                         presentDays,
                         halfDays,
                         absentDays,
-                        leaveDays: Math.round(leaveDays),
+                        leaveDays,
                         totalWorkingHours,
                         totalExtraHours,
                         extraDays,
@@ -871,11 +863,25 @@ export class SalaryService {
                     total_present_days: presentDays,
                     total_absent_days: absentDays,
                     total_half_days: halfDays,
-                    total_leaves: Math.round(leaveDays),
+                    total_leaves: String(leaveDays),
                     total_working_hours: totalWorkingHours.toFixed(2),
                     total_extra_hours: totalExtraHours.toFixed(2),
                     salary_breakdown: { extra_days: extraDays, source: 'compiled' },
                     status: 'draft',
+                }).onConflictDoUpdate({
+                    target: [monthlyAttendanceSummary.profile_id, monthlyAttendanceSummary.month, monthlyAttendanceSummary.year],
+                    set: {
+                        total_working_days: totalWorkingDays,
+                        total_present_days: presentDays,
+                        total_absent_days: absentDays,
+                        total_half_days: halfDays,
+                        total_leaves: String(leaveDays),
+                        total_working_hours: totalWorkingHours.toFixed(2),
+                        total_extra_hours: totalExtraHours.toFixed(2),
+                        salary_breakdown: { extra_days: extraDays, source: 'compiled' },
+                        updated_at: new Date(),
+                    },
+                    where: eq(monthlyAttendanceSummary.status, 'draft'),
                 }).returning()
                 results.push(newSummary)
             }
@@ -1392,6 +1398,7 @@ export class SalaryService {
         payReferenceNo,
         paymentRemarks,
         paidBy,
+        idempotencyKey,
     }: {
         summaryId: string
         paidAmount: number
@@ -1400,61 +1407,82 @@ export class SalaryService {
         payReferenceNo?: string
         paymentRemarks?: string
         paidBy: string
+        idempotencyKey?: string
     }) {
-        const summary = await db.query.monthlyAttendanceSummary.findFirst({
-            where: eq(monthlyAttendanceSummary.id, summaryId),
-            with: {
-                payments: true
+        return await db.transaction(async (tx) => {
+            // 1. Idempotency check: if an idempotency key was supplied, check if payment already recorded
+            if (idempotencyKey) {
+                const existingPayment = await tx.query.salaryPayments.findFirst({
+                    where: eq(salaryPayments.idempotency_key, idempotencyKey)
+                })
+                if (existingPayment) {
+                    const existingSummary = await tx.query.monthlyAttendanceSummary.findFirst({
+                        where: eq(monthlyAttendanceSummary.id, summaryId)
+                    })
+                    if (existingSummary) return existingSummary
+                }
             }
-        })
 
-        if (!summary) {
-            throw new TRPCError({ code: 'NOT_FOUND', message: 'Payslip summary not found' })
-        }
-        if (summary.status !== 'payslip_generated') {
-            throw new TRPCError({ code: 'BAD_REQUEST', message: 'Payslip must be generated before marking as paid' })
-        }
+            // 2. Lock the summary row with FOR UPDATE to prevent concurrent payment races
+            const [summary] = await tx
+                .select()
+                .from(monthlyAttendanceSummary)
+                .where(eq(monthlyAttendanceSummary.id, summaryId))
+                .for('update')
 
-        const netSalary = Number(summary.take_home) || 0
-        const existingPaymentsSum = summary.payments?.reduce((s, p) => s + (Number(p.amount) || 0), 0) || 0
-        const remainingBalance = netSalary - existingPaymentsSum
+            if (!summary) {
+                throw new TRPCError({ code: 'NOT_FOUND', message: 'Payslip summary not found' })
+            }
+            if (summary.status !== 'payslip_generated') {
+                throw new TRPCError({ code: 'BAD_REQUEST', message: 'Payslip must be generated before marking as paid' })
+            }
 
-        if (Number(paidAmount.toFixed(2)) > Number(remainingBalance.toFixed(2))) {
-            throw new TRPCError({
-                code: 'BAD_REQUEST',
-                message: `Payment amount of ${paidAmount} exceeds the remaining balance of ${remainingBalance}`
+            // 3. Calculate remaining balance inside the lock
+            const currentPayments = await tx.query.salaryPayments.findMany({
+                where: eq(salaryPayments.summary_id, summaryId)
             })
-        }
+            const existingPaymentsSum = currentPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0)
+            const netSalary = Number(summary.take_home) || 0
+            const remainingBalance = netSalary - existingPaymentsSum
 
-        // 1. Insert new payment record
-        await db.insert(salaryPayments).values({
-            summary_id: summaryId,
-            amount: String(paidAmount),
-            paid_mode: paidMode,
-            pay_date: payDate,
-            pay_reference_no: payReferenceNo || null,
-            payment_remarks: paymentRemarks || null,
-            paid_by: paidBy,
-            created_at: new Date(),
-            updated_at: new Date()
+            if (Number(paidAmount.toFixed(2)) > Number(remainingBalance.toFixed(2))) {
+                throw new TRPCError({
+                    code: 'BAD_REQUEST',
+                    message: `Payment amount of ${paidAmount} exceeds the remaining balance of ${remainingBalance}`
+                })
+            }
+
+            // 4. Insert new payment record
+            await tx.insert(salaryPayments).values({
+                summary_id: summaryId,
+                amount: String(paidAmount),
+                paid_mode: paidMode,
+                pay_date: payDate,
+                pay_reference_no: payReferenceNo || null,
+                payment_remarks: paymentRemarks || null,
+                paid_by: paidBy,
+                idempotency_key: idempotencyKey || null,
+                created_at: new Date(),
+                updated_at: new Date()
+            })
+
+            // 5. Calculate new total paid
+            const newTotalPaid = existingPaymentsSum + paidAmount
+
+            // 6. Update monthlyAttendanceSummary with denormalized payment details
+            const [updated] = await tx.update(monthlyAttendanceSummary).set({
+                paid_amount: String(newTotalPaid),
+                paid_mode: paidMode,
+                pay_date: payDate,
+                pay_reference_no: payReferenceNo || null,
+                payment_remarks: paymentRemarks || null,
+                paid_by: paidBy,
+                paid_at: new Date(),
+                updated_at: new Date(),
+            }).where(eq(monthlyAttendanceSummary.id, summaryId)).returning()
+
+            return updated
         })
-
-        // 2. Calculate new total paid
-        const newTotalPaid = existingPaymentsSum + paidAmount
-
-        // 3. Update monthlyAttendanceSummary with denormalized payment details
-        const [updated] = await db.update(monthlyAttendanceSummary).set({
-            paid_amount: String(newTotalPaid),
-            paid_mode: paidMode,
-            pay_date: payDate,
-            pay_reference_no: payReferenceNo || null,
-            payment_remarks: paymentRemarks || null,
-            paid_by: paidBy,
-            paid_at: new Date(),
-            updated_at: new Date(),
-        }).where(eq(monthlyAttendanceSummary.id, summaryId)).returning()
-
-        return updated
     }
 
     /** Get salary passbook/paybook for an employee (self-service) */
@@ -1571,7 +1599,7 @@ export class SalaryService {
                                         total_present_days: record.totalPresent,
                                         total_half_days: record.totalHalfDays,
                                         total_absent_days: record.totalAbsent,
-                                        total_leaves: record.totalLeaves,
+                                        total_leaves: String(record.totalLeaves),
                                         salary_breakdown: {
                                             ...currentBD,
                                             extra_days: record.extraDays,
@@ -1622,7 +1650,7 @@ export class SalaryService {
                             total_present_days: record.totalPresent,
                             total_half_days: record.totalHalfDays,
                             total_absent_days: record.totalAbsent,
-                            total_leaves: record.totalLeaves,
+                            total_leaves: String(record.totalLeaves),
                             salary_breakdown: { extra_days: record.extraDays, source: 'excel_upload' },
                             status: 'draft',
                         })
