@@ -11,7 +11,7 @@ import { l2Normalize } from '../face-threshold';
 
 // Configure ONNX WASM paths to load from reliable CDN / public assets
 if (typeof window !== 'undefined') {
-    ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/';
+    ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/';
     // Limit thread count for low-end mobile devices
     ort.env.wasm.numThreads = 2;
     // Enable proxy worker if available

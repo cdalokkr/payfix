@@ -31,5 +31,7 @@ export default defineConfig([
     'build/**',
     'next-env.d.ts',
     'docs/archive/**',
+    '**/.kilo/**',
+    '**/.agents/**',
   ]),
 ])
