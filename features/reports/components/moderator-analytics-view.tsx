@@ -13,7 +13,19 @@ import { useTheme } from "next-themes"
 import { useUserRealtimeDashboard } from "@/hooks/use-realtime-dashboard-data"
 import { AnalyticsTab } from "./analytics-tab"
 import { MetricCard } from '@/components/dashboard/metric-card'
-import { AdminActivityChart } from "./admin-activity-chart"
+import dynamic from 'next/dynamic'
+
+const AdminActivityChart = dynamic(
+    () => import('./admin-activity-chart').then(mod => mod.AdminActivityChart),
+    {
+        ssr: false,
+        loading: () => (
+            <div className="h-[300px] w-full animate-pulse rounded-lg bg-muted/40 flex items-center justify-center">
+                <span className="text-xs text-muted-foreground">Loading chart...</span>
+            </div>
+        )
+    }
+)
 import { useProfile } from '@/lib/context/profile-context'
 
 export function ModeratorAnalyticsView() {

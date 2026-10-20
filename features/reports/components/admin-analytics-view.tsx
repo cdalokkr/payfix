@@ -4,8 +4,31 @@ import React, { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DashboardPageLayout } from "@/components/dashboard/dashboard-page-layout"
-import { AdminActivityChart } from "./admin-activity-chart"
-import { UserActivityChart } from "./user-activity-chart"
+import dynamic from 'next/dynamic'
+
+const AdminActivityChart = dynamic(
+    () => import('./admin-activity-chart').then(mod => mod.AdminActivityChart),
+    {
+        ssr: false,
+        loading: () => (
+            <div className="h-[300px] w-full animate-pulse rounded-lg bg-muted/40 flex items-center justify-center">
+                <span className="text-xs text-muted-foreground">Loading chart...</span>
+            </div>
+        )
+    }
+)
+
+const UserActivityChart = dynamic(
+    () => import('./user-activity-chart').then(mod => mod.UserActivityChart),
+    {
+        ssr: false,
+        loading: () => (
+            <div className="h-[300px] w-full animate-pulse rounded-lg bg-muted/40 flex items-center justify-center">
+                <span className="text-xs text-muted-foreground">Loading chart...</span>
+            </div>
+        )
+    }
+)
 import { Users, Activity, Shield, User, RefreshCw, AlertCircle, UserCheck, UserX } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { trpc } from "@/lib/trpc/client"
