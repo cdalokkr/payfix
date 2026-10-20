@@ -4,7 +4,31 @@ import React, { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DashboardPageLayout } from "@/components/dashboard/dashboard-page-layout"
-import { ActivityBarChart, UserGrowthChart } from "./reports-charts"
+import dynamic from 'next/dynamic'
+
+const ActivityBarChart = dynamic(
+    () => import('./reports-charts').then(mod => mod.ActivityBarChart),
+    {
+        ssr: false,
+        loading: () => (
+            <div className="h-[300px] w-full animate-pulse rounded-lg bg-muted/40 flex items-center justify-center">
+                <span className="text-xs text-muted-foreground">Loading chart...</span>
+            </div>
+        )
+    }
+)
+
+const UserGrowthChart = dynamic(
+    () => import('./reports-charts').then(mod => mod.UserGrowthChart),
+    {
+        ssr: false,
+        loading: () => (
+            <div className="h-[300px] w-full animate-pulse rounded-lg bg-muted/40 flex items-center justify-center">
+                <span className="text-xs text-muted-foreground">Loading chart...</span>
+            </div>
+        )
+    }
+)
 import { Activity, Clock, FileText, Star, RefreshCw, AlertCircle, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CalendarDateRangePicker } from "@/components/dashboard/date-range-picker"
