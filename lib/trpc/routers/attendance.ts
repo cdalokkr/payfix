@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { router, protectedProcedure, adminProcedure, moderatorProcedure } from '../server'
 import { TRPCError } from '@trpc/server'
 import { attendance, profiles, leaves, officeSettings, officeClosures, activities, notifications } from '@/lib/db/schema'
-import { eq, and, gte, lte, desc, sql, inArray, or } from 'drizzle-orm'
+import { eq, and, gte, lte, desc, sql, inArray, or, isNull } from 'drizzle-orm'
 import { AttendanceService } from '@/lib/services/attendance.service'
 import { LeavesService } from '@/lib/services/leaves.service'
 import { invalidateDashboardCache } from './admin-dashboard-optimized'
@@ -313,6 +313,125 @@ export const attendanceRouter = router({
             return result
         }),
 
+    verifySession: moderatorProcedure
+        .input(z.object({
+            sessionId: z.string().uuid(),
+            attendanceId: z.string().uuid(),
+            status: z.enum(['verified', 'rejected']),
+            remarks: z.string().optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+            const result = await AttendanceService.verifyAttendanceSession({
+                sessionId: input.sessionId,
+                attendanceId: input.attendanceId,
+                status: input.status,
+                remarks: input.remarks,
+                verifiedBy: ctx.profile.id,
+                verifierName: ctx.profile.full_name || ctx.profile.email
+            })
+
+            invalidateDashboardCache()
+
+            broadcastServerEvent('dashboard_sync', {
+                action: 'verify-session',
+                targetUserId: result.session.profile_id
+            }, result.session.profile_id)
+
+            broadcastServerEvent('attendance_update', {
+                action: input.status === 'verified' ? 'session_verified' : 'session_rejected',
+                employeeId: result.session.profile_id,
+                performedById: ctx.profile.id,
+                performedByName: ctx.profile.full_name,
+                newStatus: input.status,
+                date: result.session.date,
+                sessionId: input.sessionId,
+                attendanceId: input.attendanceId,
+                remarks: input.remarks
+            }, result.session.profile_id)
+
+            return result
+        }),
+
+    updateSession: moderatorProcedure
+        .input(z.object({
+            sessionId: z.string().uuid(),
+            attendanceId: z.string().uuid(),
+            checkIn: z.string(),
+            checkOut: z.string().nullable().optional(),
+            status: z.enum(['active', 'completed', 'verified', 'rejected']).optional(),
+            remarks: z.string().optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+            const result = await AttendanceService.updateAttendanceSession({
+                sessionId: input.sessionId,
+                attendanceId: input.attendanceId,
+                checkIn: input.checkIn,
+                checkOut: input.checkOut,
+                status: input.status,
+                remarks: input.remarks,
+                updatedBy: ctx.profile.id,
+                updaterName: ctx.profile.full_name || ctx.profile.email
+            })
+
+            invalidateDashboardCache()
+
+            broadcastServerEvent('dashboard_sync', {
+                action: 'update-session',
+                targetUserId: result.session.profile_id
+            }, result.session.profile_id)
+
+            broadcastServerEvent('attendance_update', {
+                action: 'session_updated',
+                employeeId: result.session.profile_id,
+                performedById: ctx.profile.id,
+                performedByName: ctx.profile.full_name,
+                date: result.session.date,
+                sessionId: input.sessionId,
+                attendanceId: input.attendanceId,
+                remarks: input.remarks
+            }, result.session.profile_id)
+
+            return result
+        }),
+
+    batchUpdateSessions: moderatorProcedure
+        .input(z.object({
+            attendanceId: z.string().uuid(),
+            sessions: z.array(z.object({
+                id: z.string().uuid(),
+                check_in: z.string().optional(),
+                check_out: z.string().nullable().optional(),
+                status: z.enum(['active', 'completed', 'verified', 'rejected']).optional(),
+                remarks: z.string().nullable().optional(),
+            }))
+        }))
+        .mutation(async ({ ctx, input }) => {
+            const result = await AttendanceService.batchUpdateAttendanceSessions({
+                attendanceId: input.attendanceId,
+                sessions: input.sessions,
+                updatedBy: ctx.profile.id,
+                updaterName: ctx.profile.full_name || ctx.profile.email
+            })
+
+            invalidateDashboardCache()
+
+            broadcastServerEvent('dashboard_sync', {
+                action: 'batch-update-sessions',
+                targetUserId: result.attendance?.profile_id
+            }, result.attendance?.profile_id)
+
+            broadcastServerEvent('attendance_update', {
+                action: 'batch_sessions_updated',
+                employeeId: result.attendance?.profile_id,
+                performedById: ctx.profile.id,
+                performedByName: ctx.profile.full_name,
+                attendanceId: input.attendanceId,
+                sessionsCount: input.sessions.length
+            }, result.attendance?.profile_id)
+
+            return result
+        }),
+
     bulkVerifyAttendance: moderatorProcedure
         .input(z.object({
             ids: z.array(z.string()),
@@ -525,8 +644,13 @@ export const attendanceRouter = router({
         }),
 
     getOfficeClosures: protectedProcedure
-        .query(async () => {
-            return await SmartCache.getOfficeClosuresCached()
+        .input(z.object({ locationId: z.string().uuid().optional() }).optional())
+        .query(async ({ input }) => {
+            const closures = await SmartCache.getOfficeClosuresCached()
+            if (input?.locationId) {
+                return closures.filter((c: any) => !c.location_id || c.location_id === input.locationId)
+            }
+            return closures
         }),
 
     addOfficeClosure: adminProcedure
@@ -534,24 +658,30 @@ export const attendanceRouter = router({
             date: z.string(),
             reason: z.string(),
             type: z.enum(['holiday', 'closed']),
+            locationId: z.string().uuid().nullable().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
-            // Check for existing closure on same date
+            const targetLocId = input.locationId || null;
+            // Check for existing closure on same date for same scope
             const existing = await ctx.db.query.officeClosures.findFirst({
-                where: eq(officeClosures.date, input.date)
+                where: and(
+                    eq(officeClosures.date, input.date),
+                    targetLocId ? eq(officeClosures.location_id, targetLocId) : isNull(officeClosures.location_id)
+                )
             })
 
             if (existing) {
                 throw new TRPCError({
                     code: 'CONFLICT',
-                    message: `A closure already exists for ${input.date}`
+                    message: `A closure already exists for ${input.date} for this scope.`
                 })
             }
 
             const [data] = await ctx.db.insert(officeClosures).values({
                 date: input.date,
                 reason: input.reason,
-                type: input.type
+                type: input.type,
+                location_id: targetLocId,
             }).returning()
 
             if (!data) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to add closure' })

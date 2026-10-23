@@ -8,6 +8,7 @@
 'use client'
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react'
+import { useProfile } from '@/lib/context/profile-context'
 import { createClient } from '@/lib/supabase/client'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import {
@@ -323,6 +324,8 @@ export const RealTimeNotifications: React.FC<RealTimeNotificationsProps> = ({
 
     const finalConfig = useMemo(() => ({ ...DEFAULT_CONFIG, ...config }), [config])
     const supabase = createClient()
+    const { profile } = useProfile()
+    const tenantId = profile?.tenant_id
 
     // Convert real-time event to notification
     const createNotificationFromEvent = useCallback((event: AnyRealtimeEvent): NotificationItem => {

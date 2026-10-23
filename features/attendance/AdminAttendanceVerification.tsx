@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { trpc } from "@/lib/trpc/client"
-import { Search, Loader2, FileText, Save, Clock as ClockIcon, CheckCircle2 as CheckCircleIcon, XCircle as XCircleIcon, CalendarMinus as CalendarMinusIcon, Upload, Users as UsersIcon } from "lucide-react"
+import { Search, Loader2, FileText, Save, Clock as ClockIcon, CheckCircle2 as CheckCircleIcon, XCircle as XCircleIcon, CalendarMinus as CalendarMinusIcon, Upload, Users as UsersIcon, UserX as UserXIcon, LogIn as LogInIcon, LogOut as LogOutIcon, Fingerprint as FingerprintIcon, AlertCircle as AlertCircleIcon, Layers as LayersIcon } from "lucide-react"
 import { toast } from "sonner"
 import { getEventBroadcaster } from "@/lib/events/event-broadcaster"
 import { Label } from "@/components/ui/label"
@@ -22,6 +22,7 @@ import { DateRange } from "react-day-picker"
 import { generateCSV, generatePDF, downloadFile } from "@/lib/report-utils"
 import { AttendanceTableToolbar } from "./attendance-table-toolbar"
 import { AttendanceEditDialog } from "./attendance-edit-dialog"
+import { AttendanceSessionsDrawer } from "./attendance-sessions-drawer"
 import { BulkDailyUpload } from "./BulkDailyUpload"
 import { CardShell } from "./CardShell"
 import { Badge } from "@/components/ui/badge"
@@ -48,10 +49,12 @@ export function AdminAttendanceVerification() {
     const [isEditOpen, setIsEditOpen] = useState(false)
     const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false)
     const [selectedRecord, setSelectedRecord] = useState<any>(null)
+    const [sessionsDialogRecord, setSessionsDialogRecord] = useState<any>(null)
     const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({})
     // Default to current date (IST) and all statuses for full logging visibility
     const [verificationFilter, setVerificationFilter] = useState('all')
     const [dayTypeFilter, setDayTypeFilter] = useState('all')
+    const [activeQuickFilter, setActiveQuickFilter] = useState<'all' | 'in_office' | 'checked_out' | 'verified' | 'pending' | 'rejected' | 'leave' | 'absent'>('all')
     const [isFiltering, setIsFiltering] = useState(false)
 
     // Helper wrappers for filter changes to simulate a quick tactile spinner
@@ -126,14 +129,6 @@ export function AdminAttendanceVerification() {
     const { profile } = useProfile()
     const { subscribe } = useSharedManagementChannel()
 
-    const bulkVerifyMutation = trpc.attendance.bulkVerifyAttendance.useMutation({
-        onSuccess: () => {
-            toast.success('Successfully updated records')
-            setRowSelection({})
-            utils.attendance.getAttendance.invalidate()
-        },
-        onError: (error) => toast.error(error.message)
-    })
     // Queries with real-time friendly settings - staleTime: 0 ensures immediate refetch on invalidation
     const { data: attendance, isLoading, isFetching, refetch: refetchAttendance } = trpc.attendance.getAttendance.useQuery(
         {
@@ -147,6 +142,16 @@ export function AdminAttendanceVerification() {
             placeholderData: (prev) => prev, // Retain old data on screen while background refetch runs
         }
     )
+
+    const bulkVerifyMutation = trpc.attendance.bulkVerifyAttendance.useMutation({
+        onSuccess: () => {
+            toast.success('Successfully updated records')
+            setRowSelection({})
+            utils.attendance.getAttendance.invalidate()
+            refetchAttendance()
+        },
+        onError: (error) => toast.error(error.message)
+    })
     const { data: settings } = trpc.attendance.getOfficeSettings.useQuery()
 
     // Subscribe to shared management channel for real-time updates
@@ -194,6 +199,7 @@ export function AdminAttendanceVerification() {
                 toast.success(`Attendance marked as ${data.status}`)
             }
             utils.attendance.getAttendance.invalidate()
+            refetchAttendance()
         },
         onError: (error) => {
             if (!isBulkProcessingRef.current) {
@@ -218,8 +224,9 @@ export function AdminAttendanceVerification() {
             // Mark verification dialog as success immediately
             setVerificationDialog(prev => ({ ...prev, status: 'success' }))
 
-            // Invalidate/refetch in background in async mode
-            utils.attendance.getAttendance.invalidate()
+            // Invalidate/refetch immediately in active mode so KPI metric cards update
+            await utils.attendance.getAttendance.invalidate()
+            refetchAttendance()
 
         } catch (error: any) {
             setVerificationDialog(prev => ({
@@ -266,8 +273,9 @@ export function AdminAttendanceVerification() {
             }))
         }
 
-        // Sync/refresh in background after all records complete
-        utils.attendance.getAttendance.invalidate()
+        // Sync/refresh immediately after all records complete
+        await utils.attendance.getAttendance.invalidate()
+        refetchAttendance()
 
         setBulkVerificationDialog(prev => ({
             ...prev,
@@ -287,11 +295,9 @@ export function AdminAttendanceVerification() {
     const manualUpdateMutation = trpc.attendance.manualUpdate.useMutation({
         onSuccess: (data: any) => {
             toast.success("Record updated successfully")
-            // Small delay to show success state on button
-            setTimeout(() => {
-                handleOpenChange(false)
-                utils.attendance.getAttendance.invalidate()
-            }, 1000)
+            handleOpenChange(false)
+            utils.attendance.getAttendance.invalidate()
+            refetchAttendance()
         },
         onError: (error) => toast.error(error.message)
     })
@@ -437,7 +443,34 @@ export function AdminAttendanceVerification() {
 
     const filteredAttendance = useMemo(() => {
         return searchFilteredAttendance?.filter(record => {
-            // Match verification filter
+            // Match dynamic quick metric card filter
+            if (activeQuickFilter !== 'all') {
+                const sessions: any[] = record.sessions || [];
+                const isCurrentlyIn = record.current_session_status === 'checked_in' || 
+                    sessions.some((s: any) => !s.check_out && s.status !== 'rejected');
+                const hasPunches = Boolean(record.check_in || sessions.length > 0);
+
+                if (activeQuickFilter === 'in_office') {
+                    if (!isCurrentlyIn) return false;
+                } else if (activeQuickFilter === 'checked_out') {
+                    if (isCurrentlyIn || !hasPunches) return false;
+                } else if (activeQuickFilter === 'verified') {
+                    const hasUnverified = record.status === 'pending' || sessions.some((s: any) => s.status !== 'verified' && s.status !== 'rejected');
+                    if (record.status !== 'verified' || hasUnverified) return false;
+                } else if (activeQuickFilter === 'pending') {
+                    const hasUnverified = record.status === 'pending' || sessions.some((s: any) => s.status !== 'verified' && s.status !== 'rejected');
+                    if (!hasPunches || !hasUnverified) return false;
+                } else if (activeQuickFilter === 'rejected') {
+                    const isRejected = record.status === 'rejected' || sessions.some((s: any) => s.status === 'rejected');
+                    if (!isRejected) return false;
+                } else if (activeQuickFilter === 'leave') {
+                    if (getRecordDayType(record) !== 'On Leave') return false;
+                } else if (activeQuickFilter === 'absent') {
+                    if (getRecordDayType(record) !== 'Absent') return false;
+                }
+            }
+
+            // Match verification dropdown filter
             let matchesVerification = true;
             const status = record.status as string;
             
@@ -451,7 +484,7 @@ export function AdminAttendanceVerification() {
                 }
             }
             
-            // Match day type filter
+            // Match day type dropdown filter
             let matchesDayType = true;
             if (dayTypeFilter !== 'all') {
                 matchesDayType = getRecordDayType(record) === dayTypeFilter;
@@ -459,7 +492,7 @@ export function AdminAttendanceVerification() {
             
             return matchesVerification && matchesDayType;
         })
-    }, [searchFilteredAttendance, verificationFilter, dayTypeFilter])
+    }, [searchFilteredAttendance, activeQuickFilter, verificationFilter, dayTypeFilter])
 
     const handleEdit = useCallback((record: any) => {
         setRowSelection({ [record.id]: true })
@@ -508,6 +541,7 @@ export function AdminAttendanceVerification() {
             })
         },
         onEdit: handleEdit,
+        onViewSessions: (record) => setSessionsDialogRecord(record),
         isVerifying: false, // Dialog handles its own loading status
         scheduledHoursMap
     }), [scheduledHoursMap, handleEdit])
@@ -515,65 +549,70 @@ export function AdminAttendanceVerification() {
     const getRowId = useCallback((row: any) => row.id, [])
 
     const stats = useMemo(() => {
-        const list = searchFilteredAttendance || [];
+        const list = attendance || [];
         
-        let pending = 0;
-        let verified = 0;
-        let rejected = 0;
-        let present = 0;
+        let inOffice = 0;       // Currently in office (active session open now)
+        let checkedOut = 0;     // Punched today and currently checked out
+        let verified = 0;       // Fully verified records
+        let pending = 0;        // Needs verification (pending sessions or pending record)
+        let rejected = 0;       // Rejected sessions or record
+        let leave = 0;          // On leave
+        let totalSessionsCount = 0; // Total punch sessions recorded across all employees today
         let halfDay = 0;
-        let weekly_off = 0;
-        let leave = 0;
         let absent = 0;
-        let holiday = 0;
-        let extra_day = 0;
-        let noOfficeOut = 0;
-        let officeIn = 0;
-        
+
         list.forEach(a => {
             const dayType = getRecordDayType(a);
             const status = a.status as string;
+            const sessions: any[] = a.sessions || [];
             
-            if (a.check_in) {
-                officeIn++;
+            const hasPunches = Boolean(a.check_in || sessions.length > 0);
+            const isCurrentlyIn = a.current_session_status === 'checked_in' || 
+                sessions.some((s: any) => !s.check_out && s.status !== 'rejected');
+            
+            if (isCurrentlyIn) {
+                inOffice++;
+            } else if (hasPunches) {
+                checkedOut++;
             }
-            
-            if (status === 'verified') {
+
+            // Total sessions count across all employees
+            totalSessionsCount += (sessions.length || (hasPunches ? 1 : 0));
+
+            // Verification status:
+            const hasUnverified = status === 'pending' || sessions.some((s: any) => s.status !== 'verified' && s.status !== 'rejected');
+            if (status === 'verified' && !hasUnverified) {
                 verified++;
             } else if (status === 'rejected') {
                 rejected++;
-            } else {
-                pending++; // pending or virtual
+            } else if (hasPunches && hasUnverified) {
+                pending++;
             }
-            
+
             if (a.is_half_day) halfDay++;
-            if (a.is_extra_day) extra_day++;
-            
-            if (dayType === 'Present') present++;
-            if (dayType === 'Weekly Off') weekly_off++;
             if (dayType === 'On Leave') leave++;
             if (dayType === 'Absent') absent++;
-            if (dayType === 'Holiday') holiday++;
-            
-            if (a.check_in && !a.check_out) noOfficeOut++;
         });
-        
+
         return {
-            pending,
+            inOffice,
+            checkedOut,
             verified,
+            pending,
             rejected,
-            present,
-            halfDay,
-            weekly_off,
             leave,
+            totalSessionsCount,
+            halfDay,
             absent,
-            holiday,
-            extra_day,
-            noOfficeOut,
-            officeIn,
-            all: list.length
+            total: list.length,
+            all: list.length,
+            present: inOffice + checkedOut,
+            weekly_off: 0,
+            holiday: 0,
+            extra_day: 0,
+            noOfficeOut: 0
         };
-    }, [searchFilteredAttendance])
+    }, [attendance])
 
     if (!mounted) {
         return (
@@ -585,54 +624,72 @@ export function AdminAttendanceVerification() {
 
     return (
         <div className="space-y-6">
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
                 <CompactMetricCard
-                    label="Office In"
-                    value={stats.officeIn}
-                    icon={UsersIcon}
-                    theme="blue"
+                    label="In Office"
+                    value={stats.inOffice}
+                    icon={LogInIcon}
+                    theme="emerald"
+                    delay={0.05}
+                    loading={isLoading || isFetching}
+                    active={activeQuickFilter === 'in_office'}
+                    onClick={() => setActiveQuickFilter(prev => prev === 'in_office' ? 'all' : 'in_office')}
+                    subtitle={stats.inOffice === 1 ? "1 active in office" : `${stats.inOffice} active now`}
+                />
+                <CompactMetricCard
+                    label="Checked Out"
+                    value={stats.checkedOut}
+                    icon={LogOutIcon}
+                    theme="amber"
                     delay={0.1}
                     loading={isLoading || isFetching}
+                    active={activeQuickFilter === 'checked_out'}
+                    onClick={() => setActiveQuickFilter(prev => prev === 'checked_out' ? 'all' : 'checked_out')}
+                    subtitle={stats.checkedOut === 1 ? "1 out now" : `${stats.checkedOut} completed`}
                 />
                 <CompactMetricCard
                     label="Verified"
                     value={stats.verified}
                     icon={CheckCircleIcon}
                     theme="green"
+                    delay={0.15}
+                    loading={isLoading || isFetching}
+                    active={activeQuickFilter === 'verified'}
+                    onClick={() => setActiveQuickFilter(prev => prev === 'verified' ? 'all' : 'verified')}
+                    subtitle="Approved records"
+                />
+                <CompactMetricCard
+                    label="Absent"
+                    value={stats.absent}
+                    icon={UserXIcon}
+                    theme="rose"
                     delay={0.2}
                     loading={isLoading || isFetching}
+                    active={activeQuickFilter === 'absent'}
+                    onClick={() => setActiveQuickFilter(prev => prev === 'absent' ? 'all' : 'absent')}
+                    subtitle={stats.absent === 1 ? "1 absent" : `${stats.absent} absent`}
                 />
                 <CompactMetricCard
-                    label="No Office Out"
-                    value={stats.noOfficeOut}
-                    icon={ClockIcon}
-                    theme="amber"
-                    delay={0.3}
-                    loading={isLoading || isFetching}
-                />
-                <CompactMetricCard
-                    label="Half Day"
-                    value={stats.halfDay}
-                    icon={CalendarMinusIcon}
+                    label="Sessions Today"
+                    value={stats.totalSessionsCount}
+                    icon={FingerprintIcon}
                     theme="indigo"
-                    delay={0.4}
+                    delay={0.25}
                     loading={isLoading || isFetching}
-                />
-                <CompactMetricCard
-                    label="Rejected"
-                    value={stats.rejected}
-                    icon={XCircleIcon}
-                    theme="red"
-                    delay={0.5}
-                    loading={isLoading || isFetching}
+                    active={activeQuickFilter === 'all'}
+                    onClick={() => setActiveQuickFilter('all')}
+                    subtitle="Multi-sessions"
                 />
                 <CompactMetricCard
                     label="On Leave"
                     value={stats.leave}
                     icon={CalendarMinusIcon}
                     theme="rose"
-                    delay={0.6}
+                    delay={0.3}
                     loading={isLoading || isFetching}
+                    active={activeQuickFilter === 'leave'}
+                    onClick={() => setActiveQuickFilter(prev => prev === 'leave' ? 'all' : 'leave')}
+                    subtitle={stats.leave === 1 ? "1 on leave" : `${stats.leave} on leave`}
                 />
             </div>
 
@@ -653,6 +710,22 @@ export function AdminAttendanceVerification() {
                     </Button>
                 }
             >
+                                {activeQuickFilter !== 'all' && (
+                    <div className="mb-3 flex items-center justify-between px-3 py-1.5 rounded-xl bg-primary/10 border border-primary/20 text-xs">
+                        <span className="font-semibold text-primary flex items-center gap-2">
+                            <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                            Filtered by: <strong className="capitalize text-foreground">{activeQuickFilter.replace('_', ' ')}</strong> ({filteredAttendance?.length || 0} records)
+                        </span>
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 px-2 text-[11px] font-bold text-muted-foreground hover:text-foreground"
+                            onClick={() => setActiveQuickFilter('all')}
+                        >
+                            Reset Filter (Show All)
+                        </Button>
+                    </div>
+                )}
                 <div className="relative">
                     {(isFiltering || (isFetching && !isLoading)) && (
                         <div className="absolute inset-0 bg-white/50 dark:bg-slate-950/50 backdrop-blur-[1px] flex items-center justify-center z-10 rounded-xl transition-all duration-200">
@@ -699,6 +772,21 @@ export function AdminAttendanceVerification() {
                 </div>
             </CardShell>
 
+            <AttendanceSessionsDrawer
+                isOpen={!!sessionsDialogRecord}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setSessionsDialogRecord(null)
+                        refetchAttendance()
+                    }
+                }}
+                record={sessionsDialogRecord}
+                onSessionUpdated={() => {
+                    utils.attendance.getAttendance.invalidate()
+                    refetchAttendance()
+                }}
+            />
+
             <AttendanceEditDialog
                 isOpen={isEditOpen}
                 onOpenChange={handleOpenChange}
@@ -721,7 +809,12 @@ export function AdminAttendanceVerification() {
 
             <BulkDailyUpload
                 isOpen={isBulkUploadOpen}
-                onOpenChange={setIsBulkUploadOpen}
+                onOpenChange={(open) => {
+                    setIsBulkUploadOpen(open)
+                    if (!open) {
+                        refetchAttendance()
+                    }
+                }}
             />
 
             <Dialog 
@@ -729,10 +822,13 @@ export function AdminAttendanceVerification() {
                 onOpenChange={(open) => {
                     if (verificationDialog.status === 'processing') return
                     setVerificationDialog(prev => ({ ...prev, isOpen: open }))
+                    if (!open) {
+                        refetchAttendance()
+                    }
                 }}
             >
-                <DialogContent className="max-w-[500px] w-[95vw] sm:w-full p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-200/60 dark:border-slate-800/60 bg-white dark:bg-slate-950">
-                    <DialogHeader className="px-4 pt-4 pb-3 border-b border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-900/30">
+                <DialogContent className="max-w-[520px] w-[95vw] sm:w-full max-h-[90vh] flex flex-col p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-950">
+                    <DialogHeader className="shrink-0 px-5 pt-4 pb-3 border-b border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-900/30">
                         <DialogTitle className="text-base font-bold flex items-center gap-2">
                             <div className={cn("p-1.5 rounded-xl shadow-sm", verificationDialog.action === 'verified' ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-500" : "bg-rose-500/10 text-rose-600 dark:text-rose-500")}>
                                 {verificationDialog.action === 'verified' ? <CheckCircleIcon className="w-4 h-4" /> : <XCircleIcon className="w-4 h-4" />}
@@ -745,57 +841,137 @@ export function AdminAttendanceVerification() {
                     </DialogHeader>
 
                     {verificationDialog.record && (
-                        <div className="px-4 py-3.5 space-y-3">
+                        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-3.5 custom-scrollbar">
                             {/* Employee Card */}
                             <div className="flex items-center gap-3 p-2 rounded-xl bg-gradient-to-r from-slate-50 to-white dark:from-slate-900/80 dark:to-slate-900/40 border border-slate-200/60 dark:border-slate-800/80 shadow-sm transition-all hover:shadow-md">
                                 <ProfileInfoCell profile={verificationDialog.record.profile} />
                             </div>
 
                             {/* Attendance details grid */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                                <div className="p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] flex flex-col justify-center transition-all hover:bg-slate-50 dark:hover:bg-slate-900">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                                <div className="p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] flex flex-col justify-center">
                                     <span className="text-[10px] font-semibold tracking-wider uppercase text-muted-foreground mb-0.5">Date</span>
-                                    <span className="font-bold text-slate-800 dark:text-slate-200 text-[13px]">
-                                        {format(new Date(verificationDialog.record.date), 'MMM dd, yyyy (EEE)')}
+                                    <span className="font-bold text-slate-800 dark:text-slate-200 text-[12px]">
+                                        {format(new Date(verificationDialog.record.date), 'MMM dd, yyyy')}
                                     </span>
                                 </div>
-                                <div className="p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] flex flex-col justify-center transition-all hover:bg-slate-50 dark:hover:bg-slate-900">
+                                <div className="p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] flex flex-col justify-center">
                                     <span className="text-[10px] font-semibold tracking-wider uppercase text-muted-foreground mb-0.5">Current Status</span>
                                     <Badge variant="secondary" className="w-max capitalize font-bold text-[9px] tracking-tight px-2 py-0.5 border-none bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
                                         {verificationDialog.record.status}
                                     </Badge>
                                 </div>
-                                <div className="p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] flex flex-col justify-center transition-all hover:bg-slate-50 dark:hover:bg-slate-900">
-                                    <span className="text-[10px] font-semibold tracking-wider uppercase text-muted-foreground mb-0.5">Clock In</span>
-                                    <span className="font-bold text-emerald-600 dark:text-emerald-500 text-[13px]">
-                                        {verificationDialog.record.check_in 
-                                            ? format(new Date(verificationDialog.record.check_in), 'hh:mm a') 
-                                            : '—'}
-                                    </span>
-                                </div>
-                                <div className="p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] flex flex-col justify-center transition-all hover:bg-slate-50 dark:hover:bg-slate-900">
-                                    <span className="text-[10px] font-semibold tracking-wider uppercase text-muted-foreground mb-0.5">Clock Out</span>
-                                    <span className="font-bold text-amber-600 dark:text-amber-500 text-[13px]">
-                                        {verificationDialog.record.check_out 
-                                            ? format(new Date(verificationDialog.record.check_out), 'hh:mm a') 
-                                            : '—'}
-                                    </span>
-                                </div>
-                                <div className="p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] flex flex-col justify-center transition-all hover:bg-slate-50 dark:hover:bg-slate-900">
-                                    <span className="text-[10px] font-semibold tracking-wider uppercase text-muted-foreground mb-0.5">Working Hours</span>
+                                <div className="p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] flex flex-col justify-center col-span-2 sm:col-span-1">
+                                    <span className="text-[10px] font-semibold tracking-wider uppercase text-muted-foreground mb-0.5">Credited Work</span>
                                     <span className="font-black text-primary text-sm">
                                         {verificationDialog.record.working_hours 
-                                            ? `${Number(verificationDialog.record.working_hours).toFixed(1)}h` 
-                                            : '0.0h'}
-                                    </span>
-                                </div>
-                                <div className="p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] flex flex-col justify-center transition-all hover:bg-slate-50 dark:hover:bg-slate-900">
-                                    <span className="text-[10px] font-semibold tracking-wider uppercase text-muted-foreground mb-0.5">Day Type</span>
-                                    <span className="font-bold text-slate-800 dark:text-slate-200 text-[13px]">
-                                        {verificationDialog.record.is_half_day ? 'Half Day' : 'Full Day'}
+                                            ? `${Number(verificationDialog.record.working_hours).toFixed(2)} hrs` 
+                                            : '0.00 hrs'}
                                     </span>
                                 </div>
                             </div>
+
+                            {/* Multi-Session Breakdown List */}
+                            {verificationDialog.record.sessions && verificationDialog.record.sessions.length > 0 ? (
+                                <div className="p-3 rounded-xl border border-slate-200/70 dark:border-slate-800/70 bg-slate-50/50 dark:bg-slate-900/40 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[11px] font-extrabold text-foreground flex items-center gap-1.5">
+                                            <ClockIcon className="w-3.5 h-3.5 text-primary" />
+                                            Day Sessions ({verificationDialog.record.sessions.length})
+                                        </span>
+                                        <span className="text-[10px] font-semibold text-muted-foreground">
+                                            {verificationDialog.record.current_session_status === 'checked_in' ? (
+                                                <span className="text-emerald-600 font-bold animate-pulse">● Active Session</span>
+                                            ) : (
+                                                <span>All Punches Recorded</span>
+                                            )}
+                                        </span>
+                                    </div>
+
+                                    <div className="max-h-48 overflow-y-auto space-y-1.5 pr-0.5">
+                                        {verificationDialog.record.sessions.map((sess: any, idx: number) => {
+                                            const isRejected = sess.status === 'rejected'
+                                            const isVerified = sess.status === 'verified'
+                                            const isActive = sess.status === 'active' || (!sess.check_out && verificationDialog.record.current_session_status === 'checked_in')
+                                            const sIn = sess.check_in ? format(new Date(sess.check_in), 'hh:mm:ss a') : '--:--'
+                                            const sOut = sess.check_out ? format(new Date(sess.check_out), 'hh:mm:ss a') : (isActive ? 'Active' : '--:--')
+                                            const sHours = sess.working_hours ? `${Number(sess.working_hours).toFixed(2)}h` : (isActive ? 'In Progress' : '--')
+
+                                            return (
+                                                <div 
+                                                    key={sess.id || idx}
+                                                    className={cn(
+                                                        "p-2 rounded-lg border text-xs flex items-center justify-between transition-all",
+                                                        isRejected
+                                                            ? "bg-rose-500/5 border-rose-500/30 text-rose-800 dark:text-rose-300"
+                                                            : isVerified
+                                                            ? "bg-emerald-500/5 border-emerald-500/30"
+                                                            : isActive
+                                                            ? "bg-sky-500/5 border-sky-500/30"
+                                                            : "bg-white dark:bg-slate-950 border-slate-200/80 dark:border-slate-800/80"
+                                                    )}
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-extrabold text-[11px] text-foreground">
+                                                            #{sess.session_number || idx + 1}
+                                                        </span>
+                                                        <div className="flex items-center gap-1 text-[11px]">
+                                                            <span className="text-emerald-700 dark:text-emerald-400 font-semibold">{sIn}</span>
+                                                            <span className="text-muted-foreground">→</span>
+                                                            <span className={cn(
+                                                                "font-semibold",
+                                                                sess.check_out ? "text-amber-700 dark:text-amber-400" : "text-sky-600 italic"
+                                                            )}>{sOut}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className={cn(
+                                                            "text-[10px] font-bold",
+                                                            isRejected ? "line-through text-muted-foreground" : "text-foreground"
+                                                        )}>
+                                                            {sHours}
+                                                        </span>
+
+                                                        {isRejected ? (
+                                                            <Badge variant="destructive" className="text-[8px] py-0 px-1.5 h-3.5 uppercase">Rejected (0h)</Badge>
+                                                        ) : isVerified ? (
+                                                            <Badge className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[8px] py-0 px-1.5 h-3.5 uppercase font-bold">Verified</Badge>
+                                                        ) : isActive ? (
+                                                            <Badge className="bg-sky-500/20 text-sky-700 dark:text-sky-300 border-sky-500/30 text-[8px] py-0 px-1.5 h-3.5 uppercase font-bold">Active</Badge>
+                                                        ) : (
+                                                            <Badge variant="secondary" className="text-[8px] py-0 px-1.5 h-3.5 uppercase font-semibold">Done</Badge>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+
+                                    {/* Clarification note */}
+                                    {verificationDialog.record.sessions.some((s: any) => s.status === 'rejected') && (
+                                        <p className="text-[10px] text-rose-600 dark:text-rose-400 font-medium pt-1">
+                                            ⚠️ Rejected sessions remain excluded (0 hrs) and will not be credited.
+                                        </p>
+                                    )}
+                                </div>
+                            ) : (
+                                /* Fallback for legacy single punch */
+                                <div className="grid grid-cols-2 gap-2 text-xs">
+                                    <div className="p-2 rounded-lg border bg-white/50 dark:bg-slate-950/50">
+                                        <span className="text-[10px] font-semibold uppercase text-muted-foreground block">Clock In</span>
+                                        <span className="font-bold text-emerald-600 text-xs">
+                                            {verificationDialog.record.check_in ? format(new Date(verificationDialog.record.check_in), 'hh:mm a') : '—'}
+                                        </span>
+                                    </div>
+                                    <div className="p-2 rounded-lg border bg-white/50 dark:bg-slate-950/50">
+                                        <span className="text-[10px] font-semibold uppercase text-muted-foreground block">Clock Out</span>
+                                        <span className="font-bold text-amber-600 text-xs">
+                                            {verificationDialog.record.check_out ? format(new Date(verificationDialog.record.check_out), 'hh:mm a') : '—'}
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Remarks / Leaves status */}
                             {verificationDialog.record.remarks && (
@@ -841,7 +1017,7 @@ export function AdminAttendanceVerification() {
                         </div>
                     )}
 
-                    <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-900/30 flex flex-col-reverse sm:flex-row justify-end gap-2 rounded-b-2xl">
+                    <div className="shrink-0 px-5 py-3 border-t border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-900/30 flex flex-col-reverse sm:flex-row justify-end gap-2 rounded-b-2xl">
                         {verificationDialog.status === 'idle' ? (
                             <>
                                 <Button 
@@ -856,7 +1032,7 @@ export function AdminAttendanceVerification() {
                                     variant={verificationDialog.action === 'verified' ? 'default' : 'destructive'}
                                     onClick={() => handleExecuteVerification()}
                                 >
-                                    {verificationDialog.action === 'verified' ? 'Approve & Verify' : 'Confirm Reject'}
+                                    {verificationDialog.action === 'verified' ? 'Final Verify All Sessions' : 'Confirm Reject'}
                                 </Button>
                             </>
                         ) : (
@@ -878,6 +1054,9 @@ export function AdminAttendanceVerification() {
                 onOpenChange={(open) => {
                     if (bulkVerificationDialog.status === 'processing') return
                     setBulkVerificationDialog(prev => ({ ...prev, isOpen: open }))
+                    if (!open) {
+                        refetchAttendance()
+                    }
                 }}
             >
                 <DialogContent className="max-w-[480px] w-[95vw] sm:w-full p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-200/60 dark:border-slate-800/60 bg-white dark:bg-slate-950">

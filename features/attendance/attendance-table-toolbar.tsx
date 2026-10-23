@@ -44,19 +44,23 @@ interface AttendanceTableToolbarProps<TData> {
     onBulkVerify: () => void
     onBulkReject: () => void
     isBulkUpdating?: boolean
-    stats: {
-        all: number
-        pending: number
-        verified: number
-        rejected: number
-        present: number
-        halfDay: number
-        weekly_off: number
-        leave: number
-        absent: number
-        holiday: number
-        extra_day: number
-        noOfficeOut: number
+    stats?: {
+        all?: number;
+        pending?: number;
+        verified?: number;
+        rejected?: number;
+        present?: number;
+        halfDay?: number;
+        weekly_off?: number;
+        leave?: number;
+        absent?: number;
+        holiday?: number;
+        extra_day?: number;
+        noOfficeOut?: number;
+        inOffice?: number;
+        checkedOut?: number;
+        totalSessionsCount?: number;
+        total?: number;
     }
     dateFilter?: DateRange
     onDateFilterChange?: (value: DateRange | undefined) => void

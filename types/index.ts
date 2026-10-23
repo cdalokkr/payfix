@@ -18,6 +18,7 @@ export interface Designation {
 
 export interface Profile {
   id: string
+  tenant_id?: string | null
   email: string
   full_name: string | null
   avatar_url: string | null

@@ -77,7 +77,14 @@ export function DataTable<TData, TValue>({
         pageSize: hidePagination ? 10000 : defaultPageSize,
     })
 
+    const isMounted = React.useRef(false)
+    React.useEffect(() => {
+        isMounted.current = true
+        return () => { isMounted.current = false }
+    }, [])
+
     const handlePaginationChange = React.useCallback<OnChangeFn<PaginationState>>((updaterOrValue) => {
+        if (!isMounted.current) return
         setPagination((old) => {
             const next = typeof updaterOrValue === 'function' ? updaterOrValue(old) : updaterOrValue
             // If pageSize changed, reset to first page to avoid landing on an out-of-bounds page
@@ -114,6 +121,7 @@ export function DataTable<TData, TValue>({
             columnFilters,
             pagination,
         },
+        autoResetPageIndex: false,
         enableRowSelection: true,
         onPaginationChange: handlePaginationChange,
         onRowSelectionChange: setRowSelection,

@@ -14,6 +14,9 @@ interface CompactMetricCardProps {
     loading?: boolean
     delay?: number
     className?: string
+    onClick?: () => void
+    active?: boolean
+    subtitle?: string
 }
 
 const THEME_MAP: Record<MetricTheme, { color: string; bg: string; border: string; hoverBg: string; hoverBorder: string }> = {
@@ -36,7 +39,10 @@ export function CompactMetricCard({
     theme = 'primary',
     loading = false,
     delay = 0,
-    className
+    className,
+    onClick,
+    active = false,
+    subtitle,
 }: CompactMetricCardProps) {
     const { color, bg, border, hoverBg, hoverBorder } = THEME_MAP[theme]
 
@@ -44,13 +50,17 @@ export function CompactMetricCard({
         <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            whileHover={{ y: -2, transition: { duration: 0.2 } }}
+            whileHover={{ y: onClick ? -2 : 0, transition: { duration: 0.2 } }}
             transition={{ delay }}
+            onClick={onClick}
+            role={onClick ? "button" : undefined}
+            tabIndex={onClick ? 0 : undefined}
             className={cn(
-                "flex flex-col p-3 rounded-xl border transition-all duration-300",
-                "bg-background/40 hover:bg-background/80",
-                "group cursor-default shadow-sm w-full",
-                border,
+                "flex flex-col p-3 rounded-xl border transition-all duration-300 relative overflow-hidden select-none",
+                "bg-background/50 hover:bg-background/90",
+                "group shadow-xs w-full",
+                onClick ? "cursor-pointer" : "cursor-default",
+                active ? "ring-2 ring-primary ring-offset-2 border-primary bg-background shadow-md" : border,
                 hoverBg,
                 hoverBorder,
                 className
@@ -62,22 +72,26 @@ export function CompactMetricCard({
                     bg,
                     color
                 )}>
-                    {/* Handle both Phosphor (with weight) and Lucide icons */}
                     {React.isValidElement(Icon) ? (
                         Icon
                     ) : (
-                        <Icon size={28} weight="duotone" className="h-7 w-7" />
+                        <Icon size={24} weight="duotone" className="h-5 w-5" />
                     )}
                 </div>
                 {loading ? (
-                    <div className="h-8 w-12 bg-muted/30 rounded-md animate-pulse self-center" />
+                    <div className="h-7 w-10 bg-muted/40 rounded-md animate-pulse self-center" />
                 ) : (
                     <span className={cn("text-2xl font-black tabular-nums tracking-tight", color)}>{value}</span>
                 )}
             </div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground truncate">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground truncate">
                 {label}
             </p>
+            {subtitle && (
+                <span className="text-[9px] font-medium text-muted-foreground/70 truncate mt-0.5">
+                    {subtitle}
+                </span>
+            )}
         </motion.div>
     )
 }

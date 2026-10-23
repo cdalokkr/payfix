@@ -79,7 +79,13 @@ export class SmartCache {
             latitude: officeLocations.latitude,
             longitude: officeLocations.longitude,
             radius_meters: officeLocations.radius_meters,
-            is_active: officeLocations.is_active
+            is_active: officeLocations.is_active,
+            check_in_time: officeLocations.check_in_time,
+            check_out_time: officeLocations.check_out_time,
+            buffer_minutes: officeLocations.buffer_minutes,
+            off_days: officeLocations.off_days,
+            daily_working_hours: officeLocations.daily_working_hours,
+            absent_deduction_multiplier: officeLocations.absent_deduction_multiplier
         })
         .from(officeLocations)
         .where(eq(officeLocations.is_active, true))
@@ -138,6 +144,7 @@ export class SmartCache {
             date: officeClosures.date,
             reason: officeClosures.reason,
             type: officeClosures.type,
+            location_id: officeClosures.location_id,
             created_at: officeClosures.created_at
         })
         .from(officeClosures)
