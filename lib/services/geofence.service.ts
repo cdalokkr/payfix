@@ -40,6 +40,12 @@ export interface OfficeLocation {
     longitude: number
     radiusMeters: number
     isActive: boolean
+    checkInTime?: string | null
+    checkOutTime?: string | null
+    bufferMinutes?: number | null
+    offDays?: number[] | null
+    dailyWorkingHours?: Record<string, { checkIn: string, checkOut: string }> | null
+    absentDeductionMultiplier?: number | null
 }
 
 export interface GeofenceResult {
@@ -73,6 +79,12 @@ export const GeofenceService = {
             longitude: Number(loc.longitude),
             radiusMeters: loc.radius_meters,
             isActive: loc.is_active ?? true,
+            checkInTime: (loc as any).check_in_time ?? '10:00:00',
+            checkOutTime: (loc as any).check_out_time ?? '19:00:00',
+            bufferMinutes: (loc as any).buffer_minutes ?? 15,
+            offDays: (loc as any).off_days ?? [0],
+            dailyWorkingHours: (loc as any).daily_working_hours ?? {},
+            absentDeductionMultiplier: (loc as any).absent_deduction_multiplier ?? null,
         }))
     },
 
@@ -90,6 +102,12 @@ export const GeofenceService = {
             longitude: Number(loc.longitude),
             radiusMeters: loc.radius_meters,
             isActive: loc.is_active ?? true,
+            checkInTime: loc.check_in_time ?? '10:00:00',
+            checkOutTime: loc.check_out_time ?? '19:00:00',
+            bufferMinutes: loc.buffer_minutes ?? 15,
+            offDays: loc.off_days ?? [0],
+            dailyWorkingHours: (loc.daily_working_hours as any) ?? {},
+            absentDeductionMultiplier: loc.absent_deduction_multiplier ?? null,
         }))
     },
 
@@ -163,6 +181,12 @@ export const GeofenceService = {
             latitude: number
             longitude: number
             radiusMeters?: number
+            checkInTime?: string
+            checkOutTime?: string
+            bufferMinutes?: number
+            offDays?: number[]
+            dailyWorkingHours?: Record<string, { checkIn: string, checkOut: string }>
+            absentDeductionMultiplier?: number | null
         },
         createdBy: string
     ): Promise<OfficeLocation> {
@@ -174,6 +198,12 @@ export const GeofenceService = {
                 latitude: String(data.latitude),
                 longitude: String(data.longitude),
                 radius_meters: data.radiusMeters ?? 200,
+                check_in_time: data.checkInTime || '10:00:00',
+                check_out_time: data.checkOutTime || '19:00:00',
+                buffer_minutes: data.bufferMinutes ?? 15,
+                off_days: data.offDays || [0],
+                daily_working_hours: data.dailyWorkingHours || {},
+                absent_deduction_multiplier: data.absentDeductionMultiplier !== undefined ? data.absentDeductionMultiplier : null,
                 is_active: true,
                 created_by: createdBy,
             })
@@ -190,6 +220,12 @@ export const GeofenceService = {
             longitude: Number(location.longitude),
             radiusMeters: location.radius_meters,
             isActive: location.is_active ?? true,
+            checkInTime: location.check_in_time,
+            checkOutTime: location.check_out_time,
+            bufferMinutes: location.buffer_minutes,
+            offDays: location.off_days,
+            dailyWorkingHours: location.daily_working_hours as any,
+            absentDeductionMultiplier: location.absent_deduction_multiplier,
         }
     },
 
@@ -205,6 +241,12 @@ export const GeofenceService = {
             longitude?: number
             radiusMeters?: number
             isActive?: boolean
+            checkInTime?: string
+            checkOutTime?: string
+            bufferMinutes?: number
+            offDays?: number[]
+            dailyWorkingHours?: Record<string, { checkIn: string, checkOut: string }>
+            absentDeductionMultiplier?: number | null
         }
     ): Promise<OfficeLocation | null> {
         const updateData: Partial<typeof officeLocations.$inferInsert> = {
@@ -217,6 +259,12 @@ export const GeofenceService = {
         if (data.longitude !== undefined) updateData.longitude = String(data.longitude)
         if (data.radiusMeters !== undefined) updateData.radius_meters = data.radiusMeters
         if (data.isActive !== undefined) updateData.is_active = data.isActive
+        if (data.checkInTime !== undefined) updateData.check_in_time = data.checkInTime
+        if (data.checkOutTime !== undefined) updateData.check_out_time = data.checkOutTime
+        if (data.bufferMinutes !== undefined) updateData.buffer_minutes = data.bufferMinutes
+        if (data.offDays !== undefined) updateData.off_days = data.offDays
+        if (data.dailyWorkingHours !== undefined) updateData.daily_working_hours = data.dailyWorkingHours
+        if (data.absentDeductionMultiplier !== undefined) updateData.absent_deduction_multiplier = data.absentDeductionMultiplier
 
         const [location] = await db
             .update(officeLocations)
@@ -237,6 +285,12 @@ export const GeofenceService = {
             longitude: Number(location.longitude),
             radiusMeters: location.radius_meters,
             isActive: location.is_active ?? true,
+            checkInTime: location.check_in_time,
+            checkOutTime: location.check_out_time,
+            bufferMinutes: location.buffer_minutes,
+            offDays: location.off_days,
+            dailyWorkingHours: location.daily_working_hours as any,
+            absentDeductionMultiplier: location.absent_deduction_multiplier,
         }
     },
 

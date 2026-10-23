@@ -81,7 +81,7 @@ export const CANONICAL_TENANT_COLUMNS: Record<CanonicalTenantTable, readonly str
         'id', 'default_check_in', 'default_check_out', 'off_days',
         'daily_working_hours', 'absent_deduction_multiplier', 'updated_at',
     ],
-    office_closures: ['id', 'date', 'reason', 'type', 'created_at'],
+    office_closures: ['id', 'date', 'reason', 'type', 'created_at', 'location_id'],
     employee_settings: [
         'profile_id', 'custom_check_in', 'custom_check_out',
         'biometric_device_user_id', 'face_vector', 'updated_at',
@@ -92,7 +92,9 @@ export const CANONICAL_TENANT_COLUMNS: Record<CanonicalTenantTable, readonly str
     ],
     office_locations: [
         'id', 'name', 'address', 'latitude', 'longitude', 'radius_meters',
-        'is_active', 'created_by', 'created_at', 'updated_at',
+        'is_active', 'check_in_time', 'check_out_time', 'buffer_minutes',
+        'created_by', 'created_at', 'updated_at', 'off_days', 'daily_working_hours',
+        'absent_deduction_multiplier',
     ],
     user_mpin: [
         'profile_id', 'mpin_hash', 'biometric_enabled', 'biometric_credential_id',
@@ -210,6 +212,7 @@ export const TENANT_REQUIRED_FOREIGN_KEYS = [
     ['attendance', 'profile_id', 'profiles', 'id'],
     ['attendance', 'verified_by', 'profiles', 'id'],
     ['attendance', 'location_id', 'office_locations', 'id'],
+    ['office_closures', 'location_id', 'office_locations', 'id'],
     ['leaves', 'profile_id', 'profiles', 'id'],
     ['leaves', 'approved_by', 'profiles', 'id'],
     ['employee_settings', 'profile_id', 'profiles', 'id'],

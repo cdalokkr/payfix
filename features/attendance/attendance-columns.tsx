@@ -5,11 +5,12 @@ import { Badge } from "@/components/ui/badge"
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header"
 import { ProfileInfoCell } from "@/components/dashboard/profile-info-cell"
 import { format } from "date-fns"
+import { calculateAttendanceExtraHours } from "@/lib/utils/attendance-extra-hours"
 import { cn } from "@/lib/utils"
 import { ActionButton, EditButton } from "@/components/ui/action-button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Checkbox } from "@/components/ui/checkbox"
-import { CheckCircle2, Clock, XCircle } from "lucide-react"
+import { CheckCircle2, Clock, XCircle, UserCheck, UserX } from "lucide-react"
 
 export type DayType = 
     | 'Present' 
@@ -35,71 +36,38 @@ export function getRecordDayType(record: any): DayType {
         return 'Absent';
     }
 
-    const isVerifiedOrRejected = status === 'verified' || status === 'rejected';
-
-    if (isVerifiedOrRejected) {
-        if (hasCheckIn || hasCheckOut) {
-            if (record.is_extra_day) {
-                return 'Extra Day';
-            } else if (record.is_half_day) {
-                return 'Half Day';
-            } else {
-                return 'Present';
-            }
-        } else {
-            if (remarks.includes('leave')) {
-                return 'On Leave';
-            } else if (remarks.includes('weekly off') || remarks.includes('weekly_off')) {
-                return 'Weekly Off';
-            } else if (remarks.includes('holiday')) {
-                return 'Holiday';
-            } else {
-                return 'Absent';
-            }
-        }
-    } else {
-        // Pending / Unverified
-        if (hasCheckIn && hasCheckOut) {
-            return 'Marked Out';
-        } else if (hasCheckIn) {
-            return 'Marked In';
-        }
-
-        const isVirtual = typeof record.id === 'string' && record.id.startsWith('virtual_');
-
-        if (isVirtual) {
-            if (status === 'leave') {
-                return 'Applied Leave';
-            } else if (status === 'holiday') {
-                return 'Holiday';
-            } else if (status === 'weekly_off') {
-                return 'Weekly Off';
-            } else if (status === 'absent') {
-                return 'Absent';
-            } else {
-                return 'Not marked';
-            }
-        } else {
-            // Actual record is pending
-            if (status === 'absent') {
-                return 'Absent';
-            } else if (remarks.includes('leave')) {
-                return 'Applied Leave';
-            } else if (remarks.includes('weekly off') || remarks.includes('weekly_off')) {
-                return 'Weekly Off';
-            } else if (remarks.includes('holiday')) {
-                return 'Holiday';
-            } else {
-                return 'Not marked';
-            }
-        }
+    // 2. Strict Check: If record has check-in or check-out, it CANNOT be "On Leave"
+    if (hasCheckIn || hasCheckOut) {
+        if (record.is_half_day) return 'Half Day';
+        if (record.is_extra_day) return 'Extra Day';
+        if (hasCheckIn && hasCheckOut) return 'Present';
+        if (hasCheckIn && !hasCheckOut) return 'Marked In';
+        if (!hasCheckIn && hasCheckOut) return 'Marked Out';
     }
+
+    // 3. Status-based mapping for non-punch records
+    if (status === 'leave') return 'On Leave';
+    if (status === 'applied_leave') return 'Applied Leave';
+    if (status === 'half_day') return 'Half Day';
+    if (status === 'weekly_off') return 'Weekly Off';
+    if (status === 'holiday') return 'Holiday';
+    if (status === 'extra_day') return 'Extra Day';
+    if (status === 'present') return 'Present';
+
+    // 4. Remarks-based fallbacks for manual inputs/imported records without times
+    if (remarks.includes('leave')) return 'On Leave';
+    if (remarks.includes('weekly off') || remarks.includes('weekend')) return 'Weekly Off';
+    if (remarks.includes('holiday')) return 'Holiday';
+
+    // 5. Default state for pending/unmarked records
+    return 'Not marked';
 }
 
 interface AttendanceColumnsProps {
     onVerify: (record: any) => void
     onReject: (record: any) => void
     onEdit: (record: any) => void
+    onViewSessions?: (record: any) => void
     isVerifying?: boolean
     scheduledHoursMap?: Record<number, number>
 }
@@ -108,7 +76,8 @@ export function createAttendanceColumns({
     onVerify,
     onReject,
     onEdit,
-    isVerifying,
+    onViewSessions,
+    isVerifying = false,
     scheduledHoursMap = {}
 }: AttendanceColumnsProps): ColumnDef<any>[] {
     return [
@@ -116,10 +85,7 @@ export function createAttendanceColumns({
             id: "select",
             header: ({ table }) => (
                 <Checkbox
-                    checked={
-                        table.getIsAllPageRowsSelected() ||
-                        (table.getIsSomePageRowsSelected() && "indeterminate")
-                    }
+                    checked={table.getIsAllPageRowsSelected()}
                     onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
                     aria-label="Select all"
                     className="h-4.5 w-4.5 rounded-sm border border-muted-foreground/50 data-[state=checked]:border-primary"
@@ -138,17 +104,15 @@ export function createAttendanceColumns({
         {
             accessorKey: "profile.full_name",
             header: ({ column }) => (
-                <DataTableColumnHeader column={column} title="Employee" />
+                <DataTableColumnHeader column={column} title="Employee Details" />
             ),
-            cell: ({ row }) => <ProfileInfoCell profile={row.original.profile} className="max-w-[180px]" />,
-            size: 200,
-        },
-        {
-            accessorKey: "profile.email",
-            header: ({ column }) => (
-                <DataTableColumnHeader column={column} title="Email ID" />
+            cell: ({ row }) => (
+                <ProfileInfoCell 
+                    profile={row.original.profile} 
+                    showEmail={true} 
+                    className="max-w-[240px]" 
+                />
             ),
-            cell: ({ row }) => <span className="text-xs text-muted-foreground font-medium truncate block">{row.original.profile?.email || 'N/A'}</span>,
             size: 220,
         },
         {
@@ -157,91 +121,128 @@ export function createAttendanceColumns({
                 <DataTableColumnHeader column={column} title="Date" />
             ),
             cell: ({ row }) => {
-                const date = new Date(row.getValue("date"))
+                const dateVal = row.getValue("date") as string
+                const date = dateVal ? new Date(dateVal.includes('T') ? dateVal : `${dateVal}T00:00:00`) : new Date()
                 return (
-                    <div className="flex flex-col text-xs leading-tight">
-                        <span className="font-bold">{format(date, 'MMM dd, yy')}</span>
-                        <span className="text-[9px] text-muted-foreground font-medium">{format(date, 'EEE')}</span>
+                    <div className="flex flex-col text-xs leading-tight min-w-[70px]">
+                        <span className="font-bold text-foreground tabular-nums whitespace-nowrap">
+                            {format(date, 'dd-MMM-yyyy')}
+                        </span>
+                        <span className="text-[9px] text-muted-foreground font-medium">
+                            {format(date, 'EEE')}
+                        </span>
                     </div>
                 )
             },
-            size: 50,
+            size: 65,
         },
         {
-            accessorKey: "check_in",
+            id: "punch_times",
             header: ({ column }) => (
-                <DataTableColumnHeader column={column} title="In" />
+                <DataTableColumnHeader column={column} title="Punch In / Out" />
             ),
             cell: ({ row }) => {
-                const val = row.original.first_check_in || row.original.check_in
-                return val ? (
-                    <div className="text-emerald-600 dark:text-emerald-400 font-bold text-[11px]">
-                        {format(new Date(val as string), 'hh:mm a')}
-                    </div>
-                ) : <span className="text-muted-foreground/30 text-[10px]">--:--</span>
-            },
-            size: 45,
-        },
-        {
-            accessorKey: "check_out",
-            header: ({ column }) => (
-                <DataTableColumnHeader column={column} title="Out" />
-            ),
-            cell: ({ row }) => {
-                const val = row.original.last_check_out || row.original.check_out
-                return val ? (
-                    <div className="text-amber-600 dark:text-amber-400 font-bold text-[11px]">
-                        {format(new Date(val as string), 'hh:mm a')}
-                    </div>
-                ) : <span className="text-muted-foreground/30 text-[10px]">--:--</span>
-            },
-            size: 45,
-        },
-        {
-            accessorKey: "working_hours",
-            header: "Total",
-            cell: ({ row }) => {
-                const hours = row.original.working_hours ? Number(row.original.working_hours) : null
-                const totalSessions = row.original.total_sessions as number | undefined
-                return hours ? (
-                    <div className="flex items-center gap-1">
-                        <Badge variant="secondary" className="font-black tabular-nums bg-primary/5 text-primary border-primary/10 h-5 px-1.5 text-[10px]">
-                            {hours.toFixed(1)}h
-                        </Badge>
-                        {totalSessions && totalSessions > 1 && (
-                            <span className="text-[9px] font-bold text-muted-foreground bg-muted px-1 py-0.5 rounded" title={`${totalSessions} Sessions`}>
-                                {totalSessions}s
+                const record = row.original
+                const firstIn = record.first_check_in || record.check_in
+                const isCurrentlyIn = record.current_session_status === 'checked_in'
+                const lastOut = record.last_check_out || record.check_out
+
+                const inStr = firstIn ? format(new Date(firstIn as string), 'hh:mm a') : '--:--'
+                const outStr = lastOut ? format(new Date(lastOut as string), 'hh:mm a') : '--:--'
+
+                return (
+                    <div className="flex flex-col gap-1 text-[11px] leading-tight min-w-[105px]">
+                        {/* First In */}
+                        <div className="flex items-center gap-1.5 font-bold">
+                            <span className="w-7 shrink-0 text-center text-[8px] font-black uppercase py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
+                                In
                             </span>
-                        )}
+                            <span className={firstIn ? "text-emerald-700 dark:text-emerald-400" : "text-muted-foreground/30 font-normal"}>
+                                {inStr}
+                            </span>
+                        </div>
+
+                        {/* Last Out / In Office */}
+                        <div className="flex items-center gap-1.5 font-bold">
+                            <span className="w-7 shrink-0 text-center text-[8px] font-black uppercase py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400">
+                                Out
+                            </span>
+                            {isCurrentlyIn ? (
+                                <div className="flex items-center gap-1 text-sky-600 dark:text-sky-400 font-extrabold text-[10px]">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping inline-block" />
+                                    <span>In Office</span>
+                                </div>
+                            ) : (
+                                <span className={lastOut ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground/30 font-normal"}>
+                                    {outStr}
+                                </span>
+                            )}
+                        </div>
                     </div>
-                ) : <span className="text-muted-foreground/30 text-[10px]">--</span>
-            },
-            size: 40,
-        },
-        {
-            id: "extra_hours",
-            header: "Extra",
-            cell: ({ row }) => {
-                const workingHours = row.original.working_hours as number
-                const dateStr = row.original.date as string
- 
-                if (!workingHours) return <span className="text-muted-foreground/30 text-[10px]">--</span>
- 
-                const dayOfWeek = new Date(dateStr).getDay()
-                const scheduledHours = scheduledHoursMap[dayOfWeek] ?? 9
-                const extraHours = workingHours - scheduledHours
- 
-                if (extraHours <= 0) return <span className="text-muted-foreground/30 text-[10px]">--</span>
- 
-                const displayValue = `+${extraHours.toFixed(1)}h`
- 
-                return (
-                    <span className="font-black tabular-nums text-[10px] text-emerald-600">
-                        {displayValue}
-                    </span>
                 )
             },
-            size: 30,
+            size: 85,
+        },
+        {
+            id: "work_hours",
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title="Work Hours" />
+            ),
+            cell: ({ row }) => {
+                const record = row.original
+                const hours = record.working_hours ? Number(record.working_hours) : null
+                const totalSessions = record.sessions?.length || (record.total_sessions as number | undefined) || 0
+                const dateStr = record.date as string
+                const dayOfWeek = dateStr ? new Date(dateStr).getDay() : 1
+                const scheduledHours = scheduledHoursMap[dayOfWeek] ?? 9
+
+                // Calculate extra hours using individual office location timing and buffer rule
+                const extraCalc = calculateAttendanceExtraHours({
+                    checkIn: record.first_in || record.check_in,
+                    checkOut: record.last_out || record.check_out,
+                    officeTiming: (record as any).location,
+                })
+                const extraHours = extraCalc.extraHours
+
+                return (
+                    <div className="flex flex-col gap-0.5 leading-tight min-w-[85px]">
+                        {/* Line 1: Total Working Hours & Clickable Session Pill (2 decimals matching session drawer) */}
+                        <div className="flex items-center gap-1.5">
+                            {hours !== null ? (
+                                <>
+                                    <span className="font-semibold text-xs text-foreground tabular-nums">
+                                        {hours.toFixed(2)}h
+                                    </span>
+                                    {totalSessions > 1 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => onViewSessions?.(record)}
+                                            className="text-[9px] font-bold text-primary bg-primary/10 hover:bg-primary/20 px-1.5 py-0.2 rounded-full cursor-pointer transition-colors border border-primary/20"
+                                            title={`${totalSessions} Sessions - Click to view drawer`}
+                                        >
+                                            {totalSessions}s
+                                        </button>
+                                    )}
+                                </>
+                            ) : (
+                                <span className="text-muted-foreground/30 text-[11px]">--</span>
+                            )}
+                        </div>
+
+                        {/* Line 2: Extra Hours or Scheduled Reference */}
+                        {extraHours > 0 ? (
+                            <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 tabular-nums">
+                                +{extraHours.toFixed(2)}h extra
+                            </span>
+                        ) : hours !== null ? (
+                            <span className="text-[9px] text-muted-foreground/60 font-medium">
+                                Sched: {scheduledHours}h
+                            </span>
+                        ) : null}
+                    </div>
+                )
+            },
+            size: 80,
         },
         {
             accessorKey: "status",
@@ -304,7 +305,9 @@ export function createAttendanceColumns({
             header: "Actions",
             cell: ({ row }) => {
                 const record = row.original
-                const showApprove = record.status !== 'verified'
+                const hasUnverifiedSessions = record.sessions?.some((s: any) => s.status !== 'verified' && s.status !== 'rejected');
+                const isFullyVerified = record.status === 'verified' && !hasUnverifiedSessions;
+                const showApprove = true;
                 const showReject = record.status !== 'rejected'
  
                 return (
@@ -314,7 +317,8 @@ export function createAttendanceColumns({
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         <ActionButton
-                                            action="verify"
+                                            action={isFullyVerified ? "deactivate" : "activate"}
+                                            icon={isFullyVerified ? UserX : UserCheck}
                                             variant="icon-only"
                                             size="sm"
                                             onClick={() => onVerify(record)}
@@ -322,7 +326,7 @@ export function createAttendanceColumns({
                                             className="h-7 w-7"
                                         />
                                     </TooltipTrigger>
-                                    <TooltipContent>Approve</TooltipContent>
+                                    <TooltipContent>{hasUnverifiedSessions ? 'Verify Pending Sessions' : isFullyVerified ? 'Verified (Click to Review / Re-verify)' : 'Approve & Verify All Sessions'}</TooltipContent>
                                 </Tooltip>
                             )}
                             {showReject && (
@@ -342,6 +346,19 @@ export function createAttendanceColumns({
                             )}
                             <Tooltip>
                                 <TooltipTrigger asChild>
+                                    <ActionButton
+                                        action="view"
+                                        icon={Clock}
+                                        variant="icon-only"
+                                        size="sm"
+                                        onClick={() => onViewSessions?.(record)}
+                                        className="h-7 w-7"
+                                    />
+                                </TooltipTrigger>
+                                <TooltipContent>View Sessions Drawer</TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
                                     <EditButton
                                         variant="icon-only"
                                         size="sm"
@@ -349,7 +366,7 @@ export function createAttendanceColumns({
                                         className="h-7 w-7"
                                     />
                                 </TooltipTrigger>
-                                <TooltipContent>Edit</TooltipContent>
+                                <TooltipContent>Edit Day Status</TooltipContent>
                             </Tooltip>
                         </TooltipProvider>
                     </div>

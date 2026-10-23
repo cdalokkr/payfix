@@ -101,8 +101,8 @@ export class AttendanceService {
         const closures = allClosures.filter(c => c.date >= dates[0] && c.date <= dates[dates.length - 1])
         const closuresMap = new Map(closures.map(c => [c.date, c.reason]))
 
-        // Fetch leaves (both approved and pending) for employees in range & actual attendance records concurrently
-        const [leavesList, actualRecords] = await Promise.all([
+        // Fetch leaves, actual attendance records & all sessions concurrently
+        const [leavesList, actualRecords, allSessions] = await Promise.all([
             db.query.leaves.findMany({
                 where: and(
                     inArray(leaves.profile_id, employeeIds),
@@ -117,6 +117,13 @@ export class AttendanceService {
                     gte(attendance.date, dates[0]),
                     lte(attendance.date, dates[dates.length - 1])
                 )
+            }),
+            db.query.attendanceSessions.findMany({
+                where: and(
+                    inArray(attendanceSessions.profile_id, employeeIds),
+                    gte(attendanceSessions.date, dates[0]),
+                    lte(attendanceSessions.date, dates[dates.length - 1])
+                )
             })
         ])
 
@@ -126,8 +133,12 @@ export class AttendanceService {
         const actualMap = new Map<string, any>()
         for (const r of actualRecords) {
             const profile = profilesMap.get(r.profile_id)
+            const recordSessions = (allSessions || [])
+                .filter(s => s.attendance_id === r.id || (s.profile_id === r.profile_id && s.date === r.date))
+                .sort((a, b) => (a.session_number || 1) - (b.session_number || 1))
             actualMap.set(`${r.profile_id}_${r.date}`, {
                 ...r,
+                sessions: recordSessions,
                 profile: profile ? {
                     id: profile.id,
                     email: profile.email,
@@ -149,6 +160,7 @@ export class AttendanceService {
                 if (actual) {
                     results.push({
                         ...actual,
+                        sessions: actual.sessions || [],
                         working_hours: actual.working_hours ? Number(actual.working_hours) : null
                     })
                 } else {
@@ -249,6 +261,9 @@ export class AttendanceService {
                 ADD COLUMN IF NOT EXISTS "total_sessions" integer DEFAULT 0,
                 ADD COLUMN IF NOT EXISTS "current_session_status" text DEFAULT 'checked_out',
                 ADD COLUMN IF NOT EXISTS "location_id" uuid;
+
+                ALTER TABLE IF EXISTS "attendance_sessions"
+                ADD COLUMN IF NOT EXISTS "remarks" text;
 
                 CREATE TABLE IF NOT EXISTS "attendance_sessions" (
                     "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -788,6 +803,50 @@ export class AttendanceService {
 
         if (!data) throwAppError('DATABASE_ERROR', 'Failed to verify attendance')
 
+        // Synchronize sessions:
+        // When approving/verifying attendance, mark all non-rejected sessions as verified.
+        // Rejected sessions remain rejected and are strictly excluded from total working hours.
+        if (status === 'verified') {
+            await db.update(attendanceSessions).set({
+                status: 'verified',
+                updated_at: new Date()
+            }).where(and(
+                eq(attendanceSessions.attendance_id, recordId),
+                sql`${attendanceSessions.status} != 'rejected'`
+            ))
+
+            // Recalculate working_hours from non-rejected sessions
+            const validSessions = await db.query.attendanceSessions.findMany({
+                where: and(
+                    eq(attendanceSessions.attendance_id, recordId),
+                    sql`${attendanceSessions.status} != 'rejected'`
+                )
+            })
+
+            if (validSessions.length > 0) {
+                const totalMinutes = validSessions.reduce((acc, sess) => {
+                    return acc + (sess.working_hours ? Math.round(Number(sess.working_hours) * 60) : 0)
+                }, 0)
+                const recalculatedHours = (totalMinutes / 60).toFixed(2)
+                await db.update(attendance).set({
+                    working_hours: recalculatedHours,
+                    updated_at: new Date()
+                }).where(eq(attendance.id, recordId))
+                data.working_hours = recalculatedHours as any
+            }
+        } else if (status === 'rejected') {
+            await db.update(attendanceSessions).set({
+                status: 'rejected',
+                updated_at: new Date()
+            }).where(eq(attendanceSessions.attendance_id, recordId))
+
+            await db.update(attendance).set({
+                working_hours: '0.00',
+                updated_at: new Date()
+            }).where(eq(attendance.id, recordId))
+            data.working_hours = '0.00' as any
+        }
+
         // Sync leaf records status in leaves table
         const matchingLeaves = await db.query.leaves.findMany({
             where: and(
@@ -840,6 +899,325 @@ export class AttendanceService {
     /**
      * Bulk verify attendance records
      */
+    /**
+     * Verify or reject an individual attendance session
+     */
+    static async verifyAttendanceSession({
+        sessionId,
+        attendanceId,
+        status,
+        remarks,
+        verifiedBy,
+        verifierName
+    }: {
+        sessionId: string
+        attendanceId: string
+        status: 'verified' | 'rejected'
+        remarks?: string
+        verifiedBy: string
+        verifierName: string
+    }) {
+        const now = new Date()
+
+        // 1. Update session status & remarks
+        const [session] = await db.update(attendanceSessions).set({
+            status,
+            remarks: remarks || null,
+            updated_at: now
+        }).where(eq(attendanceSessions.id, sessionId)).returning()
+
+        if (!session) throwAppError('NOT_FOUND', 'Attendance session not found')
+
+        const effectiveAttendanceId = attendanceId || session.attendance_id
+        if (!effectiveAttendanceId) throwAppError('NOT_FOUND', 'Parent attendance ID is missing')
+
+        // 2. Fetch all sessions for this attendance record to recalculate total working hours
+        const allSessions = await db.query.attendanceSessions.findMany({
+            where: eq(attendanceSessions.attendance_id, effectiveAttendanceId),
+            orderBy: [attendanceSessions.session_number]
+        })
+
+        // EXCLUDE rejected sessions from working_hours!
+        const validSessions = allSessions.filter(s => s.status !== 'rejected')
+        const totalMinutes = validSessions.reduce((acc, sess) => {
+            return acc + (sess.working_hours ? Math.round(Number(sess.working_hours) * 60) : 0)
+        }, 0)
+        const recalculatedHours = (totalMinutes / 60).toFixed(2)
+
+        // Resolve first_check_in and last_check_out from non-rejected sessions
+        let firstCheckIn = null
+        let lastCheckOut = null
+        if (validSessions.length > 0) {
+            const sortedByIn = [...validSessions].sort((a, b) => new Date(a.check_in).getTime() - new Date(b.check_in).getTime())
+            firstCheckIn = sortedByIn[0].check_in
+
+            const withOut = validSessions.filter(s => s.check_out)
+            if (withOut.length > 0) {
+                const sortedByOut = [...withOut].sort((a, b) => new Date(b.check_out!).getTime() - new Date(a.check_out!).getTime())
+                lastCheckOut = sortedByOut[0].check_out
+            }
+        }
+
+        const [updatedAttendance] = await db.update(attendance).set({
+            working_hours: recalculatedHours,
+            first_check_in: firstCheckIn || undefined,
+            last_check_out: lastCheckOut || undefined,
+            updated_at: now
+        }).where(eq(attendance.id, effectiveAttendanceId)).returning()
+
+        await db.insert(activities).values({
+            user_id: session.profile_id,
+            activity_type: 'data_edit',
+            module: 'attendance',
+            description: `Session #${session.session_number} was ${status} by ${verifierName}${remarks ? ` (${remarks})` : ''}`,
+            metadata: {
+                session_id: sessionId,
+                attendance_id: effectiveAttendanceId,
+                status,
+                recalculated_hours: recalculatedHours
+            }
+        })
+
+        return {
+            session,
+            attendance: updatedAttendance
+        }
+    }
+
+    /**
+     * Edit/update an individual attendance session (check-in, check-out, remarks, status)
+     */
+    static async updateAttendanceSession({
+        sessionId,
+        attendanceId,
+        checkIn,
+        checkOut,
+        status,
+        remarks,
+        updatedBy,
+        updaterName
+    }: {
+        sessionId: string
+        attendanceId: string
+        checkIn: string
+        checkOut?: string | null
+        status?: 'active' | 'completed' | 'verified' | 'rejected'
+        remarks?: string
+        updatedBy: string
+        updaterName: string
+    }) {
+        const now = new Date()
+        const checkInDate = new Date(checkIn)
+        const checkOutDate = checkOut ? new Date(checkOut) : null
+
+        let workingHours: string | null = null
+        if (checkOutDate && checkInDate) {
+            const diffMins = Math.max(0, differenceInMinutes(checkOutDate, checkInDate))
+            workingHours = (diffMins / 60).toFixed(2)
+        }
+
+        const resolvedStatus = status || (checkOutDate ? 'completed' : 'active')
+
+        const [session] = await db.update(attendanceSessions).set({
+            check_in: checkInDate,
+            check_out: checkOutDate,
+            working_hours: workingHours,
+            status: resolvedStatus,
+            remarks: remarks || null,
+            updated_at: now
+        }).where(eq(attendanceSessions.id, sessionId)).returning()
+
+        if (!session) throwAppError('NOT_FOUND', 'Attendance session not found')
+
+        const effectiveAttendanceId = attendanceId || session.attendance_id
+        if (!effectiveAttendanceId) throwAppError('NOT_FOUND', 'Parent attendance ID is missing')
+
+        // Recalculate parent attendance record excluding rejected sessions
+        const allSessions = await db.query.attendanceSessions.findMany({
+            where: eq(attendanceSessions.attendance_id, effectiveAttendanceId),
+            orderBy: [attendanceSessions.session_number]
+        })
+
+        const validSessions = allSessions.filter(s => s.status !== 'rejected')
+        const totalMinutes = validSessions.reduce((acc, sess) => {
+            return acc + (sess.working_hours ? Math.round(Number(sess.working_hours) * 60) : 0)
+        }, 0)
+        const recalculatedHours = (totalMinutes / 60).toFixed(2)
+
+        let firstCheckIn = null
+        let lastCheckOut = null
+        if (validSessions.length > 0) {
+            const sortedByIn = [...validSessions].sort((a, b) => new Date(a.check_in).getTime() - new Date(b.check_in).getTime())
+            firstCheckIn = sortedByIn[0].check_in
+
+            const withOut = validSessions.filter(s => s.check_out)
+            if (withOut.length > 0) {
+                const sortedByOut = [...withOut].sort((a, b) => new Date(b.check_out!).getTime() - new Date(a.check_out!).getTime())
+                lastCheckOut = sortedByOut[0].check_out
+            }
+        }
+
+        const [updatedAttendance] = await db.update(attendance).set({
+            working_hours: recalculatedHours,
+            first_check_in: firstCheckIn || undefined,
+            last_check_out: lastCheckOut || undefined,
+            updated_at: now
+        }).where(eq(attendance.id, effectiveAttendanceId)).returning()
+
+        await db.insert(activities).values({
+            user_id: session.profile_id,
+            activity_type: 'data_edit',
+            module: 'attendance',
+            description: `Session #${session.session_number} was updated by ${updaterName}${remarks ? ` (${remarks})` : ''}`,
+            metadata: {
+                session_id: sessionId,
+                attendance_id: effectiveAttendanceId,
+                check_in: checkIn,
+                check_out: checkOut,
+                working_hours: workingHours,
+                recalculated_hours: recalculatedHours
+            }
+        })
+
+        return {
+            session,
+            attendance: updatedAttendance
+        }
+    }
+
+    /**
+     * Batch update multiple attendance sessions atomically and recalculate daily working hours
+     */
+    static async batchUpdateAttendanceSessions({
+        attendanceId,
+        sessions,
+        updatedBy,
+        updaterName
+    }: {
+        attendanceId: string
+        sessions: Array<{
+            id: string
+            check_in?: string
+            check_out?: string | null
+            status?: 'active' | 'completed' | 'verified' | 'rejected'
+            remarks?: string | null
+        }>
+        updatedBy: string
+        updaterName: string
+    }) {
+        const now = new Date()
+
+        if (!attendanceId) throwAppError('NOT_FOUND', 'Attendance ID is required')
+
+        // 1. Process each session update
+        for (const sess of sessions) {
+            const updateFields: any = {
+                updated_at: now
+            }
+
+            if (sess.status) {
+                updateFields.status = sess.status
+            }
+            if (sess.remarks !== undefined) {
+                updateFields.remarks = sess.remarks || null
+            }
+            if (sess.check_in) {
+                updateFields.check_in = new Date(sess.check_in)
+            }
+            if (sess.check_out !== undefined) {
+                updateFields.check_out = sess.check_out ? new Date(sess.check_out) : null
+            }
+
+            // Recalculate working_hours with exact seconds precision (no truncation)
+            if (updateFields.check_in && updateFields.check_out) {
+                const diffMs = Math.max(0, updateFields.check_out.getTime() - updateFields.check_in.getTime())
+                const diffHours = diffMs / (1000 * 60 * 60)
+                updateFields.working_hours = diffHours.toFixed(2)
+            } else if (updateFields.check_out === null) {
+                updateFields.working_hours = null
+            }
+
+            await db.update(attendanceSessions)
+                .set(updateFields)
+                .where(eq(attendanceSessions.id, sess.id))
+        }
+
+        // 2. Fetch all sessions for this attendance to recalculate daily aggregate totals
+        const allSessions = await db.query.attendanceSessions.findMany({
+            where: eq(attendanceSessions.attendance_id, attendanceId),
+            orderBy: [attendanceSessions.session_number]
+        })
+
+        // Exclude rejected sessions from working_hours with exact seconds precision!
+        const validSessions = allSessions.filter(s => s.status !== 'rejected')
+        const totalSeconds = validSessions.reduce((acc, sess) => {
+            if (sess.check_in && sess.check_out) {
+                const diffMs = Math.max(0, new Date(sess.check_out).getTime() - new Date(sess.check_in).getTime())
+                return acc + (diffMs / 1000)
+            }
+            return acc + (sess.working_hours ? Number(sess.working_hours) * 3600 : 0)
+        }, 0)
+        const recalculatedHours = (totalSeconds / 3600).toFixed(2)
+
+        // Determine first_check_in and last_check_out from non-rejected sessions
+        let firstCheckIn = null
+        let lastCheckOut = null
+        let hasOpenSession = false
+
+        if (validSessions.length > 0) {
+            const sortedByIn = [...validSessions].sort((a, b) => new Date(a.check_in).getTime() - new Date(b.check_in).getTime())
+            firstCheckIn = sortedByIn[0].check_in
+
+            const withOut = validSessions.filter(s => s.check_out)
+            if (withOut.length > 0) {
+                const sortedByOut = [...withOut].sort((a, b) => new Date(b.check_out!).getTime() - new Date(a.check_out!).getTime())
+                lastCheckOut = sortedByOut[0].check_out
+            }
+
+            hasOpenSession = validSessions.some(s => !s.check_out)
+        }
+
+        // Determine if all valid sessions are verified
+        const allValidVerified = validSessions.length > 0 && validSessions.every(s => s.status === 'verified')
+        const allRejected = allSessions.length > 0 && allSessions.every(s => s.status === 'rejected')
+
+        let parentStatus: 'verified' | 'rejected' | 'pending' = 'pending'
+        if (allRejected) {
+            parentStatus = 'rejected'
+        } else if (allValidVerified) {
+            parentStatus = 'verified'
+        }
+
+        const [updatedAttendance] = await db.update(attendance).set({
+            working_hours: recalculatedHours,
+            first_check_in: firstCheckIn || undefined,
+            last_check_out: lastCheckOut || undefined,
+            current_session_status: hasOpenSession ? 'checked_in' : 'checked_out',
+            status: parentStatus,
+            updated_at: now
+        }).where(eq(attendance.id, attendanceId)).returning()
+
+        if (updatedAttendance) {
+            await db.insert(activities).values({
+                user_id: updatedAttendance.profile_id,
+                activity_type: 'data_edit',
+                module: 'attendance',
+                description: `Batch updated ${sessions.length} session(s) by ${updaterName}`,
+                metadata: {
+                    attendance_id: attendanceId,
+                    sessions_count: sessions.length,
+                    recalculated_hours: recalculatedHours,
+                    parent_status: parentStatus
+                }
+            })
+        }
+
+        return {
+            attendance: updatedAttendance,
+            sessions: allSessions
+        }
+    }
+
     static async bulkVerifyAttendance({
         ids,
         status,

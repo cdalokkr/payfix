@@ -58,8 +58,8 @@ export function DailyAttendanceCard({ className }: { className?: string }) {
     const todayRecord = attendance?.find(r => normalizeDate(r.date) === todayStr)
     const pendingRecord = attendance?.find(r => !r.check_out && normalizeDate(r.date) === todayStr)
 
-    // Multi-session state determination
-    const isClockedIn = !!pendingRecord
+    // Multi-session state determination: accurately reflects biometric & web multi-sessions
+    const isClockedIn = todayRecord?.current_session_status === 'checked_in' || (!!todayRecord?.check_in && !todayRecord?.check_out) || !!pendingRecord
     const totalSessionsToday = todayRecord?.total_sessions || 0
     const workingHoursToday = todayRecord?.working_hours ? Number(todayRecord.working_hours).toFixed(1) : '0.0'
 

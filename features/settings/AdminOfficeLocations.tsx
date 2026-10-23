@@ -32,10 +32,22 @@ import {
     Loader2 as IconLoader2,
     LocateFixed as IconLocation,
     CheckCircle2 as IconCircleCheck,
-    XCircle as IconCircleX
+    XCircle as IconCircleX,
+    Clock as IconClock
 } from "lucide-react"
 import { trpc } from "@/lib/trpc/client"
 import { type OfficeLocation } from "@/lib/services/geofence.service"
+
+function formatShiftDisplay(timeStr?: string | null) {
+    if (!timeStr) return '--:--'
+    const parts = timeStr.split(':')
+    const h = parseInt(parts[0], 10)
+    const m = parseInt(parts[1], 10)
+    if (isNaN(h) || isNaN(m)) return timeStr
+    const period = h >= 12 ? 'PM' : 'AM'
+    const displayH = h % 12 === 0 ? 12 : h % 12
+    return `${displayH}:${String(m).padStart(2, '0')} ${period}`
+}
 
 interface LocationForm {
     name: string
@@ -44,6 +56,9 @@ interface LocationForm {
     longitude: string
     radiusMeters: number
     isActive: boolean
+    checkInTime: string
+    checkOutTime: string
+    bufferMinutes: number
 }
 
 const defaultForm: LocationForm = {
@@ -53,6 +68,9 @@ const defaultForm: LocationForm = {
     longitude: '',
     radiusMeters: 200,
     isActive: true,
+    checkInTime: '10:00:00',
+    checkOutTime: '19:00:00',
+    bufferMinutes: 15,
 }
 
 export function AdminOfficeLocations() {
@@ -109,6 +127,9 @@ export function AdminOfficeLocations() {
             longitude: String(location.longitude),
             radiusMeters: location.radiusMeters,
             isActive: location.isActive,
+            checkInTime: location.checkInTime || '10:00:00',
+            checkOutTime: location.checkOutTime || '19:00:00',
+            bufferMinutes: location.bufferMinutes ?? 15,
         })
         setIsDialogOpen(true)
     }, [])
@@ -191,6 +212,9 @@ export function AdminOfficeLocations() {
                 longitude: lng,
                 radiusMeters: form.radiusMeters,
                 isActive: form.isActive,
+                checkInTime: form.checkInTime || '10:00:00',
+                checkOutTime: form.checkOutTime || '19:00:00',
+                bufferMinutes: form.bufferMinutes ?? 15,
             })
         } else {
             addLocation.mutate({
@@ -199,6 +223,9 @@ export function AdminOfficeLocations() {
                 latitude: lat,
                 longitude: lng,
                 radiusMeters: form.radiusMeters,
+                checkInTime: form.checkInTime || '10:00:00',
+                checkOutTime: form.checkOutTime || '19:00:00',
+                bufferMinutes: form.bufferMinutes ?? 15,
             })
         }
     }, [form, editingId, addLocation, updateLocation])
@@ -217,11 +244,11 @@ export function AdminOfficeLocations() {
                 <CardHeader className="flex flex-row items-center justify-between">
                     <div>
                         <CardTitle className="flex items-center gap-2">
-                            <IconMapPin className="w-5 h-5" />
-                            Office Locations
+                            <IconMapPin className="w-5 h-5 text-primary" />
+                            Office Locations & Shift Timings
                         </CardTitle>
                         <CardDescription>
-                            Manage office locations for attendance geofencing
+                            Manage office branches, geofence radius, and individual office shift timings & overtime grace buffer
                         </CardDescription>
                     </div>
                     <Button onClick={() => setIsDialogOpen(true)} className="gap-2">
@@ -238,7 +265,7 @@ export function AdminOfficeLocations() {
                         <div className="text-center py-8 text-muted-foreground">
                             <IconMapPin className="w-12 h-12 mx-auto mb-4 opacity-50" />
                             <p>No office locations configured</p>
-                            <p className="text-sm">Add your first office location to enable geofencing</p>
+                            <p className="text-sm">Add your first office location to enable geofencing and individual shift timings</p>
                         </div>
                     ) : (
                         <Table>
@@ -246,6 +273,7 @@ export function AdminOfficeLocations() {
                                 <TableRow>
                                     <TableHead>Name</TableHead>
                                     <TableHead>Address</TableHead>
+                                    <TableHead>Shift Timings & Grace</TableHead>
                                     <TableHead>Coordinates</TableHead>
                                     <TableHead>Radius</TableHead>
                                     <TableHead>Status</TableHead>
@@ -261,18 +289,29 @@ export function AdminOfficeLocations() {
                                         <TableCell className="text-muted-foreground max-w-[200px] truncate">
                                             {location.address || '-'}
                                         </TableCell>
+                                        <TableCell className="text-xs">
+                                            <div className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                                                <IconClock className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                                                <span>
+                                                    {formatShiftDisplay(location.checkInTime || '10:00:00')} - {formatShiftDisplay(location.checkOutTime || '19:00:00')}
+                                                </span>
+                                            </div>
+                                            <div className="text-[10px] text-muted-foreground font-medium pl-5">
+                                                ±{location.bufferMinutes ?? 15}m extra hrs buffer
+                                            </div>
+                                        </TableCell>
                                         <TableCell className="font-mono text-sm">
                                             {location.latitude.toFixed(5)}, {location.longitude.toFixed(5)}
                                         </TableCell>
                                         <TableCell>{location.radiusMeters}m</TableCell>
                                         <TableCell>
                                             {location.isActive ? (
-                                                <span className="inline-flex items-center gap-1 text-green-600">
+                                                <span className="inline-flex items-center gap-1 text-green-600 font-semibold text-xs">
                                                     <IconCircleCheck className="w-4 h-4" />
                                                     Active
                                                 </span>
                                             ) : (
-                                                <span className="inline-flex items-center gap-1 text-muted-foreground">
+                                                <span className="inline-flex items-center gap-1 text-muted-foreground text-xs">
                                                     <IconCircleX className="w-4 h-4" />
                                                     Inactive
                                                 </span>
@@ -284,6 +323,7 @@ export function AdminOfficeLocations() {
                                                     variant="ghost"
                                                     size="icon"
                                                     onClick={() => handleEdit(location)}
+                                                    title="Edit Location & Timings"
                                                 >
                                                     <IconPencil className="w-4 h-4" />
                                                 </Button>
@@ -292,6 +332,7 @@ export function AdminOfficeLocations() {
                                                     size="icon"
                                                     onClick={() => handleDelete(location.id, location.name)}
                                                     disabled={deleteLocation.isPending}
+                                                    title="Delete Location"
                                                 >
                                                     <IconTrash className="w-4 h-4 text-destructive" />
                                                 </Button>
@@ -306,24 +347,24 @@ export function AdminOfficeLocations() {
             </Card>
 
             <Dialog open={isDialogOpen} onOpenChange={handleDialogClose}>
-                <DialogContent className="sm:max-w-[500px]">
+                <DialogContent className="sm:max-w-[520px] max-h-[92vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>
-                            {editingId ? 'Edit Office Location' : 'Add Office Location'}
+                            {editingId ? 'Edit Office Location & Timings' : 'Add Office Location & Timings'}
                         </DialogTitle>
                         <DialogDescription>
-                            Configure the office location and geofence radius
+                            Configure office geofence location, shift working hours, and extra hours buffer minutes
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="space-y-4 py-4">
+                    <div className="space-y-4 py-2">
                         <div className="space-y-2">
                             <Label htmlFor="name">Location Name *</Label>
                             <Input
                                 id="name"
                                 value={form.name}
                                 onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
-                                placeholder="e.g., Main Office, Branch Office"
+                                placeholder="e.g., Main Office, Noida Branch"
                             />
                         </div>
 
@@ -335,6 +376,61 @@ export function AdminOfficeLocations() {
                                 onChange={(e) => setForm(prev => ({ ...prev, address: e.target.value }))}
                                 placeholder="Full address (optional)"
                             />
+                        </div>
+
+                        {/* Shift Timings & Grace Buffer Setup */}
+                        <div className="space-y-3 p-3.5 rounded-xl border border-indigo-100 dark:border-indigo-900/50 bg-indigo-50/40 dark:bg-indigo-950/20">
+                            <div className="flex items-center gap-2">
+                                <IconClock className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                                <span className="text-xs font-bold text-foreground">Office Timing & Extra Hours Grace Setup</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="checkInTime" className="text-xs font-semibold">Office Start (In Time)</Label>
+                                    <Input
+                                        id="checkInTime"
+                                        type="time"
+                                        step="1"
+                                        value={form.checkInTime.slice(0, 8)}
+                                        onChange={(e) => setForm(prev => ({ ...prev, checkInTime: e.target.value.length === 5 ? `${e.target.value}:00` : e.target.value }))}
+                                        className="h-8 text-xs font-mono"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="checkOutTime" className="text-xs font-semibold">Office End (Out Time)</Label>
+                                    <Input
+                                        id="checkOutTime"
+                                        type="time"
+                                        step="1"
+                                        value={form.checkOutTime.slice(0, 8)}
+                                        onChange={(e) => setForm(prev => ({ ...prev, checkOutTime: e.target.value.length === 5 ? `${e.target.value}:00` : e.target.value }))}
+                                        className="h-8 text-xs font-mono"
+                                    />
+                                </div>
+                            </div>
+                            <div className="space-y-1.5 pt-1">
+                                <div className="flex justify-between items-center">
+                                    <Label htmlFor="bufferMinutes" className="text-xs font-semibold">
+                                        Grace / Buffer (Minutes)
+                                    </Label>
+                                    <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                                        ±{form.bufferMinutes} mins
+                                    </span>
+                                </div>
+                                <Input
+                                    id="bufferMinutes"
+                                    type="number"
+                                    min="0"
+                                    max="180"
+                                    value={form.bufferMinutes}
+                                    onChange={(e) => setForm(prev => ({ ...prev, bufferMinutes: parseInt(e.target.value, 10) || 0 }))}
+                                    className="h-8 text-xs font-mono"
+                                    placeholder="15"
+                                />
+                                <p className="text-[11px] text-muted-foreground leading-tight">
+                                    Punches within {form.bufferMinutes} min of shift time will not count as extra hours. Exceeding {form.bufferMinutes} min counts the full early/late duration as extra hours.
+                                </p>
+                            </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">

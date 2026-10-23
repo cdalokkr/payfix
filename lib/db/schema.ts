@@ -154,7 +154,8 @@ export const attendanceSessions = pgTable('attendance_sessions', {
     checkout_latitude: numeric('checkout_latitude', { precision: 10, scale: 7 }),
     checkout_longitude: numeric('checkout_longitude', { precision: 10, scale: 7 }),
     checkout_location_name: text('checkout_location_name'),
-    status: text('status').notNull().default('active'), // 'active' | 'completed'
+    status: text('status').notNull().default('active'), // 'active' | 'completed' | 'verified' | 'rejected'
+    remarks: text('remarks'),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
@@ -259,9 +260,10 @@ export const officeSettings = pgTable('office_settings', {
 // Office Closures
 export const officeClosures = pgTable('office_closures', {
     id: uuid('id').primaryKey().defaultRandom(),
-    date: date('date').notNull().unique(),
+    date: date('date').notNull(),
     reason: text('reason').notNull(),
     type: text('type').notNull(),
+    location_id: uuid('location_id').references(() => officeLocations.id, { onDelete: 'cascade' }),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 
@@ -300,6 +302,12 @@ export const officeLocations = pgTable('office_locations', {
     longitude: numeric('longitude', { precision: 10, scale: 7 }).notNull(),
     radius_meters: integer('radius_meters').notNull().default(200),
     is_active: boolean('is_active').default(true),
+    check_in_time: text('check_in_time').notNull().default('10:00:00'),
+    check_out_time: text('check_out_time').notNull().default('19:00:00'),
+    buffer_minutes: integer('buffer_minutes').notNull().default(15),
+    off_days: integer('off_days').array().default([0]),
+    daily_working_hours: jsonb('daily_working_hours').default({}),
+    absent_deduction_multiplier: integer('absent_deduction_multiplier'),
     created_by: uuid('created_by').references(() => profiles.id, { onDelete: 'set null' }),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
@@ -602,6 +610,13 @@ export const userStatusHistoryRelations = relations(userStatusHistory, ({ one })
     actor: one(profiles, {
         fields: [userStatusHistory.changed_by],
         references: [profiles.id],
+    }),
+}));
+
+export const officeClosuresRelations = relations(officeClosures, ({ one }) => ({
+    location: one(officeLocations, {
+        fields: [officeClosures.location_id],
+        references: [officeLocations.id],
     }),
 }));
 
