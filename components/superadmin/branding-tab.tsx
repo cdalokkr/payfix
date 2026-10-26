@@ -1,8 +1,9 @@
 "use client";
+/* eslint-disable @next/next/no-img-element */
 
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc/client";
-import { Palette, Sparkles, Image, Check, RefreshCw } from "lucide-react";
+import { Palette, Sparkles, Check, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { AppButton } from "@/components/ui/button-system";
 import { FormInput } from "@/components/ui/form-input";
@@ -47,7 +48,7 @@ export function BrandingTab({ tenant, onRefresh }: BrandingTabProps) {
     setAccentColor(tenant.branding?.accentColor || "#f59e0b");
     setLogoUrl(tenant.branding?.logoUrl || "");
     setFaviconUrl(tenant.branding?.faviconUrl || "");
-  }, [tenant.id, tenant.branding]);
+  }, [tenant.id, tenant.branding, tenant.companyName]);
 
   const updateBrandingMutation = trpc.superadmin.updateTenantBranding.useMutation({
     onSuccess: () => {
@@ -152,7 +153,7 @@ export function BrandingTab({ tenant, onRefresh }: BrandingTabProps) {
             Brand Color Palette
           </h4>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Colors are dynamically injected as CSS custom properties into this tenant's login screen and PWA.
+            Colors are dynamically injected as CSS custom properties into this tenant&apos;s login screen and PWA.
           </p>
         </div>
 

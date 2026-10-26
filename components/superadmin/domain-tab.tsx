@@ -128,7 +128,7 @@ export function DomainTab({ tenant, baseDomain, onRefresh }: DomainTabProps) {
             </h4>
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Attach the client's corporate domain (e.g. <span className="font-mono text-slate-700 dark:text-slate-300">attendance.clientcompany.com</span>). All existing tenant data and biometric sync continue seamlessly.
+            Attach the client&apos;s corporate domain (e.g. <span className="font-mono text-slate-700 dark:text-slate-300">attendance.clientcompany.com</span>). All existing tenant data and biometric sync continue seamlessly.
           </p>
         </div>
 
@@ -183,7 +183,7 @@ export function DomainTab({ tenant, baseDomain, onRefresh }: DomainTabProps) {
               DNS Configuration Instructions for Client IT
             </h4>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Share these DNS records with the client's IT team or domain registrar (GoDaddy, Cloudflare, Namecheap, etc.):
+              Share these DNS records with the client&apos;s IT team or domain registrar (GoDaddy, Cloudflare, Namecheap, etc.):
             </p>
           </div>
         </div>
@@ -226,7 +226,7 @@ export function DomainTab({ tenant, baseDomain, onRefresh }: DomainTabProps) {
 
         <div className="text-[11.5px] text-slate-500 dark:text-slate-400 space-y-1">
           <p>• <strong>Automatic SSL:</strong> Vercel provisions a free, auto-renewing SSL certificate within 5–15 minutes of DNS propagation.</p>
-          <p>• <strong>Supabase Auth:</strong> Add <span className="font-mono text-slate-700 dark:text-slate-300">https://{tenant.customDomain || `${tenant.slug}.${baseDomain}`}/**</span> into Supabase Auth Redirect URLs if using social logins.</p>
+          <p>• <strong>Supabase Auth:</strong> Add <span className="font-mono text-slate-700 dark:text-slate-300">https://{tenant.customDomain || `${tenant.slug}.${baseDomain}`}/{"**"}</span> into Supabase Auth Redirect URLs if using social logins.</p>
         </div>
       </div>
     </div>
