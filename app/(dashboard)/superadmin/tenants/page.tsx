@@ -1,10 +1,14 @@
 "use client";
 
+import { DomainTab } from "@/components/superadmin/domain-tab";
+import { BiometricTab } from "@/components/superadmin/biometric-tab";
+import { BrandingTab } from "@/components/superadmin/branding-tab";
+
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { trpc } from "@/lib/trpc/client";
 import { 
-  Building2, Users, Search, Edit2, Loader2, Trash2, Mail, Phone, Clock,
+  Building2, Users, Globe, Fingerprint, Palette, Search, Edit2, Loader2, Trash2, Mail, Phone, Clock,
   Calendar, Power, Check, ChevronDown, Eye, ShieldCheck,
   CreditCard, DollarSign, UserCheck, Lock, Key, Activity, Plus, Gift, X,
   CheckCircle2, XCircle, AlertCircle, MoreHorizontal, Briefcase, RefreshCw, ArrowUpDown
@@ -57,7 +61,7 @@ export default function TenantsPage() {
   const utils = trpc.useUtils();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"payments" | "logs">("payments");
+  const [activeTab, setActiveTab] = useState<"payments" | "logs" | "domain" | "biometric" | "branding">("payments");
 
   // Status, Plan & Sort Filter States
   const [statusFilter, setStatusFilter] = useState("all");
@@ -1110,6 +1114,42 @@ export default function TenantsPage() {
             <div className="flex border-b border-slate-100 dark:border-slate-800 overflow-x-auto no-scrollbar -mx-2 px-2">
               <button
                 type="button"
+                onClick={() => setActiveTab("domain")}
+                className={`px-4 py-2.5 text-xs sm:text-sm flex items-center whitespace-nowrap -mb-[2px] transition-all cursor-pointer ${
+                  activeTab === "domain"
+                    ? "font-extrabold text-[#635BFF] dark:text-[#0BDBB9] border-b-2 border-[#635BFF] dark:border-[#0BDBB9]"
+                    : "font-semibold text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
+                }`}
+              >
+                <Globe className="w-4 h-4 mr-2 stroke-[1.8]" />
+                Domain & Routing
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("biometric")}
+                className={`px-4 py-2.5 text-xs sm:text-sm flex items-center whitespace-nowrap -mb-[2px] transition-all cursor-pointer ${
+                  activeTab === "biometric"
+                    ? "font-extrabold text-[#635BFF] dark:text-[#0BDBB9] border-b-2 border-[#635BFF] dark:border-[#0BDBB9]"
+                    : "font-semibold text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
+                }`}
+              >
+                <Fingerprint className="w-4 h-4 mr-2 stroke-[1.8]" />
+                Biometric & Hardware
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("branding")}
+                className={`px-4 py-2.5 text-xs sm:text-sm flex items-center whitespace-nowrap -mb-[2px] transition-all cursor-pointer ${
+                  activeTab === "branding"
+                    ? "font-extrabold text-[#635BFF] dark:text-[#0BDBB9] border-b-2 border-[#635BFF] dark:border-[#0BDBB9]"
+                    : "font-semibold text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
+                }`}
+              >
+                <Palette className="w-4 h-4 mr-2 stroke-[1.8]" />
+                White-Label Branding
+              </button>
+              <button
+                type="button"
                 onClick={() => setActiveTab("payments")}
                 className={`px-4 py-2.5 text-xs sm:text-sm flex items-center whitespace-nowrap -mb-[2px] transition-all cursor-pointer ${
                   activeTab === "payments"
@@ -1204,6 +1244,29 @@ export default function TenantsPage() {
                   })}
                 </div>
               </div>
+            )}
+
+            {activeTab === "domain" && (
+              <DomainTab 
+                tenant={selectedTenant} 
+                baseDomain={baseDomain} 
+                onRefresh={() => utils.superadmin.listTenants.invalidate()} 
+              />
+            )}
+
+            {activeTab === "biometric" && (
+              <BiometricTab 
+                tenant={selectedTenant} 
+                baseDomain={baseDomain} 
+                onRefresh={() => utils.superadmin.listTenants.invalidate()} 
+              />
+            )}
+
+            {activeTab === "branding" && (
+              <BrandingTab 
+                tenant={selectedTenant} 
+                onRefresh={() => utils.superadmin.listTenants.invalidate()} 
+              />
             )}
           </div>
         </div>

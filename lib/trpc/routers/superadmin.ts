@@ -2,7 +2,7 @@ import { router, superAdminProcedure } from '../server';
 import { masterDb } from '@/lib/db/master-connection';
 import { centralDb } from '@/lib/db';
 import { tenants, tenantPlans, tenantBranding } from '@/lib/db/master-schema';
-import { eq, sql } from 'drizzle-orm';
+import { eq, and, ne, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import {
@@ -93,6 +93,7 @@ export const superadminRouter = router({
             maxModeratorsOverride: tenant.max_moderators_override,
             licenseExpiresAt: tenant.license_expires_at.toISOString(),
             createdAt: tenant.created_at?.toISOString() || null,
+            biometricApiKey: tenant.biometric_api_key || null,
             plan: plan ? {
               id: plan.id,
               name: plan.name,
@@ -103,7 +104,12 @@ export const superadminRouter = router({
             branding: branding ? {
               appName: branding.app_name,
               primaryColor: branding.primary_color,
-              secondaryColor: branding.secondary_color
+              secondaryColor: branding.secondary_color,
+              shortName: branding.short_name,
+              tagline: branding.tagline,
+              accentColor: branding.accent_color,
+              logoUrl: branding.logo_url,
+              faviconUrl: branding.favicon_url,
             } : null,
             employeeCount,
             moderatorCount,
@@ -667,6 +673,199 @@ export const superadminRouter = router({
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: error instanceof Error ? error.message : 'Failed to provision tenant workspace',
+        });
+      }
+    }),
+
+  // 11. Update tenant custom domain (or remove by passing null/empty string)
+  updateTenantDomain: superAdminProcedure
+    .input(z.object({
+      tenantId: z.string().uuid(),
+      customDomain: z.string().trim().toLowerCase().nullable().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        const rawDomain = input.customDomain?.trim() || null;
+        const normalizedDomain = rawDomain ? rawDomain.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : null;
+
+        if (normalizedDomain) {
+          // Check for conflicts across other tenants
+          const existing = await masterDb.query.tenants.findFirst({
+            where: and(
+              eq(tenants.custom_domain, normalizedDomain),
+              ne(tenants.id, input.tenantId)
+            ),
+          });
+          if (existing) {
+            throw new TRPCError({
+              code: 'CONFLICT',
+              message: `The domain "${normalizedDomain}" is already linked to workspace "${existing.company_name}".`,
+            });
+          }
+        }
+
+        await masterDb
+          .update(tenants)
+          .set({
+            custom_domain: normalizedDomain,
+            updated_at: new Date(),
+          })
+          .where(eq(tenants.id, input.tenantId));
+
+        return { success: true, customDomain: normalizedDomain };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        console.error('[SUPERADMIN] updateTenantDomain error:', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to update custom domain',
+        });
+      }
+    }),
+
+  // 12. Get tenant biometric hardware configuration and live registered devices
+  getTenantBiometricConfig: superAdminProcedure
+    .input(z.object({
+      tenantId: z.string().uuid(),
+    }))
+    .query(async ({ input }) => {
+      try {
+        const tenant = await masterDb.query.tenants.findFirst({
+          where: eq(tenants.id, input.tenantId),
+        });
+
+        if (!tenant) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Tenant not found' });
+        }
+
+        let devices: any[] = [];
+        if (tenant.tenant_schema) {
+          try {
+            devices = await centralDb.execute(sql`
+              SELECT id, name, serial_number, location, ip_address, device_type, status, last_sync_time
+              FROM ${sql.raw(tenant.tenant_schema)}.biometric_devices
+              ORDER BY updated_at DESC;
+            `);
+          } catch (err) {
+            devices = [];
+          }
+        }
+
+        return {
+          tenantId: tenant.id,
+          slug: tenant.slug,
+          companyName: tenant.company_name,
+          customDomain: tenant.custom_domain,
+          biometricApiKey: tenant.biometric_api_key || null,
+          devices: devices.map((d: any) => ({
+            id: d.id,
+            name: d.name,
+            serialNumber: d.serial_number,
+            location: d.location,
+            ipAddress: d.ip_address,
+            deviceType: d.device_type,
+            status: d.status,
+            lastSyncTime: d.last_sync_time ? new Date(d.last_sync_time).toISOString() : null,
+          })),
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        console.error('[SUPERADMIN] getTenantBiometricConfig error:', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch tenant biometric configuration',
+        });
+      }
+    }),
+
+  // 13. Regenerate or generate tenant biometric API key
+  regenerateBiometricKey: superAdminProcedure
+    .input(z.object({
+      tenantId: z.string().uuid(),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        const crypto = await import('crypto');
+        const tenant = await masterDb.query.tenants.findFirst({
+          where: eq(tenants.id, input.tenantId),
+        });
+
+        if (!tenant) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Tenant not found' });
+        }
+
+        const cleanSlug = tenant.slug.replace(/[^a-z0-9]/g, '');
+        const newKey = `bfx_live_${cleanSlug}_${crypto.randomBytes(12).toString('hex')}`;
+
+        await masterDb
+          .update(tenants)
+          .set({
+            biometric_api_key: newKey,
+            updated_at: new Date(),
+          })
+          .where(eq(tenants.id, input.tenantId));
+
+        return { success: true, biometricApiKey: newKey };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        console.error('[SUPERADMIN] regenerateBiometricKey error:', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to regenerate biometric API key',
+        });
+      }
+    }),
+
+  // 14. Update White-Label branding (logos, theme colors, app names)
+  updateTenantBranding: superAdminProcedure
+    .input(z.object({
+      tenantId: z.string().uuid(),
+      appName: z.string().trim().min(2),
+      shortName: z.string().trim().optional(),
+      tagline: z.string().trim().optional(),
+      primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Primary color must be a valid hex code (e.g. #4F46E5)"),
+      secondaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Secondary color must be a valid hex code (e.g. #0F172A)"),
+      accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Accent color must be a valid hex code").optional(),
+      logoUrl: z.string().trim().nullable().optional(),
+      faviconUrl: z.string().trim().nullable().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        const existing = await masterDb.query.tenantBranding.findFirst({
+          where: eq(tenantBranding.tenant_id, input.tenantId),
+        });
+
+        const payload = {
+          app_name: input.appName,
+          short_name: input.shortName || input.appName.substring(0, 15),
+          tagline: input.tagline || null,
+          primary_color: input.primaryColor,
+          secondary_color: input.secondaryColor,
+          accent_color: input.accentColor || '#f59e0b',
+          logo_url: input.logoUrl || null,
+          favicon_url: input.faviconUrl || null,
+          updated_at: new Date(),
+        };
+
+        if (existing) {
+          await masterDb
+            .update(tenantBranding)
+            .set(payload)
+            .where(eq(tenantBranding.tenant_id, input.tenantId));
+        } else {
+          await masterDb.insert(tenantBranding).values({
+            tenant_id: input.tenantId,
+            ...payload,
+          });
+        }
+
+        return { success: true };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        console.error('[SUPERADMIN] updateTenantBranding error:', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to update tenant branding',
         });
       }
     }),
