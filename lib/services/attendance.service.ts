@@ -1,6 +1,6 @@
 import { db } from '@/lib/db'
 import { attendance, attendanceSessions, biometricRawLogs, activities, officeSettings, officeClosures, officeLocations, notifications, leaves, profiles, biometricConsumedProofs } from '@/lib/db/schema'
-import { eq, and, gte, lte, desc, sql, inArray } from 'drizzle-orm'
+import { eq, and, gte, lte, desc, sql, inArray, isNotNull } from 'drizzle-orm'
 import { throwAppError } from '@/lib/errors/app-errors'
 import { SmartCache } from '@/lib/cache/smart-cache'
 import { getLocalDateIST, getLocalTimeIST12Hour } from '@/lib/utils/date-utils'
@@ -71,7 +71,7 @@ export class AttendanceService {
             throwAppError('UNAUTHORIZED', 'Profile ID is required for employee role')
         }
 
-        const [targetProfiles, settings, allClosures] = await Promise.all([
+        const [targetProfiles, settings, allClosures, allLocations] = await Promise.all([
             db.query.profiles.findMany({
                 where: filterProfileId ? eq(profiles.id, filterProfileId) : eq(profiles.status, 'active'),
                 columns: {
@@ -91,15 +91,16 @@ export class AttendanceService {
                 }
             }),
             SmartCache.getOfficeSettingsCached(),
-            SmartCache.getOfficeClosuresCached()
+            SmartCache.getOfficeClosuresCached(),
+            SmartCache.getOfficeLocationsCached()
         ])
 
         if (targetProfiles.length === 0) return []
         const employeeIds = targetProfiles.map(p => p.id)
 
-        const offDays = settings?.off_days || [0]
+        const defaultOffDays = settings?.off_days || [0]
         const closures = allClosures.filter(c => c.date >= dates[0] && c.date <= dates[dates.length - 1])
-        const closuresMap = new Map(closures.map(c => [c.date, c.reason]))
+        const locationsMap = new Map<string, any>(allLocations.map((l: any) => [l.id, l]))
 
         // Fetch leaves, actual attendance records & all sessions concurrently
         const [leavesList, actualRecords, allSessions] = await Promise.all([
@@ -130,6 +131,22 @@ export class AttendanceService {
         // Build a profile lookup map from targetProfiles to stitch profiles in memory (avoiding redundant DB joins)
         const profilesMap = new Map<string, any>(targetProfiles.map((p: any) => [p.id, p]))
 
+        // Infer primary office location for each employee from punch records (or fallback to single active branch)
+        const profileLocationMap = new Map<string, any>()
+        for (const r of actualRecords) {
+            if (r.location_id && !profileLocationMap.has(r.profile_id)) {
+                const loc = locationsMap.get(r.location_id)
+                if (loc) profileLocationMap.set(r.profile_id, loc)
+            }
+        }
+        if (allLocations.length === 1) {
+            for (const p of targetProfiles) {
+                if (!profileLocationMap.has(p.id)) {
+                    profileLocationMap.set(p.id, allLocations[0])
+                }
+            }
+        }
+
         const actualMap = new Map<string, any>()
         for (const r of actualRecords) {
             const profile = profilesMap.get(r.profile_id)
@@ -138,6 +155,7 @@ export class AttendanceService {
                 .sort((a, b) => (a.session_number || 1) - (b.session_number || 1))
             actualMap.set(`${r.profile_id}_${r.date}`, {
                 ...r,
+                location: r.location_id ? (locationsMap.get(r.location_id) || null) : (profileLocationMap.get(r.profile_id) || null),
                 sessions: recordSessions,
                 profile: profile ? {
                     id: profile.id,
@@ -171,8 +189,16 @@ export class AttendanceService {
                     )
                     const dateObj = new Date(dateStr)
                     const dayOfWeek = dateObj.getDay()
+                    const empLocation = profileLocationMap.get(profile.id) || (allLocations.length === 1 ? allLocations[0] : null)
+                    const offDays = (empLocation?.off_days && empLocation.off_days.length > 0)
+                        ? empLocation.off_days
+                        : defaultOffDays
                     const isWeeklyOff = offDays.includes(dayOfWeek)
-                    const holidayReason = closuresMap.get(dateStr)
+                    const holidayClosure = closures.find(c =>
+                        c.date === dateStr &&
+                        (!c.location_id || (empLocation && c.location_id === empLocation.id))
+                    )
+                    const holidayReason = holidayClosure ? holidayClosure.reason : null
 
                     let status: string = 'absent'
                     let isHalfDay = false
@@ -209,6 +235,8 @@ export class AttendanceService {
                         is_half_day: isHalfDay,
                         source: 'bulk',
                         device_id: null,
+                        location_id: empLocation?.id || null,
+                        location: empLocation || null,
                         selfie_url: null,
                         checkin_latitude: null,
                         checkin_longitude: null,
@@ -770,16 +798,38 @@ export class AttendanceService {
             if (existing) {
                 recordId = existing.id
             } else {
-                const settings = await SmartCache.getOfficeSettingsCached()
-                const closures = await SmartCache.getOfficeClosuresCached()
+                const [settings, closures, allLocations] = await Promise.all([
+                    SmartCache.getOfficeSettingsCached(),
+                    SmartCache.getOfficeClosuresCached(),
+                    SmartCache.getOfficeLocationsCached()
+                ])
+                const profileRecentRecord = await db.query.attendance.findFirst({
+                    where: and(
+                        eq(attendance.profile_id, profileId),
+                        isNotNull(attendance.location_id)
+                    ),
+                    columns: { location_id: true }
+                })
+                const empLocation = profileRecentRecord?.location_id 
+                    ? allLocations.find(l => l.id === profileRecentRecord.location_id)
+                    : (allLocations.length === 1 ? allLocations[0] : null)
+
+                const offDays = (empLocation?.off_days && empLocation.off_days.length > 0)
+                    ? empLocation.off_days
+                    : (settings?.off_days || [0])
+
                 const dayOfWeek = new Date(recordDate).getDay()
-                const isOffDay = settings?.off_days?.includes(dayOfWeek)
-                const isHoliday = closures?.some(c => c.date === recordDate)
+                const isOffDay = offDays.includes(dayOfWeek)
+                const isHoliday = closures?.some(c => 
+                    c.date === recordDate && 
+                    (!c.location_id || (empLocation && c.location_id === empLocation.id))
+                )
                 const isExtraDay = (isOffDay || isHoliday) ? true : false
 
                 const [inserted] = await db.insert(attendance).values({
                     profile_id: profileId,
                     date: recordDate,
+                    location_id: empLocation?.id || null,
                     check_in: null,
                     check_out: null,
                     status: 'pending',
@@ -1232,6 +1282,11 @@ export class AttendanceService {
         verifierName: string
     }) {
         const resolvedIds: string[] = []
+        const [settings, closures, allLocations] = await Promise.all([
+            SmartCache.getOfficeSettingsCached(),
+            SmartCache.getOfficeClosuresCached(),
+            SmartCache.getOfficeLocationsCached()
+        ])
 
         for (const id of ids) {
             if (id.startsWith('virtual_')) {
@@ -1249,16 +1304,33 @@ export class AttendanceService {
                 if (existing) {
                     resolvedIds.push(existing.id)
                 } else {
-                    const settings = await SmartCache.getOfficeSettingsCached()
-                    const closures = await SmartCache.getOfficeClosuresCached()
+                    const profileRecentRecord = await db.query.attendance.findFirst({
+                        where: and(
+                            eq(attendance.profile_id, profileId),
+                            isNotNull(attendance.location_id)
+                        ),
+                        columns: { location_id: true }
+                    })
+                    const empLocation = profileRecentRecord?.location_id 
+                        ? allLocations.find(l => l.id === profileRecentRecord.location_id)
+                        : (allLocations.length === 1 ? allLocations[0] : null)
+
+                    const offDays = (empLocation?.off_days && empLocation.off_days.length > 0)
+                        ? empLocation.off_days
+                        : (settings?.off_days || [0])
+
                     const dayOfWeek = new Date(recordDate).getDay()
-                    const isOffDay = settings?.off_days?.includes(dayOfWeek)
-                    const isHoliday = closures?.some(c => c.date === recordDate)
+                    const isOffDay = offDays.includes(dayOfWeek)
+                    const isHoliday = closures?.some(c => 
+                        c.date === recordDate && 
+                        (!c.location_id || (empLocation && c.location_id === empLocation.id))
+                    )
                     const isExtraDay = (isOffDay || isHoliday) ? true : false
 
                     const [inserted] = await db.insert(attendance).values({
                         profile_id: profileId,
                         date: recordDate,
+                        location_id: empLocation?.id || null,
                         check_in: null,
                         check_out: null,
                         status: 'pending',
@@ -1440,11 +1512,32 @@ export class AttendanceService {
         let data: any
 
         if (id.startsWith('virtual_') && recordId === id) {
-            const settings = await SmartCache.getOfficeSettingsCached()
-            const closures = await SmartCache.getOfficeClosuresCached()
+            const [settings, closures, allLocations] = await Promise.all([
+                SmartCache.getOfficeSettingsCached(),
+                SmartCache.getOfficeClosuresCached(),
+                SmartCache.getOfficeLocationsCached()
+            ])
+            const profileRecentRecord = await db.query.attendance.findFirst({
+                where: and(
+                    eq(attendance.profile_id, profileId),
+                    isNotNull(attendance.location_id)
+                ),
+                columns: { location_id: true }
+            })
+            const empLocation = profileRecentRecord?.location_id 
+                ? allLocations.find(l => l.id === profileRecentRecord.location_id)
+                : (allLocations.length === 1 ? allLocations[0] : null)
+
+            const offDays = (empLocation?.off_days && empLocation.off_days.length > 0)
+                ? empLocation.off_days
+                : (settings?.off_days || [0])
+
             const dayOfWeek = new Date(recordDate).getDay()
-            const isOffDay = settings?.off_days?.includes(dayOfWeek)
-            const isHoliday = closures?.some(c => c.date === recordDate)
+            const isOffDay = offDays.includes(dayOfWeek)
+            const isHoliday = closures?.some(c => 
+                c.date === recordDate && 
+                (!c.location_id || (empLocation && c.location_id === empLocation.id))
+            )
             const autoExtraDay = (isOffDay || isHoliday) ? true : false
 
             const resolvedExtraDay = isExtraDay !== undefined ? isExtraDay : autoExtraDay
@@ -1454,6 +1547,7 @@ export class AttendanceService {
             const [inserted] = await db.insert(attendance).values({
                 profile_id: profileId,
                 date: recordDate,
+                location_id: empLocation?.id || null,
                 check_in: updateData.check_in || null,
                 check_out: updateData.check_out || null,
                 status: resolvedStatus,
@@ -1571,9 +1665,13 @@ export class AttendanceService {
 
         try {
             // Pre-fetch office settings and closures for holiday & weekly-off detection
-            const settings = await SmartCache.getOfficeSettingsCached()
-            const closures = await SmartCache.getOfficeClosuresCached()
-            const offDays = settings?.off_days || [0]
+            const [settings, closures, allLocations] = await Promise.all([
+                SmartCache.getOfficeSettingsCached(),
+                SmartCache.getOfficeClosuresCached(),
+                SmartCache.getOfficeLocationsCached(),
+            ])
+            const defaultOffDays = settings?.off_days || [0]
+            const locationsMap = new Map<string, any>(allLocations.map((l: any) => [l.id, l]))
             const holidaysSet = new Set(closures?.map(c => c.date) || [])
 
             const profileIds = [...new Set(records.map(r => r.profileId))]
@@ -1644,7 +1742,7 @@ export class AttendanceService {
                     // Check if date is Sunday (off day) or Holiday
                     const dateObjForDay = new Date(record.date)
                     const dayOfWeek = dateObjForDay.getDay()
-                    const isOffDay = offDays.includes(dayOfWeek)
+                    const isOffDay = defaultOffDays.includes(dayOfWeek)
                     const isHoliday = holidaysSet.has(record.date)
                     const isExtraDay = (isOffDay || isHoliday) ? true : false
 

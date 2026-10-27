@@ -201,6 +201,7 @@ export function createAttendanceColumns({
                     checkIn: record.first_in || record.check_in,
                     checkOut: record.last_out || record.check_out,
                     officeTiming: (record as any).location,
+                    date: dateStr,
                 })
                 const extraHours = extraCalc.extraHours
 

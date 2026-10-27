@@ -582,6 +582,10 @@ export const attendanceRelations = relations(attendance, ({ one }) => ({
         fields: [attendance.verified_by],
         references: [profiles.id],
     }),
+    location: one(officeLocations, {
+        fields: [attendance.location_id],
+        references: [officeLocations.id],
+    }),
 }));
 
 export const activitiesRelations = relations(activities, ({ one }) => ({
@@ -620,11 +624,15 @@ export const officeClosuresRelations = relations(officeClosures, ({ one }) => ({
     }),
 }));
 
-export const officeLocationsRelations = relations(officeLocations, ({ one }) => ({
+export const officeLocationsRelations = relations(officeLocations, ({ one, many }) => ({
     creator: one(profiles, {
         fields: [officeLocations.created_by],
         references: [profiles.id],
     }),
+    attendance: many(attendance),
+    attendanceSessions: many(attendanceSessions),
+    closures: many(officeClosures),
+    kioskDevices: many(kioskDevices),
 }));
 
 export const kioskDevicesRelations = relations(kioskDevices, ({ one }) => ({
