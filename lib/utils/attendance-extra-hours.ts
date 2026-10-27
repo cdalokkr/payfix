@@ -14,7 +14,18 @@ export interface OfficeTimingRule {
     checkInTime?: string | null  // "HH:mm:ss" or "HH:mm" (default: "10:00:00")
     checkOutTime?: string | null // "HH:mm:ss" or "HH:mm" (default: "19:00:00")
     bufferMinutes?: number | null // x threshold (default: 15)
+    check_in_time?: string | null
+    check_out_time?: string | null
+    buffer_minutes?: number | null
+    daily_working_hours?: Record<string, { checkIn?: string; checkOut?: string; check_in?: string; check_out?: string }> | null
+    dailyWorkingHours?: Record<string, { checkIn?: string; checkOut?: string; check_in?: string; check_out?: string }> | null
+    off_days?: number[] | null
+    offDays?: number[] | null
+    absent_deduction_multiplier?: number | null
+    absentDeductionMultiplier?: number | null
 }
+
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
 export function parseTimeToMinutes(timeStr?: string | null, defaultMinutes: number = 0): number {
     if (!timeStr) return defaultMinutes
@@ -29,10 +40,12 @@ export function calculateAttendanceExtraHours({
     checkIn,
     checkOut,
     officeTiming,
+    date,
 }: {
     checkIn?: string | Date | null
     checkOut?: string | Date | null
-    officeTiming?: OfficeTimingRule | null
+    officeTiming?: OfficeTimingRule | any | null
+    date?: string | Date | null
 }): {
     extraHours: number
     earlyExtraHours: number
@@ -43,9 +56,27 @@ export function calculateAttendanceExtraHours({
         bufferMinutes: number
     }
 } {
-    const startTimeStr = officeTiming?.checkInTime || '10:00:00'
-    const endTimeStr = officeTiming?.checkOutTime || '19:00:00'
-    const bufferMinutes = Number(officeTiming?.bufferMinutes ?? 15)
+    // Resolve day-of-week custom schedule if configured
+    const refDate = checkIn ? new Date(checkIn) : (date ? new Date(date) : null)
+    let dayStartTime: string | undefined
+    let dayEndTime: string | undefined
+
+    if (refDate && !isNaN(refDate.getTime()) && officeTiming) {
+        const dayIdx = refDate.getDay()
+        const dayName = DAY_NAMES[dayIdx]
+        const dailySchedule = officeTiming.daily_working_hours || officeTiming.dailyWorkingHours
+        if (dailySchedule && typeof dailySchedule === 'object') {
+            const dayEntry = dailySchedule[dayName] || dailySchedule[dayIdx]
+            if (dayEntry) {
+                dayStartTime = dayEntry.checkIn || dayEntry.check_in
+                dayEndTime = dayEntry.checkOut || dayEntry.check_out
+            }
+        }
+    }
+
+    const startTimeStr = dayStartTime || officeTiming?.check_in_time || officeTiming?.checkInTime || '10:00:00'
+    const endTimeStr = dayEndTime || officeTiming?.check_out_time || officeTiming?.checkOutTime || '19:00:00'
+    const bufferMinutes = Number(officeTiming?.buffer_minutes ?? officeTiming?.bufferMinutes ?? 15)
 
     const ruleApplied = {
         startTime: startTimeStr,

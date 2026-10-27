@@ -10,9 +10,10 @@ import {
     officeClosures,
     salaryPayments
 } from '@/lib/db/schema'
-import { eq, and, gte, lte, desc, sql, inArray, or, ne, gt } from 'drizzle-orm'
+import { eq, and, gte, lte, desc, sql, inArray, or, ne, gt, isNotNull } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { SmartCache } from '@/lib/cache/smart-cache'
+import { calculateAttendanceExtraHours } from '@/lib/utils/attendance-extra-hours'
 
 const MONTH_NAMES = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -424,8 +425,27 @@ export class SalaryService {
                 return updated
             }
 
-            const officeSettingsData = await SmartCache.getOfficeSettingsCached()
-            const multiplier = officeSettingsData?.absent_deduction_multiplier ?? 1
+            const [officeSettingsData, allLocations] = await Promise.all([
+                SmartCache.getOfficeSettingsCached(),
+                SmartCache.getOfficeLocationsCached(),
+            ])
+            let empLocation: any = null
+            if (existingSummary.profile_id) {
+                const lastPunch = await db.query.attendance.findFirst({
+                    where: and(
+                        eq(attendance.profile_id, existingSummary.profile_id),
+                        isNotNull(attendance.location_id)
+                    ),
+                    columns: { location_id: true }
+                })
+                if (lastPunch?.location_id) {
+                    empLocation = allLocations.find(l => l.id === lastPunch.location_id)
+                }
+            }
+            if (!empLocation && allLocations.length === 1) {
+                empLocation = allLocations[0]
+            }
+            const multiplier = empLocation?.absent_deduction_multiplier ?? officeSettingsData?.absent_deduction_multiplier ?? 1
 
             const basic = Number(salarySetup.basic_salary) || 0
             const hra = Number(salarySetup.hra) || 0
@@ -664,7 +684,7 @@ export class SalaryService {
         const endDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`
 
         // Fetch office settings, closures, bulk attendance records, approved leaves, and existing summaries concurrently
-        const [settings, closures, allAttendanceRecords, allLeaves, allExistingSummaries] = await Promise.all([
+        const [settings, closures, allAttendanceRecords, allLeaves, allExistingSummaries, allLocations] = await Promise.all([
             SmartCache.getOfficeSettingsCached(),
             db.query.officeClosures.findMany({
                 where: and(
@@ -693,19 +713,14 @@ export class SalaryService {
                     eq(monthlyAttendanceSummary.month, month),
                     eq(monthlyAttendanceSummary.year, year)
                 )
-            })
+            }),
+            SmartCache.getOfficeLocationsCached(),
         ])
 
         const defaultCheckIn = settings?.default_check_in || '10:00:00'
         const defaultCheckOut = settings?.default_check_out || '19:00:00'
-        const offDays = (settings?.off_days as number[] | null) || [0] // Default Sunday off
-
-        // Calculate scheduled hours per day
-        const [inH, inM] = defaultCheckIn.split(':').map(Number)
-        const [outH, outM] = defaultCheckOut.split(':').map(Number)
-        const scheduledHoursPerDay = ((outH * 60 + outM) - (inH * 60 + inM)) / 60
-
-        const closureDates = new Set(closures.map(c => c.date))
+        const defaultOffDays = (settings?.off_days as number[] | null) || [0] // Default Sunday off
+        const locationsMap = new Map<string, any>(allLocations.map((l: any) => [l.id, l]))
 
         // PAY-01: Company policy enforces per-day salary rate strictly calculated from
         // the total calendar days in the month (e.g. 28/29 for Feb, 30 for Apr/Jun/Sep/Nov, 31 for Jan/Mar/May/Jul/Aug/Oct/Dec).
@@ -729,6 +744,31 @@ export class SalaryService {
             // Filter attendance records in memory
             const records = allAttendanceRecords.filter(r => r.profile_id === employee.id)
 
+            // Determine employee's office location
+            const empRecordWithLoc = records.find(r => r.location_id)
+            const empLocation = empRecordWithLoc?.location_id 
+                ? locationsMap.get(empRecordWithLoc.location_id) 
+                : (allLocations.length === 1 ? allLocations[0] : null)
+
+            // Location-aware off days
+            const empOffDays = (empLocation?.off_days && empLocation.off_days.length > 0)
+                ? (empLocation.off_days as number[])
+                : defaultOffDays
+
+            // Location-aware closures (holidays)
+            const empClosureDates = new Set(
+                closures
+                    .filter(c => !c.location_id || (empLocation && c.location_id === empLocation.id))
+                    .map(c => c.date)
+            )
+
+            // Scheduled hours per day for this employee's branch
+            const empCheckIn = empLocation?.check_in_time || defaultCheckIn
+            const empCheckOut = empLocation?.check_out_time || defaultCheckOut
+            const [eInH, eInM] = empCheckIn.split(':').map(Number)
+            const [eOutH, eOutM] = empCheckOut.split(':').map(Number)
+            const empScheduledHoursPerDay = ((eOutH * 60 + eOutM) - (eInH * 60 + eInM)) / 60
+
             // Filter approved leaves in memory
             const employeeLeaves = allLeaves.filter(l => l.profile_id === employee.id)
 
@@ -747,7 +787,7 @@ export class SalaryService {
                     const d = cur.getDate()
                     const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
 
-                    if (y === year && m === month && !offDays.includes(cur.getDay()) && !closureDates.has(dateStr)) {
+                    if (y === year && m === month && !empOffDays.includes(cur.getDay()) && !empClosureDates.has(dateStr)) {
                         // Check if an attendance record overrides this leave day
                         const attRecord = records.find(r => r.date === dateStr)
                         const isOverriddenByAbsent = attRecord && (attRecord.status === 'absent' || (attRecord.remarks && attRecord.remarks.toLowerCase().includes('absent')))
@@ -779,7 +819,7 @@ export class SalaryService {
                 if (r.is_extra_day) return true
                 const dateObj = new Date(r.date)
                 const dayOfWeek = dateObj.getDay()
-                const isSundayOrHoliday = offDays.includes(dayOfWeek) || closureDates.has(r.date)
+                const isSundayOrHoliday = empOffDays.includes(dayOfWeek) || empClosureDates.has(r.date)
                 return isSundayOrHoliday
             })
 
@@ -796,8 +836,8 @@ export class SalaryService {
                 if (!r.check_in && !r.check_out) {
                     const [y, m, d] = r.date.split('-').map(Number)
                     const dayOfWeek = new Date(y, m - 1, d).getDay()
-                    const isWeeklyOff = offDays.includes(dayOfWeek) || r.status === 'weekly_off'
-                    const isHoliday = closureDates.has(r.date) || r.status === 'holiday'
+                    const isWeeklyOff = empOffDays.includes(dayOfWeek) || r.status === 'weekly_off'
+                    const isHoliday = empClosureDates.has(r.date) || r.status === 'holiday'
                     const hasLeave = (employeeLeaves.some(l => r.date >= l.start_date && r.date <= l.end_date) || r.status === 'leave') && !isMarkedAbsent
                     if (!isWeeklyOff && !isHoliday && !hasLeave) {
                         return true
@@ -813,7 +853,7 @@ export class SalaryService {
                 const dateObj = new Date(year, month - 1, d)
                 const dayOfWeek = dateObj.getDay()
                 
-                if (!offDays.includes(dayOfWeek) && !closureDates.has(dateStr)) {
+                if (!empOffDays.includes(dayOfWeek) && !empClosureDates.has(dateStr)) {
                     const hasRecord = records.some(r => r.date === dateStr)
                     const hasLeave = employeeLeaves.some(l => {
                         const start = l.start_date
@@ -829,8 +869,25 @@ export class SalaryService {
             const absentDays = explicitAbsents + inferredAbsents
 
             const totalWorkingHours = verifiedRecords.reduce((sum, r) => sum + (Number(r.working_hours) || 0), 0)
-            // Extra hours are based on full days + half days * 0.5 scheduled hours
-            const totalExtraHours = Math.max(0, totalWorkingHours - ((presentDays + halfDays * 0.5) * scheduledHoursPerDay))
+            
+            // Calculate extra hours using individual office location timing and buffer rule where available
+            let totalExtraHours = 0
+            for (const r of verifiedRecords) {
+                if (r.check_in && r.check_out) {
+                    const extraCalc = calculateAttendanceExtraHours({
+                        checkIn: r.check_in,
+                        checkOut: r.check_out,
+                        officeTiming: empLocation,
+                        date: r.date
+                    })
+                    totalExtraHours += extraCalc.extraHours
+                }
+            }
+            // Fallback to standard scheduled difference if extra hours not captured by punch buffer
+            if (totalExtraHours === 0 && totalWorkingHours > ((presentDays + halfDays * 0.5) * empScheduledHoursPerDay)) {
+                totalExtraHours = Math.max(0, totalWorkingHours - ((presentDays + halfDays * 0.5) * empScheduledHoursPerDay))
+            }
+            totalExtraHours = parseFloat(totalExtraHours.toFixed(2))
 
             if (existingSummary) {
                 const existingBD = existingSummary.salary_breakdown as Record<string, any> | null
@@ -1069,12 +1126,31 @@ export class SalaryService {
             })
         }
 
-        // Pre-fetch all salary setups in a single query to eliminate N+1 queries
+        // Pre-fetch all salary setups and location data in a single query to eliminate N+1 queries
         const profileIds = summaries.map(s => s.profile_id)
-        const allSalarySetups = await db.query.employeeSalarySetup.findMany({
-            where: inArray(employeeSalarySetup.profile_id, profileIds),
-            orderBy: [desc(employeeSalarySetup.effective_from_year), desc(employeeSalarySetup.effective_from_month)],
-        })
+        const [allSalarySetups, officeSettingsData, allLocations, punchLocations] = await Promise.all([
+            db.query.employeeSalarySetup.findMany({
+                where: inArray(employeeSalarySetup.profile_id, profileIds),
+                orderBy: [desc(employeeSalarySetup.effective_from_year), desc(employeeSalarySetup.effective_from_month)],
+            }),
+            SmartCache.getOfficeSettingsCached(),
+            SmartCache.getOfficeLocationsCached(),
+            db.query.attendance.findMany({
+                where: and(
+                    inArray(attendance.profile_id, profileIds),
+                    isNotNull(attendance.location_id)
+                ),
+                columns: { profile_id: true, location_id: true }
+            })
+        ])
+
+        const profileLocationIdMap = new Map<string, string>()
+        for (const pl of punchLocations) {
+            if (pl.location_id && !profileLocationIdMap.has(pl.profile_id)) {
+                profileLocationIdMap.set(pl.profile_id, pl.location_id)
+            }
+        }
+        const locationsMap = new Map<string, any>(allLocations.map((l: any) => [l.id, l]))
 
         const results: any[] = []
 
@@ -1109,8 +1185,9 @@ export class SalaryService {
                 continue
             }
 
-            const officeSettingsData = await SmartCache.getOfficeSettingsCached()
-            const multiplier = officeSettingsData?.absent_deduction_multiplier ?? 1
+            const locId = profileLocationIdMap.get(summary.profile_id)
+            const empLocation = locId ? locationsMap.get(locId) : (allLocations.length === 1 ? allLocations[0] : null)
+            const multiplier = empLocation?.absent_deduction_multiplier ?? officeSettingsData?.absent_deduction_multiplier ?? 1
 
             const basic = Number(salarySetup.basic_salary) || 0
             const hra = Number(salarySetup.hra) || 0
