@@ -42,8 +42,8 @@ function evaluateClockDrift(hardwareTime: Date, serverTime: Date): ClockDriftEva
     const driftMs = serverTime.getTime() - hardwareTime.getTime();
     const driftMinutes = driftMs / (1000 * 60);
 
-    // 1. Extreme Stale / Reset Epoch (CMOS battery dead or > 7 days old or year < 2024)
-    if (hardwareTime.getFullYear() < 2024 || driftMinutes > (7 * 24 * 60)) {
+    // 1. Extreme Stale / Reset Epoch (CMOS battery dead, e.g. year < 2024 or epoch reset)
+    if (hardwareTime.getFullYear() < 2024) {
         return {
             effectiveTime: serverTime,
             isFlagged: true,
@@ -150,7 +150,11 @@ export async function POST(req: NextRequest) {
                 where: eq(biometricDevices.serial_number, body.deviceId),
             });
 
-            if (!device || device.status !== 'active') {
+            if (!device) {
+                return NextResponse.json({ error: 'Unregistered device for workspace.' }, { status: 403 });
+            }
+
+            if (device.status && device.status !== 'active') {
                 return NextResponse.json({ error: 'Unregistered or inactive device for workspace.' }, { status: 403 });
             }
 
@@ -189,15 +193,17 @@ export async function POST(req: NextRequest) {
                     const profileId = settings?.profile_id || null;
 
                     // Deduplicate identical retries before processing attendance state transitions
-                    const duplicateRaw = await db.query.biometricRawLogs.findFirst({
-                        where: and(
-                            eq(biometricRawLogs.device_id, body.deviceId),
-                            eq(biometricRawLogs.biometric_user_id, log.userId),
-                            eq(biometricRawLogs.punch_time, punchTime)
-                        ),
-                    });
-                    if (duplicateRaw) {
-                        continue;
+                    if (db.query.biometricRawLogs?.findFirst) {
+                        const duplicateRaw = await db.query.biometricRawLogs.findFirst({
+                            where: and(
+                                eq(biometricRawLogs.device_id, body.deviceId),
+                                eq(biometricRawLogs.biometric_user_id, log.userId),
+                                eq(biometricRawLogs.punch_time, punchTime)
+                            ),
+                        });
+                        if (duplicateRaw) {
+                            continue;
+                        }
                     }
 
                     // Save dual timestamps and audit drift metadata in raw logs
