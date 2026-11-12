@@ -12,7 +12,8 @@ const customJestConfig = {
     // Handle module aliases (this will be automatically configured for you based on your tsconfig.json paths)
     '^@/(.*)$': '<rootDir>/$1',
   },
-  testPathIgnorePatterns: ['/node_modules/', '<rootDir>/e2e/'],
+  testPathIgnorePatterns: ['/node_modules/', '<rootDir>/e2e/', '<rootDir>/.kilo/'],
+  modulePathIgnorePatterns: ['<rootDir>/.kilo/'],
   testEnvironment: 'jest-environment-jsdom',
 }
 

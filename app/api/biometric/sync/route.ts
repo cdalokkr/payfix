@@ -85,12 +85,7 @@ export async function POST(req: NextRequest) {
                     });
 
                     const profileId = settings?.profile_id || null;
-                    let punchTime = parseBiometricTimestamp(log.timestamp);
-                    const now = new Date();
-                    // If terminal clock is unsynced (more than 12 hours away from real time), use real-time
-                    if (Math.abs(now.getTime() - punchTime.getTime()) > 12 * 60 * 60 * 1000) {
-                        punchTime = now;
-                    }
+                    const punchTime = parseBiometricTimestamp(log.timestamp);
                     const localDate = formatDateIST(punchTime);
 
                     // 1. Record raw audit log
