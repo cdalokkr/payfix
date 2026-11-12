@@ -5,8 +5,11 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { trpc } from "@/lib/trpc/client"
 import { toast } from "sonner"
-import { Receipt, Loader2, Printer, Eye, AlertTriangle, TrendingUp, TrendingDown, CreditCard, CheckCircle, Save, Calendar as CalendarIcon } from "lucide-react"
+import { Receipt, Loader2, Printer, Eye, AlertTriangle, TrendingUp, TrendingDown, CreditCard, CheckCircle, Save, Calendar as CalendarIcon, FileSpreadsheet, Lock, Unlock, ShieldCheck, ShieldAlert, Banknote, Gift } from "lucide-react"
+import { MonthlyBonusDialog } from "./MonthlyBonusDialog"
 import { CardShell } from "./CardShell"
+import { MetricCard } from "@/components/dashboard/metric-card"
+import { Switch } from "@/components/ui/switch"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { format } from "date-fns"
@@ -35,7 +38,25 @@ const MONTHS = [
     "July", "August", "September", "October", "November", "December"
 ]
 
-export function PayslipGeneration({ basePath }: { basePath: string }) {
+export interface PayslipGenerationProps {
+    basePath: string
+    controlledMonth?: number
+    controlledYear?: number
+    onMonthChange?: (m: number) => void
+    onYearChange?: (y: number) => void
+    onBackToAttendance?: () => void
+    isUnified?: boolean
+}
+
+export function PayslipGeneration({
+    basePath,
+    controlledMonth,
+    controlledYear,
+    onMonthChange,
+    onYearChange,
+    onBackToAttendance,
+    isUnified = false,
+}: PayslipGenerationProps) {
     // Default to last completed month
     const currentDate = new Date()
     let defaultMonth = currentDate.getMonth()
@@ -54,6 +75,7 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
     const utils = trpc.useUtils()
     const [markPaidId, setMarkPaidId] = useState<string | null>(null)
     const [isCalendarOpen, setIsCalendarOpen] = useState(false)
+    const [isBonusModalOpen, setIsBonusModalOpen] = useState(false)
     const [paidMode, setPaidMode] = useState<string>("bank_transfer")
     const [payDate, setPayDate] = useState<string>(new Date().toISOString().split('T')[0])
     const [payReferenceNo, setPayReferenceNo] = useState<string>("")
@@ -131,9 +153,139 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
         onError: (err) => toast.error(err.message),
     })
 
+    const [isExportingExcel, setIsExportingExcel] = useState(false)
+
+    // Access control query & mutations
+    const { data: accessSettings, refetch: refetchAccess } = trpc.salary.getPayslipAccessSettings.useQuery()
+
+    const toggleGlobalMutation = trpc.salary.toggleGlobalPayslipAccess.useMutation({
+        onSuccess: () => {
+            refetchAccess()
+        }
+    })
+
+    const toggleEmployeeMutation = trpc.salary.toggleEmployeePayslipAccess.useMutation({
+        onSuccess: () => {
+            refetch()
+        }
+    })
+
+    const bulkToggleMutation = trpc.salary.bulkToggleEmployeePayslipAccess.useMutation({
+        onSuccess: (data) => {
+            toast.success(`Access updated for ${data.count} employees`)
+            setSelectedIds([])
+            refetch()
+        },
+        onError: (err) => toast.error(err.message)
+    })
+
+    const isGlobalEnabled = accessSettings ? accessSettings.globalEnabled !== false : true
+
+    const handleToggleGlobalAccess = (enabled: boolean) => {
+        toggleGlobalMutation.mutate(
+            { enabled },
+            {
+                onSuccess: (data) => {
+                    toast.success(data.globalEnabled ? "Payslip access enabled for all employees" : "Payslip access disabled workspace-wide")
+                    refetchAccess()
+                    refetch()
+                },
+                onError: (err) => toast.error(err.message || "Failed to update global payslip access")
+            }
+        )
+    }
+
+    const handleToggleEmployeeAccess = (profileId: string, currentEnabled: boolean) => {
+        toggleEmployeeMutation.mutate(
+            { profileId, enabled: !currentEnabled },
+            {
+                onSuccess: (data) => {
+                    toast.success(data.enabled ? "Payslip access enabled for employee" : "Payslip access disabled for employee")
+                    refetch()
+                },
+                onError: (err) => toast.error(err.message || "Failed to update employee access")
+            }
+        )
+    }
+
+    const handleBulkToggle = (enabled: boolean) => {
+        if (selectedIds.length === 0) return
+        const selectedProfileIds = displaySummaries
+            .filter((s: any) => selectedIds.includes(s.id) && s.profile_id)
+            .map((s: any) => s.profile_id)
+        if (selectedProfileIds.length === 0) return
+        bulkToggleMutation.mutate(
+            { profileIds: selectedProfileIds, enabled },
+            {
+                onSuccess: (data) => {
+                    toast.success(`Payslip access ${enabled ? 'enabled' : 'disabled'} for ${data.count} employees`)
+                    setSelectedIds([])
+                    refetch()
+                },
+                onError: (err) => toast.error(err.message)
+            }
+        )
+    }
+
     const displaySummaries = useMemo(() =>
         summaries?.filter((s: any) => s.status === 'set_for_salary' || s.status === 'payslip_generated') || [], [summaries]
     )
+
+    const payrollStats = useMemo(() => {
+        if (!displaySummaries || displaySummaries.length === 0) {
+            return {
+                totalNetSalary: 0,
+                totalGrossSalary: 0,
+                totalDeductions: 0,
+                totalAdvanceRecovered: 0,
+                generatedCount: 0,
+                readyCount: 0,
+                totalPaidAmount: 0,
+                unpaidCount: 0,
+            }
+        }
+
+        let net = 0
+        let gross = 0
+        let deductions = 0
+        let advances = 0
+        let generated = 0
+        let ready = 0
+        let paidAmt = 0
+        let unpaid = 0
+
+        displaySummaries.forEach((s: any) => {
+            const bd = s.salary_breakdown as Record<string, any> | null
+            const isGen = s.status === 'payslip_generated'
+
+            if (isGen) {
+                generated++
+                net += Number(s.take_home) || 0
+                gross += Number(s.gross_salary) || 0
+                deductions += (Number(s.absence_deduction) || 0) + (Number(bd?.other_deductions) || 0) + (Number(s.advance_recovery) || 0)
+                advances += Number(s.advance_recovery) || 0
+
+                const paidSoFar = s.payments?.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0
+                paidAmt += paidSoFar
+                if (paidSoFar < (Number(s.take_home) || 0)) {
+                    unpaid++
+                }
+            } else {
+                ready++
+            }
+        })
+
+        return {
+            totalNetSalary: net,
+            totalGrossSalary: gross,
+            totalDeductions: deductions,
+            totalAdvanceRecovered: advances,
+            generatedCount: generated,
+            readyCount: ready,
+            totalPaidAmount: paidAmt,
+            unpaidCount: unpaid,
+        }
+    }, [displaySummaries])
 
     const selectedSummary = useMemo(() =>
         summaries?.find((s: any) => s.id === markPaidId), [summaries, markPaidId]
@@ -235,6 +387,239 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
         }
     }
 
+    const handleExportExcel = async () => {
+        if (!displaySummaries || displaySummaries.length === 0) {
+            toast.error("No payroll records available to export")
+            return
+        }
+
+        setIsExportingExcel(true)
+        try {
+            const ExcelJS = (await import('exceljs')).default
+            const workbook = new ExcelJS.Workbook()
+            const monthName = MONTHS[month - 1]
+            const worksheet = workbook.addWorksheet(`${monthName} ${year} Payroll`, {
+                pageSetup: {
+                    orientation: 'landscape',
+                    paperSize: 9, // A4
+                    fitToPage: true,
+                    fitToWidth: 1,
+                    fitToHeight: 0,
+                    margins: {
+                        left: 0.3,
+                        right: 0.3,
+                        top: 0.4,
+                        bottom: 0.4,
+                        header: 0.2,
+                        footer: 0.2
+                    }
+                }
+            })
+
+            // 1. Title Block
+            worksheet.mergeCells('A1:U1')
+            const titleCell = worksheet.getCell('A1')
+            titleCell.value = 'PAYFIX WORKSPACE - MONTHLY SALARY REGISTER'
+            titleCell.font = { name: 'Calibri', size: 15, bold: true, color: { argb: 'FFFFFFFF' } }
+            titleCell.alignment = { horizontal: 'center', vertical: 'middle' }
+            titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF635BFF' } }
+            worksheet.getRow(1).height = 28
+
+            worksheet.mergeCells('A2:U2')
+            const subTitleCell = worksheet.getCell('A2')
+            subTitleCell.value = `Salary & Attendance Statement for the period of ${monthName} ${year} (Landscape A4)`
+            subTitleCell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF334155' } }
+            subTitleCell.alignment = { horizontal: 'center', vertical: 'middle' }
+            subTitleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } }
+            worksheet.getRow(2).height = 20
+
+            worksheet.mergeCells('A3:U3')
+            const dateCell = worksheet.getCell('A3')
+            dateCell.value = `Generated on: ${format(new Date(), 'dd MMMM yyyy, HH:mm:ss')} | Total Records: ${displaySummaries.length}`
+            dateCell.font = { name: 'Calibri', size: 9, italic: true, color: { argb: 'FF64748B' } }
+            dateCell.alignment = { horizontal: 'center', vertical: 'middle' }
+            worksheet.getRow(3).height = 16
+
+            worksheet.getRow(4).height = 8
+
+            // 2. Table Column Headers
+            const columns = [
+                { header: 'S.No', key: 'sno', width: 6 },
+                { header: 'Employee Name', key: 'name', width: 22 },
+                { header: 'Email ID', key: 'email', width: 24 },
+                { header: 'Designation', key: 'designation', width: 16 },
+                { header: 'Department', key: 'department', width: 16 },
+                { header: 'Month Days', key: 'month_days', width: 11 },
+                { header: 'Present', key: 'present', width: 9 },
+                { header: 'Absent', key: 'absent', width: 9 },
+                { header: 'Half Days', key: 'half_days', width: 10 },
+                { header: 'Paid Leaves', key: 'leaves', width: 11 },
+                { header: 'Extra Days', key: 'extra_days', width: 10 },
+                { header: 'Basic Salary', key: 'basic', width: 14 },
+                { header: 'Gross Earnings', key: 'gross', width: 15 },
+                { header: 'Absent Deduct.', key: 'absent_deduct', width: 14 },
+                { header: 'Half Day Deduct.', key: 'half_deduct', width: 14 },
+                { header: 'Advance Rec.', key: 'adv_rec', width: 13 },
+                { header: 'Other Deduct.', key: 'other_deduct', width: 13 },
+                { header: 'Total Deductions', key: 'total_deduct', width: 15 },
+                { header: 'Net Salary', key: 'net_salary', width: 16 },
+                { header: 'Status', key: 'status', width: 12 },
+                { header: 'Paid Details', key: 'pay_details', width: 22 },
+            ]
+
+            worksheet.columns = columns
+
+            const headerRow = worksheet.getRow(5)
+            headerRow.values = columns.map(c => c.header)
+            headerRow.height = 24
+            headerRow.eachCell((cell) => {
+                cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } }
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } }
+                cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+                cell.border = {
+                    top: { style: 'thin', color: { argb: 'FF94A3B8' } },
+                    bottom: { style: 'medium', color: { argb: 'FF0F172A' } },
+                    left: { style: 'thin', color: { argb: 'FF94A3B8' } },
+                    right: { style: 'thin', color: { argb: 'FF94A3B8' } },
+                }
+            })
+
+            // 3. Data Rows
+            displaySummaries.forEach((s: any, idx: number) => {
+                const bd = s.salary_breakdown as Record<string, any> | null
+                const isGenerated = s.status === 'payslip_generated'
+
+                const basicSalary = Number(bd?.basic_salary || s.monthly_salary || 0)
+                const grossEarnings = Number(s.gross_salary || bd?.gross_salary || 0)
+                const absentDeduction = Number(bd?.absent_deduction || s.absence_deduction || 0)
+                const halfDayDeduction = Number(bd?.half_day_deduction || 0)
+                const advanceRecovery = Number(s.advance_recovery || bd?.advance_recovery || 0)
+                const otherDeductions = Number(bd?.other_deductions || 0)
+                const totalDeductions = Number(s.absence_deduction || 0) + Number(bd?.other_deductions || 0) + Number(s.advance_recovery || 0)
+                const netSalary = Number(s.take_home || bd?.take_home || s.net_salary || 0)
+
+                const paidSoFar = s.payments?.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0
+                const paymentStatus = !isGenerated ? 'Draft' : paidSoFar === 0 ? 'Unpaid' : paidSoFar >= netSalary ? 'Paid' : `Partial (${paidSoFar})`
+                const payDetails = s.paid_mode ? `${s.paid_mode.toUpperCase()} on ${s.pay_date || 'N/A'}${s.pay_reference_no ? ` (${s.pay_reference_no})` : ''}` : '—'
+
+                const row = worksheet.addRow({
+                    sno: idx + 1,
+                    name: s.profile?.full_name || '—',
+                    email: s.profile?.email || '—',
+                    designation: s.profile?.designation?.name || '—',
+                    department: s.profile?.department?.name || '—',
+                    month_days: s.total_working_days || 0,
+                    present: s.total_present_days || 0,
+                    absent: s.total_absent_days || 0,
+                    half_days: s.total_half_days || 0,
+                    leaves: Number(s.total_leaves || 0),
+                    extra_days: Number(bd?.extra_days || 0),
+                    basic: basicSalary,
+                    gross: grossEarnings,
+                    absent_deduct: absentDeduction,
+                    half_deduct: halfDayDeduction,
+                    adv_rec: advanceRecovery,
+                    other_deduct: otherDeductions,
+                    total_deduct: totalDeductions,
+                    net_salary: netSalary,
+                    status: paymentStatus,
+                    pay_details: payDetails,
+                })
+
+                row.height = 20
+                const isEven = idx % 2 === 0
+                row.eachCell((cell, colNumber) => {
+                    cell.font = { name: 'Calibri', size: 9.5 }
+                    if (isEven) {
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } }
+                    }
+                    cell.border = {
+                        top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                        bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                        left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                        right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                    }
+
+                    if ([6, 7, 8, 9, 10, 11].includes(colNumber)) {
+                        cell.alignment = { horizontal: 'center', vertical: 'middle' }
+                    } else if ([12, 13, 14, 15, 16, 17, 18, 19].includes(colNumber)) {
+                        cell.numFmt = '₹#,##0.00'
+                        cell.alignment = { horizontal: 'right', vertical: 'middle' }
+                    } else if (colNumber === 1 || colNumber === 20) {
+                        cell.alignment = { horizontal: 'center', vertical: 'middle' }
+                    } else {
+                        cell.alignment = { horizontal: 'left', vertical: 'middle' }
+                    }
+                })
+            })
+
+            // 4. Summary Totals Row
+            const totalGross = displaySummaries.reduce((sum: number, s: any) => sum + Number(s.gross_salary || 0), 0)
+            const totalAbsDeduct = displaySummaries.reduce((sum: number, s: any) => sum + Number((s.salary_breakdown as any)?.absent_deduction || s.absence_deduction || 0), 0)
+            const totalHalfDeduct = displaySummaries.reduce((sum: number, s: any) => sum + Number((s.salary_breakdown as any)?.half_day_deduction || 0), 0)
+            const totalAdvRec = displaySummaries.reduce((sum: number, s: any) => sum + Number(s.advance_recovery || 0), 0)
+            const totalOtherDeduct = displaySummaries.reduce((sum: number, s: any) => sum + Number((s.salary_breakdown as any)?.other_deductions || 0), 0)
+            const totalAllDeduct = displaySummaries.reduce((sum: number, s: any) => sum + Number(s.absence_deduction || 0) + Number((s.salary_breakdown as any)?.other_deductions || 0) + Number(s.advance_recovery || 0), 0)
+            const totalNet = displaySummaries.reduce((sum: number, s: any) => sum + Number(s.take_home || (s.salary_breakdown as any)?.take_home || s.net_salary || 0), 0)
+
+            const totalRow = worksheet.addRow({
+                sno: '',
+                name: 'TOTALS (ALL EMPLOYEES)',
+                email: '',
+                designation: '',
+                department: '',
+                month_days: '',
+                present: '',
+                absent: '',
+                half_days: '',
+                leaves: '',
+                extra_days: '',
+                basic: '',
+                gross: totalGross,
+                absent_deduct: totalAbsDeduct,
+                half_deduct: totalHalfDeduct,
+                adv_rec: totalAdvRec,
+                other_deduct: totalOtherDeduct,
+                total_deduct: totalAllDeduct,
+                net_salary: totalNet,
+                status: '',
+                pay_details: '',
+            })
+
+            totalRow.height = 24
+            totalRow.eachCell((cell, colNumber) => {
+                cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF0F172A' } }
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } }
+                cell.border = {
+                    top: { style: 'thin', color: { argb: 'FF64748B' } },
+                    bottom: { style: 'double', color: { argb: 'FF0F172A' } },
+                    left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                    right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                }
+                if ([13, 14, 15, 16, 17, 18, 19].includes(colNumber)) {
+                    cell.numFmt = '₹#,##0.00'
+                    cell.alignment = { horizontal: 'right', vertical: 'middle' }
+                }
+            })
+
+            // 5. Download buffer
+            const buffer = await workbook.xlsx.writeBuffer()
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+            const url = URL.createObjectURL(blob)
+            const anchor = document.createElement('a')
+            anchor.href = url
+            anchor.download = `PAYROLL-REGISTER-${monthName.toUpperCase()}-${year}.xlsx`
+            anchor.click()
+            URL.revokeObjectURL(url)
+            toast.success(`Exported detailed payroll report for ${monthName} ${year}`)
+        } catch (err: any) {
+            console.error('Excel export error:', err)
+            toast.error('Failed to export Excel payroll sheet')
+        } finally {
+            setIsExportingExcel(false)
+        }
+    }
+
     const breakdown = payslipDetail?.salary_breakdown as Record<string, any> | null
 
     const viewedSummary = summaries?.find((s: any) => s.id === viewPayslipId) || null
@@ -251,7 +636,9 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
         Number(breakdown.ta || 0) +
         Number(breakdown.special_allowance || 0) +
         Number(breakdown.incentive || 0) +
-        Number(breakdown.extra_day_payment || 0)
+        Number(breakdown.monthly_bonus || 0) +
+        Number(breakdown.extra_day_payment || 0) +
+        Number(breakdown.extra_shift_payment || 0)
     ) : 0
 
     const totalDeductions = breakdown ? (
@@ -267,7 +654,9 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
         { label: 'TA', amount: breakdown.ta },
         { label: 'Special Allowance', amount: breakdown.special_allowance },
         { label: 'Incentive', amount: breakdown.incentive },
+        ...(Number(breakdown.monthly_bonus) > 0 ? [{ label: breakdown.bonus_title || 'Monthly Bonus / Incentive', amount: breakdown.monthly_bonus }] : []),
         ...(Number(breakdown.extra_day_payment) > 0 ? [{ label: 'Extra Days Payment', amount: breakdown.extra_day_payment }] : []),
+        ...(Number(breakdown.extra_shift_payment) > 0 ? [{ label: `Extra Shift Pay (${breakdown.extra_shift_equivalent_days || 1} shifts)`, amount: breakdown.extra_shift_payment }] : []),
     ].filter(e => Number(e.amount) > 0) : []
 
     const deductionItems = breakdown ? [
@@ -347,8 +736,9 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
     return (
         <TooltipProvider>
             <div className="space-y-6">
-                {/* Controls */}
-                <div className="flex flex-col sm:flex-row sm:items-end gap-4">
+                {/* Controls & Action Buttons */}
+                {!isUnified && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div className="flex items-center gap-2">
                         <Select value={String(month)} onValueChange={(val) => setMonth(Number(val))}>
                             <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
@@ -368,18 +758,168 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
                         </Select>
                     </div>
 
-                    {selectedIds.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
                         <Button
-                            onClick={() => generateMutation.mutate({ ids: selectedIds })}
-                            disabled={generateMutation.isPending}
-                            className="sm:ml-auto"
+                            variant="outline"
+                            onClick={handleExportExcel}
+                            disabled={isExportingExcel || displaySummaries.length === 0}
+                            className="font-medium gap-1.5 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 shadow-xs"
                         >
-                            {generateMutation.isPending
-                                ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Generating...</>
-                                : <><Receipt className="h-4 w-4 mr-1" />Generate Payslips ({selectedIds.length})</>
-                            }
+                            {isExportingExcel ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                                <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                            )}
+                            Export Detailed Payroll (Excel)
                         </Button>
-                    )}
+
+                        {!isUnified && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-1.5 rounded-lg border-amber-300 dark:border-amber-800/60 text-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 font-semibold"
+                                onClick={() => setIsBonusModalOpen(true)}
+                            >
+                                <Gift className="h-4 w-4 text-amber-500" />
+                                Bonus / Incentives
+                            </Button>
+                        )}
+
+                        {selectedIds.length > 0 && (
+                            <Button
+                                onClick={() => generateMutation.mutate({ ids: selectedIds })}
+                                disabled={generateMutation.isPending}
+                            >
+                                {generateMutation.isPending
+                                    ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Generating...</>
+                                    : <><Receipt className="h-4 w-4 mr-1" />Generate Payslips ({selectedIds.length})</>
+                                }
+                            </Button>
+                        )}
+                    </div>
+                </div>
+                )}
+
+                {/* Top Payroll Summary Metric Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <MetricCard
+                        title="Total Net Payout"
+                        value={formatCurrency(payrollStats.totalNetSalary)}
+                        description={`${payrollStats.generatedCount} payslips · ${payrollStats.unpaidCount} pending payout`}
+                        icon={<Banknote className="h-4 w-4" />}
+                        iconBgColor="bg-emerald-500/10"
+                        iconColor="text-emerald-600 dark:text-emerald-400"
+                        cardBgColor="bg-[#FFFFFF] dark:bg-zinc-900"
+                        borderColor="border-x-gray-200/80 border-b-gray-200/80 dark:border-x-zinc-800 dark:border-b-zinc-800"
+                        topBorderColor="border-t-emerald-600 dark:border-t-emerald-400"
+                        hoverBorderColor="hover:border-t-emerald-600 hover:border-x-emerald-500/30 hover:border-b-emerald-500/30 dark:hover:border-t-emerald-400 dark:hover:border-x-emerald-500/40 dark:hover:border-b-emerald-500/40"
+                        hoverShadowColor="hover:shadow-[0_8px_30px_rgba(16,185,129,0.12)] dark:hover:shadow-[0_8px_30px_rgba(52,211,153,0.2)]"
+                        loading={isLoading}
+                        delay={0.05}
+                    />
+                    <MetricCard
+                        title="Total Gross Earnings"
+                        value={formatCurrency(payrollStats.totalGrossSalary)}
+                        description="Base salary + all allowances"
+                        icon={<TrendingUp className="h-4 w-4" />}
+                        iconBgColor="bg-blue-500/10"
+                        iconColor="text-blue-600 dark:text-blue-400"
+                        cardBgColor="bg-[#FFFFFF] dark:bg-zinc-900"
+                        borderColor="border-x-gray-200/80 border-b-gray-200/80 dark:border-x-zinc-800 dark:border-b-zinc-800"
+                        topBorderColor="border-t-blue-600 dark:border-t-blue-400"
+                        hoverBorderColor="hover:border-t-blue-600 hover:border-x-blue-500/30 hover:border-b-blue-500/30 dark:hover:border-t-blue-400 dark:hover:border-x-blue-500/40 dark:hover:border-b-blue-500/40"
+                        hoverShadowColor="hover:shadow-[0_8px_30px_rgba(59,130,246,0.12)] dark:hover:shadow-[0_8px_30px_rgba(96,165,250,0.2)]"
+                        loading={isLoading}
+                        delay={0.1}
+                    />
+                    <MetricCard
+                        title="Total Deductions"
+                        value={formatCurrency(payrollStats.totalDeductions)}
+                        description={`Adv. Recovered: ${formatCurrency(payrollStats.totalAdvanceRecovered)}`}
+                        icon={<TrendingDown className="h-4 w-4" />}
+                        iconBgColor="bg-rose-500/10"
+                        iconColor="text-rose-600 dark:text-rose-400"
+                        cardBgColor="bg-[#FFFFFF] dark:bg-zinc-900"
+                        borderColor="border-x-gray-200/80 border-b-gray-200/80 dark:border-x-zinc-800 dark:border-b-zinc-800"
+                        topBorderColor="border-t-rose-600 dark:border-t-rose-400"
+                        hoverBorderColor="hover:border-t-rose-600 hover:border-x-rose-500/30 hover:border-b-rose-500/30 dark:hover:border-t-rose-400 dark:hover:border-x-rose-500/40 dark:hover:border-b-rose-500/40"
+                        hoverShadowColor="hover:shadow-[0_8px_30px_rgba(244,63,94,0.12)] dark:hover:shadow-[0_8px_30px_rgba(251,113,133,0.2)]"
+                        loading={isLoading}
+                        delay={0.15}
+                    />
+                    <MetricCard
+                        title="Payslip Progress"
+                        value={`${payrollStats.generatedCount} / ${displaySummaries.length}`}
+                        description={payrollStats.readyCount > 0 ? `${payrollStats.readyCount} pending generation` : "All payslips generated"}
+                        icon={<CheckCircle className="h-4 w-4" />}
+                        iconBgColor="bg-purple-500/10"
+                        iconColor="text-purple-600 dark:text-purple-400"
+                        cardBgColor="bg-[#FFFFFF] dark:bg-zinc-900"
+                        borderColor="border-x-gray-200/80 border-b-gray-200/80 dark:border-x-zinc-800 dark:border-b-zinc-800"
+                        topBorderColor="border-t-purple-600 dark:border-t-purple-400"
+                        hoverBorderColor="hover:border-t-purple-600 hover:border-x-purple-500/30 hover:border-b-purple-500/30 dark:hover:border-t-purple-400 dark:hover:border-x-purple-500/40 dark:hover:border-b-purple-500/40"
+                        hoverShadowColor="hover:shadow-[0_8px_30px_rgba(168,85,247,0.12)] dark:hover:shadow-[0_8px_30px_rgba(192,132,252,0.2)]"
+                        loading={isLoading}
+                        delay={0.2}
+                    />
+                </div>
+
+                {/* Workspace Payslip Access Control Bar */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md shadow-xs">
+                    <div className="flex items-center gap-3">
+                        <div className={`p-2.5 rounded-xl ${isGlobalEnabled ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-rose-500/15 text-rose-600 dark:text-rose-400'}`}>
+                            {isGlobalEnabled ? <ShieldCheck className="h-5 w-5" /> : <ShieldAlert className="h-5 w-5" />}
+                        </div>
+                        <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm font-bold">Employee Self-Service (Payslips & Salary Book)</span>
+                                <Badge variant="outline" className={isGlobalEnabled ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/25 text-[10px] font-semibold" : "bg-rose-500/10 text-rose-600 border-rose-500/25 text-[10px] font-semibold"}>
+                                    {isGlobalEnabled ? "Workspace Active" : "Workspace Disabled"}
+                                </Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground leading-snug">
+                                {isGlobalEnabled
+                                    ? "Active: Employees can access their payslips & passbook on PWA and Web (subject to individual toggles below)."
+                                    : "Master Block Active: No employee can view or download payslips or passbook on either mobile app or web."}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 self-end md:self-center">
+                        {selectedIds.length > 0 && (
+                            <div className="flex items-center gap-1.5 mr-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleBulkToggle(true)}
+                                    disabled={bulkToggleMutation.isPending}
+                                    className="text-xs h-8 text-emerald-600 border-emerald-500/20 hover:bg-emerald-500/10"
+                                >
+                                    <Unlock className="h-3 w-3 mr-1" />
+                                    Enable ({selectedIds.length})
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleBulkToggle(false)}
+                                    disabled={bulkToggleMutation.isPending}
+                                    className="text-xs h-8 text-rose-600 border-rose-500/20 hover:bg-rose-500/10"
+                                >
+                                    <Lock className="h-3 w-3 mr-1" />
+                                    Disable ({selectedIds.length})
+                                </Button>
+                            </div>
+                        )}
+
+                        <div className="flex items-center gap-2 pl-2 border-l border-border/50">
+                            <span className="text-xs font-semibold text-muted-foreground">Master Switch:</span>
+                            <Switch
+                                checked={isGlobalEnabled}
+                                onCheckedChange={handleToggleGlobalAccess}
+                                disabled={toggleGlobalMutation.isPending}
+                            />
+                        </div>
+                    </div>
                 </div>
 
                 {displaySummaries.length > 0 && (
@@ -387,6 +927,37 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
                         title="Payslips"
                         icon={Receipt}
                         description="Records confirmed for salary with payslip generation options"
+                        headerActions={
+                            <div className="flex items-center gap-2">
+                                {selectedIds.length > 0 && (
+                                    <Button
+                                        size="sm"
+                                        onClick={() => generateMutation.mutate({ ids: selectedIds })}
+                                        disabled={generateMutation.isPending}
+                                        className="h-8 text-xs font-bold gap-1.5"
+                                    >
+                                        {generateMutation.isPending
+                                            ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Generating...</>
+                                            : <><Receipt className="h-3.5 w-3.5" />Generate Payslips ({selectedIds.length})</>
+                                        }
+                                    </Button>
+                                )}
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleExportExcel}
+                                    disabled={isExportingExcel || displaySummaries.length === 0}
+                                    className="font-semibold gap-1.5 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 shadow-xs h-8 text-xs"
+                                >
+                                    {isExportingExcel ? (
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    ) : (
+                                        <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                    )}
+                                    Export Detailed Payroll (Excel)
+                                </Button>
+                            </div>
+                        }
                         contentClassName="p-0"
                     >
                         {/* Mobile */}
@@ -488,6 +1059,27 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
                                                     <div><span className="text-muted-foreground mr-1">Take-Home:</span><span className="font-medium text-emerald-600">{formatCurrency(s.take_home)}</span></div>
                                                 </div>
                                             )}
+
+                                            <div className="flex items-center justify-between pt-2 mt-2 border-t border-border/30 text-xs">
+                                                <div className="flex items-center gap-1.5 text-muted-foreground">
+                                                    {s.profile?.payslip_enabled !== false ? (
+                                                        <Unlock className="h-3.5 w-3.5 text-emerald-500" />
+                                                    ) : (
+                                                        <Lock className="h-3.5 w-3.5 text-rose-500" />
+                                                    )}
+                                                    <span className="text-[11px] font-medium">Payslip Access:</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <Badge variant="outline" className={s.profile?.payslip_enabled !== false ? "text-[9px] px-1.5 py-0 bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : "text-[9px] px-1.5 py-0 bg-rose-500/10 text-rose-600 border-rose-500/20"}>
+                                                        {s.profile?.payslip_enabled !== false ? 'Enabled' : 'Disabled'}
+                                                    </Badge>
+                                                    <Switch
+                                                        checked={s.profile?.payslip_enabled !== false}
+                                                        disabled={!isGlobalEnabled || toggleEmployeeMutation.isPending}
+                                                        onCheckedChange={() => handleToggleEmployeeAccess(s.profile_id, s.profile?.payslip_enabled !== false)}
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -513,6 +1105,7 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
                                         <th className="p-3 text-right font-semibold text-muted-foreground">Adv. Rec.</th>
                                         <th className="p-3 text-right font-semibold text-muted-foreground">Take-Home</th>
                                         <th className="p-3 text-center font-semibold text-muted-foreground">Status</th>
+                                        <th className="p-3 text-center font-semibold text-muted-foreground">Self-Service</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border/30">
@@ -609,6 +1202,35 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
                                                         Ready
                                                     </Badge>
                                                 )}
+                                            </td>
+                                            <td className="p-3 text-center">
+                                                <div className="flex items-center justify-center gap-1.5">
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <div className="inline-flex items-center">
+                                                                <Switch
+                                                                    checked={s.profile?.payslip_enabled !== false}
+                                                                    disabled={!isGlobalEnabled || toggleEmployeeMutation.isPending}
+                                                                    onCheckedChange={() => handleToggleEmployeeAccess(s.profile_id, s.profile?.payslip_enabled !== false)}
+                                                                />
+                                                            </div>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>
+                                                            {!isGlobalEnabled ? (
+                                                                <p>Workspace master switch is disabled</p>
+                                                            ) : s.profile?.payslip_enabled !== false ? (
+                                                                <p>Self-service enabled. Click to disable for this employee.</p>
+                                                            ) : (
+                                                                <p>Self-service disabled. Click to enable for this employee.</p>
+                                                            )}
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                    {s.profile?.payslip_enabled === false ? (
+                                                        <Lock className="h-3.5 w-3.5 text-rose-500" />
+                                                    ) : (
+                                                        <Unlock className="h-3.5 w-3.5 text-emerald-500/60" />
+                                                    )}
+                                                </div>
                                             </td>
                                         </tr>
                                     )})}
@@ -1288,6 +1910,14 @@ export function PayslipGeneration({ basePath }: { basePath: string }) {
                         </div>
                     </DialogContent>
                 </Dialog>
+
+                <MonthlyBonusDialog
+                    isOpen={isBonusModalOpen}
+                    onOpenChange={setIsBonusModalOpen}
+                    month={month}
+                    year={year}
+                    onSuccess={() => refetch()}
+                />
             </div>
         </TooltipProvider>
     )

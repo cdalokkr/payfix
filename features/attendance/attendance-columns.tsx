@@ -19,6 +19,8 @@ export type DayType =
     | 'Weekly Off' 
     | 'Holiday' 
     | 'Extra Day' 
+    | 'Extra Shift (Full)'
+    | 'Extra Shift (Half)'
     | 'Half Day' 
     | 'Not marked' 
     | 'Marked In' 
@@ -36,7 +38,15 @@ export function getRecordDayType(record: any): DayType {
         return 'Absent';
     }
 
-    // 2. Strict Check: If record has check-in or check-out, it CANNOT be "On Leave"
+    // 2. Extra Shift check takes high priority
+    if (record.is_extra_shift || record.extra_shift_type) {
+        if (record.extra_shift_type === 'half' || (!record.extra_shift_type && record.is_half_day)) {
+            return 'Extra Shift (Half)';
+        }
+        return 'Extra Shift (Full)';
+    }
+
+    // 3. Strict Check: If record has check-in or check-out, it CANNOT be "On Leave"
     if (hasCheckIn || hasCheckOut) {
         if (record.is_half_day) return 'Half Day';
         if (record.is_extra_day) return 'Extra Day';
@@ -196,11 +206,18 @@ export function createAttendanceColumns({
                 const dayOfWeek = dateStr ? new Date(dateStr).getDay() : 1
                 const scheduledHours = scheduledHoursMap[dayOfWeek] ?? 9
 
-                // Calculate extra hours using individual office location timing and buffer rule
+                // Calculate extra hours using individual office location or shift timing, bounded by physical presence
                 const extraCalc = calculateAttendanceExtraHours({
-                    checkIn: record.first_in || record.check_in,
-                    checkOut: record.last_out || record.check_out,
+                    checkIn: record.first_in || record.first_check_in || record.check_in,
+                    checkOut: record.last_out || record.last_check_out || record.check_out,
                     officeTiming: (record as any).location,
+                    shiftTiming: (record as any).shift || {
+                        startTime: (record as any).shift_start,
+                        endTime: (record as any).shift_end,
+                        dutyHours: record.duty_hours ? Number(record.duty_hours) : undefined,
+                    },
+                    workingHours: hours,
+                    dutyHours: record.duty_hours ? Number(record.duty_hours) : scheduledHours,
                     date: dateStr,
                 })
                 const extraHours = extraCalc.extraHours
@@ -237,9 +254,29 @@ export function createAttendanceColumns({
                             </span>
                         ) : hours !== null ? (
                             <span className="text-[9px] text-muted-foreground/60 font-medium">
-                                Sched: {scheduledHours}h
+                                Sched: {record.duty_hours ? `${record.duty_hours}h` : `${scheduledHours}h`}
                             </span>
                         ) : null}
+
+                        {/* Line 3: Shift Name and Extra Shift Badge */}
+                        {(record.shift_name || record.is_extra_shift) && (
+                            <div className="flex items-center gap-1 mt-0.5">
+                                {record.shift_name && (
+                                    <span className="text-[8px] font-semibold px-1 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 truncate max-w-[80px]">
+                                        {record.shift_name}
+                                    </span>
+                                )}
+                                {record.is_extra_shift && (
+                                    <span className={`text-[8px] font-bold px-1 py-0.2 rounded shrink-0 ${
+                                        record.extra_shift_type === 'half'
+                                            ? 'bg-purple-600 text-white'
+                                            : 'bg-violet-600 text-white'
+                                    }`}>
+                                        {record.extra_shift_type === 'half' ? 'Extra Half' : 'Extra Full'}
+                                    </span>
+                                )}
+                            </div>
+                        )}
                     </div>
                 )
             },
@@ -259,11 +296,13 @@ export function createAttendanceColumns({
 
                 const dayTypeStyles: Record<string, string> = {
                     'Present': "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/30",
+                    'Extra Shift (Full)': "bg-violet-100 dark:bg-violet-950/60 text-violet-800 dark:text-violet-300 border-violet-300 dark:border-violet-800 font-bold",
+                    'Extra Shift (Half)': "bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300 border-purple-300 dark:border-purple-800 font-bold",
                     'On Leave': "bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-900/30",
                     'Weekly Off': "bg-slate-50 dark:bg-slate-900/30 text-slate-700 dark:text-slate-400 border-slate-200 dark:border-slate-800/30",
                     'Holiday': "bg-sky-50 dark:bg-sky-950/30 text-sky-700 dark:text-sky-400 border-sky-200 dark:border-sky-900/30",
                     'Extra Day': "bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-900/30",
-                    'Half Day': "bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 border-indigo-200 dark:border-indigo-900/30",
+                    'Half Day': "bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800 font-black",
                     'Absent': "bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-450 border-rose-200 dark:border-rose-900/30",
                     'Not marked': "bg-zinc-105 dark:bg-zinc-900/40 text-zinc-650 dark:text-zinc-400 border-zinc-200/50 dark:border-zinc-800/40",
                     'Marked In': "bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 border-indigo-200 dark:border-indigo-900/30",

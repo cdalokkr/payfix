@@ -4,6 +4,7 @@ import { useState } from "react"
 import { motion } from "framer-motion"
 import { format } from "date-fns"
 import { trpc } from "@/lib/trpc/client"
+import { useRouter } from "next/navigation"
 import {
     Receipt,
     FileText,
@@ -11,7 +12,10 @@ import {
     TrendingUp,
     Loader2,
     Download,
-    CheckCircle
+    CheckCircle,
+    Lock,
+    ShieldAlert,
+    ArrowLeft
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -100,14 +104,22 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
         defaultYear -= 1
     }
 
+    const router = useRouter()
     const [activeTab, setActiveTab] = useState<"monthly" | "passbook">("monthly")
     const [month, setMonth] = useState<number>(defaultMonth)
     const [year, setYear] = useState<number>(defaultYear)
     const [isDownloading, setIsDownloading] = useState<string | null>(null)
 
-    const { data: payslips, isLoading, isFetching } = trpc.salary.getMyPayslips.useQuery({ month, year })
+    // Check if payslips are accessible
+    const { data: payslipAccess, isLoading: isAccessLoading } = trpc.salary.getPayslipAccessSettings.useQuery()
+    const isAccessible = payslipAccess ? payslipAccess.isAccessible !== false : true
+
+    const { data: payslips, isLoading, isFetching } = trpc.salary.getMyPayslips.useQuery(
+        { month, year },
+        { enabled: isAccessible }
+    )
     const { data: paybook, isLoading: isPaybookLoading } = trpc.salary.getMyPaybook.useQuery(undefined, {
-        enabled: activeTab === "passbook"
+        enabled: isAccessible && activeTab === "passbook"
     })
 
     const months = Array.from({ length: 12 }, (_, i) => ({
@@ -169,7 +181,9 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                 { label: 'TA', amount: bd.ta },
                 { label: 'Special Allowance', amount: bd.special_allowance },
                 { label: 'Incentive', amount: bd.incentive },
+                ...(Number(bd.monthly_bonus) > 0 ? [{ label: bd.bonus_title || 'Monthly Bonus / Incentive', amount: bd.monthly_bonus }] : []),
                 ...(Number(bd.extra_day_payment) > 0 ? [{ label: 'Extra Days Payment', amount: bd.extra_day_payment }] : []),
+                ...(Number(bd.extra_shift_payment) > 0 ? [{ label: `Extra Shift Pay (${bd.extra_shift_equivalent_days || 1} shifts)`, amount: bd.extra_shift_payment }] : []),
             ].filter(ev => Number(ev.amount) > 0) : [];
             
             const dItems = bd ? [
@@ -277,6 +291,30 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
     }
 
 
+
+    if (!isAccessLoading && !isAccessible) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] px-6 text-center space-y-4">
+                <div className="w-16 h-16 rounded-3xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shadow-inner">
+                    <Lock className="w-8 h-8 text-amber-600" />
+                </div>
+                <div className="space-y-1">
+                    <h2 className="text-lg font-bold text-foreground">Payslip Access Disabled</h2>
+                    <p className="text-xs text-muted-foreground max-w-xs leading-relaxed">
+                        Payslip and Salary Book features have been disabled by your workspace administrator. Please contact HR or your admin for any inquiries.
+                    </p>
+                </div>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => router.push('/mobile')}
+                    className="gap-2 text-xs font-semibold rounded-xl"
+                >
+                    <ArrowLeft className="w-3.5 h-3.5" /> Back to Dashboard
+                </Button>
+            </div>
+        )
+    }
 
     return (
         <div className="flex flex-col h-[calc(100dvh-5rem-5rem)] -mx-4 -mt-4 bg-slate-50 dark:bg-slate-950">
@@ -402,6 +440,9 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                                         { label: 'TA', amount: bd.ta },
                                         { label: 'Special Allow.', amount: bd.special_allowance },
                                         { label: 'Incentive', amount: bd.incentive },
+                                        ...(Number(bd.monthly_bonus) > 0 ? [{ label: bd.bonus_title || 'Monthly Bonus', amount: bd.monthly_bonus }] : []),
+                                        ...(Number(bd.extra_day_payment) > 0 ? [{ label: 'Extra Days Pay', amount: bd.extra_day_payment }] : []),
+                                        ...(Number(bd.extra_shift_payment) > 0 ? [{ label: `Extra Shift Pay (${bd.extra_shift_equivalent_days || 1}s)`, amount: bd.extra_shift_payment }] : []),
                                     ].filter(e => Number(e.amount) > 0) : []
                                     const cardDeductions = bd ? [
                                         ...(bd.absent_deduction !== undefined

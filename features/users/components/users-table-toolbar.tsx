@@ -11,12 +11,13 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
-import { X } from "lucide-react"
+import { X, FileUp } from "lucide-react"
 import CreateUserButton from "@/components/ui/create-user-button"
 
 interface UsersTableToolbarProps<TData> {
     table: Table<TData>
     onCreateUser?: () => void
+    onBulkImport?: () => void
     isLoading?: boolean
     searchTerm: string
     onSearchChange: (value: string) => void
@@ -27,6 +28,7 @@ interface UsersTableToolbarProps<TData> {
 export function UsersTableToolbar<TData>({
     table,
     onCreateUser,
+    onBulkImport,
     isLoading = false,
     searchTerm,
     onSearchChange,
@@ -78,6 +80,18 @@ export function UsersTableToolbar<TData>({
             </div>
             <div className="flex items-center gap-2">
                 <DataTableViewOptions table={table} />
+                {onBulkImport && (
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={onBulkImport}
+                        disabled={isLoading}
+                        className="h-9 gap-1.5 rounded-xl font-bold text-xs border-slate-200 dark:border-zinc-800 hover:bg-slate-100 dark:hover:bg-zinc-800"
+                    >
+                        <FileUp className="h-3.5 w-3.5 text-primary" />
+                        Bulk Upload
+                    </Button>
+                )}
                 {onCreateUser && (
                     <CreateUserButton
                         onClick={onCreateUser}

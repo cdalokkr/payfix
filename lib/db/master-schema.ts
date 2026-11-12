@@ -86,6 +86,39 @@ export const trialTracking = pgTable('trial_tracking', {
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 
+export const tenantInvoices = pgTable('tenant_invoices', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenant_id: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+    invoice_number: varchar('invoice_number', { length: 50 }).notNull().unique(),
+    plan_id: uuid('plan_id').references(() => tenantPlans.id),
+    plan_name: text('plan_name').notNull(),
+    amount: numeric('amount', { precision: 10, scale: 2 }).default('0.00').notNull(),
+    currency: varchar('currency', { length: 10 }).default('INR').notNull(),
+    billing_cycle: text('billing_cycle').default('monthly').notNull(),
+    status: text('status').default('paid').notNull(),
+    billing_date: timestamp('billing_date', { withTimezone: true }).defaultNow().notNull(),
+    due_date: timestamp('due_date', { withTimezone: true }),
+    paid_at: timestamp('paid_at', { withTimezone: true }),
+    period_start: timestamp('period_start', { withTimezone: true }).defaultNow().notNull(),
+    period_end: timestamp('period_end', { withTimezone: true }),
+    payment_method: text('payment_method').default('Credit Card / Online'),
+    transaction_id: text('transaction_id'),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const tenantAuditLogs = pgTable('tenant_audit_logs', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenant_id: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+    action: text('action').notNull(),
+    activity: text('activity').notNull(),
+    performed_by: text('performed_by').notNull(),
+    actor_email: text('actor_email'),
+    ip_address: varchar('ip_address', { length: 45 }).default('103.112.45.67'),
+    category: text('category').default('general').notNull(),
+    metadata: jsonb('metadata').default({}),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
 /**
  * Internal, redacted audit records for tenant ownership repairs.
  *

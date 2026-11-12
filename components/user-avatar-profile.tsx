@@ -38,7 +38,7 @@ function UserAvatarProfileComponent({
         .join('')
         .toUpperCase()
         .slice(0, 2)
-      : user.email[0].toUpperCase();
+      : (user.email ? user.email[0].toUpperCase() : 'U');
   }, [user]);
 
   const avatarUrl = useMemo(() => {
@@ -94,7 +94,7 @@ function UserAvatarProfileComponent({
         )}
         <AvatarImage
           src={avatarUrl}
-          alt={user.full_name || user.email}
+          alt={user.full_name || user.email || 'User'}
           loading="eager"
           fetchPriority="high"
           onLoad={handleLoad}

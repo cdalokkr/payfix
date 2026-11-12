@@ -9,6 +9,7 @@ import { DataTable } from '@/components/ui/data-table'
 import { createUsersColumns } from './users-columns'
 import { UsersTableToolbar } from './users-table-toolbar'
 import { ModernAddUserForm } from './ModernAddUserForm'
+import { BulkUserImportDialog } from './BulkUserImportDialog'
 import { UserOperationModalState } from './user-operation-modal-overlay'
 import type { AppRouter } from '@/lib/trpc/routers'
 import { inferRouterOutputs } from '@trpc/server'
@@ -49,6 +50,7 @@ interface UserManagementProps {
 
 export default function UserManagement({ initialData, tenantScope }: UserManagementProps) {
   const [showAddUserSheet, setShowAddUserSheet] = useState(false)
+  const [showBulkImportModal, setShowBulkImportModal] = useState(false)
   const [editingUser, setEditingUser] = useState<Profile | null>(null)
   const [deletingUser, setDeletingUser] = useState<Profile | null>(null)
   const [passwordResetUser, setPasswordResetUser] = useState<Profile | null>(null)
@@ -138,6 +140,7 @@ export default function UserManagement({ initialData, tenantScope }: UserManagem
     <UsersTableToolbar
       table={table}
       onCreateUser={handleCreateUser}
+      onBulkImport={() => setShowBulkImportModal(true)}
       isLoading={isLoading}
       searchTerm={searchTerm}
       onSearchChange={setSearchTerm}
@@ -518,6 +521,12 @@ export default function UserManagement({ initialData, tenantScope }: UserManagem
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Bulk User Import Dialog */}
+      <BulkUserImportDialog
+        isOpen={showBulkImportModal}
+        onOpenChange={setShowBulkImportModal}
+      />
     </DashboardPageLayout>
   )
 }

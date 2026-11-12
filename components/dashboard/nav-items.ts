@@ -29,6 +29,14 @@ export const adminNavItems: NavGroup[] = [
         moduleId: "dashboard",
         description: "Overview of system metrics and activities"
       },
+      {
+        title: "Billing & Invoices",
+        href: "/admin/billing",
+        icon: "Receipt",
+        moduleId: "settings",
+        requiredRole: "admin",
+        description: "Workspace subscription, renewal timeline, and invoices"
+      },
     ]
   },
   {
@@ -42,14 +50,6 @@ export const adminNavItems: NavGroup[] = [
         moduleId: "users",
         requiredRole: "admin",
         description: "User administration and management tools"
-      },
-      {
-        title: "Designation",
-        href: "/admin/designations",
-        icon: "Briefcase",
-        moduleId: "designations",
-        requiredRole: "admin",
-        description: "Manage various job designations"
       },
       {
         title: "Analytics",
@@ -74,6 +74,52 @@ export const adminNavItems: NavGroup[] = [
         moduleId: "profile",
         requiredRole: "admin",
         description: "Review employee photo updates"
+      },
+    ]
+  },
+  {
+    label: "Organization",
+    icon: "Building2",
+    items: [
+      {
+        title: "Deptt. & Desig.",
+        href: "/admin/departments",
+        icon: "Building2",
+        moduleId: "departments",
+        requiredRole: "admin",
+        description: "Manage organizational departments and job designations"
+      },
+      {
+        title: "Office & Holidays",
+        href: "/admin/office-locations",
+        icon: "MapPin",
+        moduleId: "settings",
+        requiredRole: "admin",
+        description: "Office branches, timings, geofencing & holiday closures"
+      },
+      {
+        title: "Shifts & Rotation",
+        href: "/admin/shifts",
+        icon: "Clock",
+        moduleId: "shifts",
+        requiredRole: "admin",
+        description: "Shift timing configuration & rotation builder"
+      },
+      {
+        title: "Duty Roster",
+        href: "/admin/roster",
+        icon: "CalendarDays",
+        moduleId: "shifts",
+        requiredRole: "admin",
+        description: "Weekly department roster board & shift allocation"
+      },
+      {
+        title: "Biometrics & Kiosks",
+        href: "/admin/devices",
+        icon: "Cpu",
+        moduleId: "settings",
+        requiredRole: "admin",
+        description: "eSSL biometric devices & selfie kiosk tablets"
       },
     ]
   },
@@ -111,25 +157,18 @@ export const adminNavItems: NavGroup[] = [
         description: "Manage employee advances and loans"
       },
       {
-        title: "Monthly Attendance",
+        title: "Payroll & Payslips",
         href: "/admin/payroll/monthly-attendance",
-        icon: "CalendarRange",
-        moduleId: "salary",
-        description: "Compile monthly attendance for payroll"
-      },
-      {
-        title: "Payslips",
-        href: "/admin/payroll/payslips",
         icon: "Receipt",
         moduleId: "salary",
-        description: "Generate and view payslips"
+        description: "Compile monthly attendance, manage bonuses & generate payslips"
       },
       {
-        title: "Office Settings",
-        href: "/admin/payroll/settings",
-        icon: "Settings",
-        moduleId: "settings",
-        description: "Office timing and closures"
+        title: "Salary Book",
+        href: "/admin/payroll/salary-book",
+        icon: "BookOpen",
+        moduleId: "salary",
+        description: "Employee salary passbook & payment ledger with grand totals"
       },
     ]
   },
@@ -206,6 +245,13 @@ export const moderatorNavItems: NavGroup[] = [
         moduleId: "dashboard",
         description: "Overview of your activities"
       },
+      {
+        title: "Billing & Invoices",
+        href: "/admin/billing",
+        icon: "Receipt",
+        moduleId: "settings",
+        description: "Workspace subscription, renewal timeline, and invoices"
+      },
     ]
   },
   {
@@ -236,6 +282,33 @@ export const moderatorNavItems: NavGroup[] = [
     ]
   },
   {
+    label: "Organization",
+    icon: "Building2",
+    items: [
+      {
+        title: "Duty Roster",
+        href: "/admin/roster",
+        icon: "CalendarDays",
+        moduleId: "shifts",
+        description: "Weekly shift duty roster & on-behalf leaves"
+      },
+      {
+        title: "Shifts & Rotation",
+        href: "/admin/shifts",
+        icon: "Clock",
+        moduleId: "shifts",
+        description: "Shift timings & rotation schedules"
+      },
+      {
+        title: "Office Schedule & Holidays",
+        href: "/admin/office-locations",
+        icon: "MapPin",
+        moduleId: "settings",
+        description: "Branch timings & holiday closures"
+      },
+    ]
+  },
+  {
     label: "Payroll",
     icon: "Banknote",
     items: [
@@ -261,18 +334,18 @@ export const moderatorNavItems: NavGroup[] = [
         description: "Manage employee advances and loans"
       },
       {
-        title: "Monthly Attendance",
+        title: "Payroll & Payslips",
         href: "/moderator/payroll/monthly-attendance",
-        icon: "CalendarRange",
-        moduleId: "salary",
-        description: "Compile monthly attendance for payroll"
-      },
-      {
-        title: "Payslips",
-        href: "/moderator/payroll/payslips",
         icon: "Receipt",
         moduleId: "salary",
-        description: "Generate and view payslips"
+        description: "Compile monthly attendance, manage bonuses & generate payslips"
+      },
+      {
+        title: "Salary Book",
+        href: "/moderator/payroll/salary-book",
+        icon: "BookOpen",
+        moduleId: "salary",
+        description: "Employee salary passbook & payment ledger with grand totals"
       },
     ]
   },
@@ -443,7 +516,7 @@ export const userNavItems: NavItem[] = [
     moduleId: "billing",
   },
   {
-    title: "Settings", // Keeping Settings just in case or we can remove it if redundant
+    title: "Settings",
     href: "/user/profile",
     icon: "Settings",
     moduleId: "settings",

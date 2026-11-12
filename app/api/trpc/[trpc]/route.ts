@@ -17,6 +17,13 @@ const SECURITY_HEADERS = {
 
 // Error handler that doesn't leak sensitive information
 function onError({ error, path }: { error: Error; path: string | undefined }) {
+  const trpcError = error as any
+  const isExpectedUserError = trpcError?.code === 'FORBIDDEN' || trpcError?.code === 'BAD_REQUEST' || trpcError?.code === 'UNAUTHORIZED'
+  if (isExpectedUserError) {
+    console.warn(`[tRPC Notice] ${path ?? 'unknown'}: ${error.message}`)
+    return
+  }
+
   // Log the full error server-side for debugging
   console.error(`[tRPC Error] ${path ?? 'unknown'}:`, {
     message: error.message,

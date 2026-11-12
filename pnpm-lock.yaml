@@ -137,6 +137,9 @@ importers:
       onnxruntime-web:
         specifier: ^1.30.0
         version: 1.30.0
+      openai:
+        specifier: ^7.55.0
+        version: 7.55.0(ws@8.21.3)(zod@4.5.4)
       postgres:
         specifier: ^3.4.9
         version: 3.4.9
@@ -3049,8 +3052,8 @@ packages:
     resolution: {integrity: sha512-kWWXztvZ5SBQV+eRgKFeh8q5sLuZY2+8WUIzlxWVTg+oGwY14qylx1KbKzHd8P6ZYkAg0xyIDU9JMHhyJMZ1jw==}
     engines: {node: '>=10'}
 
-  chromedriver@156.0.0:
-    resolution: {integrity: sha512-C1YDo5DHMNdQ5w5i4lz9htZ7ZQPnLTkQcnaQio8NKN1nPudJXhervWf9rr1othlT58QGTNVLhDDjp9Jel0kQLQ==}
+  chromedriver@157.0.1:
+    resolution: {integrity: sha512-KZWZnk67gV7uB7Ub2QKCml1jqIXZA0h4VotpNH+vCx/N1ZGO9WDQ8X+wBga35SGR/in32lc0Znw3zjm+wndEIQ==}
     engines: {node: '>=22'}
     hasBin: true
 
@@ -4871,6 +4874,33 @@ packages:
   onnxruntime-web@1.30.0:
     resolution: {integrity: sha512-q0y+JrrtukXSzsBWEMccVfqX25LRmosXHF+CaRJmg8pZClzcV7svNc4rKY3jL02Vb7QmRMDs1SigqR4CXAfKYQ==}
 
+  openai@7.55.0:
+    resolution: {integrity: sha512-0r4snVSRN46m4wL2vXCW5Xw6CKGPbdNI8t79KZOpe8GKKPmhL8peDXN8YOY/2ipsOVWSfsP/vgkLjTmWB+kMug==}
+    engines: {node: '>=22.0.0'}
+    peerDependencies:
+      '@aws-sdk/credential-provider-node': '>=3.972.0 <4'
+      '@smithy/hash-node': '>=4.3.0 <5'
+      '@smithy/signature-v4': '>=5.4.0 <6'
+      google-auth-library: '>=9.15.1 <12'
+      undici: '>=5 <9'
+      ws: ^8.21.0
+      zod: ^3.25 || ^4.0
+    peerDependenciesMeta:
+      '@aws-sdk/credential-provider-node':
+        optional: true
+      '@smithy/hash-node':
+        optional: true
+      '@smithy/signature-v4':
+        optional: true
+      google-auth-library:
+        optional: true
+      undici:
+        optional: true
+      ws:
+        optional: true
+      zod:
+        optional: true
+
   opener@1.5.2:
     resolution: {integrity: sha512-ur5UIdyw5Y7yEj9wLzhqXiy6GZ3Mwx0yGI+5sMn2r0N0v3cKJvUmFH5yPP+WXh9e0xfyzyJX95D8l088DNFj7A==}
     hasBin: true
@@ -5921,7 +5951,7 @@ snapshots:
     dependencies:
       '@axe-core/webdriverjs': 4.13.0(selenium-webdriver@4.44.0)
       axe-core: 4.13.0
-      chromedriver: 156.0.0
+      chromedriver: 157.0.1
       colors: 1.4.0
       commander: 9.5.0
       dotenv: 17.4.2
@@ -8473,7 +8503,7 @@ snapshots:
 
   char-regex@1.0.2: {}
 
-  chromedriver@156.0.0:
+  chromedriver@157.0.1:
     dependencies:
       '@testim/chrome-version': 1.1.4
       adm-zip: 0.6.1
@@ -10566,6 +10596,11 @@ snapshots:
       onnxruntime-common: 1.30.0
       platform: 1.3.6
       protobufjs: 7.6.6
+
+  openai@7.55.0(ws@8.21.3)(zod@4.5.4):
+    optionalDependencies:
+      ws: 8.21.3
+      zod: 4.5.4
 
   opener@1.5.2: {}
 

@@ -341,6 +341,52 @@ export class AttendanceService {
         }
     }
 
+    static async assertActiveSubscription() {
+        const tenantStore = tenantStorage.getStore();
+        if (!tenantStore || !tenantStore.tenantId) return;
+
+        // 1. Check licenseExpiresAt from tenantStore if available
+        if (tenantStore.licenseExpiresAt) {
+            const expTime = new Date(tenantStore.licenseExpiresAt).getTime();
+            if (Date.now() > expTime) {
+                const expDateStr = new Date(tenantStore.licenseExpiresAt).toLocaleDateString('en-GB', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                });
+                throwAppError('FORBIDDEN', `Workspace subscription expired on ${expDateStr}. Attendance operations are disabled until renewed.`);
+            }
+        }
+
+        // 2. Authoritative check from masterDb
+        try {
+            const { masterDb } = await import('@/lib/db/master-connection');
+            const { tenants: tenantsTable } = await import('@/lib/db/master-schema');
+            const { eq } = await import('drizzle-orm');
+
+            const tenant = await masterDb.query.tenants.findFirst({
+                where: eq(tenantsTable.id, tenantStore.tenantId),
+                columns: { status: true, license_expires_at: true }
+            });
+
+            if (tenant) {
+                if (tenant.status === 'suspended' || tenant.status === 'cancelled') {
+                    throwAppError('FORBIDDEN', 'Workspace is currently suspended. Attendance operations are disabled.');
+                }
+                if (tenant.license_expires_at && Date.now() > new Date(tenant.license_expires_at).getTime()) {
+                    const expDateStr = new Date(tenant.license_expires_at).toLocaleDateString('en-GB', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric'
+                    });
+                    throwAppError('FORBIDDEN', `Workspace subscription expired on ${expDateStr}. Attendance operations are disabled until renewed.`);
+                }
+            }
+        } catch (err: any) {
+            if (err?.code === 'FORBIDDEN' || err?.statusCode === 403) throw err;
+        }
+    }
+
     /**
      * Clock in a user
      */
@@ -371,6 +417,7 @@ export class AttendanceService {
         selfieUrl?: string
         verificationProof?: string
     }) {
+        await AttendanceService.assertActiveSubscription()
         await AttendanceService.ensureAttendanceSchema()
         const today = localDate || getLocalDateIST()
         let consumedProof: ReturnType<typeof consumeAttendanceProof> = null
@@ -469,14 +516,25 @@ export class AttendanceService {
             const activeSession = await tx.query.attendanceSessions.findFirst({
                 where: and(
                     eq(attendanceSessions.profile_id, profileId),
-                    eq(attendanceSessions.date, today),
                     eq(attendanceSessions.status, 'active')
-                )
+                ),
+                orderBy: [desc(attendanceSessions.created_at)]
             })
 
             if (activeSession) {
-                throwAppError('ALREADY_CLOCKED_IN', 'An active attendance session is currently in progress. Please clock out first.')
+                if (activeSession.date !== today) {
+                    // Auto-close stale active session from an earlier day so current day can start
+                    await tx.update(attendanceSessions)
+                        .set({ status: 'completed', check_out: activeSession.check_in })
+                        .where(eq(attendanceSessions.id, activeSession.id))
+                } else {
+                    throwAppError('ALREADY_CLOCKED_IN', 'An active attendance session is currently in progress. Please clock out first.')
+                }
             }
+
+            const { ShiftService } = await import('@/lib/services/shifts.service')
+            const effectiveShift = await ShiftService.getEffectiveShiftForDate(profileId, today)
+            const resolvedShiftId = (effectiveShift.shift?.id && effectiveShift.shift.id.length === 36) ? effectiveShift.shift.id : null
 
             let record = await tx.query.attendance.findFirst({
                 where: and(
@@ -499,6 +557,10 @@ export class AttendanceService {
                     source: validSource,
                     device_id: deviceId || null,
                     location_id: locationId || null,
+                    shift_id: resolvedShiftId,
+                    shift_name: effectiveShift.shift?.name || null,
+                    duty_hours: String(effectiveShift.dutyHours || 8.0),
+                    is_extra_shift: effectiveShift.isExtraShift || false,
                     selfie_url: selfieUrl || null,
                     is_extra_day: isExtraDay || autoExtraDay,
                     checkin_latitude: latitude ? String(latitude) : null,
@@ -511,6 +573,9 @@ export class AttendanceService {
                     total_sessions: currentTotalSessions,
                     current_session_status: 'checked_in',
                     first_check_in: record.first_check_in || record.check_in || now,
+                    shift_id: record.shift_id || resolvedShiftId,
+                    shift_name: record.shift_name || effectiveShift.shift?.name || null,
+                    duty_hours: record.duty_hours || String(effectiveShift.dutyHours || 8.0),
                     updated_at: now
                 }).where(eq(attendance.id, record.id)).returning()
                 record = updatedParent
@@ -523,9 +588,11 @@ export class AttendanceService {
                 session_number: currentTotalSessions,
                 check_in: now,
                 status: 'active',
-                    source: validSource,
+                source: validSource,
                 device_id: deviceId || null,
                 location_id: locationId || null,
+                shift_id: resolvedShiftId,
+                is_extra_shift: effectiveShift.isExtraShift || false,
                 selfie_url: selfieUrl || null,
                 checkin_latitude: latitude ? String(latitude) : null,
                 checkin_longitude: longitude ? String(longitude) : null,
@@ -591,6 +658,7 @@ export class AttendanceService {
         source?: string
         verificationProof?: string
     }) {
+        await AttendanceService.assertActiveSubscription()
         await AttendanceService.ensureAttendanceSchema()
         const today = localDate || getLocalDateIST()
         let consumedProof: ReturnType<typeof consumeAttendanceProof> = null
@@ -661,17 +729,27 @@ export class AttendanceService {
         const now = new Date()
 
         return await db.transaction(async (tx) => {
+            // Find active session without restricting to today, handling cross-midnight/overnight shifts
             const activeSession = await tx.query.attendanceSessions.findFirst({
                 where: and(
                     eq(attendanceSessions.profile_id, profileId),
-                    eq(attendanceSessions.date, today),
                     eq(attendanceSessions.status, 'active')
                 ),
                 orderBy: [desc(attendanceSessions.created_at)]
             })
-            const record = await tx.query.attendance.findFirst({
-                where: and(eq(attendance.profile_id, profileId), eq(attendance.date, today))
-            })
+
+            let record: any = null
+            if (activeSession?.attendance_id) {
+                record = await tx.query.attendance.findFirst({
+                    where: eq(attendance.id, activeSession.attendance_id)
+                })
+            }
+            if (!record) {
+                record = await tx.query.attendance.findFirst({
+                    where: and(eq(attendance.profile_id, profileId), eq(attendance.date, today))
+                })
+            }
+
             if (!record && !activeSession) {
                 throwAppError('NO_CLOCK_IN_FOUND', 'No clock-in record found to clock out.')
             }
@@ -736,10 +814,31 @@ export class AttendanceService {
             })
             const totalMins = completedSessions.reduce((acc, session) =>
                 acc + (session.working_hours ? Math.round(Number(session.working_hours) * 60) : 0), 0)
+            const totalWorkHours = totalMins / 60
+            const dutyHours = Number(record?.duty_hours) || 8.0
+
+            let isHalfDay = record?.is_half_day || false
+            let remarks = record?.remarks || null
+
+            // Half-day auto calculation: if worked < scheduled duty hours and >= 40% of duty hours
+            if (totalWorkHours > 0 && totalWorkHours < (dutyHours - 0.25)) {
+                if (totalWorkHours >= (dutyHours * 0.40)) {
+                    isHalfDay = true
+                    const halfDayNote = `Half Day (Incomplete duty: ${totalWorkHours.toFixed(1)}h / ${dutyHours.toFixed(1)}h)`
+                    remarks = remarks && !remarks.includes('Half Day') ? `${remarks} • ${halfDayNote}` : halfDayNote
+                }
+            }
+
+            // Extra hours calculation: if worked beyond assigned duty hours
+            const extraHours = Math.max(0, parseFloat((totalWorkHours - dutyHours).toFixed(2)))
+
             const [data] = await tx.update(attendance).set({
                 check_out: now,
                 last_check_out: now,
-                working_hours: (totalMins / 60).toFixed(2),
+                working_hours: totalWorkHours.toFixed(2),
+                extra_hours: String(extraHours),
+                is_half_day: isHalfDay,
+                remarks: remarks,
                 current_session_status: 'checked_out',
                 updated_at: now
             }).where(eq(attendance.id, attendanceId)).returning()
@@ -1419,6 +1518,8 @@ export class AttendanceService {
         dayType,
         isHalfDay,
         isExtraDay,
+        isExtraShift,
+        extraShiftType,
         remarks,
         updatedBy,
         updaterName
@@ -1430,6 +1531,8 @@ export class AttendanceService {
         dayType?: string
         isHalfDay?: boolean
         isExtraDay?: boolean
+        isExtraShift?: boolean
+        extraShiftType?: 'full' | 'half' | null
         remarks?: string
         updatedBy: string
         updaterName: string
@@ -1509,6 +1612,22 @@ export class AttendanceService {
         updateData.source = 'manual'
         if (isExtraDay !== undefined) updateData.is_extra_day = isExtraDay
 
+        if (isExtraShift !== undefined) {
+            updateData.is_extra_shift = isExtraShift
+            updateData.extra_shift_type = extraShiftType || (isExtraShift ? 'full' : null)
+        } else if (extraShiftType !== undefined) {
+            updateData.extra_shift_type = extraShiftType
+            updateData.is_extra_shift = Boolean(extraShiftType)
+        }
+
+        if (dayType === 'Extra Shift (Full)') {
+            updateData.is_extra_shift = true
+            updateData.extra_shift_type = 'full'
+        } else if (dayType === 'Extra Shift (Half)') {
+            updateData.is_extra_shift = true
+            updateData.extra_shift_type = 'half'
+        }
+
         let data: any
 
         if (id.startsWith('virtual_') && recordId === id) {
@@ -1553,6 +1672,8 @@ export class AttendanceService {
                 status: resolvedStatus,
                 is_half_day: isAbsentRequest ? false : (isHalfDay ?? false),
                 is_extra_day: resolvedExtraDay,
+                is_extra_shift: updateData.is_extra_shift ?? false,
+                extra_shift_type: updateData.extra_shift_type ?? null,
                 remarks: resolvedRemarks,
                 source: 'manual',
                 updated_at: new Date()

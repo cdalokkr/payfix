@@ -63,6 +63,24 @@ const TENANT_FOREIGN_KEY_ACTIONS: Record<string, string> = {
     'call_logs.called_by': 'CASCADE',
     'salary_payments.summary_id': 'CASCADE',
     'salary_payments.paid_by': 'SET NULL',
+    'departments.location_id': 'SET NULL',
+    'departments.manager_id': 'SET NULL',
+    'office_shifts.location_id': 'SET NULL',
+    'office_shifts.department_id': 'SET NULL',
+    'employee_shift_assignments.profile_id': 'CASCADE',
+    'employee_shift_assignments.location_id': 'SET NULL',
+    'shift_roster.profile_id': 'CASCADE',
+    'shift_roster.department_id': 'SET NULL',
+    'shift_roster.shift_id': 'SET NULL',
+    'shift_roster.allotted_by': 'SET NULL',
+    'department_managers_history.department_id': 'CASCADE',
+    'department_managers_history.manager_id': 'SET NULL',
+    'department_managers_history.appointed_by': 'SET NULL',
+    'monthly_bonuses.profile_id': 'CASCADE',
+    'monthly_bonuses.created_by': 'SET NULL',
+    'profiles.department_id': 'SET NULL',
+    'designations.department_id': 'SET NULL',
+    'attendance.shift_id': 'SET NULL',
 };
 
 const CANONICAL_SOURCE_TABLES = CANONICAL_TENANT_TABLES.filter(
@@ -392,6 +410,44 @@ async function alignCanonicalTenantSchema(
             ON ${sql.raw(schemaName)}.biometric_verification_attempts ("profile_id", "created_at" DESC);
         CREATE INDEX IF NOT EXISTS "biometric_verification_attempts_created_idx"
             ON ${sql.raw(schemaName)}.biometric_verification_attempts ("created_at" DESC);
+        CREATE INDEX IF NOT EXISTS "idx_attendance_shift_id"
+            ON ${sql.raw(schemaName)}.attendance ("shift_id");
+        CREATE INDEX IF NOT EXISTS "idx_attendance_location_id"
+            ON ${sql.raw(schemaName)}.attendance ("location_id");
+        CREATE INDEX IF NOT EXISTS "idx_profiles_department_id"
+            ON ${sql.raw(schemaName)}.profiles ("department_id");
+        CREATE INDEX IF NOT EXISTS "idx_designations_department_id"
+            ON ${sql.raw(schemaName)}.designations ("department_id");
+        CREATE INDEX IF NOT EXISTS "idx_departments_manager_id"
+            ON ${sql.raw(schemaName)}.departments ("manager_id");
+        CREATE INDEX IF NOT EXISTS "idx_departments_location_id"
+            ON ${sql.raw(schemaName)}.departments ("location_id");
+        CREATE INDEX IF NOT EXISTS "idx_departments_active"
+            ON ${sql.raw(schemaName)}.departments ("is_active");
+        CREATE INDEX IF NOT EXISTS "idx_office_shifts_dept_id"
+            ON ${sql.raw(schemaName)}.office_shifts ("department_id");
+        CREATE INDEX IF NOT EXISTS "idx_office_shifts_loc_id"
+            ON ${sql.raw(schemaName)}.office_shifts ("location_id");
+        CREATE INDEX IF NOT EXISTS "idx_office_shifts_active"
+            ON ${sql.raw(schemaName)}.office_shifts ("is_active");
+        CREATE INDEX IF NOT EXISTS "idx_emp_shift_assign_profile_id"
+            ON ${sql.raw(schemaName)}.employee_shift_assignments ("profile_id");
+        CREATE UNIQUE INDEX IF NOT EXISTS "idx_emp_shift_assign_active_uniq"
+            ON ${sql.raw(schemaName)}.employee_shift_assignments ("profile_id") WHERE "effective_to" IS NULL;
+        CREATE INDEX IF NOT EXISTS "idx_emp_shift_assign_dates"
+            ON ${sql.raw(schemaName)}.employee_shift_assignments ("profile_id", "effective_from" DESC, "effective_to");
+        CREATE UNIQUE INDEX IF NOT EXISTS "idx_shift_roster_profile_date_uniq"
+            ON ${sql.raw(schemaName)}.shift_roster ("profile_id", "date") WHERE "is_extra_shift" = false;
+        CREATE INDEX IF NOT EXISTS "idx_shift_roster_profile_date"
+            ON ${sql.raw(schemaName)}.shift_roster ("profile_id", "date");
+        CREATE INDEX IF NOT EXISTS "idx_shift_roster_dept_date_cov"
+            ON ${sql.raw(schemaName)}.shift_roster ("department_id", "date") INCLUDE ("profile_id", "shift_id", "status", "is_extra_shift");
+        CREATE INDEX IF NOT EXISTS "idx_shift_roster_date"
+            ON ${sql.raw(schemaName)}.shift_roster ("date");
+        CREATE INDEX IF NOT EXISTS "idx_shift_roster_shift_id"
+            ON ${sql.raw(schemaName)}.shift_roster ("shift_id");
+        CREATE INDEX IF NOT EXISTS "idx_monthly_bonuses_period"
+            ON ${sql.raw(schemaName)}.monthly_bonuses ("year", "month");
     `);
 
     const foreignKeyRows = requiredForeignKeys

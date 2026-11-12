@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { trpc } from "@/lib/trpc/client"
 import { toast } from "sonner"
-import { CalendarRange, RefreshCw, CheckCircle, Loader2, ArrowRight, Users, TrendingUp, FileEdit, Clock, FileUp, AlertTriangle } from "lucide-react"
+import { CalendarRange, RefreshCw, CheckCircle, Loader2, ArrowRight, Users, TrendingUp, FileEdit, Clock, FileUp, AlertTriangle, Gift } from "lucide-react"
 import { CardShell } from "./CardShell"
 import {
     Select,
@@ -17,6 +17,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { useRouter } from "next/navigation"
 import { BulkMonthlySummaryUpload } from "./BulkMonthlySummaryUpload"
+import { MonthlyBonusDialog } from "./MonthlyBonusDialog"
 import {
     Dialog,
     DialogContent,
@@ -29,7 +30,25 @@ const MONTHS = [
     "July", "August", "September", "October", "November", "December"
 ]
 
-export function MonthlyAttendanceCompilation({ basePath }: { basePath: string }) {
+export interface MonthlyAttendanceCompilationProps {
+    basePath: string
+    controlledMonth?: number
+    controlledYear?: number
+    onMonthChange?: (m: number) => void
+    onYearChange?: (y: number) => void
+    onProceedToPayslips?: () => void
+    isUnified?: boolean
+}
+
+export function MonthlyAttendanceCompilation({
+    basePath,
+    controlledMonth,
+    controlledYear,
+    onMonthChange,
+    onYearChange,
+    onProceedToPayslips,
+    isUnified = false,
+}: MonthlyAttendanceCompilationProps) {
     const router = useRouter()
     
     // Default to last completed month
@@ -41,10 +60,15 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
         defaultYear -= 1
     }
 
-    const [month, setMonth] = useState(defaultMonth)
-    const [year, setYear] = useState(defaultYear)
+    const [internalMonth, setInternalMonth] = useState(defaultMonth)
+    const [internalYear, setInternalYear] = useState(defaultYear)
+    const month = controlledMonth ?? internalMonth
+    const year = controlledYear ?? internalYear
+    const setMonth = onMonthChange ?? setInternalMonth
+    const setYear = onYearChange ?? setInternalYear
     const [selectedIds, setSelectedIds] = useState<string[]>([])
     const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false)
+    const [isBonusModalOpen, setIsBonusModalOpen] = useState(false)
 
     // Progress compilation states
     const [isCompileModalOpen, setIsCompileModalOpen] = useState(false)
@@ -342,7 +366,7 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                             Attendance or leave records were modified after monthly attendance was compiled. Click &quot;Re-compile&quot; to refresh payable days and payslip calculations.
                         </p>
                     </div>
-                    <Button
+<Button
                         size="sm"
                         variant="outline"
                         className="border-amber-500/40 bg-amber-500/20 hover:bg-amber-500/30 text-amber-900 dark:text-amber-100 shrink-0 gap-1.5 font-semibold text-xs h-8"
@@ -356,8 +380,11 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
             )}
 
             {/* Controls */}
+            {!isUnified && (
             <div className="flex flex-col sm:flex-row sm:items-end gap-4">
                 <div className="flex items-center gap-2 flex-wrap">
+                    {!isUnified && (
+                    <>
                     <Select value={String(month)} onValueChange={(val) => setMonth(Number(val))}>
                         <SelectTrigger className="w-[140px]">
                             <SelectValue />
@@ -398,6 +425,8 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                                 ))}
                         </SelectContent>
                     </Select>
+                    </>
+                    )}
                     <div className="flex items-center gap-2">
                         <Button
                             onClick={handleStartCompilation}
@@ -422,6 +451,17 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                             <FileUp className="h-4 w-4" />
                             Upload Summary
                         </Button>
+                        {!isUnified && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5 rounded-lg border-amber-300 dark:border-amber-800/60 text-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 font-semibold"
+                            onClick={() => setIsBonusModalOpen(true)}
+                        >
+                            <Gift className="h-4 w-4 text-amber-500" />
+                            Bonus / Incentives
+                        </Button>
+                        )}
                     </div>
                 </div>
 
@@ -449,6 +489,7 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                     )}
                 </div>
             </div>
+            )}
 
             {/* Summary Stats Bar */}
             {summaryStats && (
@@ -498,6 +539,22 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                 icon={CalendarRange}
                 description="Compiled attendance summary for all employees"
                 contentClassName="p-0"
+                headerActions={
+                    selectedIds.length > 0 ? (
+                        <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => setForSalaryMutation.mutate({ ids: selectedIds })}
+                            disabled={setForSalaryMutation.isPending}
+                            className="h-8 text-xs font-bold gap-1.5"
+                        >
+                            {setForSalaryMutation.isPending
+                                ? <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />Processing...</>
+                                : <><CheckCircle className="h-3.5 w-3.5 mr-1" />Set for Salary ({selectedIds.length})</>
+                            }
+                        </Button>
+                    ) : undefined
+                }
             >
                 {isLoading ? (
                     <div className="p-6 space-y-3">
@@ -550,6 +607,17 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
+                                                className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
+                                                onClick={() => setForSalaryMutation.mutate({ ids: [s.id] })}
+                                                disabled={setForSalaryMutation.isPending || s.status === 'set_for_salary' || s.status === 'payslip_generated'}
+                                                title={s.status === 'draft' ? "Confirm & Set for Salary" : "Already confirmed"}
+                                            >
+                                                <CheckCircle className={`h-3.5 w-3.5 ${s.status === 'draft' ? "text-emerald-600" : "text-emerald-500/40"}`} />
+                                            </Button>
+
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
                                                 className={`h-7 w-7 ${
                                                     s.needs_recompile
                                                         ? "text-amber-600 hover:text-amber-700 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 ring-1 ring-amber-500/20"
@@ -589,6 +657,14 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                                              <p className="text-[9px] text-muted-foreground mt-0.5">Extra</p>
                                          </div>
                                      </div>
+                                     {(s.salary_breakdown as any)?.monthly_bonus > 0 && (
+                                         <div className="flex items-center justify-between text-xs bg-emerald-500/5 px-2.5 py-1.5 rounded-lg border border-emerald-500/20">
+                                             <span className="text-muted-foreground text-[11px] font-medium">Incentive</span>
+                                             <span className="font-bold text-emerald-600 text-xs">
+                                                 +₹{Number((s.salary_breakdown as any).monthly_bonus).toLocaleString('en-IN')}
+                                             </span>
+                                         </div>
+                                     )}
                                 </div>
                             ))}
                         </div>
@@ -614,6 +690,7 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                                         <th className="p-3 text-center font-semibold text-muted-foreground">Half Days</th>
                                         <th className="p-3 text-center font-semibold text-muted-foreground">Leaves</th>
                                         <th className="p-3 text-center font-semibold text-muted-foreground">Extra Days</th>
+                                        <th className="p-3 text-center font-semibold text-muted-foreground">Incentive</th>
                                         <th className="p-3 text-center font-semibold text-muted-foreground">Hours</th>
                                         <th className="p-3 text-center font-semibold text-muted-foreground">Status</th>
                                         <th className="p-3 text-center font-semibold text-muted-foreground">Actions</th>
@@ -655,6 +732,24 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                                                 <td className="p-3 text-center">{s.total_leaves}</td>
                                                 <td className="p-3 text-center">
                                                     <span className="font-bold text-amber-600">{(s.salary_breakdown as any)?.extra_days || 0}</span>
+                                                    {((s.salary_breakdown as any)?.extra_shift_full > 0 || (s.salary_breakdown as any)?.extra_shift_half > 0) && (
+                                                        <span className="block text-[10px] text-muted-foreground whitespace-nowrap">
+                                                            {((s.salary_breakdown as any)?.extra_shift_full || 0)}F / {((s.salary_breakdown as any)?.extra_shift_half || 0)}H
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="p-3 text-center">
+                                                    {(s.salary_breakdown as any)?.monthly_bonus > 0 ? (
+                                                        <Badge 
+                                                            variant="outline" 
+                                                            className="text-xs bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 font-bold px-2 py-0.5 whitespace-nowrap"
+                                                            title={(s.salary_breakdown as any).bonus_title || 'Monthly Incentive'}
+                                                        >
+                                                            +₹{Number((s.salary_breakdown as any).monthly_bonus).toLocaleString('en-IN')}
+                                                        </Badge>
+                                                    ) : (
+                                                        <span className="text-muted-foreground text-xs opacity-40">—</span>
+                                                    )}
                                                 </td>
                                                 <td className="p-3 text-center text-muted-foreground">{s.total_working_hours || 0}h</td>
                                                 <td className="p-3 text-center">
@@ -673,24 +768,45 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                                                     </div>
                                                 </td>
                                                 <td className="p-3 text-center">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className={`h-8 w-8 ${
-                                                            s.needs_recompile
-                                                                ? "text-amber-600 hover:text-amber-700 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 ring-1 ring-amber-500/20"
-                                                                : "text-orange-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20"
-                                                        }`}
-                                                        onClick={() => handleCompileSingle(s.profile_id, s.profile?.full_name || s.profile?.email)}
-                                                        disabled={compilingProfileId !== null}
-                                                        title={s.needs_recompile ? `${s.recompile_reason || 'Records modified after compilation'} - click to recompile` : "Recompile Employee Attendance"}
-                                                    >
-                                                        {compilingProfileId === s.profile_id ? (
-                                                            <Loader2 className="h-4 w-4 animate-spin" />
-                                                        ) : (
-                                                            <RefreshCw className={`h-4 w-4 ${s.needs_recompile ? "animate-pulse" : ""}`} />
-                                                        )}
-                                                    </Button>
+                                                    <div className="flex items-center justify-center gap-1">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
+                                                            onClick={() => setForSalaryMutation.mutate({ ids: [s.id] })}
+                                                            disabled={setForSalaryMutation.isPending || s.status === 'set_for_salary' || s.status === 'payslip_generated'}
+                                                            title={
+                                                                s.status === 'set_for_salary' || s.status === 'payslip_generated'
+                                                                    ? "Already confirmed for salary"
+                                                                    : "Confirm & Set for Salary"
+                                                            }
+                                                        >
+                                                            {setForSalaryMutation.isPending && setForSalaryMutation.variables?.ids.includes(s.id) ? (
+                                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                                            ) : (
+                                                                <CheckCircle className={`h-4 w-4 ${s.status === 'draft' ? "text-emerald-600" : "text-emerald-500/40"}`} />
+                                                            )}
+                                                        </Button>
+
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className={`h-8 w-8 ${
+                                                                s.needs_recompile
+                                                                    ? "text-amber-600 hover:text-amber-700 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 ring-1 ring-amber-500/20"
+                                                                    : "text-orange-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20"
+                                                            }`}
+                                                            onClick={() => handleCompileSingle(s.profile_id, s.profile?.full_name || s.profile?.email)}
+                                                            disabled={compilingProfileId !== null}
+                                                            title={s.needs_recompile ? `${s.recompile_reason || 'Records modified after compilation'} - click to recompile` : "Recompile Employee Attendance"}
+                                                        >
+                                                            {compilingProfileId === s.profile_id ? (
+                                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                                            ) : (
+                                                                <RefreshCw className={`h-4 w-4 ${s.needs_recompile ? "animate-pulse" : ""}`} />
+                                                            )}
+                                                        </Button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         )
@@ -702,11 +818,39 @@ export function MonthlyAttendanceCompilation({ basePath }: { basePath: string })
                 )}
             </CardShell>
 
+            {onProceedToPayslips && summaries && summaries.length > 0 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between p-4 bg-gradient-to-r from-emerald-500/10 via-primary/10 to-transparent border border-emerald-500/20 rounded-2xl gap-3">
+                    <div className="space-y-0.5">
+                        <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-emerald-600" />
+                            Attendance Verification Complete?
+                        </h4>
+                        <p className="text-xs text-muted-foreground">
+                            Move directly to Step 2 to generate payslips, calculate take-home pay, and distribute to employees.
+                        </p>
+                    </div>
+                    <Button
+                        onClick={onProceedToPayslips}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md gap-2 shrink-0"
+                    >
+                        Proceed to Payslips <ArrowRight className="h-4 w-4" />
+                    </Button>
+                </div>
+            )}
+
             <BulkMonthlySummaryUpload
                 isOpen={isBulkUploadOpen}
                 onOpenChange={setIsBulkUploadOpen}
                 initialMonth={month}
                 initialYear={year}
+            />
+
+            <MonthlyBonusDialog
+                isOpen={isBonusModalOpen}
+                onOpenChange={setIsBonusModalOpen}
+                month={month}
+                year={year}
+                onSuccess={() => refetch()}
             />
 
             <Dialog 

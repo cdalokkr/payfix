@@ -15,6 +15,7 @@ $form = New-Object System.Windows.Forms.Form
 $form.WindowState = [System.Windows.Forms.FormWindowState]::Minimized
 $form.ShowInTaskbar = $false
 
+Set-Location "C:\iAS"
 $asm = [Reflection.Assembly]::LoadFrom("C:\iAS\AxInterop.RealSvrOcxTcpLib.dll")
 $axCtrl = New-Object AxRealSvrOcxTcpLib.AxRealSvrOcxTcp
 $form.Controls.Add($axCtrl)
@@ -31,26 +32,31 @@ function Handle-LogData($sender, $devIp, $devPort, $sn, $uId, $pDate, $ioMode, $
 
         Log-Message "[$sourceEvent] Incoming Punch: UserID=$uId, Time=$pDate, SN=$sn"
 
-        # STRICT FILTER: User 80 (aktestuser@testnet.in)
-        if ("$uId" -ne "80") {
-            return
-        }
-
-        # DEBOUNCE: Ignore duplicate event within 15 seconds
+        # DEBOUNCE: Ignore duplicate event within 10 seconds (e.g. dual OnReceiveGLogData + OnReceiveGLogDataExtend for same face scan)
         $now = [DateTime]::UtcNow
         if ($global:LastPunches.ContainsKey("$uId")) {
             $diff = ($now - $global:LastPunches["$uId"]).TotalSeconds
-            if ($diff -lt 15) {
+            if ($diff -lt 10) {
                 Log-Message "⏳ [DEBOUNCE] Duplicate event from $sourceEvent ignored for User $uId ($([Math]::Round($diff, 1))s since last punch)"
                 return
             }
         }
         $global:LastPunches["$uId"] = $now
 
-        Log-Message "🎯 [USER 80 MATCH!] aktestuser@testnet.in punched on $sn at $pDate"
+        # If terminal hardware clock is more than 12 hours off from PC real-time clock, use real-time PC timestamp
+        $realNow = Get-Date
+        try {
+            $parsedDate = [DateTime]::Parse($pDate)
+            if ([Math]::Abs(($realNow - $parsedDate).TotalHours) -gt 12) {
+                $pDate = $realNow.ToString("yyyy-MM-ddTHH:mm:ss+05:30")
+                Log-Message "⚠️ Terminal clock unsynced ($parsedDate). Adjusted punch to real-time: $pDate"
+            }
+        } catch {}
+
+        Log-Message "🎯 [USER PUNCH MATCH!] User $uId punched on $sn at $pDate (Mode: $ioMode)"
 
         # Run node sync
-        $nodeCmd = "node d:\payfix\sync-agent\sync-punch.js --userId 80 --timestamp `"$pDate`" --punchType $ioMode --deviceSerial `"$sn`""
+        $nodeCmd = "node d:\payfix\sync-agent\sync-punch.js --userId `"$uId`" --timestamp `"$pDate`" --punchType $ioMode --deviceSerial `"$sn`""
         cmd.exe /c $nodeCmd | Out-File -FilePath $logFile -Append -Encoding utf8
 
     } catch {
@@ -84,7 +90,7 @@ $handlerText = [AxRealSvrOcxTcpLib._DRealSvrOcxTcpEvents_OnReceiveGLogTextEventH
             $parts = $logText -split "`t"
             if ($parts.Count -ge 2) {
                 $uId = $parts[0].Trim()
-                if ($uId -eq "80") {
+                if ($uId) {
                     $now = [DateTime]::UtcNow
                     if ($global:LastPunches.ContainsKey("$uId")) {
                         $diff = ($now - $global:LastPunches["$uId"]).TotalSeconds
@@ -97,8 +103,8 @@ $handlerText = [AxRealSvrOcxTcpLib._DRealSvrOcxTcpEvents_OnReceiveGLogTextEventH
 
                     $dateStr = $parts[1].Trim()
                     $ioMode = if ($parts.Count -gt 3) { [int]$parts[3] } else { 0 }
-                    Log-Message "🎯 [USER 80 MATCH - TEXT] aktestuser@testnet.in punched at $dateStr"
-                    $nodeCmd = "node d:\payfix\sync-agent\sync-punch.js --userId 80 --timestamp `"$dateStr`" --punchType $ioMode --deviceSerial `"TIPL596270523057`""
+                    Log-Message "🎯 [USER PUNCH - TEXT] User $uId punched at $dateStr"
+                    $nodeCmd = "node d:\payfix\sync-agent\sync-punch.js --userId `"$uId`" --timestamp `"$dateStr`" --punchType $ioMode --deviceSerial `"TIPL596270523057`""
                     cmd.exe /c $nodeCmd | Out-File -FilePath $logFile -Append -Encoding utf8
                 }
             }
@@ -117,18 +123,21 @@ $handlerTextImage = [AxRealSvrOcxTcpLib._DRealSvrOcxTcpEvents_OnReceiveGLogTextA
         Log-Message "[OnReceiveGLogTextAndImage] IP=$($e.astrClientIP), Text=$logText"
         if ($logText) {
             $parts = $logText -split "`t"
-            if ($parts.Count -ge 2 -and $parts[0].Trim() -eq "80") {
-                $now = [DateTime]::UtcNow
-                if ($global:LastPunches.ContainsKey("80")) {
-                    $diff = ($now - $global:LastPunches["80"]).TotalSeconds
-                    if ($diff -lt 15) {
-                        return
+            if ($parts.Count -ge 2) {
+                $uId = $parts[0].Trim()
+                if ($uId) {
+                    $now = [DateTime]::UtcNow
+                    if ($global:LastPunches.ContainsKey("$uId")) {
+                        $diff = ($now - $global:LastPunches["$uId"]).TotalSeconds
+                        if ($diff -lt 15) {
+                            return
+                        }
                     }
-                }
-                $global:LastPunches["80"] = $now
+                    $global:LastPunches["$uId"] = $now
 
-                $nodeCmd = "node d:\payfix\sync-agent\sync-punch.js --userId 80 --timestamp `"$($parts[1].Trim())`" --punchType 0 --deviceSerial `"TIPL596270523057`""
-                cmd.exe /c $nodeCmd | Out-File -FilePath $logFile -Append -Encoding utf8
+                    $nodeCmd = "node d:\payfix\sync-agent\sync-punch.js --userId `"$uId`" --timestamp `"$($parts[1].Trim())`" --punchType 0 --deviceSerial `"TIPL596270523057`""
+                    cmd.exe /c $nodeCmd | Out-File -FilePath $logFile -Append -Encoding utf8
+                }
             }
         }
     } catch {}

@@ -25,7 +25,7 @@ import {
     AccordionTrigger,
     AccordionContent,
 } from "@/components/ui/accordion"
-import { User, Mail, Shield, Lock, Trash2, Briefcase } from "lucide-react"
+import { User, Mail, Shield, Lock, Trash2, Briefcase, Building2 } from "lucide-react"
 import { CancelButton } from "@/components/ui/action-button"
 import CreateUserButton from "@/components/ui/create-user-button"
 import { Calendar28 } from "@/components/ui/calendar-28"
@@ -39,12 +39,14 @@ export type UserFormValues = {
     firstName: string
     middleName?: string | null
     lastName: string
-    email: string
+    email?: string | null
     mobileNo?: string | null
     dateOfBirth: string
     sex: "male" | "female" | ""
     role: "admin" | "moderator" | "employee" | ""
+    departmentId?: string | null
     designationId?: string | null
+    biometricDeviceId?: string | null
     allowedModules?: string[]
     password?: string
     confirmPassword?: string
@@ -98,8 +100,22 @@ export const FormContent = memo(function FormContent({
         staleTime: 5 * 60 * 1000, // 5 minutes
     })
 
+    // Fetch departments for dropdown
+    const { data: departments } = trpc.departments.getAll.useQuery(undefined, {
+        staleTime: 5 * 60 * 1000,
+    })
+
+    const selectedDepartmentId = form.watch('departmentId') || values.departmentId
+    const selectedDepartmentName = departments?.find(d => d.id === selectedDepartmentId)?.name || "-"
     const selectedDesignationName = designations?.find(d => d.id === values.designationId)?.name || "-"
-    const filteredDesignations = designations?.filter(d => d.role === values.role) || []
+
+    // Filter designations by role AND relative to department if assigned
+    const filteredDesignations = designations?.filter(d => {
+        const roleMatch = !values.role || d.role === values.role
+        // If department is chosen, show designations matching that department or generic (no department assigned)
+        const deptMatch = !selectedDepartmentId || !d.department_id || d.department_id === selectedDepartmentId
+        return roleMatch && deptMatch
+    }) || []
 
     // Use a stable date reference to avoid hydration issues with Next.js 16
     // Initialize with undefined and set on client side only
@@ -197,6 +213,10 @@ export const FormContent = memo(function FormContent({
                                         </div>
                                     </AccordionTrigger>
                                     <AccordionContent className="px-4 pb-4 pt-4">
+                                        <ReadOnlyField
+                                            label="Department"
+                                            value={selectedDepartmentName}
+                                        />
                                         <ReadOnlyField
                                             label="User Role"
                                             value={values.role === 'admin' ? 'Administrator' : values.role === 'moderator' ? 'Moderator' : 'Employee'}
@@ -512,7 +532,7 @@ export const FormContent = memo(function FormContent({
                                             control={control}
                                             render={({ field, fieldState }) => (
                                                 <Field data-invalid={fieldState.invalid}>
-                                                    <FieldLabel htmlFor="mobileNo">Mobile Number</FieldLabel>
+                                                    <FieldLabel htmlFor="mobileNo">Mobile Number (Required for Login) *</FieldLabel>
                                                     <Input
                                                         id="mobileNo"
                                                         type="tel"
@@ -640,7 +660,7 @@ export const FormContent = memo(function FormContent({
                                             control={control}
                                             render={({ field, fieldState }) => (
                                                 <Field data-invalid={fieldState.invalid}>
-                                                    <FieldLabel htmlFor="email">Email Address *</FieldLabel>
+                                                    <FieldLabel htmlFor="email">Email Address (Optional)</FieldLabel>
                                                     <div className="relative">
                                                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
                                                         <Input
@@ -652,6 +672,7 @@ export const FormContent = memo(function FormContent({
                                                             autoComplete="new-email"
                                                             data-form-type="other"
                                                             {...field}
+                                                            value={field.value || ""}
                                                         />
                                                     </div>
                                                     {fieldState.invalid && fieldState.error && (
@@ -742,7 +763,7 @@ export const FormContent = memo(function FormContent({
                                             control={control}
                                             render={({ field, fieldState }) => (
                                                 <Field data-invalid={fieldState.invalid}>
-                                                    <FieldLabel htmlFor="email">Email Address *</FieldLabel>
+                                                    <FieldLabel htmlFor="email">Email Address (Optional)</FieldLabel>
                                                     <div className="relative">
                                                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
                                                         <Input
@@ -754,6 +775,7 @@ export const FormContent = memo(function FormContent({
                                                             autoComplete="email"
                                                             data-form-type="other"
                                                             {...field}
+                                                            value={field.value || ""}
                                                         />
                                                     </div>
                                                     {fieldState.invalid && fieldState.error && (
@@ -789,8 +811,47 @@ export const FormContent = memo(function FormContent({
                                         </div>
                                     </AccordionTrigger>
                                     <AccordionContent className="px-4 pb-4 pt-4 space-y-4">
-                                        {/* Role and Designation in same row */}
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
+                                        {/* Department, Role, and Designation */}
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
+                                            <Controller
+                                                name="departmentId"
+                                                control={control}
+                                                render={({ field, fieldState }) => (
+                                                    <Field data-invalid={fieldState.invalid}>
+                                                        <FieldLabel htmlFor="departmentId">Department</FieldLabel>
+                                                        <Select
+                                                            value={field.value || "none"}
+                                                            onValueChange={(val) => {
+                                                                const actualVal = val === "none" ? null : val
+                                                                field.onChange(actualVal)
+                                                                // Clear designation if it doesn't belong to the newly selected department
+                                                                if (actualVal && values.designationId) {
+                                                                    const currentDesig = designations?.find(d => d.id === values.designationId)
+                                                                    if (currentDesig && currentDesig.department_id && currentDesig.department_id !== actualVal) {
+                                                                        form.setValue('designationId', null)
+                                                                    }
+                                                                }
+                                                            }}
+                                                        >
+                                                            <SelectTrigger className={fieldState.invalid ? "border-destructive" : ""}>
+                                                                <SelectValue placeholder="Select Department" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="none">General / No Department</SelectItem>
+                                                                {departments?.map((dept) => (
+                                                                    <SelectItem key={dept.id} value={dept.id}>
+                                                                        {dept.name}
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                        {fieldState.invalid && fieldState.error && (
+                                                            <FieldError errors={[fieldState.error]} className="mt-1" />
+                                                        )}
+                                                    </Field>
+                                                )}
+                                            />
+
                                             <Controller
                                                 name="role"
                                                 control={control}
@@ -854,6 +915,32 @@ export const FormContent = memo(function FormContent({
                                                                 </p>
                                                             )}
                                                         </div>
+                                                    </Field>
+                                                )}
+                                            />
+
+                                            <Controller
+                                                name="biometricDeviceId"
+                                                control={control}
+                                                render={({ field, fieldState }) => (
+                                                    <Field data-invalid={fieldState.invalid} className="sm:col-span-2">
+                                                        <FieldLabel htmlFor="biometricDeviceId" className="flex items-center justify-between text-xs">
+                                                            <span>Biometric Machine ID (Enrollment No.)</span>
+                                                            <span className="text-[10px] text-muted-foreground font-normal">(Auto-syncs hardware attendance)</span>
+                                                        </FieldLabel>
+                                                        <Input
+                                                            {...field}
+                                                            value={field.value || ""}
+                                                            id="biometricDeviceId"
+                                                            placeholder="e.g. 1, 2, 80"
+                                                            className={`font-mono text-xs ${fieldState.invalid ? "border-destructive" : ""}`}
+                                                        />
+                                                        <p className="text-[11px] text-muted-foreground mt-1">
+                                                            Numeric ID configured on the physical biometric machine for fingerprint/face clock in-out.
+                                                        </p>
+                                                        {fieldState.invalid && fieldState.error && (
+                                                            <FieldError errors={[fieldState.error]} className="mt-1" />
+                                                        )}
                                                     </Field>
                                                 )}
                                             />

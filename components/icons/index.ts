@@ -39,13 +39,21 @@ import {
   HandCoins,
   CalendarRange,
   Receipt,
+  BookOpen,
 
   // Complaint & Ticket icons
   Headset,
   MessageSquareWarning,
   TicketCheck,
   Building2,
+  Building,
   Phone,
+
+  // Organization & Device icons
+  Clock,
+  MapPin,
+  Cpu,
+  Monitor,
 } from 'lucide-react';
 
 export const Icons: Record<string, React.ElementType> = {
@@ -89,12 +97,19 @@ export const Icons: Record<string, React.ElementType> = {
   HandCoins,
   CalendarRange,
   Receipt,
+  BookOpen,
 
   // Complaint & Ticket icons
   Headset,
   MessageSquareWarning,
   TicketCheck,
   Building2,
+  Building,
   Phone,
-};
 
+  // Organization & Device icons
+  Clock,
+  MapPin,
+  Cpu,
+  Monitor,
+};

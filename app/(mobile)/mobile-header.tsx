@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { UserAvatar } from "@/components/user-avatar"
 import { Button } from "@/components/ui/button"
@@ -56,6 +56,12 @@ export function MobileHeader({ profile }: MobileHeaderProps) {
         staleTime: 60000,
     })
     const activeProfile = dynamicProfile || profile
+
+    useEffect(() => {
+        if (activeProfile?.must_change_password) {
+            window.location.replace('/setup-password')
+        }
+    }, [activeProfile?.must_change_password])
 
     // Query for pending photo request
     const { data: pendingRequest } = trpc.profile.getMyPendingPhotoRequest.useQuery()
@@ -230,7 +236,7 @@ export function MobileHeader({ profile }: MobileHeaderProps) {
                         profileId={activeProfile.id}
                         profileData={{
                             fullName: activeProfile.full_name || 'User',
-                            email: activeProfile.email,
+                            email: activeProfile.email || '',
                             role: (activeProfile as any)?.role || 'employee',
                             avatarUrl: activeProfile.avatar_url,
                             avatarStatus: activeProfile.avatar_url ? 'custom' : 'default'

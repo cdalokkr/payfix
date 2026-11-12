@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="hi" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Analytics & NVR Server | IP Camera Access Control</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50: '#eef2ff', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca', 900: '#312e81' },
+            surface: { 800: '#1e293b', 900: '#0f172a', 950: '#020617' }
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="/static/css/custom.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body class="bg-surface-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-brand-600 selection:text-white">
+
+  <!-- Top Navbar -->
+  <header class="border-b border-slate-800 bg-surface-900/80 backdrop-blur sticky top-0 z-50 px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center space-x-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-400 flex items-center justify-center shadow-lg shadow-brand-500/20">
+        <i class="fa-solid fa-video text-white text-lg"></i>
+      </div>
+      <div>
+        <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+          IP Camera Video Analytics Server
+          <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> LIVE NVR
+          </span>
+        </h1>
+        <p class="text-xs text-slate-400">ANPR License Plate • Face Biometric Entry • 24/7 NVR Storage</p>
+      </div>
+    </div>
+
+    <!-- Quick Stats in Header -->
+    <div class="flex items-center space-x-6 text-sm">
+      <div class="hidden md:flex items-center space-x-2 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700/60">
+        <i class="fa-solid fa-hard-drive text-indigo-400"></i>
+        <span class="text-slate-400 text-xs">Storage:</span>
+        <span id="header-disk-stat" class="font-semibold text-slate-200 text-xs">Checking...</span>
+      </div>
+
+      <div class="hidden sm:flex items-center space-x-2 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700/60">
+        <i class="fa-solid fa-camera text-emerald-400"></i>
+        <span class="text-slate-400 text-xs">Cameras:</span>
+        <span id="header-camera-stat" class="font-semibold text-slate-200 text-xs">1 Active</span>
+      </div>
+
+      <div class="flex items-center space-x-2">
+        <button id="btn-quick-sim" onclick="openSimulatorModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-3 py-1.5 rounded-lg shadow font-medium flex items-center gap-1.5 transition">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> Test Simulator
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation Tabs Bar -->
+  <nav class="bg-surface-900 border-b border-slate-800/80 px-6 flex space-x-1 overflow-x-auto text-sm">
+    <button onclick="switchTab('live-monitor')" id="tab-btn-live-monitor" class="tab-btn active px-4 py-3 border-b-2 border-brand-500 text-brand-400 font-semibold flex items-center gap-2 transition">
+      <i class="fa-solid fa-desktop"></i> Live Monitor & Alerts
+    </button>
+    <button onclick="switchTab('vehicles')" id="tab-btn-vehicles" class="tab-btn px-4 py-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium flex items-center gap-2 transition">
+      <i class="fa-solid fa-car-side"></i> Vehicle ANPR (Number Plates)
+    </button>
+    <button onclick="switchTab('faces')" id="tab-btn-faces" class="tab-btn px-4 py-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium flex items-center gap-2 transition">
+      <i class="fa-solid fa-user-check"></i> Face Access Control
+    </button>
+    <button onclick="switchTab('playback')" id="tab-btn-playback" class="tab-btn px-4 py-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium flex items-center gap-2 transition">
+      <i class="fa-solid fa-film"></i> NVR Video Playback & Archive
+    </button>
+    <button onclick="switchTab('cameras')" id="tab-btn-cameras" class="tab-btn px-4 py-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium flex items-center gap-2 transition">
+      <i class="fa-solid fa-video"></i> Cameras Config
+    </button>
+    <button onclick="switchTab('settings')" id="tab-btn-settings" class="tab-btn px-4 py-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium flex items-center gap-2 transition">
+      <i class="fa-solid fa-gear"></i> Storage & Relay Settings
+    </button>
+  </nav>
+
+  <!-- Main Content Body -->
+  <main class="flex-1 p-6 overflow-y-auto">
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         TAB 1: LIVE MONITOR & REAL-TIME ALERTS
+    ══════════════════════════════════════════════════════════════════════ -->
+    <section id="tab-live-monitor" class="tab-content block">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Left: Live Video Feeds Grid (Span 2) -->
+        <div class="lg:col-span-2 space-y-4">
+          <div class="bg-surface-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+            <!-- Feed Header -->
+            <div class="bg-surface-800/80 px-4 py-3 border-b border-slate-700/60 flex items-center justify-between">
+              <div class="flex items-center space-x-2">
+                <span class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span id="current-stream-title" class="font-bold text-sm text-slate-200">Entry Gate Camera (cam_01)</span>
+                <span class="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded">RTSP / Simulated</span>
+              </div>
+              <div class="flex items-center space-x-2">
+                <select id="camera-selector" onchange="changeActiveStream(this.value)" class="bg-surface-900 text-xs text-slate-300 border border-slate-700 rounded px-2.5 py-1 focus:outline-none focus:border-brand-500">
+                  <option value="cam_01">cam_01 - Entry Gate Camera</option>
+                </select>
+                <button onclick="refreshLiveStream()" title="Reload Stream" class="text-slate-400 hover:text-white text-xs bg-slate-700/60 p-1.5 rounded">
+                  <i class="fa-solid fa-rotate-right"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Video Player Frame -->
+            <div class="relative bg-black flex items-center justify-center min-h-[420px] max-h-[540px] overflow-hidden group">
+              <img id="live-stream-img" src="/api/stream/cam_01" alt="Live Camera Stream" class="w-full h-auto object-contain max-h-[540px]">
+              
+              <!-- Live HUD Overlay -->
+              <div class="absolute top-4 left-4 pointer-events-none">
+                <div id="live-status-badge" class="hidden px-3 py-1.5 rounded-lg text-xs font-bold shadow-lg transition-all transform scale-100 flex items-center gap-2">
+                  <!-- dynamic badge -->
+                </div>
+              </div>
+
+              <!-- Gate Trigger Simulation overlay indicator -->
+              <div id="barrier-status-indicator" class="absolute bottom-4 left-4 bg-slate-900/90 border border-slate-700 px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 shadow-lg">
+                <i class="fa-solid fa-shield-halved text-brand-400"></i>
+                <span class="text-slate-400">Boom Barrier:</span>
+                <span id="barrier-text" class="text-emerald-400 font-bold">READY / ARMED</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom Action Buttons for Quick Gate Override -->
+          <div class="flex items-center justify-between bg-surface-900 border border-slate-800 p-4 rounded-xl">
+            <div class="flex items-center gap-3">
+              <button onclick="manualOpenGate()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs px-4 py-2 rounded-lg flex items-center gap-2 shadow transition">
+                <i class="fa-solid fa-door-open"></i> Emergency Gate Open
+              </button>
+              <button onclick="triggerSecurityAlarm()" class="bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs px-4 py-2 rounded-lg flex items-center gap-2 shadow transition">
+                <i class="fa-solid fa-bell"></i> Trigger Alert Siren
+              </button>
+            </div>
+            <div class="text-xs text-slate-400 flex items-center gap-2">
+              <i class="fa-solid fa-circle-info text-slate-500"></i>
+              Real-time AI Frame rate: <span class="text-indigo-400 font-bold">~25 FPS</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Real-Time Event & Alert Feed -->
+        <div class="bg-surface-900 border border-slate-800 rounded-2xl flex flex-col h-[580px] shadow-xl">
+          <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+            <h2 class="font-bold text-sm text-slate-200 flex items-center gap-2">
+              <i class="fa-solid fa-bolt text-amber-400"></i> Live Access Feed
+            </h2>
+            <span id="event-counter" class="text-xs bg-brand-500/20 text-brand-400 px-2 py-0.5 rounded-full border border-brand-500/30">
+              0 Events
+            </span>
+          </div>
+
+          <!-- Event Log List Container -->
+          <div id="live-event-container" class="flex-1 p-4 space-y-3 overflow-y-auto">
+            <!-- Dynamic events inserted here -->
+            <div class="text-center text-slate-500 py-16 text-xs">
+              <i class="fa-solid fa-satellite-dish text-2xl mb-2 text-slate-600"></i>
+              <p>Listening for camera detections...</p>
+              <p class="text-[11px] text-slate-600 mt-1">Plates and faces will appear automatically in real-time.</p>
+            </div>
+          </div>
+
+          <!-- Bottom Audio Notification Toggle -->
+          <div class="p-3 border-t border-slate-800/80 bg-surface-950/40 flex items-center justify-between text-xs text-slate-400">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="chk-audio-alert" checked class="rounded border-slate-700 text-brand-600 focus:ring-0">
+              <span>Sound Alerts (Chime / Buzzer)</span>
+            </label>
+            <button onclick="clearEventFeed()" class="text-slate-500 hover:text-slate-300 transition">
+              <i class="fa-solid fa-trash-can mr-1"></i> Clear
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         TAB 2: VEHICLE ANPR & WHITELIST/BLACKLIST
+    ══════════════════════════════════════════════════════════════════════ -->
+    <section id="tab-vehicles" class="tab-content hidden space-y-6">
+      
+      <!-- Top Action Bar -->
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-surface-900 border border-slate-800 p-4 rounded-2xl">
+        <div>
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-car text-brand-400"></i> Registered Vehicles & Whitelist
+          </h2>
+          <p class="text-xs text-slate-400">Manage which vehicle number plates are Allowed, Blocked, or Visitors.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="text" id="vehicle-search" oninput="searchVehicles(this.value)" placeholder="Search plate or owner..." class="bg-surface-950 text-xs text-slate-200 border border-slate-700 rounded-lg px-3 py-2 w-52 focus:outline-none focus:border-brand-500">
+          <button onclick="openAddVehicleModal()" class="bg-brand-600 hover:bg-brand-500 text-white text-xs px-3.5 py-2 rounded-lg font-semibold flex items-center gap-1.5 shadow transition">
+            <i class="fa-solid fa-plus"></i> Add Vehicle
+          </button>
+        </div>
+      </div>
+
+      <!-- Vehicles Table -->
+      <div class="bg-surface-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-300">
+            <thead class="bg-surface-800/80 text-slate-400 uppercase tracking-wider text-[11px] border-b border-slate-800">
+              <tr>
+                <th class="px-5 py-3">Number Plate</th>
+                <th class="px-5 py-3">Owner Name</th>
+                <th class="px-5 py-3">Type</th>
+                <th class="px-5 py-3">Access Status</th>
+                <th class="px-5 py-3">Notes</th>
+                <th class="px-5 py-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="vehicles-table-body" class="divide-y divide-slate-800">
+              <!-- Dynamic rows -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Recent Vehicle Entry Logs History -->
+      <div class="bg-surface-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-clock-rotate-left text-indigo-400"></i> Vehicle Detection & Entry History
+        </h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-300">
+            <thead class="bg-surface-800/80 text-slate-400 uppercase tracking-wider text-[11px] border-b border-slate-800">
+              <tr>
+                <th class="px-4 py-3">Time</th>
+                <th class="px-4 py-3">Plate Number</th>
+                <th class="px-4 py-3">Owner</th>
+                <th class="px-4 py-3">Decision</th>
+                <th class="px-4 py-3">Confidence</th>
+                <th class="px-4 py-3">Snapshot</th>
+                <th class="px-4 py-3">Event Clip</th>
+              </tr>
+            </thead>
+            <tbody id="vehicle-logs-table-body" class="divide-y divide-slate-800">
+              <!-- Dynamic rows -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         TAB 3: FACE BIOMETRIC ACCESS CONTROL
+    ══════════════════════════════════════════════════════════════════════ -->
+    <section id="tab-faces" class="tab-content hidden space-y-6">
+      
+      <!-- Top Action Bar -->
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-surface-900 border border-slate-800 p-4 rounded-2xl">
+        <div>
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-id-card-clip text-brand-400"></i> Enrolled Members & Biometric Whitelist
+          </h2>
+          <p class="text-xs text-slate-400">Enroll employees & guests with photo embedding to authorize pedestrian gate entry.</p>
+        </div>
+        <button onclick="openAddPersonModal()" class="bg-brand-600 hover:bg-brand-500 text-white text-xs px-3.5 py-2 rounded-lg font-semibold flex items-center gap-1.5 shadow transition">
+          <i class="fa-solid fa-user-plus"></i> Enroll New Member
+        </button>
+      </div>
+
+      <!-- Persons Cards Grid -->
+      <div id="persons-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <!-- Dynamic Person Cards -->
+      </div>
+
+      <!-- Recent Face Entry Logs History -->
+      <div class="bg-surface-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-clock-rotate-left text-indigo-400"></i> Face Access Verification Logs
+        </h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-300">
+            <thead class="bg-surface-800/80 text-slate-400 uppercase tracking-wider text-[11px] border-b border-slate-800">
+              <tr>
+                <th class="px-4 py-3">Time</th>
+                <th class="px-4 py-3">Person Name</th>
+                <th class="px-4 py-3">Decision</th>
+                <th class="px-4 py-3">Similarity</th>
+                <th class="px-4 py-3">Face Snapshot</th>
+                <th class="px-4 py-3">Event Clip</th>
+              </tr>
+            </thead>
+            <tbody id="face-logs-table-body" class="divide-y divide-slate-800">
+              <!-- Dynamic rows -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         TAB 4: NVR VIDEO PLAYBACK & ARCHIVE
+    ══════════════════════════════════════════════════════════════════════ -->
+    <section id="tab-playback" class="tab-content hidden space-y-6">
+      
+      <!-- Video Archive Filter Bar -->
+      <div class="bg-surface-900 border border-slate-800 p-4 rounded-2xl flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-compact-disc text-brand-400"></i> NVR Video Recordings Archive
+          </h2>
+          <p class="text-xs text-slate-400">Browse continuous 24/7 recordings and event-triggered clips.</p>
+        </div>
+        <div class="flex items-center gap-3 text-xs">
+          <select id="playback-camera-filter" onchange="loadRecordings()" class="bg-surface-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-200">
+            <option value="">All Cameras</option>
+          </select>
+          <select id="playback-type-filter" onchange="loadRecordings()" class="bg-surface-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-200">
+            <option value="">All Recordings</option>
+            <option value="events">Only Event Clips (Plates/Faces)</option>
+            <option value="continuous">Continuous Segments</option>
+          </select>
+          <button onclick="loadRecordings()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-lg font-semibold flex items-center gap-1">
+            <i class="fa-solid fa-rotate"></i> Refresh
+          </button>
+        </div>
+      </div>
+
+      <!-- Playback Split: Video Player + Recordings List -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- HTML5 Video Player -->
+        <div class="lg:col-span-2 bg-surface-900 border border-slate-800 rounded-2xl overflow-hidden p-4 space-y-3">
+          <div class="flex items-center justify-between text-xs pb-2 border-b border-slate-800">
+            <span id="player-title" class="font-bold text-slate-200">Select a recording to play</span>
+            <span id="player-meta" class="text-slate-400"></span>
+          </div>
+          <div class="bg-black rounded-xl overflow-hidden aspect-video flex items-center justify-center">
+            <video id="archive-video-player" controls class="w-full h-full">
+              Your browser does not support the video tag.
+            </video>
+          </div>
+          <div class="flex items-center justify-between text-xs pt-1">
+            <a id="btn-download-video" href="#" download class="hidden text-brand-400 hover:underline flex items-center gap-1">
+              <i class="fa-solid fa-download"></i> Download Video File
+            </a>
+          </div>
+        </div>
+
+        <!-- Recordings List -->
+        <div class="bg-surface-900 border border-slate-800 rounded-2xl flex flex-col h-[520px]">
+          <div class="p-3 border-b border-slate-800 text-xs font-bold text-slate-300 flex items-center justify-between">
+            <span>Video Files (<span id="recordings-count">0</span>)</span>
+            <span class="text-[11px] text-slate-500">Auto FIFO</span>
+          </div>
+          <div id="recordings-list-container" class="flex-1 p-3 space-y-2 overflow-y-auto">
+            <!-- Dynamic recording items -->
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         TAB 5: CAMERAS CONFIGURATION
+    ══════════════════════════════════════════════════════════════════════ -->
+    <section id="tab-cameras" class="tab-content hidden space-y-6">
+      
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-surface-900 border border-slate-800 p-4 rounded-2xl">
+        <div>
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-video text-brand-400"></i> Connected IP Cameras & Streams
+          </h2>
+          <p class="text-xs text-slate-400">Configure IP camera RTSP URLs, ONVIF feeds, and recording toggles.</p>
+        </div>
+        <button onclick="openAddCameraModal()" class="bg-brand-600 hover:bg-brand-500 text-white text-xs px-3.5 py-2 rounded-lg font-semibold flex items-center gap-1.5 shadow transition">
+          <i class="fa-solid fa-plus"></i> Add New Camera
+        </button>
+      </div>
+
+      <!-- Cameras Cards Grid -->
+      <div id="cameras-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Dynamic camera cards -->
+      </div>
+
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         TAB 6: STORAGE & RELAY SETTINGS
+    ══════════════════════════════════════════════════════════════════════ -->
+    <section id="tab-settings" class="tab-content hidden space-y-6">
+      
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        <!-- Storage Health Card -->
+        <div class="bg-surface-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+          <h3 class="text-sm font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-hard-drive text-brand-400"></i> NVR Disk Space & Auto-Purge Janitor
+          </h3>
+          <p class="text-xs text-slate-400">
+            The Storage Janitor automatically monitors disk capacity and deletes the oldest continuous recordings when storage usage exceeds the threshold.
+          </p>
+
+          <!-- Storage Progress Bar -->
+          <div class="space-y-1.5 pt-2">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-slate-300 font-semibold">Disk Usage: <span id="storage-used-gb">0 GB</span> / <span id="storage-total-gb">0 GB</span></span>
+              <span id="storage-pct-label" class="font-bold text-brand-400">0%</span>
+            </div>
+            <div class="w-full bg-slate-800 h-3 rounded-full overflow-hidden">
+              <div id="storage-progress-bar" class="bg-brand-500 h-full transition-all duration-500" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <form id="settings-storage-form" onsubmit="saveStorageSettings(event)" class="space-y-3 pt-3">
+            <div class="grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <label class="block text-slate-400 mb-1">Max Disk Threshold (%)</label>
+                <input type="number" id="setting-max-disk" min="50" max="98" class="w-full bg-surface-950 border border-slate-700 rounded-lg p-2 text-slate-200">
+              </div>
+              <div>
+                <label class="block text-slate-400 mb-1">Retention Days</label>
+                <input type="number" id="setting-retention-days" min="1" max="365" class="w-full bg-surface-950 border border-slate-700 rounded-lg p-2 text-slate-200">
+              </div>
+            </div>
+            <button type="submit" class="bg-brand-600 hover:bg-brand-500 text-white text-xs px-4 py-2 rounded-lg font-semibold transition">
+              Save Storage Policy
+            </button>
+          </form>
+        </div>
+
+        <!-- Gate Relay & PayFix Integration Card -->
+        <div class="bg-surface-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+          <h3 class="text-sm font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-network-wired text-emerald-400"></i> Boom Barrier Relay & Webhook Trigger
+          </h3>
+          <p class="text-xs text-slate-400">
+            When an authorized number plate or face receives <strong>ENTRY GRANTED</strong>, this server automatically fires an HTTP POST webhook to open your IP relay or boom barrier controller.
+          </p>
+
+          <form id="settings-relay-form" onsubmit="saveRelaySettings(event)" class="space-y-3 text-xs">
+            <div>
+              <label class="block text-slate-400 mb-1">Relay Webhook URL (ESP32 / IP Relay / Gate Controller)</label>
+              <input type="url" id="setting-relay-url" placeholder="http://192.168.1.150/relay/open or https://webhook..." class="w-full bg-surface-950 border border-slate-700 rounded-lg p-2 text-slate-200">
+            </div>
+            <div>
+              <label class="block text-slate-400 mb-1">Face Similarity Match Threshold (0.50 - 0.90)</label>
+              <input type="number" id="setting-face-thresh" step="0.01" min="0.40" max="0.95" class="w-full bg-surface-950 border border-slate-700 rounded-lg p-2 text-slate-200">
+            </div>
+            <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-4 py-2 rounded-lg font-semibold transition">
+              Save Relay & AI Settings
+            </button>
+          </form>
+        </div>
+
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       MODALS
+  ══════════════════════════════════════════════════════════════════════ -->
+
+  <!-- Modal: Add / Edit Vehicle -->
+  <div id="modal-vehicle" class="modal-backdrop hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+    <div class="bg-surface-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-car text-brand-400"></i> Register Vehicle Number Plate
+        </h3>
+        <button onclick="closeModal('modal-vehicle')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form id="vehicle-form" onsubmit="submitVehicle(event)" class="space-y-3 text-xs">
+        <div>
+          <label class="block text-slate-400 mb-1">Plate Number (e.g. DL01AB1234) *</label>
+          <input type="text" id="v-plate" required placeholder="DL01AB1234" class="w-full bg-surface-950 border border-slate-700 rounded-lg p-2.5 text-slate-200 uppercase font-mono font-bold">
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">Owner / Driver Name *</label>
+          <input type="text" id="v-owner" required placeholder="Ramesh Kumar" class="w-full bg-surface-950 border border-slate-700 rounded-lg p-2.5 text-slate-200">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-400 mb-1">Vehicle Type</label>
+            <select id="v-type" class="w-full bg-surface-950 border border-slate-700 rounded-lg p-2.5 text-slate-200">
+              <option value="Car">Car / Sedan / SUV</option>
+              <option value="Bike">Motorcycle / Scooter</option>
+              <option value="Truck">Truck / Commercial</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">Access Decision</label>
+            <select id="v-status" class="w-full bg-surface-950 border border-slate-700 rounded-lg p-2.5 text-slate-200 font-semibold">
+              <option value="ALLOWED" class="text-emerald-400">ALLOWED (Whitelist)</option>
+              <option value="BLOCKED" class="text-rose-400">BLOCKED (Blacklist)</option>
+              <option value="VISITOR" class="text-amber-400">VISITOR (Ask Guard)</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">Notes</label>
+          <input type="text" id="v-notes" placeholder="Staff Parking Slot 4" class="w-full bg-surface-950 border border-slate-700 rounded-lg p-2 text-slate-200">
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+          <button type="button" onclick="closeModal('modal-vehicle')" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300">Cancel</button>
+          <button type="submit" class="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-lg font-semibold shadow">Save Vehicle</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Enroll Person Face -->
+  <div id="modal-person" class="modal-backdrop hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+    <div class="bg-surface-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-user-plus text-brand-400"></i> Enroll Person Face Biometric
+        </h3>
+        <button onclick="closeModal('modal-person')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form id="person-form" onsubmit="submitPerson(event)" class="space-y-3 text-xs">
+        <div>
+          <label class="block text-slate-400 mb-1">Full Name *</label>
+          <input type="text" id="p-name" required placeholder="Aarav Sharma" class="w-full bg-surface-950 border border-slate-700 rounded-lg p-2.5 text-slate-200">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-400 mb-1">Employee / Member ID</label>
+            <input type="text" id="p-code" placeholder="EMP-104" class="w-full bg-surface-950 border border-slate-700 rounded-lg p-2 text-slate-200">
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">Access Decision</label>
+            <select id="p-status" class="w-full bg-surface-950 border border-slate-700 rounded-lg p-2 text-slate-200 font-semibold">
+              <option value="ALLOWED" class="text-emerald-400">ALLOWED (Whitelist)</option>
+              <option value="BLOCKED" class="text-rose-400">BLOCKED (Blacklist)</option>
+              <option value="VISITOR" class="text-amber-400">VISITOR</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">Face Photo (Upload or take snapshot) *</label>
+          <input type="file" id="p-photo" accept="image/*" required class="w-full text-slate-400 text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-slate-800 file:text-slate-200 hover:file:bg-slate-700">
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+          <button type="button" onclick="closeModal('modal-person')" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300">Cancel</button>
+          <button type="submit" class="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-lg font-semibold shadow">Enroll Face</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Add Camera (with RTSP and ONVIF tabs) -->
+  <div id="modal-camera" class="modal-backdrop hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+    <div class="bg-surface-900 border border-slate-700 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-video text-brand-400"></i> Add IP Camera Stream
+        </h3>
+        <button onclick="closeModal('modal-camera')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <!-- Add Camera Method Switcher -->
+      <div class="flex border-b border-slate-800 text-xs">
+        <button type="button" onclick="switchAddCameraTab('rtsp')" id="btn-add-tab-rtsp" class="px-4 py-2 font-bold border-b-2 border-brand-500 text-brand-400 flex items-center gap-1.5">
+          <i class="fa-solid fa-link"></i> Direct RTSP Stream
+        </button>
+        <button type="button" onclick="switchAddCameraTab('onvif')" id="btn-add-tab-onvif" class="px-4 py-2 font-medium border-b-2 border-transparent text-slate-400 hover:text-white flex items-center gap-1.5">
+          <i class="fa-solid fa-network-wired text-emerald-400"></i> ONVIF Discovery
+        </button>
+      </div>
+
+      <!-- Tab A: Direct RTSP -->
+      <div id="add-camera-rtsp-panel">
+        <form id="camera-form" onsubmit="submitCamera(event)" class="space-y-3 text-xs">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-slate-400 mb-1">Camera ID (e.g. cam_02) *</label>
+              <input type="text" id="c-id" required placeholder="cam_02" class="w-full bg-surface-950 border border-slate-700 rounded-lg p-2.5 text-slate-200">
+            </div>
+            <div>
+              <label class="block text-slate-400 mb-1">Camera Name *</label>
+              <input type="text" id="c-name" required placeholder="Main Entry Gate" class="w-full bg-surface-950 border border-slate-700 rounded-lg p-2.5 text-slate-200">
+            </div>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="text-slate-400">RTSP Stream URL *</label>
+              <button type="button" onclick="testStreamInput('c-url', 'add-stream-test-status')" class="text-[11px] text-brand-400 hover:text-brand-300 font-semibold flex items-center gap-1">
+                <i class="fa-solid fa-vial"></i> Test Stream Connection
+              </button>
+            </div>
+            <input type="text" id="c-url" required placeholder="rtsp://admin:password@192.168.10.15:554/stream1" class="w-full bg-surface-950 border border-slate-700 rounded-lg p-2.5 text-slate-200 font-mono text-[11px]">
+            <p class="text-[10px] text-slate-500 mt-1">
+              Tip: Passwords with special symbols (e.g. <code>@</code>, <code>#</code>) are automatically sanitized and URL-encoded.
+            </p>
+            <div id="add-stream-test-status" class="mt-1.5 hidden text-[11px] p-2 rounded-lg"></div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-slate-400 mb-1">Location</label>
+              <input type="text" id="c-loc" placeholder="North Gate" class="w-full bg-surface-950 border border-slate-700 rounded-lg p-2 text-slate-200">
+            </div>
+            <div>
+              <label class="block text-slate-400 mb-1">Purpose</label>
+              <select id="c-purpose" class="w-full bg-surface-950 border border-slate-700 rounded-lg p-2 text-slate-200">
+                <option value="entry_gate">Vehicle Entry Gate</option>
+                <option value="exit_gate">Vehicle Exit Gate</option>
+                <option value="pedestrian">Pedestrian Turnstile</option>
+                <option value="surveillance">General Surveillance</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 pt-1">
+            <input type="checkbox" id="c-recording" checked class="rounded border-slate-700 text-brand-600 focus:ring-0">
+            <label for="c-recording" class="text-slate-300">Enable 24/7 Segmented Video Recording</label>
+          </div>
+
+          <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+            <button type="button" onclick="closeModal('modal-camera')" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300">Cancel</button>
+            <button type="submit" class="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-lg font-semibold shadow">Add Camera</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Tab B: ONVIF Scanner & Profile Finder -->
+      <div id="add-camera-onvif-panel" class="hidden space-y-3 text-xs">
+        <div class="p-3 bg-surface-950 border border-slate-800 rounded-xl space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-slate-300 flex items-center gap-1.5">
+              <i class="fa-solid fa-tower-broadcast text-emerald-400"></i> Auto-Discover ONVIF Cameras on Network
+            </span>
+            <button type="button" onclick="discoverOnvifDevices()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded text-[11px] font-semibold flex items-center gap-1">
+              <i class="fa-solid fa-magnifying-glass"></i> Scan LAN
+            </button>
+          </div>
+          <div id="onvif-discovery-results" class="text-[11px] text-slate-400">
+            Click "Scan LAN" to find cameras broadcasting WS-Discovery on your local subnet.
+          </div>
+        </div>
+
+        <div class="space-y-2 pt-1">
+          <div class="font-bold text-slate-300 flex items-center gap-1">
+            <i class="fa-solid fa-key text-indigo-400"></i> Connect with Camera Credentials
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-slate-400 mb-0.5">Camera IP</label>
+              <input type="text" id="onvif-ip" placeholder="192.168.10.15" value="192.168.10.15" class="w-full bg-surface-950 border border-slate-700 rounded-lg p-2 text-slate-200">
+            </div>
+            <div>
+              <label class="block text-slate-400 mb-0.5">ONVIF HTTP Port</label>
+              <input type="number" id="onvif-port" value="80" class="w-full bg-surface-950 border border-slate-700 rounded-lg p-2 text-slate-200">
+            </div>
+            <div>
+              <label class="block text-slate-400 mb-0.5">Username</label>
+              <input type="text" id="onvif-user" value="admin" class="w-full bg-surface-950 border border-slate-700 rounded-lg p-2 text-slate-200">
+            </div>
+            <div>
+              <label class="block text-slate-400 mb-0.5">Password</label>
+              <input type="text" id="onvif-pass" placeholder="Camera password" class="w-full bg-surface-950 border border-slate-700 rounded-lg p-2 text-slate-200">
+            </div>
+          </div>
+          <button type="button" onclick="fetchOnvifProfiles()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 rounded-lg text-xs shadow flex items-center justify-center gap-1.5 transition">
+            <i class="fa-solid fa-magnifying-glass-arrow-right"></i> Fetch Available Streams via ONVIF
+          </button>
+        </div>
+
+        <!-- Discovered Streams List Container -->
+        <div id="onvif-streams-container" class="hidden space-y-2 pt-1">
+          <span class="font-bold text-slate-300">Select Stream Profile:</span>
+          <div id="onvif-streams-list" class="space-y-1.5 max-h-40 overflow-y-auto"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Modal: Edit Camera -->
+  <div id="modal-edit-camera" class="modal-backdrop hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+    <div class="bg-surface-900 border border-slate-700 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-pen-to-square text-brand-400"></i> Edit IP Camera Details
+        </h3>
+        <button onclick="closeModal('modal-edit-camera')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <form id="edit-camera-form" onsubmit="submitEditCamera(event)" class="space-y-3 text-xs">
+        <input type="hidden" id="edit-c-id">
+        
+        <div>
+          <label class="block text-slate-400 mb-1">Camera ID (Read-only)</label>
+          <input type="text" id="edit-c-id-display" disabled class="w-full bg-surface-950/60 border border-slate-800 rounded-lg p-2 text-slate-400 font-mono">
+        </div>
+
+        <div>
+          <label class="block text-slate-400 mb-1">Camera Name *</label>
+          <input type="text" id="edit-c-name" required class="w-full bg-surface-950 border border-slate-700 rounded-lg p-2.5 text-slate-200">
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-slate-400">RTSP Stream URL *</label>
+            <button type="button" onclick="testStreamInput('edit-c-url', 'edit-stream-test-status')" class="text-[11px] text-brand-400 hover:text-brand-300 font-semibold flex items-center gap-1">
+              <i class="fa-solid fa-vial"></i> Test Connection
+            </button>
+          </div>
+          <input type="text" id="edit-c-url" required class="w-full bg-surface-950 border border-slate-700 rounded-lg p-2.5 text-slate-200 font-mono text-[11px]">
+          <p class="text-[10px] text-slate-500 mt-1">Special characters like <code>@</code> and <code>#</code> in password will be auto-encoded.</p>
+          <div id="edit-stream-test-status" class="mt-1.5 hidden text-[11px] p-2 rounded-lg"></div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-400 mb-1">Location</label>
+            <input type="text" id="edit-c-loc" class="w-full bg-surface-950 border border-slate-700 rounded-lg p-2 text-slate-200">
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">Purpose</label>
+            <select id="edit-c-purpose" class="w-full bg-surface-950 border border-slate-700 rounded-lg p-2 text-slate-200">
+              <option value="entry_gate">Vehicle Entry Gate</option>
+              <option value="exit_gate">Vehicle Exit Gate</option>
+              <option value="pedestrian">Pedestrian Turnstile</option>
+              <option value="surveillance">General Surveillance</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 pt-1">
+          <input type="checkbox" id="edit-c-recording" class="rounded border-slate-700 text-brand-600 focus:ring-0">
+          <label for="edit-c-recording" class="text-slate-300">Enable 24/7 Segmented Video Recording</label>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+          <button type="button" onclick="closeModal('modal-edit-camera')" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300">Cancel</button>
+          <button type="submit" class="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-lg font-semibold shadow">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Test Simulator -->
+  <div id="modal-simulator" class="modal-backdrop hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+    <div class="bg-surface-900 border border-slate-700 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-wand-magic-sparkles text-brand-400"></i> Event Simulation & Testing
+        </h3>
+        <button onclick="closeModal('modal-simulator')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <p class="text-xs text-slate-400">
+        Trigger simulated real-time events to test how the server evaluates license plates and faces, fires audio alerts, updates the dashboard HUD, and saves recordings.
+      </p>
+
+      <div class="space-y-4 text-xs">
+        <!-- Vehicle Plate Simulator -->
+        <div class="p-3 bg-surface-950 border border-slate-800 rounded-xl space-y-2">
+          <span class="font-bold text-slate-300 flex items-center gap-1.5"><i class="fa-solid fa-car text-indigo-400"></i> Test Vehicle ANPR</span>
+          <div class="grid grid-cols-3 gap-2">
+            <button onclick="simulateVehicle('DL01AB1234')" class="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 py-2 px-2 rounded-lg text-center font-bold">
+              Allowed Car<br><span class="text-[10px] font-normal text-slate-400">DL01AB1234</span>
+            </button>
+            <button onclick="simulateVehicle('UP16XX9999')" class="bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 py-2 px-2 rounded-lg text-center font-bold">
+              Blocked Car<br><span class="text-[10px] font-normal text-slate-400">UP16XX9999</span>
+            </button>
+            <button onclick="simulateVehicle('MH02ZZ5555')" class="bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 py-2 px-2 rounded-lg text-center font-bold">
+              Visitor / Unreg<br><span class="text-[10px] font-normal text-slate-400">MH02ZZ5555</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Face Biometric Simulator -->
+        <div class="p-3 bg-surface-950 border border-slate-800 rounded-xl space-y-2">
+          <span class="font-bold text-slate-300 flex items-center gap-1.5"><i class="fa-solid fa-user-check text-emerald-400"></i> Test Face Biometric</span>
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="simulateFace(true)" class="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 py-2.5 px-3 rounded-lg font-bold flex items-center justify-center gap-2">
+              <i class="fa-solid fa-check"></i> Authorized Face (Granted)
+            </button>
+            <button onclick="simulateFace(false)" class="bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 py-2.5 px-3 rounded-lg font-bold flex items-center justify-center gap-2">
+              <i class="fa-solid fa-ban"></i> Unknown Stranger (Denied)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-end pt-2 border-t border-slate-800">
+        <button onclick="closeModal('modal-simulator')" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg font-semibold">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Audio elements for sound alerts -->
+  <audio id="audio-granted" preload="auto" src="data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU9vT18A"></audio>
+  <audio id="audio-denied" preload="auto" src="data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU9vT18A"></audio>
+
+  <!-- JavaScript application logic -->
+  <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

@@ -19,7 +19,7 @@ import { getRecordDayType } from "./attendance-columns"
 
 const attendanceEditSchema = z.object({
     status: z.enum(['pending', 'verified', 'rejected']),
-    dayType: z.enum(['Present', 'Half Day', 'Extra Day', 'On Leave', 'Weekly Off', 'Holiday', 'Absent']),
+    dayType: z.enum(['Present', 'Half Day', 'Extra Day', 'Extra Shift (Full)', 'Extra Shift (Half)', 'On Leave', 'Weekly Off', 'Holiday', 'Absent']),
     remarks: z.string().optional(),
     checkIn: z.string().optional().or(z.literal('')),
     checkOut: z.string().optional().or(z.literal('')),
@@ -38,6 +38,8 @@ interface AttendanceEditDialogProps {
         dayType: string
         isHalfDay: boolean
         isExtraDay: boolean
+        isExtraShift: boolean
+        extraShiftType: 'full' | 'half' | null
         remarks: string
     }) => void
     isSaving: boolean
@@ -104,6 +106,8 @@ export function AttendanceEditDialog({
     const onSubmit = (values: AttendanceEditValues) => {
         const isHalfDay = values.dayType === 'Half Day';
         const isExtraDay = values.dayType === 'Extra Day';
+        const isExtraShift = values.dayType === 'Extra Shift (Full)' || values.dayType === 'Extra Shift (Half)';
+        const extraShiftType: 'full' | 'half' | null = values.dayType === 'Extra Shift (Full)' ? 'full' : values.dayType === 'Extra Shift (Half)' ? 'half' : null;
         
         let remarks = values.remarks || '';
         let finalStatus: 'pending' | 'verified' | 'rejected' | 'absent' = values.status;
@@ -142,6 +146,8 @@ export function AttendanceEditDialog({
             dayType: values.dayType,
             isHalfDay,
             isExtraDay,
+            isExtraShift,
+            extraShiftType,
             remarks
         })
     }
@@ -243,6 +249,8 @@ export function AttendanceEditDialog({
                                     <SelectItem value="Present" className="rounded-lg m-1 cursor-pointer text-xs">Present</SelectItem>
                                     <SelectItem value="Half Day" className="rounded-lg m-1 cursor-pointer text-xs">Half Day</SelectItem>
                                     <SelectItem value="Extra Day" className="rounded-lg m-1 cursor-pointer text-xs">Extra Day</SelectItem>
+                                    <SelectItem value="Extra Shift (Full)" className="rounded-lg m-1 cursor-pointer font-semibold text-violet-600 dark:text-violet-400 text-xs">Extra Shift (Full - 1.0x)</SelectItem>
+                                    <SelectItem value="Extra Shift (Half)" className="rounded-lg m-1 cursor-pointer font-semibold text-purple-600 dark:text-purple-400 text-xs">Extra Shift (Half - 0.5x)</SelectItem>
                                     <SelectItem value="On Leave" className="rounded-lg m-1 cursor-pointer text-amber-600 dark:text-amber-500 text-xs">On Leave</SelectItem>
                                     <SelectItem value="Weekly Off" className="rounded-lg m-1 cursor-pointer text-xs">Weekly Off</SelectItem>
                                     <SelectItem value="Holiday" className="rounded-lg m-1 cursor-pointer text-xs">Holiday</SelectItem>

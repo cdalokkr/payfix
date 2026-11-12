@@ -2,6 +2,7 @@
 // lib/trpc/routers/salary.ts
 // ============================================
 import { z } from 'zod'
+import { TRPCError } from '@trpc/server'
 import { router, adminProcedure, moderatorProcedure, protectedProcedure } from '../server'
 import { SalaryService } from '@/lib/services/salary.service'
 import { db } from '@/lib/db'
@@ -172,9 +173,21 @@ export const salaryRouter = router({
             month: z.number().min(1).max(12),
             year: z.number().min(2020).max(2100),
             profileId: z.string().uuid().optional(),
+            force: z.boolean().optional().default(false),
         }))
         .mutation(async ({ input }) => {
-            const results = await SalaryService.compileMonthlyAttendance(input.month, input.year, input.profileId)
+            if (input.force && !input.profileId) {
+                throw new TRPCError({
+                    code: 'BAD_REQUEST',
+                    message: 'Forced recalculation on finalized payslips requires a specific profileId.',
+                })
+            }
+            const results = await SalaryService.compileMonthlyAttendance(
+                input.month,
+                input.year,
+                input.profileId,
+                input.force
+            )
             try {
                 invalidateDashboardCache()
                 await broadcastServerEvent('dashboard_sync', {
@@ -211,6 +224,82 @@ export const salaryRouter = router({
         }))
         .query(async ({ input }) => {
             return await SalaryService.getMonthlySummaries(input.month, input.year)
+        }),
+
+    getSalaryBook: moderatorProcedure
+        .input(z.object({
+            profileId: z.string().uuid().optional().nullable(),
+            year: z.number().optional().nullable(),
+            departmentId: z.string().uuid().optional().nullable(),
+            status: z.string().optional().nullable(),
+        }).optional())
+        .query(async ({ input }) => {
+            return await SalaryService.getSalaryBook(input || {})
+        }),
+
+    // ==========================================
+    // MONTHLY BONUSES & INCENTIVES
+    // ==========================================
+
+    getMonthlyBonuses: moderatorProcedure
+        .input(z.object({
+            month: z.number().min(1).max(12),
+            year: z.number().min(2020).max(2100),
+        }))
+        .query(async ({ input }) => {
+            return await SalaryService.getMonthlyBonuses(input.month, input.year)
+        }),
+
+    setBulkMonthlyBonus: moderatorProcedure
+        .input(z.object({
+            month: z.number().min(1).max(12),
+            year: z.number().min(2020).max(2100),
+            amount: z.union([z.string(), z.number()]),
+            title: z.string().min(1),
+            bonusType: z.string().optional(),
+            remarks: z.string().optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+            return await SalaryService.setBulkMonthlyBonus({
+                month: input.month,
+                year: input.year,
+                amount: input.amount,
+                title: input.title,
+                bonusType: input.bonusType,
+                remarks: input.remarks,
+                createdBy: ctx.profile.id,
+            })
+        }),
+
+    upsertIndividualBonus: moderatorProcedure
+        .input(z.object({
+            profileId: z.string().uuid(),
+            month: z.number().min(1).max(12),
+            year: z.number().min(2020).max(2100),
+            amount: z.union([z.string(), z.number()]),
+            title: z.string().min(1),
+            bonusType: z.string().optional(),
+            remarks: z.string().optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+            return await SalaryService.upsertIndividualBonus({
+                profileId: input.profileId,
+                month: input.month,
+                year: input.year,
+                amount: input.amount,
+                title: input.title,
+                bonusType: input.bonusType,
+                remarks: input.remarks,
+                createdBy: ctx.profile.id,
+            })
+        }),
+
+    deleteMonthlyBonus: moderatorProcedure
+        .input(z.object({
+            id: z.string().uuid(),
+        }))
+        .mutation(async ({ input }) => {
+            return await SalaryService.deleteMonthlyBonus(input.id)
         }),
 
     // ==========================================
@@ -286,5 +375,44 @@ export const salaryRouter = router({
                 ...input,
                 paidBy: ctx.profile.id,
             })
+        }),
+
+    // ==========================================
+    // PAYSLIP ACCESS CONTROL (Global & Per-Employee)
+    // ==========================================
+
+    getPayslipAccessSettings: protectedProcedure
+        .input(z.object({
+            profileId: z.string().uuid().optional(),
+        }).optional())
+        .query(async ({ ctx, input }) => {
+            const targetProfileId = input?.profileId || ctx.profile?.id
+            return await SalaryService.getPayslipAccessSettings(targetProfileId)
+        }),
+
+    toggleGlobalPayslipAccess: moderatorProcedure
+        .input(z.object({
+            enabled: z.boolean(),
+        }))
+        .mutation(async ({ input }) => {
+            return await SalaryService.toggleGlobalPayslipAccess(input.enabled)
+        }),
+
+    toggleEmployeePayslipAccess: moderatorProcedure
+        .input(z.object({
+            profileId: z.string().uuid(),
+            enabled: z.boolean(),
+        }))
+        .mutation(async ({ input }) => {
+            return await SalaryService.toggleEmployeePayslipAccess(input.profileId, input.enabled)
+        }),
+
+    bulkToggleEmployeePayslipAccess: moderatorProcedure
+        .input(z.object({
+            profileIds: z.array(z.string().uuid()),
+            enabled: z.boolean(),
+        }))
+        .mutation(async ({ input }) => {
+            return await SalaryService.bulkToggleEmployeePayslipAccess(input.profileIds, input.enabled)
         }),
 })

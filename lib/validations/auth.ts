@@ -1,13 +1,12 @@
 import * as z from "zod"
 
 export const loginSchema = z.object({
-  email: z
-    .string()
-    .min(1, "Email is required.")
-    .email("Please enter a valid email."),
-  password: z
-    .string()
-    .min(6, "Password must be at least 6 characters.")
+  identifier: z.string().optional(),
+  email: z.string().optional(),
+  password: z.string().min(6, "Password must be at least 6 characters.")
+}).refine((data) => !!(data.identifier?.trim() || data.email?.trim()), {
+  message: "Email or Mobile Number is required.",
+  path: ["identifier"]
 })
 
 export type LoginInput = z.infer<typeof loginSchema>
@@ -39,6 +38,7 @@ export const profileUpdateSchema = z.object({
 
 export const designationSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(100),
+  departmentId: z.string().uuid().optional().nullable().or(z.literal('')),
   description: z.string().max(500).optional().or(z.literal('')),
   role: z.enum(['admin', 'moderator', 'employee'], {
     message: "Invalid role selected",
@@ -46,6 +46,49 @@ export const designationSchema = z.object({
 })
 
 export type DesignationInput = z.infer<typeof designationSchema>
+
+export const departmentSchema = z.object({
+  name: z.string().min(2, 'Department name must be at least 2 characters').max(100),
+  code: z.string().max(20).optional().nullable().or(z.literal('')),
+  description: z.string().max(500).optional().nullable().or(z.literal('')),
+  managerId: z.string().uuid().optional().nullable().or(z.literal('')),
+  locationId: z.string().uuid().optional().nullable().or(z.literal('')),
+  promoteManagerRole: z.boolean().optional().nullable(),
+})
+
+export type DepartmentInput = z.infer<typeof departmentSchema>
+
+export const shiftSchema = z.object({
+  name: z.string().min(2, 'Shift name must be at least 2 characters').max(100),
+  code: z.string().max(20).optional().nullable().or(z.literal('')),
+  locationId: z.string().uuid().optional().nullable(),
+  departmentId: z.string().uuid().optional().nullable().or(z.literal('')),
+  startTime: z.string().min(4, 'Start time is required'),
+  endTime: z.string().min(4, 'End time is required'),
+  durationHours: z.number().min(0.5).max(24).optional(),
+  bufferMinutes: z.number().min(0).max(180).default(15).optional(),
+  breakMinutes: z.number().min(0).max(300).optional(),
+  minHalfDayHours: z.number().optional(),
+  minFullDayHours: z.number().optional(),
+  isDefault: z.boolean().optional(),
+  color: z.string().optional().default('#3b82f6'),
+  isOvernight: z.boolean().default(false).optional(),
+})
+
+export type ShiftInput = z.infer<typeof shiftSchema>
+
+export const rosterAllotmentSchema = z.object({
+  departmentId: z.string().uuid().optional().nullable(),
+  profileIds: z.array(z.string().uuid()).min(1, 'Select at least one employee'),
+  shiftId: z.string().uuid('Select a shift').optional().nullable(),
+  startDate: z.string().min(8, 'Start date is required'),
+  endDate: z.string().min(8, 'End date is required'),
+  isExtraShift: z.boolean().default(false),
+  status: z.enum(['scheduled', 'completed', 'absent', 'on_leave', 'swapped']).default('scheduled'),
+  notes: z.string().optional(),
+})
+
+export type RosterAllotmentInput = z.infer<typeof rosterAllotmentSchema>
 
 export type ProfileUpdateInput = z.infer<typeof profileUpdateSchema>
 
@@ -88,15 +131,13 @@ export const passwordValidation = z.string()
   })
 
 export const createUserSchema = z.object({
-  email: z.string()
-    .min(1, 'Email is required')
-    .email('Invalid email address'),
+  email: z.string().email('Invalid email address').optional().or(z.literal('')),
   password: passwordValidation,
   firstName: z.string().min(1, 'First name is required').max(50, 'First name too long'),
   middleName: z.string().max(50, 'Middle name too long').optional().or(z.literal('')),
   lastName: z.string().min(1, 'Last name is required').max(50, 'Last name too long'),
   mobileNo: z.string()
-    .min(1, 'Mobile No is required')
+    .min(1, 'Mobile number is required')
     .regex(/^\d{10}$/, 'Mobile number must be exactly 10 digits'),
   dateOfBirth: z.string()
     .min(1, 'Date of birth is required')
@@ -111,7 +152,9 @@ export const createUserSchema = z.object({
     message: 'Select User Role'
   }),
   allowedModules: z.array(z.string()).optional(),
-  designationId: z.string().uuid("Designation is required"),
+  departmentId: z.string().uuid().optional().nullable().or(z.literal('')),
+  designationId: z.string().uuid().optional().nullable().or(z.literal('')),
+  biometricDeviceId: z.string().optional().nullable().or(z.literal('')),
   sex: z.enum(['male', 'female']).or(z.literal('')).refine((val) => val !== '', {
     message: 'Sex is required'
   }),
@@ -128,11 +171,9 @@ export const editUserSchema = z.object({
   firstName: z.string().min(1, 'First name is required').max(50, 'First name too long'),
   middleName: z.string().max(50, 'Middle name too long').optional().or(z.literal('')),
   lastName: z.string().min(1, 'Last name is required').max(50, 'Last name too long'),
-  email: z.string()
-    .min(1, 'Email is required')
-    .email('Invalid email address'),
+  email: z.string().email('Invalid email address').optional().or(z.literal('')),
   mobileNo: z.string()
-    .min(1, 'Mobile No is required')
+    .min(1, 'Mobile number is required')
     .regex(/^\d{10}$/, 'Mobile number must be exactly 10 digits'),
   dateOfBirth: z.string()
     .min(1, 'Date of birth is required')
@@ -147,7 +188,9 @@ export const editUserSchema = z.object({
     message: 'Select User Role'
   }),
   allowedModules: z.array(z.string()).optional(),
-  designationId: z.string().uuid("Designation is required"),
+  departmentId: z.string().uuid().optional().nullable().or(z.literal('')),
+  designationId: z.string().uuid().optional().nullable().or(z.literal('')),
+  biometricDeviceId: z.string().optional().nullable().or(z.literal('')),
   sex: z.enum(['male', 'female']).or(z.literal('')).refine((val) => val !== '', {
     message: 'Sex is required'
   }),

@@ -849,6 +849,49 @@
   scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
 }
 
+/* Custom rounded scrollbar for Dialogs & Modals */
+[data-slot="dialog-content"]::-webkit-scrollbar,
+.modal-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+[data-slot="dialog-content"]::-webkit-scrollbar-track,
+.modal-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 12px 0;
+}
+[data-slot="dialog-content"]::-webkit-scrollbar-thumb,
+.modal-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 9999px;
+}
+[data-slot="dialog-content"]::-webkit-scrollbar-thumb:hover,
+.modal-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.35);
+}
+:is(.dark [data-slot="dialog-content"])::-webkit-scrollbar-thumb,
+:is(.dark .modal-scrollbar)::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
+:is(.dark [data-slot="dialog-content"])::-webkit-scrollbar-thumb:hover,
+:is(.dark .modal-scrollbar)::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+[data-slot="dialog-content"]::-webkit-scrollbar-button,
+.modal-scrollbar::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+[data-slot="dialog-content"],
+.modal-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+:is(.dark [data-slot="dialog-content"]),
+:is(.dark .modal-scrollbar) {
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
 /* Focus ring utility */
 .focus-ring:focus-visible {
   outline: 2px solid var(--brand-primary);

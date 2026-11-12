@@ -1116,10 +1116,24 @@ export function ExpressKioskApp() {
                             <div className="w-full max-w-xl mx-auto space-y-4 animate-in zoom-in-95 duration-300">
                                 <Button
                                     onClick={openVerificationModal}
-                                    disabled={!isCameraReady}
-                                    className="w-full h-16 rounded-2xl bg-sky-600 hover:bg-sky-500 active:bg-sky-700 disabled:opacity-50 text-white font-black text-lg tracking-wide shadow-xl shadow-sky-600/30 transition-all transform hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-3 border border-sky-400/30 cursor-pointer"
+                                    disabled={!isCameraReady || !isOnline}
+                                    className={`w-full h-16 rounded-2xl font-black text-lg tracking-wide shadow-xl transition-all transform flex items-center justify-center gap-3 border ${
+                                        !isOnline
+                                            ? 'bg-amber-950/40 border-amber-500/30 text-amber-200 cursor-not-allowed shadow-none'
+                                            : 'bg-sky-600 hover:bg-sky-500 active:bg-sky-700 disabled:opacity-50 text-white shadow-sky-600/30 hover:scale-[1.02] active:scale-95 border-sky-400/30 cursor-pointer'
+                                    }`}
                                 >
-                                    {!isCameraReady ? (
+                                    {!isOnline ? (
+                                        <div className="flex items-center gap-2">
+                                            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-500/20 px-3 py-1 text-xs font-bold uppercase tracking-wider text-amber-300">
+                                                <WifiOff className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                                                Offline
+                                            </span>
+                                            <span className="text-sm font-medium text-amber-200">
+                                                Reconnect Internet to Start Verification
+                                            </span>
+                                        </div>
+                                    ) : !isCameraReady ? (
                                         <>
                                             <RefreshCw className="h-5 w-5 shrink-0 animate-spin text-sky-200" />
                                             <span>Starting Camera...</span>

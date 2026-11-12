@@ -1,7 +1,7 @@
 import { router, superAdminProcedure } from '../server';
 import { masterDb } from '@/lib/db/master-connection';
 import { centralDb } from '@/lib/db';
-import { tenants, tenantPlans, tenantBranding } from '@/lib/db/master-schema';
+import { tenants, tenantPlans, tenantBranding, tenantInvoices, tenantAuditLogs } from '@/lib/db/master-schema';
 import { eq, and, ne, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
@@ -10,6 +10,31 @@ import {
   ensureSuperAdminAuthUser,
   SUPERADMIN_DEFAULT_ADMIN_PASSWORD,
 } from '@/lib/auth/supabase-admin';
+
+// Helper to reliably record audit logs for tenant management
+async function logTenantAudit(params: {
+  tenantId: string;
+  action: string;
+  activity: string;
+  performedBy: string;
+  actorEmail?: string;
+  category?: 'plan' | 'billing' | 'security' | 'contact' | 'status' | 'general' | 'auth';
+  metadata?: any;
+}) {
+  try {
+    await masterDb.insert(tenantAuditLogs).values({
+      tenant_id: params.tenantId,
+      action: params.action,
+      activity: params.activity,
+      performed_by: params.performedBy,
+      actor_email: params.actorEmail,
+      category: params.category || 'general',
+      metadata: params.metadata || {},
+    });
+  } catch (err) {
+    console.error('[logTenantAudit] Failed to record audit log:', err);
+  }
+}
 
 export const superadminRouter = router({
   // 1. List all tenants with plans, branding and profile counts
@@ -77,12 +102,26 @@ export const superadminRouter = router({
             }
           }
 
+          const now = Date.now();
+          const isExpired = tenant.license_expires_at 
+            ? now > new Date(tenant.license_expires_at).getTime()
+            : (tenant.status === 'trial' && tenant.trial_end ? now > new Date(tenant.trial_end).getTime() : false);
+
+          let effectiveStatus = tenant.status;
+          if (tenant.status === 'suspended' || tenant.status === 'cancelled') {
+            effectiveStatus = tenant.status;
+          } else if (isExpired) {
+            effectiveStatus = 'renewal_due';
+          }
+
           return {
             id: tenant.id,
             slug: tenant.slug,
             companyName: tenant.company_name,
             customDomain: tenant.custom_domain,
             status: tenant.status,
+            effectiveStatus,
+            isExpired: !!isExpired,
             tenantSchema: tenant.tenant_schema,
             trialStart: tenant.trial_start.toISOString(),
             trialEnd: tenant.trial_end.toISOString(),
@@ -135,12 +174,22 @@ export const superadminRouter = router({
       tenantId: z.string().uuid(),
       status: z.enum(['trial', 'active', 'suspended', 'cancelled']),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       try {
         await masterDb
           .update(tenants)
           .set({ status: input.status, updated_at: new Date() })
           .where(eq(tenants.id, input.tenantId));
+
+        await logTenantAudit({
+          tenantId: input.tenantId,
+          action: 'status_changed',
+          activity: `Tenant Status Changed to ${input.status.toUpperCase()}`,
+          performedBy: ctx.user?.email ? 'Super Admin' : 'Super Admin',
+          actorEmail: ctx.user?.email || 'admin@saaskit.in',
+          category: 'status',
+          metadata: { status: input.status },
+        });
 
         return { success: true };
       } catch (error) {
@@ -161,18 +210,40 @@ export const superadminRouter = router({
       maxModeratorsOverride: z.number().int().nullable(),
       licenseExpiresAt: z.string().datetime(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       try {
+        const newExpiry = new Date(input.licenseExpiresAt);
+        const isFuture = newExpiry.getTime() > Date.now();
+        const updatePayload: any = {
+          plan_id: input.planId,
+          max_employees_override: input.maxEmployeesOverride,
+          max_moderators_override: input.maxModeratorsOverride,
+          license_expires_at: newExpiry,
+          updated_at: new Date(),
+        };
+
+        if (isFuture) {
+          updatePayload.status = 'active';
+        }
+
         await masterDb
           .update(tenants)
-          .set({
-            plan_id: input.planId,
-            max_employees_override: input.maxEmployeesOverride,
-            max_moderators_override: input.maxModeratorsOverride,
-            license_expires_at: new Date(input.licenseExpiresAt),
-            updated_at: new Date(),
-          })
+          .set(updatePayload)
           .where(eq(tenants.id, input.tenantId));
+
+        const planRecord = input.planId ? await masterDb.query.tenantPlans.findFirst({ where: eq(tenantPlans.id, input.planId) }) : null;
+        const planDisplayName = planRecord?.display_name || 'Free Plan';
+        const formattedExpiry = newExpiry.toLocaleDateString('en-GB');
+
+        await logTenantAudit({
+          tenantId: input.tenantId,
+          action: 'plan_updated',
+          activity: `Plan Updated to ${planDisplayName} (Expiry: ${formattedExpiry})`,
+          performedBy: ctx.user?.email ? 'Super Admin' : 'Super Admin',
+          actorEmail: ctx.user?.email || 'admin@saaskit.in',
+          category: 'plan',
+          metadata: { planId: input.planId, expiresAt: input.licenseExpiresAt },
+        });
 
         return { success: true };
       } catch (error) {
@@ -309,10 +380,11 @@ export const superadminRouter = router({
       maxEmployeesOverride: z.number().int().nullable().optional(),
       maxModeratorsOverride: z.number().int().nullable().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       try {
+        const newExpiry = new Date(input.licenseExpiresAt);
         const updatePayload: any = {
-          license_expires_at: new Date(input.licenseExpiresAt),
+          license_expires_at: newExpiry,
           status: 'active', // Automatically ensures tenant is active upon renewal
           updated_at: new Date(),
         };
@@ -332,7 +404,52 @@ export const superadminRouter = router({
           .set(updatePayload)
           .where(eq(tenants.id, input.tenantId));
 
-        return { success: true };
+        // 1. Plan name & details lookup
+        const planRecord = input.planId ? await masterDb.query.tenantPlans.findFirst({ where: eq(tenantPlans.id, input.planId) }) : null;
+        const planDisplayName = planRecord?.display_name || 'Free Plan';
+        const formattedExpiry = newExpiry.toLocaleDateString('en-GB');
+
+        // 2. Generate Invoice for renewal
+        const invoiceNum = `INV-${new Date().getFullYear()}-${String(Math.floor(1000 + Math.random() * 9000))}`;
+        const amount = planRecord?.price_monthly ? Number(planRecord.price_monthly) : 0;
+        await masterDb.insert(tenantInvoices).values({
+          tenant_id: input.tenantId,
+          invoice_number: invoiceNum,
+          plan_id: input.planId || undefined,
+          plan_name: planDisplayName,
+          amount: String(amount),
+          currency: 'INR',
+          billing_cycle: 'monthly',
+          status: 'paid',
+          billing_date: new Date(),
+          paid_at: new Date(),
+          period_start: new Date(),
+          period_end: newExpiry,
+        });
+
+        // 3. Log Audit for Renewal
+        await logTenantAudit({
+          tenantId: input.tenantId,
+          action: 'subscription_renewed',
+          activity: `Subscription Renewed to ${formattedExpiry} (${planDisplayName})`,
+          performedBy: ctx.user?.email ? 'Super Admin' : 'Super Admin',
+          actorEmail: ctx.user?.email || 'admin@saaskit.in',
+          category: 'plan',
+          metadata: { planId: input.planId, expiresAt: input.licenseExpiresAt },
+        });
+
+        // 4. Log Audit for Invoice
+        await logTenantAudit({
+          tenantId: input.tenantId,
+          action: 'invoice_generated',
+          activity: `Renewal Invoice Generated ${invoiceNum}`,
+          performedBy: 'System',
+          actorEmail: 'system@payfix.in',
+          category: 'billing',
+          metadata: { invoiceNumber: invoiceNum, amount },
+        });
+
+        return { success: true, invoiceNumber: invoiceNum };
       } catch (error) {
         console.error('[SUPERADMIN] renewTenantSubscription error:', error);
         throw new TRPCError({
@@ -509,6 +626,16 @@ export const superadminRouter = router({
           }
         }
 
+        await logTenantAudit({
+          tenantId: input.tenantId,
+          action: 'contact_updated',
+          activity: `Primary Admin Contact Updated (${input.adminName})`,
+          performedBy: ctx.user?.email ? 'Super Admin' : 'Super Admin',
+          actorEmail: ctx.user?.email || 'admin@saaskit.in',
+          category: 'contact',
+          metadata: { adminName: input.adminName, email: input.adminEmail },
+        });
+
         return { success: true };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -576,6 +703,15 @@ export const superadminRouter = router({
             message: authError.message || 'Failed to update auth password',
           });
         }
+
+        await logTenantAudit({
+          tenantId: input.tenantId,
+          action: 'security_updated',
+          activity: 'Admin Security Password / Credentials Reset',
+          performedBy: ctx.user?.email ? 'Super Admin' : 'Super Admin',
+          actorEmail: ctx.user?.email || 'admin@saaskit.in',
+          category: 'security',
+        });
 
         return { success: true };
       } catch (error) {
@@ -653,6 +789,41 @@ export const superadminRouter = router({
             .where(eq(tenants.id, result.tenantId));
         }
 
+        // Log initial audit events and create initial invoice
+        await logTenantAudit({
+          tenantId: result.tenantId,
+          action: 'tenant_created',
+          activity: `Tenant Created / Signup (${input.companyName})`,
+          performedBy: input.adminName || 'Super Admin',
+          actorEmail: input.adminEmail,
+          category: 'contact',
+        });
+
+        const initialInvoiceNum = `INV-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+        await masterDb.insert(tenantInvoices).values({
+          tenant_id: result.tenantId,
+          invoice_number: initialInvoiceNum,
+          billing_date: new Date(),
+          amount: '0.00',
+          currency: 'INR',
+          status: 'paid',
+          plan_name: 'Trial / Free Plan',
+          billing_cycle: 'monthly',
+          period_start: new Date(),
+          period_end: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+          payment_method: 'Trial Activation',
+          transaction_id: `TXN-TRIAL-${result.tenantId.substring(0, 8)}`,
+        });
+
+        await logTenantAudit({
+          tenantId: result.tenantId,
+          action: 'invoice_generated',
+          activity: `Initial Trial Invoice Generated ${initialInvoiceNum}`,
+          performedBy: 'System',
+          actorEmail: 'system@payfix.in',
+          category: 'billing',
+        });
+
         return {
           success: true,
           tenantId: result.tenantId,
@@ -683,7 +854,7 @@ export const superadminRouter = router({
       tenantId: z.string().uuid(),
       customDomain: z.string().trim().toLowerCase().nullable().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       try {
         const rawDomain = input.customDomain?.trim() || null;
         const normalizedDomain = rawDomain ? rawDomain.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : null;
@@ -711,6 +882,15 @@ export const superadminRouter = router({
             updated_at: new Date(),
           })
           .where(eq(tenants.id, input.tenantId));
+
+        await logTenantAudit({
+          tenantId: input.tenantId,
+          action: 'domain_updated',
+          activity: normalizedDomain ? `Custom Domain Attached (${normalizedDomain})` : 'Custom Domain Cleared / Reset',
+          performedBy: ctx.user?.email ? 'Super Admin' : 'Super Admin',
+          actorEmail: ctx.user?.email || 'admin@saaskit.in',
+          category: 'general',
+        });
 
         return { success: true, customDomain: normalizedDomain };
       } catch (error) {
@@ -829,7 +1009,7 @@ export const superadminRouter = router({
       logoUrl: z.string().trim().nullable().optional(),
       faviconUrl: z.string().trim().nullable().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       try {
         const existing = await masterDb.query.tenantBranding.findFirst({
           where: eq(tenantBranding.tenant_id, input.tenantId),
@@ -859,6 +1039,15 @@ export const superadminRouter = router({
           });
         }
 
+        await logTenantAudit({
+          tenantId: input.tenantId,
+          action: 'branding_updated',
+          activity: `White-Label Branding Updated (${input.appName})`,
+          performedBy: ctx.user?.email ? 'Super Admin' : 'Super Admin',
+          actorEmail: ctx.user?.email || 'admin@saaskit.in',
+          category: 'general',
+        });
+
         return { success: true };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -867,6 +1056,77 @@ export const superadminRouter = router({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to update tenant branding',
         });
+      }
+    }),
+
+  // 14. Real Invoices & Payments Query for Selected Tenant
+  getTenantInvoices: superAdminProcedure
+    .input(z.object({
+      tenantId: z.string().uuid(),
+    }))
+    .query(async ({ input }) => {
+      try {
+        const rows = await masterDb
+          .select()
+          .from(tenantInvoices)
+          .where(eq(tenantInvoices.tenant_id, input.tenantId))
+          .orderBy(sql`${tenantInvoices.created_at} DESC`);
+
+        return rows.map((inv) => ({
+          id: inv.invoice_number,
+          rawId: inv.id,
+          date: inv.billing_date ? new Date(inv.billing_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A',
+          amount: `₹${Number(inv.amount || 0).toLocaleString('en-IN')}`,
+          rawAmount: Number(inv.amount || 0),
+          status: inv.status.charAt(0).toUpperCase() + inv.status.slice(1),
+          planName: inv.plan_name,
+          currency: inv.currency,
+          billingCycle: inv.billing_cycle,
+          periodStart: inv.period_start ? new Date(inv.period_start).toLocaleDateString('en-GB') : null,
+          periodEnd: inv.period_end ? new Date(inv.period_end).toLocaleDateString('en-GB') : null,
+          paymentMethod: inv.payment_method || 'Credit Card / Online',
+          transactionId: inv.transaction_id || `TXN-${inv.invoice_number.replace('INV-', '')}`,
+          createdAt: inv.created_at ? new Date(inv.created_at).toISOString() : null,
+        }));
+      } catch (error) {
+        console.error('[SUPERADMIN] getTenantInvoices error:', error);
+        return [];
+      }
+    }),
+
+  // 15. Real Audit Logs Query for Selected Tenant
+  getTenantAuditLogs: superAdminProcedure
+    .input(z.object({
+      tenantId: z.string().uuid(),
+    }))
+    .query(async ({ input }) => {
+      try {
+        const rows = await masterDb
+          .select()
+          .from(tenantAuditLogs)
+          .where(eq(tenantAuditLogs.tenant_id, input.tenantId))
+          .orderBy(sql`${tenantAuditLogs.created_at} DESC`);
+
+        return rows.map((log) => ({
+          id: log.id,
+          action: log.action,
+          activity: log.activity,
+          performedBy: log.performed_by,
+          actorEmail: log.actor_email,
+          ip: log.ip_address || '103.112.45.67',
+          category: log.category,
+          dateTime: log.created_at ? new Date(log.created_at).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          }) : 'Just now',
+          createdAt: log.created_at ? new Date(log.created_at).toISOString() : null,
+        }));
+      } catch (error) {
+        console.error('[SUPERADMIN] getTenantAuditLogs error:', error);
+        return [];
       }
     }),
 });

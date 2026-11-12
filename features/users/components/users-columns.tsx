@@ -244,9 +244,10 @@ export function createUsersColumns(
             cell: ({ row }) => {
                 const user = row.original
                 const hasUpdate = isUpdated(user.id, ['email'])
+                const emailVal = row.getValue("email") as string
                 return (
                     <div className={`font-medium text-sm relative ${hasUpdate ? updatedBorderClass : ''}`}>
-                        {row.getValue("email")}
+                        {emailVal ? emailVal : <span className="text-xs text-muted-foreground italic">Mobile Login Only</span>}
                     </div>
                 )
             },
@@ -304,6 +305,25 @@ export function createUsersColumns(
             enableColumnFilter: true,
         },
         {
+            accessorKey: "department.name",
+            id: "department",
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title="Department" />
+            ),
+            cell: ({ row }) => {
+                const user = row.original
+                const deptName = user.department?.name || "General"
+                return (
+                    <div className="font-medium text-sm text-muted-foreground whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs">
+                            {deptName}
+                        </span>
+                    </div>
+                )
+            },
+            size: 150,
+        },
+        {
             accessorKey: "designation.name",
             id: "designation",
             header: ({ column }) => (
@@ -320,6 +340,30 @@ export function createUsersColumns(
                 )
             },
             size: 200,
+        },
+        {
+            id: "biometricId",
+            accessorKey: "biometricDeviceId",
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title="Biometric ID" />
+            ),
+            cell: ({ row }) => {
+                const user = row.original
+                const bioId = (user as any).biometricDeviceId || (user as any).biometric_device_user_id
+                if (bioId) {
+                    return (
+                        <div className="flex items-center gap-1.5 whitespace-nowrap">
+                            <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/25">
+                                #{bioId}
+                            </span>
+                        </div>
+                    )
+                }
+                return (
+                    <span className="text-xs text-muted-foreground/60 italic">Unlinked</span>
+                )
+            },
+            size: 130,
         }
     )
 

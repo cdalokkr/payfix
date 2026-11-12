@@ -31,18 +31,37 @@ export const POST = withTenantContext(async (req: NextRequest) => {
     try {
         const supabase = getSupabaseClient()
         const body = await req.json()
-        const { email, password } = body
+        const { email, identifier, password } = body
+        const rawIdentifier = (identifier || email || '').trim()
 
-        if (!email || !password) {
+        if (!rawIdentifier || !password) {
             return NextResponse.json(
-                { error: 'Email and password are required.' },
+                { error: 'Email or Mobile Number and password are required.' },
                 { status: 400 }
             )
         }
 
+        let effectiveEmail = rawIdentifier
+        const isPhone = /^\d{10}$/.test(rawIdentifier) || (!rawIdentifier.includes('@') && /^\d+$/.test(rawIdentifier))
+
+        if (isPhone) {
+            const profileByPhone = await db.query.profiles.findFirst({
+                where: eq(profiles.mobile_no, rawIdentifier)
+            })
+
+            if (!profileByPhone) {
+                return NextResponse.json(
+                    { error: 'No account registered with this mobile number.' },
+                    { status: 404 }
+                )
+            }
+
+            effectiveEmail = profileByPhone.email || `mobile_${rawIdentifier}@${profileByPhone.tenant_id || 'payfix'}.internal`
+        }
+
         // Authenticate with Supabase
         const { data, error } = await supabase.auth.signInWithPassword({
-            email,
+            email: effectiveEmail,
             password
         })
 

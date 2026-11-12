@@ -31,6 +31,14 @@ async function authenticateDevice(req: NextRequest): Promise<AuthenticatedTenant
     const tenant = await masterDb.query.tenants.findFirst({
         where: eq(tenants.biometric_api_key, match[1])
     });
+
+    if (tenant) {
+        if (tenant.status === 'suspended' || tenant.status === 'cancelled') return null;
+        if (tenant.license_expires_at && Date.now() > new Date(tenant.license_expires_at).getTime()) {
+            return null;
+        }
+    }
+
     return tenant ?? null;
 }
 

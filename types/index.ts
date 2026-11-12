@@ -7,9 +7,24 @@ export type UserRole = 'super_admin' | 'admin' | 'moderator' | 'employee'
 
 export type ActivityType = 'login' | 'logout' | 'profile_update' | 'data_view' | 'data_edit' | 'data_delete' | 'create_user'
 
+export interface Department {
+  id: string
+  name: string
+  code: string | null
+  description: string | null
+  manager_id: string | null
+  manager?: Profile | null
+  location_id: string | null
+  is_active: boolean
+  created_at: string | null
+  updated_at: string | null
+}
+
 export interface Designation {
   id: string
   name: string
+  department_id?: string | null
+  department?: Department | null
   description: string | null
   role: UserRole | string | null
   created_at: string | null
@@ -19,10 +34,12 @@ export interface Designation {
 export interface Profile {
   id: string
   tenant_id?: string | null
-  email: string
+  email?: string | null
   full_name: string | null
   avatar_url: string | null
   role: UserRole
+  department_id?: string | null
+  department?: Department | null
   designation_id?: string | null
   designation?: Designation | null
   first_name?: string | null
@@ -35,6 +52,63 @@ export interface Profile {
   created_at: string | null
   updated_at: string | null
   allowed_modules?: string[] | null
+  biometricDeviceId?: string | null
+  biometric_device_user_id?: string | null
+  must_change_password?: boolean | null
+}
+
+export interface OfficeShift {
+  id: string
+  location_id: string
+  department_id?: string | null
+  department?: Department | null
+  name: string
+  code?: string | null
+  start_time: string
+  end_time: string
+  duration_hours: number
+  is_overnight: boolean
+  buffer_minutes: number
+  color?: string | null
+  is_active: boolean
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+export interface EmployeeShiftAssignment {
+  id: string
+  profile_id: string
+  profile?: Profile | null
+  location_id: string
+  duty_hours: number
+  shift_mode: 'default' | 'single' | 'multi' | 'rotational'
+  assigned_shift_ids: string[]
+  assigned_shifts?: OfficeShift[]
+  rotation_type: 'none' | 'weekly' | 'biweekly' | 'monthly'
+  rotation_shift_ids?: string[]
+  rotation_start_date?: string | null
+  effective_from: string
+  effective_to?: string | null
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+export interface ShiftRoster {
+  id: string
+  profile_id: string
+  profile?: Profile | null
+  department_id?: string | null
+  department?: Department | null
+  shift_id?: string | null
+  shift?: OfficeShift | null
+  date: string
+  status: 'scheduled' | 'completed' | 'absent' | 'on_leave' | 'swapped'
+  is_extra_shift: boolean
+  notes?: string | null
+  allotted_by?: string | null
+  assigner?: Profile | null
+  created_at?: string | null
+  updated_at?: string | null
 }
 
 export interface Activity {

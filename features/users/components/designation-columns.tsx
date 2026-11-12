@@ -141,6 +141,24 @@ export function createDesignationColumns(
             },
         },
         {
+            id: "department",
+            accessorKey: "department.name",
+            header: ({ column }) => (
+                <DataTableColumnHeader column={column} title="Department" />
+            ),
+            cell: ({ row }) => {
+                const deptName = (row.original as any)?.department?.name || "All / General"
+                return (
+                    <div className="font-medium text-xs text-muted-foreground whitespace-nowrap">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                            {deptName}
+                        </span>
+                    </div>
+                )
+            },
+            size: 150,
+        },
+        {
             id: "name",
             accessorKey: "name",
             header: ({ column }) => (

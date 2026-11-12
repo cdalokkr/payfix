@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
         // Query Central master database to match token to a tenant
         const tenant = await masterDb.query.tenants.findFirst({
             where: eq(tenants.biometric_api_key, token),
-            with: { plan: true }
+            
         });
 
         if (!tenant || tenant.status === 'suspended' || tenant.status === 'cancelled') {
@@ -85,7 +85,12 @@ export async function POST(req: NextRequest) {
                     });
 
                     const profileId = settings?.profile_id || null;
-                    const punchTime = parseBiometricTimestamp(log.timestamp);
+                    let punchTime = parseBiometricTimestamp(log.timestamp);
+                    const now = new Date();
+                    // If terminal clock is unsynced (more than 12 hours away from real time), use real-time
+                    if (Math.abs(now.getTime() - punchTime.getTime()) > 12 * 60 * 60 * 1000) {
+                        punchTime = now;
+                    }
                     const localDate = formatDateIST(punchTime);
 
                     // 1. Record raw audit log
@@ -114,16 +119,25 @@ export async function POST(req: NextRequest) {
                         )
                     });
 
-                    if (log.punchType === 1 && activeSession) {
-                        // Explicit Punch Out -> Clock out active session
-                        await AttendanceService.clockOut({
-                            profileId,
-                            email: 'biometric@device.local',
-                            localDate,
-                            source: 'biometric',
-                        });
-                    } else if (!activeSession && (log.punchType === undefined || log.punchType === 0)) {
-                        // Start new attendance session
+                    if (activeSession) {
+                        // Debounce check: make sure this punch is at least 15s after check-in
+                        const checkInTime = new Date(activeSession.check_in).getTime();
+                        const secondsSinceCheckIn = (punchTime.getTime() - checkInTime) / 1000;
+
+                        if (secondsSinceCheckIn >= 15 || log.punchType === 1) {
+                            // Punch 2 (or explicit punch-out) -> Clock Out active session!
+                            await AttendanceService.clockOut({
+                                profileId,
+                                email: 'biometric@device.local',
+                                localDate,
+                                source: 'biometric',
+                            });
+                            console.log(`[Biometric Sync] User ${log.userId} clocked OUT successfully (${Math.round(secondsSinceCheckIn)}s after in).`);
+                        } else {
+                            console.log(`[Biometric Sync] Debounce: User ${log.userId} punched within ${Math.round(secondsSinceCheckIn)}s of check-in, duplicate ignored.`);
+                        }
+                    } else {
+                        // Punch 1 -> Clock In!
                         await AttendanceService.clockIn({
                             profileId,
                             email: 'biometric@device.local',
@@ -132,9 +146,7 @@ export async function POST(req: NextRequest) {
                             deviceId: body.deviceId,
                             locationId: locationId || undefined
                         });
-                    } else if (activeSession && (log.punchType === 0 || log.punchType === undefined)) {
-                        // Secondary in-between punch without explicit out:
-                        // Logged into biometric_raw_logs above, do NOT force clock-out automatically.
+                        console.log(`[Biometric Sync] User ${log.userId} clocked IN successfully.`);
                     }
 
                     processedCount++;

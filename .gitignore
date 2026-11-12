@@ -38,6 +38,8 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.example
+sync-agent/config.env
+!sync-agent/config.env.example
 
 # office & report docs
 *.docx
@@ -48,3 +50,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# python & local storage
+__pycache__/
+*.py[cod]
+*$py.class
+video-analytics-server/storage/
+*.db
+

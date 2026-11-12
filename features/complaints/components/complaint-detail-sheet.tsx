@@ -22,6 +22,7 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/
 import { CancelButton } from "@/components/ui/action-button"
 import CreateUserButton from "@/components/ui/create-user-button"
 import { Card, CardContent } from "@/components/ui/card"
+import { ComplaintAiTriageSection } from "@/features/complaints/components/complaint-ai-triage"
 
 interface Props {
   complaintId: string | null
@@ -200,6 +201,9 @@ export function ComplaintDetailSheet({ complaintId, onOpenChange, basePath }: Pr
                       <p className="text-sm whitespace-pre-wrap text-slate-700 leading-relaxed">{complaint.description}</p>
                     </div>
                   )}
+
+                  {/* Coarena AI Complaint Triage & Resolution Suggestion (Plan 019) */}
+                  <ComplaintAiTriageSection complaint={complaint} />
 
                   {/* Tickets and Call Logs Sections */}
                   <Accordion type="multiple" defaultValue={["tickets", "call-logs"]} className="space-y-4">

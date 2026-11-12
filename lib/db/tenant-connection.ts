@@ -22,17 +22,23 @@ const connectionPoolCache = new Map<string, CachedConnection>();
 
 // Prune idle connections in serverless environment (cleanup worker)
 if (process.env.NODE_ENV !== 'test') {
-    setInterval(() => {
+    const pruneTimer = setInterval(() => {
         const now = Date.now();
         const IDLE_TIMEOUT = 10 * 60 * 1000; // 10 minutes
         for (const [key, cached] of connectionPoolCache.entries()) {
             if (now - cached.lastUsed > IDLE_TIMEOUT) {
                 console.log(`[DB Router] Closing idle connection pool: ${key}`);
-                cached.client.end();
                 connectionPoolCache.delete(key);
+                cached.client.end().catch((err: any) => {
+                    console.warn(`[DB Router] Warning while closing idle connection ${key}:`, err);
+                });
             }
         }
     }, 5 * 60 * 1000); // Check every 5 minutes
+
+    if (typeof pruneTimer.unref === 'function') {
+        pruneTimer.unref();
+    }
 }
 
 // Map to cache blocked/suspended tenant IDs to enforce fast, non-blocking DB-level lockout
