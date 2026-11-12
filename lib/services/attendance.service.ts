@@ -12,6 +12,16 @@ import { consumeAttendanceProof } from '@/lib/biometric-attendance-proof'
 // ─ One-time flag per tenant schema — skips repeated CREATE TABLE IF NOT EXISTS round-trips
 const _attendanceSchemaEnsured = new Set<string>()
 
+// Helper: Safe weekday (0-6) without UTC midnight timezone drift
+function getWeekdayFromYYYYMMDD(dateStr: string): number {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr)
+    if (!match) {
+        return new Date(dateStr).getDay()
+    }
+    const [, y, m, d] = match
+    return new Date(Number(y), Number(m) - 1, Number(d)).getDay()
+}
+
 export class AttendanceService {
     /**
      * Get attendance records with optional filters
@@ -48,7 +58,7 @@ export class AttendanceService {
         const diffTime = Math.abs(end.getTime() - start.getTime())
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
         if (diffDays > 31) {
-            start.setDate(end.getDate() - 31)
+            start.setFullYear(end.getFullYear(), end.getMonth(), end.getDate() - 31)
         }
 
         const dates: string[] = []
@@ -187,8 +197,7 @@ export class AttendanceService {
                         dateStr >= l.start_date && 
                         dateStr <= l.end_date
                     )
-                    const dateObj = new Date(dateStr)
-                    const dayOfWeek = dateObj.getDay()
+                    const dayOfWeek = getWeekdayFromYYYYMMDD(dateStr)
                     const empLocation = profileLocationMap.get(profile.id) || (allLocations.length === 1 ? allLocations[0] : null)
                     const offDays = (empLocation?.off_days && empLocation.off_days.length > 0)
                         ? empLocation.off_days
@@ -343,7 +352,10 @@ export class AttendanceService {
 
     static async assertActiveSubscription() {
         const tenantStore = tenantStorage.getStore();
-        if (!tenantStore || !tenantStore.tenantId || tenantStore.trusted) return;
+        if (!tenantStore || !tenantStore.tenantId) {
+            throwAppError('FORBIDDEN', 'Tenant context is required for attendance operations.');
+        }
+        if (tenantStore.trusted) return;
 
         // 1. Check licenseExpiresAt from tenantStore if available
         if (tenantStore.licenseExpiresAt) {
@@ -359,31 +371,28 @@ export class AttendanceService {
         }
 
         // 2. Authoritative check from masterDb
-        try {
-            const { masterDb } = await import('@/lib/db/master-connection');
-            const { tenants: tenantsTable } = await import('@/lib/db/master-schema');
-            const { eq } = await import('drizzle-orm');
+        const { masterDb } = await import('@/lib/db/master-connection');
+        const { tenants: tenantsTable } = await import('@/lib/db/master-schema');
+        const { eq } = await import('drizzle-orm');
 
-            const tenant = await masterDb.query.tenants.findFirst({
-                where: eq(tenantsTable.id, tenantStore.tenantId),
-                columns: { status: true, license_expires_at: true }
+        const tenant = await masterDb.query.tenants.findFirst({
+            where: eq(tenantsTable.id, tenantStore.tenantId),
+            columns: { status: true, license_expires_at: true }
+        });
+
+        if (!tenant) {
+            throwAppError('FORBIDDEN', 'Workspace subscription record not found.');
+        }
+        if (tenant.status === 'suspended' || tenant.status === 'cancelled') {
+            throwAppError('FORBIDDEN', 'Workspace is currently suspended. Attendance operations are disabled.');
+        }
+        if (tenant.license_expires_at && Date.now() > new Date(tenant.license_expires_at).getTime()) {
+            const expDateStr = new Date(tenant.license_expires_at).toLocaleDateString('en-GB', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
             });
-
-            if (tenant) {
-                if (tenant.status === 'suspended' || tenant.status === 'cancelled') {
-                    throwAppError('FORBIDDEN', 'Workspace is currently suspended. Attendance operations are disabled.');
-                }
-                if (tenant.license_expires_at && Date.now() > new Date(tenant.license_expires_at).getTime()) {
-                    const expDateStr = new Date(tenant.license_expires_at).toLocaleDateString('en-GB', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric'
-                    });
-                    throwAppError('FORBIDDEN', `Workspace subscription expired on ${expDateStr}. Attendance operations are disabled until renewed.`);
-                }
-            }
-        } catch (err: any) {
-            if (err?.code === 'FORBIDDEN' || err?.statusCode === 403) throw err;
+            throwAppError('FORBIDDEN', `Workspace subscription expired on ${expDateStr}. Attendance operations are disabled until renewed.`);
         }
     }
 
@@ -395,6 +404,9 @@ export class AttendanceService {
         fullName,
         email,
         localDate,
+        punchTime,
+        trustedHardwareSync,
+        remarks,
         isExtraDay,
         latitude,
         longitude,
@@ -408,6 +420,9 @@ export class AttendanceService {
         fullName?: string
         email: string
         localDate?: string
+        punchTime?: Date
+        trustedHardwareSync?: boolean
+        remarks?: string
         isExtraDay?: boolean
         latitude?: number
         longitude?: number
@@ -420,8 +435,12 @@ export class AttendanceService {
         await AttendanceService.assertActiveSubscription()
         await AttendanceService.ensureAttendanceSchema()
         const today = localDate || getLocalDateIST()
+
+        const isTrustedHardware = trustedHardwareSync === true && source === 'biometric'
+        const requiresBiometricProof = !isTrustedHardware
+
         let consumedProof: ReturnType<typeof consumeAttendanceProof> = null
-        if (source === 'mobile') {
+        if (requiresBiometricProof) {
             const tenantId = tenantStorage.getStore()?.tenantId
             consumedProof = consumeAttendanceProof(verificationProof, {
                 subject: profileId,
@@ -431,7 +450,7 @@ export class AttendanceService {
             })
             if (!consumedProof) throwAppError('FORBIDDEN', 'A fresh biometric verification is required before clocking in.')
         }
-        const dayOfWeek = new Date(today).getDay()
+        const dayOfWeek = getWeekdayFromYYYYMMDD(today)
 
         const settings = await SmartCache.getOfficeSettingsCached()
         const closures = await SmartCache.getOfficeClosuresCached()
@@ -507,7 +526,7 @@ export class AttendanceService {
             }
         }
 
-        const now = new Date()
+        const now = punchTime ?? new Date()
 
         // Keep the active-session check and both writes in one transaction.
         // The unique partial index above protects this invariant across
@@ -577,6 +596,7 @@ export class AttendanceService {
                     is_extra_shift: effectiveShift.isExtraShift || false,
                     selfie_url: selfieUrl || null,
                     is_extra_day: isExtraDay || autoExtraDay,
+                    remarks: remarks || null,
                     checkin_latitude: latitude ? String(latitude) : null,
                     checkin_longitude: longitude ? String(longitude) : null,
                     checkin_location_name: locationName
@@ -590,6 +610,7 @@ export class AttendanceService {
                     shift_id: record.shift_id || resolvedShiftId,
                     shift_name: record.shift_name || effectiveShift.shift?.name || null,
                     duty_hours: record.duty_hours || String(effectiveShift.dutyHours || 8.0),
+                    remarks: remarks || record.remarks || null,
                     updated_at: now
                 }).where(eq(attendance.id, record.id)).returning()
                 record = updatedParent
@@ -608,13 +629,14 @@ export class AttendanceService {
                 shift_id: resolvedShiftId,
                 is_extra_shift: effectiveShift.isExtraShift || false,
                 selfie_url: selfieUrl || null,
+                remarks: remarks || null,
                 checkin_latitude: latitude ? String(latitude) : null,
                 checkin_longitude: longitude ? String(longitude) : null,
                 checkin_location_name: locationName
             })
 
             // NEW-01: Claim biometric proof atomically in database to prevent multi-instance replays
-            if (source === 'mobile' && consumedProof?.jti) {
+            if (requiresBiometricProof && consumedProof?.jti) {
                 try {
                     await tx.insert(biometricConsumedProofs).values({
                         jti: consumedProof.jti,
@@ -626,6 +648,7 @@ export class AttendanceService {
                     if (err?.code === '23505' || err?.cause?.code === '23505') {
                         throwAppError('FORBIDDEN', 'This biometric attendance proof has already been used.')
                     }
+                    throw err
                 }
             }
 
@@ -658,6 +681,9 @@ export class AttendanceService {
         fullName,
         email,
         localDate,
+        punchTime,
+        trustedHardwareSync,
+        remarks,
         latitude,
         longitude,
         source = 'mobile',
@@ -667,6 +693,9 @@ export class AttendanceService {
         fullName?: string
         email: string
         localDate?: string
+        punchTime?: Date
+        trustedHardwareSync?: boolean
+        remarks?: string
         latitude?: number
         longitude?: number
         source?: string
@@ -675,8 +704,12 @@ export class AttendanceService {
         await AttendanceService.assertActiveSubscription()
         await AttendanceService.ensureAttendanceSchema()
         const today = localDate || getLocalDateIST()
+
+        const isTrustedHardware = trustedHardwareSync === true && source === 'biometric'
+        const requiresBiometricProof = !isTrustedHardware
+
         let consumedProof: ReturnType<typeof consumeAttendanceProof> = null
-        if (source === 'mobile') {
+        if (requiresBiometricProof) {
             const tenantId = tenantStorage.getStore()?.tenantId
             consumedProof = consumeAttendanceProof(verificationProof, {
                 subject: profileId,
@@ -740,7 +773,7 @@ export class AttendanceService {
             }
         }
 
-        const now = new Date()
+        const now = punchTime ?? new Date()
 
         return await db.transaction(async (tx) => {
             // Find active session without restricting to today, handling cross-midnight/overnight shifts
@@ -775,7 +808,7 @@ export class AttendanceService {
             }
 
             // NEW-01: Claim biometric proof atomically in database to prevent multi-instance replays
-            if (source === 'mobile' && consumedProof?.jti) {
+            if (requiresBiometricProof && consumedProof?.jti) {
                 try {
                     await tx.insert(biometricConsumedProofs).values({
                         jti: consumedProof.jti,
@@ -787,6 +820,7 @@ export class AttendanceService {
                     if (err?.code === '23505' || err?.cause?.code === '23505') {
                         throwAppError('FORBIDDEN', 'This biometric attendance proof has already been used.')
                     }
+                    throw err
                 }
             }
 
@@ -802,6 +836,7 @@ export class AttendanceService {
                     checkout_latitude: latitude ? String(latitude) : null,
                     checkout_longitude: longitude ? String(longitude) : null,
                     checkout_location_name: locationName,
+                    remarks: remarks || activeSession.remarks || null,
                     status: 'completed',
                     updated_at: now
                 }).where(and(
@@ -832,14 +867,14 @@ export class AttendanceService {
             const dutyHours = Number(record?.duty_hours) || 8.0
 
             let isHalfDay = record?.is_half_day || false
-            let remarks = record?.remarks || null
+            let finalRemarks = remarks || record?.remarks || null
 
             // Half-day auto calculation: if worked < scheduled duty hours and >= 40% of duty hours
             if (totalWorkHours > 0 && totalWorkHours < (dutyHours - 0.25)) {
                 if (totalWorkHours >= (dutyHours * 0.40)) {
                     isHalfDay = true
                     const halfDayNote = `Half Day (Incomplete duty: ${totalWorkHours.toFixed(1)}h / ${dutyHours.toFixed(1)}h)`
-                    remarks = remarks && !remarks.includes('Half Day') ? `${remarks} • ${halfDayNote}` : halfDayNote
+                    finalRemarks = finalRemarks && !finalRemarks.includes('Half Day') ? `${finalRemarks} • ${halfDayNote}` : halfDayNote
                 }
             }
 
@@ -852,7 +887,7 @@ export class AttendanceService {
                 working_hours: totalWorkHours.toFixed(2),
                 extra_hours: String(extraHours),
                 is_half_day: isHalfDay,
-                remarks: remarks,
+                remarks: finalRemarks,
                 current_session_status: 'checked_out',
                 updated_at: now
             }).where(eq(attendance.id, attendanceId)).returning()
@@ -931,7 +966,7 @@ export class AttendanceService {
                     ? empLocation.off_days
                     : (settings?.off_days || [0])
 
-                const dayOfWeek = new Date(recordDate).getDay()
+                const dayOfWeek = getWeekdayFromYYYYMMDD(recordDate)
                 const isOffDay = offDays.includes(dayOfWeek)
                 const isHoliday = closures?.some(c => 
                     c.date === recordDate && 
@@ -1302,7 +1337,10 @@ export class AttendanceService {
 
             await db.update(attendanceSessions)
                 .set(updateFields)
-                .where(eq(attendanceSessions.id, sess.id))
+                .where(and(
+                    eq(attendanceSessions.id, sess.id),
+                    eq(attendanceSessions.attendance_id, attendanceId)
+                ))
         }
 
         // 2. Fetch all sessions for this attendance to recalculate daily aggregate totals
@@ -1432,7 +1470,7 @@ export class AttendanceService {
                         ? empLocation.off_days
                         : (settings?.off_days || [0])
 
-                    const dayOfWeek = new Date(recordDate).getDay()
+                    const dayOfWeek = getWeekdayFromYYYYMMDD(recordDate)
                     const isOffDay = offDays.includes(dayOfWeek)
                     const isHoliday = closures?.some(c => 
                         c.date === recordDate && 
@@ -1665,7 +1703,7 @@ export class AttendanceService {
                 ? empLocation.off_days
                 : (settings?.off_days || [0])
 
-            const dayOfWeek = new Date(recordDate).getDay()
+            const dayOfWeek = getWeekdayFromYYYYMMDD(recordDate)
             const isOffDay = offDays.includes(dayOfWeek)
             const isHoliday = closures?.some(c => 
                 c.date === recordDate && 
@@ -1875,8 +1913,7 @@ export class AttendanceService {
             for (const record of records) {
                 try {
                     // Check if date is Sunday (off day) or Holiday
-                    const dateObjForDay = new Date(record.date)
-                    const dayOfWeek = dateObjForDay.getDay()
+                    const dayOfWeek = getWeekdayFromYYYYMMDD(record.date)
                     const isOffDay = defaultOffDays.includes(dayOfWeek)
                     const isHoliday = holidaysSet.has(record.date)
                     const isExtraDay = (isOffDay || isHoliday) ? true : false
