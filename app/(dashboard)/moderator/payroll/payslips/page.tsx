@@ -1,16 +1,16 @@
 import { DashboardPageLayout } from "@/components/dashboard/dashboard-page-layout"
 import { ErrorBoundary } from "@/components/ui/error-boundary"
-import { PayslipGeneration } from "@/features/attendance/PayslipGeneration"
+import { UnifiedPayrollHub } from "@/features/attendance/UnifiedPayrollHub"
 
 export default function ModeratorPayslipsPage() {
     return (
         <div className="min-h-screen bg-background">
             <DashboardPageLayout
-                heading="Payslips"
-                description="Generate and view employee payslips"
+                heading="Payroll & Payslips"
+                description="Generate, review, lock, and distribute employee payslips"
             >
                 <ErrorBoundary level="section">
-                    <PayslipGeneration basePath="/moderator/payroll" />
+                    <UnifiedPayrollHub basePath="/moderator/payroll" defaultTab="payslips" />
                 </ErrorBoundary>
             </DashboardPageLayout>
         </div>

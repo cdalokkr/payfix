@@ -13,10 +13,37 @@ export const ticketPriorityEnum = pgEnum('ticket_priority', ['low', 'medium', 'h
 export const callLogStatusEnum = pgEnum('call_log_status', ['done', 'pending', 'cancelled']);
 export const complaintCategoryEnum = pgEnum('complaint_category', ['billing', 'technical', 'service', 'product', 'general']);
 
+// Departments
+export const departments = pgTable('departments', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    code: varchar('code', { length: 20 }),
+    description: text('description'),
+    manager_id: uuid('manager_id').references(() => profiles.id, { onDelete: 'set null' }),
+    location_id: uuid('location_id').references(() => officeLocations.id, { onDelete: 'cascade' }),
+    is_active: boolean('is_active').default(true),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+// Department Managers History (Tenure & Audit tracking)
+export const departmentManagersHistory = pgTable('department_managers_history', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    department_id: uuid('department_id').notNull().references(() => departments.id, { onDelete: 'cascade' }),
+    manager_id: uuid('manager_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+    appointed_by: uuid('appointed_by').references(() => profiles.id, { onDelete: 'set null' }),
+    start_date: timestamp('start_date', { withTimezone: true }).defaultNow(),
+    end_date: timestamp('end_date', { withTimezone: true }),
+    status: varchar('status', { length: 50 }).default('active'), // 'active', 'relieved', 'transferred'
+    handover_notes: text('handover_notes'),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
 // Designations
 export const designations = pgTable('designations', {
     id: uuid('id').primaryKey().defaultRandom(),
     name: text('name').notNull().unique(),
+    department_id: uuid('department_id').references(() => departments.id, { onDelete: 'set null' }),
     description: text('description'),
     role: text('role').notNull().default('employee'),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
@@ -67,10 +94,11 @@ export const vector512 = customType<{ data: number[] }>({
 export const profiles = pgTable('profiles', {
     id: uuid('id').primaryKey(),
     tenant_id: uuid('tenant_id'),
-    email: text('email').notNull().unique(),
+    email: text('email').unique(),
     full_name: text('full_name'),
     avatar_url: text('avatar_url'),
     role: userRoleEnum('role').default('employee'),
+    department_id: uuid('department_id').references(() => departments.id, { onDelete: 'set null' }),
     designation_id: uuid('designation_id').references(() => designations.id, { onDelete: 'set null' }),
     first_name: varchar('first_name', { length: 255 }),
     middle_name: text('middle_name'),
@@ -87,6 +115,8 @@ export const profiles = pgTable('profiles', {
     face_quality_score: real('face_quality_score'),
     face_enrolled_at: timestamp('face_enrolled_at', { withTimezone: true }),
     face_photo_url: text('face_photo_url'),
+    payslip_enabled: boolean('payslip_enabled').default(true),
+    must_change_password: boolean('must_change_password').default(false),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
@@ -124,6 +154,12 @@ export const attendance = pgTable('attendance', {
     source: attendanceSourceEnum('source').default('mobile'),
     device_id: text('device_id'),
     location_id: uuid('location_id').references(() => officeLocations.id, { onDelete: 'set null' }),
+    shift_id: uuid('shift_id').references(() => officeShifts.id, { onDelete: 'set null' }),
+    shift_name: text('shift_name'),
+    duty_hours: numeric('duty_hours'),
+    extra_hours: numeric('extra_hours').default('0'),
+    is_extra_shift: boolean('is_extra_shift').default(false),
+    extra_shift_type: text('extra_shift_type'), // 'full' | 'half' | null
     // Mobile attendance fields
     selfie_url: text('selfie_url'),
     checkin_latitude: numeric('checkin_latitude', { precision: 10, scale: 7 }),
@@ -147,6 +183,9 @@ export const attendanceSessions = pgTable('attendance_sessions', {
     source: text('source').default('mobile'), // 'mobile', 'biometric', 'kiosk', 'manual', 'bulk'
     device_id: text('device_id'),
     location_id: uuid('location_id').references(() => officeLocations.id, { onDelete: 'set null' }),
+    shift_id: uuid('shift_id').references(() => officeShifts.id, { onDelete: 'set null' }),
+    is_extra_shift: boolean('is_extra_shift').default(false),
+    extra_shift_type: text('extra_shift_type'), // 'full' | 'half' | null
     selfie_url: text('selfie_url'),
     checkin_latitude: numeric('checkin_latitude', { precision: 10, scale: 7 }),
     checkin_longitude: numeric('checkin_longitude', { precision: 10, scale: 7 }),
@@ -254,6 +293,7 @@ export const officeSettings = pgTable('office_settings', {
     off_days: integer('off_days').array().default([0]),
     daily_working_hours: jsonb('daily_working_hours').default({}),
     absent_deduction_multiplier: integer('absent_deduction_multiplier').notNull().default(1),
+    payslip_enabled: boolean('payslip_enabled').notNull().default(true),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 
@@ -280,6 +320,7 @@ export const employeeSettings = pgTable('employee_settings', {
 // Biometric Devices
 export const biometricDevices = pgTable('biometric_devices', {
     id: uuid('id').primaryKey().defaultRandom(),
+    tenant_id: uuid('tenant_id'),
     name: text('name').notNull(),
     serial_number: varchar('serial_number', { length: 100 }).unique(),
     location: text('location'),
@@ -309,6 +350,57 @@ export const officeLocations = pgTable('office_locations', {
     daily_working_hours: jsonb('daily_working_hours').default({}),
     absent_deduction_multiplier: integer('absent_deduction_multiplier'),
     created_by: uuid('created_by').references(() => profiles.id, { onDelete: 'set null' }),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+// Office Shifts (Multiple shifts per branch/location)
+export const officeShifts = pgTable('office_shifts', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    location_id: uuid('location_id').notNull().references(() => officeLocations.id, { onDelete: 'cascade' }),
+    department_id: uuid('department_id').references(() => departments.id, { onDelete: 'set null' }),
+    name: text('name').notNull(),
+    code: varchar('code', { length: 20 }),
+    start_time: text('start_time').notNull(), // "HH:mm:ss" or "HH:mm"
+    end_time: text('end_time').notNull(), // "HH:mm:ss" or "HH:mm"
+    duration_hours: numeric('duration_hours', { precision: 4, scale: 2 }).notNull(),
+    is_overnight: boolean('is_overnight').default(false),
+    buffer_minutes: integer('buffer_minutes').notNull().default(15),
+    color: text('color').default('#3b82f6'),
+    is_active: boolean('is_active').default(true),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+// Employee Shift Assignments (Primary shift mode & duty hours per employee)
+export const employeeShiftAssignments = pgTable('employee_shift_assignments', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    profile_id: uuid('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+    location_id: uuid('location_id').notNull().references(() => officeLocations.id, { onDelete: 'cascade' }),
+    duty_hours: numeric('duty_hours', { precision: 4, scale: 2 }).notNull().default('8.00'),
+    shift_mode: text('shift_mode').notNull().default('default'), // 'default' | 'single' | 'multi' | 'rotational'
+    assigned_shift_ids: jsonb('assigned_shift_ids').default([]), // UUID[] array of shift IDs
+    rotation_type: text('rotation_type').default('none'), // 'none' | 'weekly' | 'biweekly' | 'monthly'
+    rotation_shift_ids: jsonb('rotation_shift_ids').default([]), // Ordered shift IDs for rotation
+    rotation_start_date: date('rotation_start_date'),
+    effective_from: date('effective_from').defaultNow(),
+    effective_to: date('effective_to'),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+// Daily / Weekly Shift Roster (Allotted by Department Managers or Admins)
+export const shiftRoster = pgTable('shift_roster', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    profile_id: uuid('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+    department_id: uuid('department_id').references(() => departments.id, { onDelete: 'cascade' }),
+    shift_id: uuid('shift_id').references(() => officeShifts.id, { onDelete: 'set null' }),
+    date: date('date').notNull(),
+    status: text('status').notNull().default('scheduled'), // 'scheduled' | 'completed' | 'absent' | 'on_leave' | 'swapped'
+    is_extra_shift: boolean('is_extra_shift').default(false),
+    extra_shift_type: text('extra_shift_type'), // 'full' | 'half' | null
+    notes: text('notes'),
+    allotted_by: uuid('allotted_by').references(() => profiles.id, { onDelete: 'set null' }),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
@@ -443,6 +535,23 @@ export const monthlyAttendanceSummary = pgTable('monthly_attendance_summary', {
     uniqueIndex('monthly_attendance_summary_profile_month_year_idx').on(table.profile_id, table.month, table.year),
 ]);
 
+// Monthly Bonuses & Incentives
+export const monthlyBonuses = pgTable('monthly_bonuses', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    profile_id: uuid('profile_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+    month: integer('month').notNull(),
+    year: integer('year').notNull(),
+    amount: numeric('amount', { precision: 10, scale: 2 }).notNull().default('0'),
+    bonus_type: text('bonus_type').notNull().default('festival_bonus'), // 'festival_bonus' | 'performance_bonus' | 'incentive' | 'special'
+    title: text('title').notNull().default('Monthly Bonus'), // e.g. "Diwali Bonus", "Incentive"
+    remarks: text('remarks'),
+    created_by: uuid('created_by').references(() => profiles.id, { onDelete: 'set null' }),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+    uniqueIndex('monthly_bonuses_profile_month_year_title_idx').on(table.profile_id, table.month, table.year, table.title),
+]);
+
 // ============================================
 // Complaint & Ticket Management Tables
 // ============================================
@@ -553,6 +662,10 @@ export const callLogs = pgTable('call_logs', {
 
 // Relations
 export const profilesRelations = relations(profiles, ({ one, many }) => ({
+    department: one(departments, {
+        fields: [profiles.department_id],
+        references: [departments.id],
+    }),
     designation: one(designations, {
         fields: [profiles.designation_id],
         references: [designations.id],
@@ -571,6 +684,89 @@ export const profilesRelations = relations(profiles, ({ one, many }) => ({
     ticketAssignments: many(ticketAssignments),
     ticketResolutions: many(ticketResolutions),
     callLogs: many(callLogs),
+    shiftAssignments: many(employeeShiftAssignments),
+    shiftRosters: many(shiftRoster),
+}));
+
+export const departmentsRelations = relations(departments, ({ one, many }) => ({
+    manager: one(profiles, {
+        fields: [departments.manager_id],
+        references: [profiles.id],
+    }),
+    location: one(officeLocations, {
+        fields: [departments.location_id],
+        references: [officeLocations.id],
+    }),
+    designations: many(designations),
+    members: many(profiles),
+    shifts: many(officeShifts),
+    rosterEntries: many(shiftRoster),
+    managerHistory: many(departmentManagersHistory),
+}));
+
+export const departmentManagersHistoryRelations = relations(departmentManagersHistory, ({ one }) => ({
+    department: one(departments, {
+        fields: [departmentManagersHistory.department_id],
+        references: [departments.id],
+    }),
+    manager: one(profiles, {
+        fields: [departmentManagersHistory.manager_id],
+        references: [profiles.id],
+    }),
+    appointedBy: one(profiles, {
+        fields: [departmentManagersHistory.appointed_by],
+        references: [profiles.id],
+    }),
+}));
+
+export const designationsRelations = relations(designations, ({ one, many }) => ({
+    department: one(departments, {
+        fields: [designations.department_id],
+        references: [departments.id],
+    }),
+    profiles: many(profiles),
+}));
+
+export const officeShiftsRelations = relations(officeShifts, ({ one, many }) => ({
+    location: one(officeLocations, {
+        fields: [officeShifts.location_id],
+        references: [officeLocations.id],
+    }),
+    department: one(departments, {
+        fields: [officeShifts.department_id],
+        references: [departments.id],
+    }),
+    rosterEntries: many(shiftRoster),
+}));
+
+export const employeeShiftAssignmentsRelations = relations(employeeShiftAssignments, ({ one }) => ({
+    profile: one(profiles, {
+        fields: [employeeShiftAssignments.profile_id],
+        references: [profiles.id],
+    }),
+    location: one(officeLocations, {
+        fields: [employeeShiftAssignments.location_id],
+        references: [officeLocations.id],
+    }),
+}));
+
+export const shiftRosterRelations = relations(shiftRoster, ({ one }) => ({
+    profile: one(profiles, {
+        fields: [shiftRoster.profile_id],
+        references: [profiles.id],
+    }),
+    department: one(departments, {
+        fields: [shiftRoster.department_id],
+        references: [departments.id],
+    }),
+    shift: one(officeShifts, {
+        fields: [shiftRoster.shift_id],
+        references: [officeShifts.id],
+    }),
+    assigner: one(profiles, {
+        fields: [shiftRoster.allotted_by],
+        references: [profiles.id],
+    }),
 }));
 
 export const attendanceRelations = relations(attendance, ({ one }) => ({
@@ -585,6 +781,10 @@ export const attendanceRelations = relations(attendance, ({ one }) => ({
     location: one(officeLocations, {
         fields: [attendance.location_id],
         references: [officeLocations.id],
+    }),
+    shift: one(officeShifts, {
+        fields: [attendance.shift_id],
+        references: [officeShifts.id],
     }),
 }));
 
@@ -704,6 +904,17 @@ export const monthlyAttendanceSummaryRelations = relations(monthlyAttendanceSumm
         references: [profiles.id],
     }),
     payments: many(salaryPayments),
+}));
+
+export const monthlyBonusesRelations = relations(monthlyBonuses, ({ one }) => ({
+    profile: one(profiles, {
+        fields: [monthlyBonuses.profile_id],
+        references: [profiles.id],
+    }),
+    creator: one(profiles, {
+        fields: [monthlyBonuses.created_by],
+        references: [profiles.id],
+    }),
 }));
 
 // Complaint & Ticket Relations
@@ -828,6 +1039,10 @@ export const attendanceSessionsRelations = relations(attendanceSessions, ({ one 
     location: one(officeLocations, {
         fields: [attendanceSessions.location_id],
         references: [officeLocations.id],
+    }),
+    shift: one(officeShifts, {
+        fields: [attendanceSessions.shift_id],
+        references: [officeShifts.id],
     }),
 }));
 

@@ -3,6 +3,7 @@ import {
     employeeSalarySetup,
     employeeAdvances,
     monthlyAttendanceSummary,
+    monthlyBonuses,
     attendance,
     leaves,
     profiles,
@@ -21,6 +22,144 @@ const MONTH_NAMES = [
 ]
 
 export class SalaryService {
+
+    // ==========================================
+    // MONTHLY BONUSES & INCENTIVES
+    // ==========================================
+
+    /** Get all bonuses for a specific month and year */
+    static async getMonthlyBonuses(month: number, year: number) {
+        return await db.query.monthlyBonuses.findMany({
+            where: and(
+                eq(monthlyBonuses.month, month),
+                eq(monthlyBonuses.year, year)
+            ),
+            with: {
+                profile: {
+                    columns: { id: true, full_name: true, email: true, role: true, avatar_url: true }
+                }
+            },
+            orderBy: [desc(monthlyBonuses.created_at)]
+        })
+    }
+
+    /** 1-Click Set Bulk Bonus for all active employees and moderators */
+    static async setBulkMonthlyBonus({
+        month,
+        year,
+        amount,
+        title,
+        bonusType = 'festival_bonus',
+        remarks,
+        createdBy,
+    }: {
+        month: number
+        year: number
+        amount: string | number
+        title: string
+        bonusType?: string
+        remarks?: string
+        createdBy: string
+    }) {
+        const numAmt = Number(amount)
+        if (isNaN(numAmt) || numAmt < 0) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid bonus amount' })
+        }
+
+        // Fetch all active employees and moderators
+        const activeUsers = await db.query.profiles.findMany({
+            where: and(
+                eq(profiles.status, 'active'),
+                or(eq(profiles.role, 'employee'), eq(profiles.role, 'moderator'))
+            ),
+            columns: { id: true }
+        })
+
+        if (activeUsers.length === 0) return []
+
+        const cleanTitle = (title || 'Monthly Bonus').trim()
+        const cleanRemarks = remarks?.trim() || null
+        const results: any[] = []
+
+        for (const user of activeUsers) {
+            const [saved] = await db.insert(monthlyBonuses).values({
+                profile_id: user.id,
+                month,
+                year,
+                amount: numAmt.toFixed(2),
+                bonus_type: bonusType,
+                title: cleanTitle,
+                remarks: cleanRemarks,
+                created_by: createdBy,
+            }).onConflictDoUpdate({
+                target: [monthlyBonuses.profile_id, monthlyBonuses.month, monthlyBonuses.year, monthlyBonuses.title],
+                set: {
+                    amount: numAmt.toFixed(2),
+                    bonus_type: bonusType,
+                    remarks: cleanRemarks,
+                    updated_at: new Date(),
+                }
+            }).returning()
+            results.push(saved)
+        }
+
+        return results
+    }
+
+    /** Upsert an individual bonus for a specific user */
+    static async upsertIndividualBonus({
+        profileId,
+        month,
+        year,
+        amount,
+        title,
+        bonusType = 'incentive',
+        remarks,
+        createdBy,
+    }: {
+        profileId: string
+        month: number
+        year: number
+        amount: string | number
+        title: string
+        bonusType?: string
+        remarks?: string
+        createdBy: string
+    }) {
+        const numAmt = Number(amount)
+        if (isNaN(numAmt) || numAmt < 0) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid bonus amount' })
+        }
+
+        const cleanTitle = (title || 'Monthly Bonus').trim()
+        const cleanRemarks = remarks?.trim() || null
+
+        const [saved] = await db.insert(monthlyBonuses).values({
+            profile_id: profileId,
+            month,
+            year,
+            amount: numAmt.toFixed(2),
+            bonus_type: bonusType,
+            title: cleanTitle,
+            remarks: cleanRemarks,
+            created_by: createdBy,
+        }).onConflictDoUpdate({
+            target: [monthlyBonuses.profile_id, monthlyBonuses.month, monthlyBonuses.year, monthlyBonuses.title],
+            set: {
+                amount: numAmt.toFixed(2),
+                bonus_type: bonusType,
+                remarks: cleanRemarks,
+                updated_at: new Date(),
+            }
+        }).returning()
+
+        return saved
+    }
+
+    /** Delete a bonus */
+    static async deleteMonthlyBonus(id: string) {
+        return await db.delete(monthlyBonuses).where(eq(monthlyBonuses.id, id)).returning()
+    }
 
     // ==========================================
     // SALARY SETUP
@@ -376,6 +515,12 @@ export class SalaryService {
             totalWorkingHours: number
             totalExtraHours: number
             extraDays: number
+            extraShiftFull?: number
+            extraShiftHalf?: number
+            extraShiftEquivalentDays?: number
+            monthlyBonus?: number
+            bonusTitle?: string
+            bonusType?: string
             source?: string
         },
         tx?: any
@@ -395,6 +540,14 @@ export class SalaryService {
                 salary_breakdown: {
                     ...currentBD,
                     extra_days: metrics.extraDays || 0,
+                    extra_shift_full: metrics.extraShiftFull ?? currentBD.extra_shift_full ?? 0,
+                    extra_shift_half: metrics.extraShiftHalf ?? currentBD.extra_shift_half ?? 0,
+                    extra_shift_equivalent_days: metrics.extraShiftEquivalentDays ?? currentBD.extra_shift_equivalent_days ?? 0,
+                    ...(metrics.monthlyBonus !== undefined ? {
+                        monthly_bonus: Number(metrics.monthlyBonus.toFixed(2)),
+                        bonus_title: metrics.bonusTitle || currentBD.bonus_title || 'Monthly Bonus',
+                        bonus_type: metrics.bonusType || currentBD.bonus_type || 'festival_bonus',
+                    } : {}),
                     source: metrics.source || currentBD.source || 'compiled'
                 },
                 updated_at: new Date(),
@@ -455,21 +608,39 @@ export class SalaryService {
             const incentiveAmt = Number(salarySetup.incentive) || 0
             const otherDeductions = Number(salarySetup.other_deductions) || 0
 
-            const grossSalary = basic + hra + da + ta + special + incentiveAmt
+            const bonusRecord = await client.query.monthlyBonuses.findFirst({
+                where: and(
+                    eq(monthlyBonuses.profile_id, existingSummary.profile_id),
+                    eq(monthlyBonuses.month, existingSummary.month),
+                    eq(monthlyBonuses.year, existingSummary.year)
+                )
+            })
+            const bonusAmt = metrics.monthlyBonus !== undefined ? metrics.monthlyBonus : (Number(bonusRecord?.amount) || 0)
+            const bonusTitle = metrics.bonusTitle || bonusRecord?.title || 'Monthly Bonus'
+            const bonusType = metrics.bonusType || bonusRecord?.bonus_type || 'festival_bonus'
+
+            const currentBD = (existingSummary.salary_breakdown as Record<string, any>) || {}
+            const extraShiftEquiv = metrics.extraShiftEquivalentDays !== undefined 
+                ? metrics.extraShiftEquivalentDays 
+                : (Number(currentBD.extra_shift_equivalent_days) || 0)
+
+            const baseGross = basic + hra + da + ta + special + incentiveAmt
             const totalWorkingDaysVal = metrics.totalWorkingDays || 1
             const absentDaysVal = metrics.absentDays || 0
             const halfDaysVal = metrics.halfDays || 0
             const extraDaysVal = metrics.extraDays || 0
 
             // Pro-rate absence deduction
-            const perDayRate = grossSalary / totalWorkingDaysVal
+            const perDayRate = baseGross / totalWorkingDaysVal
             const extraDayPayment = extraDaysVal * perDayRate
+            const extraShiftPayment = extraShiftEquiv * perDayRate
             const absentDeductionVal = absentDaysVal * multiplier * perDayRate
             const halfDayDeductionVal = halfDaysVal * 0.5 * perDayRate
             const leaveDeductionVal = 0
             const absenceDeduction = absentDeductionVal + halfDayDeductionVal
 
-            const netSalary = grossSalary + extraDayPayment - absenceDeduction - otherDeductions
+            const grossSalary = baseGross + bonusAmt
+            const netSalary = grossSalary + extraDayPayment + extraShiftPayment - absenceDeduction - otherDeductions
 
             const lastDay = new Date(existingSummary.year, existingSummary.month, 0).getDate()
             const endDate = `${existingSummary.year}-${String(existingSummary.month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
@@ -535,12 +706,19 @@ export class SalaryService {
                 ta,
                 special_allowance: special,
                 incentive: incentiveAmt,
+                monthly_bonus: Number(bonusAmt.toFixed(2)),
+                bonus_title: bonusTitle,
+                bonus_type: bonusType,
                 gross_salary: grossSalary,
                 total_working_days: totalWorkingDaysVal,
                 absent_days: absentDaysVal,
                 half_days: halfDaysVal,
                 extra_days: extraDaysVal,
                 extra_day_payment: Number(extraDayPayment.toFixed(2)),
+                extra_shift_full: metrics.extraShiftFull ?? currentBD.extra_shift_full ?? 0,
+                extra_shift_half: metrics.extraShiftHalf ?? currentBD.extra_shift_half ?? 0,
+                extra_shift_equivalent_days: Number(extraShiftEquiv.toFixed(1)),
+                extra_shift_payment: Number(extraShiftPayment.toFixed(2)),
                 absent_deduction_multiplier: multiplier,
                 per_day_rate: Number(perDayRate.toFixed(2)),
                 absence_deduction: Number(absenceDeduction.toFixed(2)),
@@ -667,7 +845,12 @@ export class SalaryService {
     // ==========================================
 
     /** Compile monthly attendance for all employees or a specific employee */
-    static async compileMonthlyAttendance(month: number, year: number, profileId?: string) {
+    static async compileMonthlyAttendance(
+        month: number,
+        year: number,
+        profileId?: string,
+        forceRecalculate: boolean = false
+    ) {
         // Get all active employees or a specific employee
         const employees = await db.query.profiles.findMany({
             where: profileId
@@ -683,8 +866,8 @@ export class SalaryService {
         const lastDay = new Date(year, month, 0).getDate()
         const endDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`
 
-        // Fetch office settings, closures, bulk attendance records, approved leaves, and existing summaries concurrently
-        const [settings, closures, allAttendanceRecords, allLeaves, allExistingSummaries, allLocations] = await Promise.all([
+        // Fetch office settings, closures, bulk attendance records, approved leaves, existing summaries, and monthly bonuses concurrently
+        const [settings, closures, allAttendanceRecords, allLeaves, allExistingSummaries, allLocations, allBonuses] = await Promise.all([
             SmartCache.getOfficeSettingsCached(),
             db.query.officeClosures.findMany({
                 where: and(
@@ -697,7 +880,11 @@ export class SalaryService {
                     inArray(attendance.profile_id, employeeIds),
                     gte(attendance.date, startDate),
                     lte(attendance.date, endDate)
-                )
+                ),
+                with: {
+                    shift: true,
+                    location: true,
+                }
             }),
             db.query.leaves.findMany({
                 where: and(
@@ -715,6 +902,13 @@ export class SalaryService {
                 )
             }),
             SmartCache.getOfficeLocationsCached(),
+            db.query.monthlyBonuses.findMany({
+                where: and(
+                    inArray(monthlyBonuses.profile_id, employeeIds),
+                    eq(monthlyBonuses.month, month),
+                    eq(monthlyBonuses.year, year)
+                )
+            }),
         ])
 
         const defaultCheckIn = settings?.default_check_in || '10:00:00'
@@ -873,11 +1067,20 @@ export class SalaryService {
             // Calculate extra hours using individual office location timing and buffer rule where available
             let totalExtraHours = 0
             for (const r of verifiedRecords) {
-                if (r.check_in && r.check_out) {
+                const checkIn = (r as any).first_in || (r as any).first_check_in || r.check_in
+                const checkOut = (r as any).last_out || (r as any).last_check_out || r.check_out
+                if (checkIn && checkOut) {
                     const extraCalc = calculateAttendanceExtraHours({
-                        checkIn: r.check_in,
-                        checkOut: r.check_out,
-                        officeTiming: empLocation,
+                        checkIn,
+                        checkOut,
+                        officeTiming: (r as any).location || empLocation,
+                        shiftTiming: (r as any).shift || {
+                            startTime: (r as any).shift_start,
+                            endTime: (r as any).shift_end,
+                            dutyHours: r.duty_hours ? Number(r.duty_hours) : undefined,
+                        },
+                        workingHours: r.working_hours ? Number(r.working_hours) : null,
+                        dutyHours: r.duty_hours ? Number(r.duty_hours) : empScheduledHoursPerDay,
                         date: r.date
                     })
                     totalExtraHours += extraCalc.extraHours
@@ -889,7 +1092,25 @@ export class SalaryService {
             }
             totalExtraHours = parseFloat(totalExtraHours.toFixed(2))
 
+            // Extra shifts calculation
+            const extraShiftRecords = records.filter(r => r.is_extra_shift || Boolean(r.extra_shift_type))
+            const fullExtraShifts = extraShiftRecords.filter(r => r.extra_shift_type === 'full' || (!r.extra_shift_type && !r.is_half_day)).length
+            const halfExtraShifts = extraShiftRecords.filter(r => r.extra_shift_type === 'half' || (!r.extra_shift_type && r.is_half_day)).length
+            const extraShiftEquivalentDays = (fullExtraShifts * 1.0) + (halfExtraShifts * 0.5)
+
+            // Monthly bonuses calculation
+            const empBonuses = allBonuses.filter(b => b.profile_id === employee.id)
+            const bonusAmt = empBonuses.reduce((sum, b) => sum + (Number(b.amount) || 0), 0)
+            const bonusTitle = empBonuses.length > 0 ? empBonuses[0].title : 'Monthly Bonus'
+            const bonusType = empBonuses.length > 0 ? empBonuses[0].bonus_type : 'festival_bonus'
+
             if (existingSummary) {
+                // AUDIT LOCK: Do not silently mutate finalized payslips during bulk runs
+                if (existingSummary.status === 'payslip_generated' && !forceRecalculate) {
+                    results.push(existingSummary)
+                    continue
+                }
+
                 const existingBD = existingSummary.salary_breakdown as Record<string, any> | null
                 const existingExtraDays = existingBD?.extra_days || 0
 
@@ -905,6 +1126,12 @@ export class SalaryService {
                         totalWorkingHours,
                         totalExtraHours,
                         extraDays,
+                        extraShiftFull: fullExtraShifts,
+                        extraShiftHalf: halfExtraShifts,
+                        extraShiftEquivalentDays,
+                        monthlyBonus: bonusAmt,
+                        bonusTitle,
+                        bonusType,
                         source: 'compiled'
                     })
                     results.push(updated)
@@ -923,7 +1150,16 @@ export class SalaryService {
                     total_leaves: String(leaveDays),
                     total_working_hours: totalWorkingHours.toFixed(2),
                     total_extra_hours: totalExtraHours.toFixed(2),
-                    salary_breakdown: { extra_days: extraDays, source: 'compiled' },
+                    salary_breakdown: {
+                        extra_days: extraDays,
+                        extra_shift_full: fullExtraShifts,
+                        extra_shift_half: halfExtraShifts,
+                        extra_shift_equivalent_days: Number(extraShiftEquivalentDays.toFixed(1)),
+                        monthly_bonus: Number(bonusAmt.toFixed(2)),
+                        bonus_title: bonusTitle,
+                        bonus_type: bonusType,
+                        source: 'compiled'
+                    },
                     status: 'draft',
                 }).onConflictDoUpdate({
                     target: [monthlyAttendanceSummary.profile_id, monthlyAttendanceSummary.month, monthlyAttendanceSummary.year],
@@ -935,7 +1171,16 @@ export class SalaryService {
                         total_leaves: String(leaveDays),
                         total_working_hours: totalWorkingHours.toFixed(2),
                         total_extra_hours: totalExtraHours.toFixed(2),
-                        salary_breakdown: { extra_days: extraDays, source: 'compiled' },
+                        salary_breakdown: {
+                            extra_days: extraDays,
+                            extra_shift_full: fullExtraShifts,
+                            extra_shift_half: halfExtraShifts,
+                            extra_shift_equivalent_days: Number(extraShiftEquivalentDays.toFixed(1)),
+                            monthly_bonus: Number(bonusAmt.toFixed(2)),
+                            bonus_title: bonusTitle,
+                            bonus_type: bonusType,
+                            source: 'compiled'
+                        },
                         updated_at: new Date(),
                     },
                     where: eq(monthlyAttendanceSummary.status, 'draft'),
@@ -958,9 +1203,12 @@ export class SalaryService {
                 ),
                 with: {
                     profile: {
-                        columns: { id: true, full_name: true, email: true, role: true },
+                        columns: { id: true, full_name: true, email: true, role: true, payslip_enabled: true },
                         with: {
                             designation: {
+                                columns: { name: true }
+                            },
+                            department: {
                                 columns: { name: true }
                             }
                         }
@@ -1126,9 +1374,14 @@ export class SalaryService {
             })
         }
 
-        // Pre-fetch all salary setups and location data in a single query to eliminate N+1 queries
+        const firstSummary = summaries[0]
+        const lastDayOfMonth = new Date(firstSummary.year, firstSummary.month, 0).getDate()
+        const startOfMonth = `${firstSummary.year}-${String(firstSummary.month).padStart(2, '0')}-01`
+        const endOfMonth = `${firstSummary.year}-${String(firstSummary.month).padStart(2, '0')}-${lastDayOfMonth}`
+
+        // Pre-fetch all salary setups, location data, monthly bonuses, and extra shifts in parallel
         const profileIds = summaries.map(s => s.profile_id)
-        const [allSalarySetups, officeSettingsData, allLocations, punchLocations] = await Promise.all([
+        const [allSalarySetups, officeSettingsData, allLocations, punchLocations, allBonuses, allExtraShifts] = await Promise.all([
             db.query.employeeSalarySetup.findMany({
                 where: inArray(employeeSalarySetup.profile_id, profileIds),
                 orderBy: [desc(employeeSalarySetup.effective_from_year), desc(employeeSalarySetup.effective_from_month)],
@@ -1141,6 +1394,24 @@ export class SalaryService {
                     isNotNull(attendance.location_id)
                 ),
                 columns: { profile_id: true, location_id: true }
+            }),
+            db.query.monthlyBonuses.findMany({
+                where: and(
+                    inArray(monthlyBonuses.profile_id, profileIds),
+                    eq(monthlyBonuses.month, firstSummary.month),
+                    eq(monthlyBonuses.year, firstSummary.year)
+                )
+            }),
+            db.query.attendance.findMany({
+                where: and(
+                    inArray(attendance.profile_id, profileIds),
+                    gte(attendance.date, startOfMonth),
+                    lte(attendance.date, endOfMonth),
+                    or(
+                        eq(attendance.is_extra_shift, true),
+                        isNotNull(attendance.extra_shift_type)
+                    )
+                )
             })
         ])
 
@@ -1197,23 +1468,37 @@ export class SalaryService {
             const incentiveAmt = Number(salarySetup.incentive) || 0
             const otherDeductions = Number(salarySetup.other_deductions) || 0
 
-            const grossSalary = basic + hra + da + ta + special + incentiveAmt
-            const totalWorkingDays = summary.total_working_days || 1
-            const absentDays = summary.total_absent_days || 0
-            const halfDays = summary.total_half_days || 0
+            const empBonuses = allBonuses.filter(b => b.profile_id === summary.profile_id)
+            const bonusAmt = empBonuses.reduce((sum, b) => sum + (Number(b.amount) || 0), 0)
+            const bonusTitle = empBonuses.length > 0 ? empBonuses[0].title : 'Monthly Bonus'
+            const bonusType = empBonuses.length > 0 ? empBonuses[0].bonus_type : 'festival_bonus'
 
             const summaryBD = summary.salary_breakdown as Record<string, any> | null
             const extraDays = summaryBD?.extra_days || 0
 
+            const empExtraShifts = allExtraShifts.filter(r => r.profile_id === summary.profile_id)
+            const fullExtraShifts = empExtraShifts.filter(r => r.extra_shift_type === 'full' || (!r.extra_shift_type && !r.is_half_day)).length
+            const halfExtraShifts = empExtraShifts.filter(r => r.extra_shift_type === 'half' || (!r.extra_shift_type && r.is_half_day)).length
+            const extraShiftEquivDays = empExtraShifts.length > 0
+                ? (fullExtraShifts * 1.0 + halfExtraShifts * 0.5)
+                : (Number(summaryBD?.extra_shift_equivalent_days) || 0)
+
+            const baseGross = basic + hra + da + ta + special + incentiveAmt
+            const totalWorkingDays = summary.total_working_days || 1
+            const absentDays = summary.total_absent_days || 0
+            const halfDays = summary.total_half_days || 0
+
             // Pro-rate absence deduction
-            const perDayRate = grossSalary / totalWorkingDays
+            const perDayRate = baseGross / totalWorkingDays
             const extraDayPayment = extraDays * perDayRate
+            const extraShiftPayment = extraShiftEquivDays * perDayRate
             const absentDeductionVal = absentDays * multiplier * perDayRate
             const halfDayDeductionVal = halfDays * 0.5 * perDayRate
             const leaveDeductionVal = 0
             const absenceDeduction = absentDeductionVal + halfDayDeductionVal
 
-            const netSalary = grossSalary + extraDayPayment - absenceDeduction - otherDeductions
+            const grossSalary = baseGross + bonusAmt
+            const netSalary = grossSalary + extraDayPayment + extraShiftPayment - absenceDeduction - otherDeductions
 
             const lastDay = new Date(summary.year, summary.month, 0).getDate()
             const endDate = `${summary.year}-${String(summary.month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
@@ -1279,12 +1564,19 @@ export class SalaryService {
                 ta,
                 special_allowance: special,
                 incentive: incentiveAmt,
+                monthly_bonus: Number(bonusAmt.toFixed(2)),
+                bonus_title: bonusTitle,
+                bonus_type: bonusType,
                 gross_salary: grossSalary,
                 total_working_days: totalWorkingDays,
                 absent_days: absentDays,
                 half_days: halfDays,
                 extra_days: extraDays,
                 extra_day_payment: Number(extraDayPayment.toFixed(2)),
+                extra_shift_full: fullExtraShifts || (summaryBD?.extra_shift_full || 0),
+                extra_shift_half: halfExtraShifts || (summaryBD?.extra_shift_half || 0),
+                extra_shift_equivalent_days: Number(extraShiftEquivDays.toFixed(1)),
+                extra_shift_payment: Number(extraShiftPayment.toFixed(2)),
                 absent_deduction_multiplier: multiplier,
                 per_day_rate: Number(perDayRate.toFixed(2)),
                 absence_deduction: Number(absenceDeduction.toFixed(2)),
@@ -1409,8 +1701,108 @@ export class SalaryService {
         return summary
     }
 
+    // ==========================================
+    // PAYSLIP ACCESS CONTROL (Global & Per-Employee)
+    // ==========================================
+
+    /** Check whether payslips and salary book are accessible for an employee */
+    static async isPayslipAccessible(profileId: string): Promise<boolean> {
+        // 1. Check workspace global settings
+        const office = await db.query.officeSettings.findFirst({
+            columns: { payslip_enabled: true }
+        })
+        if (office && office.payslip_enabled === false) {
+            return false
+        }
+
+        // 2. Check employee specific toggle
+        const prof = await db.query.profiles.findFirst({
+            where: eq(profiles.id, profileId),
+            columns: { payslip_enabled: true, role: true }
+        })
+
+        // Admins and moderators always have access
+        if (prof?.role === 'admin' || prof?.role === 'moderator') {
+            return true
+        }
+
+        if (prof && prof.payslip_enabled === false) {
+            return false
+        }
+
+        return true
+    }
+
+    /** Get current payslip access settings (global & employee-specific) */
+    static async getPayslipAccessSettings(profileId?: string) {
+        const office = await db.query.officeSettings.findFirst({
+            columns: { payslip_enabled: true }
+        })
+        const globalEnabled = office ? office.payslip_enabled !== false : true
+
+        let employeeEnabled = true
+        let isStaff = false
+        if (profileId) {
+            const prof = await db.query.profiles.findFirst({
+                where: eq(profiles.id, profileId),
+                columns: { payslip_enabled: true, role: true }
+            })
+            if (prof?.role === 'admin' || prof?.role === 'moderator') {
+                isStaff = true
+            }
+            if (prof && prof.payslip_enabled === false) {
+                employeeEnabled = false
+            }
+        }
+
+        return {
+            globalEnabled,
+            employeeEnabled,
+            isAccessible: isStaff || (globalEnabled && employeeEnabled)
+        }
+    }
+
+    /** Toggle workspace-wide global payslip access */
+    static async toggleGlobalPayslipAccess(enabled: boolean) {
+        const existing = await db.query.officeSettings.findFirst()
+        if (existing) {
+            await db.update(officeSettings)
+                .set({ payslip_enabled: enabled, updated_at: new Date() })
+                .where(eq(officeSettings.id, existing.id))
+        } else {
+            await db.insert(officeSettings).values({
+                payslip_enabled: enabled
+            })
+        }
+        return { success: true, globalEnabled: enabled }
+    }
+
+    /** Toggle individual employee payslip access */
+    static async toggleEmployeePayslipAccess(profileId: string, enabled: boolean) {
+        await db.update(profiles)
+            .set({ payslip_enabled: enabled, updated_at: new Date() })
+            .where(eq(profiles.id, profileId))
+        return { success: true, profileId, enabled }
+    }
+
+    /** Bulk toggle employee payslip access */
+    static async bulkToggleEmployeePayslipAccess(profileIds: string[], enabled: boolean) {
+        if (!profileIds.length) return { success: true, count: 0, enabled }
+        await db.update(profiles)
+            .set({ payslip_enabled: enabled, updated_at: new Date() })
+            .where(inArray(profiles.id, profileIds))
+        return { success: true, count: profileIds.length, enabled }
+    }
+
     /** Get payslips for an employee (self-service) */
     static async getMyPayslips(profileId: string, month: number, year: number) {
+        if (!(await SalaryService.isPayslipAccessible(profileId))) {
+            throw new TRPCError({
+                code: 'FORBIDDEN',
+                message: 'Payslip and salary book access has been disabled by your administrator.'
+            })
+        }
+
         const summaries = await db.query.monthlyAttendanceSummary.findMany({
             where: and(
                 eq(monthlyAttendanceSummary.profile_id, profileId),
@@ -1439,6 +1831,13 @@ export class SalaryService {
 
     /** Get individual payslip detail for an employee (self-service with ownership check) */
     static async getMyPayslipDetail(summaryId: string, profileId: string) {
+        if (!(await SalaryService.isPayslipAccessible(profileId))) {
+            throw new TRPCError({
+                code: 'FORBIDDEN',
+                message: 'Payslip and salary book access has been disabled by your administrator.'
+            })
+        }
+
         const summary = await db.query.monthlyAttendanceSummary.findFirst({
             where: and(
                 eq(monthlyAttendanceSummary.id, summaryId),
@@ -1564,6 +1963,13 @@ export class SalaryService {
 
     /** Get salary passbook/paybook for an employee (self-service) */
     static async getMyPaybook(profileId: string) {
+        if (!(await SalaryService.isPayslipAccessible(profileId))) {
+            throw new TRPCError({
+                code: 'FORBIDDEN',
+                message: 'Payslip and salary book access has been disabled by your administrator.'
+            })
+        }
+
         const summaries = await db.query.monthlyAttendanceSummary.findMany({
             where: and(
                 eq(monthlyAttendanceSummary.profile_id, profileId),
@@ -1815,6 +2221,232 @@ export class SalaryService {
         }
 
         return { inserted, updated, skipped, errors }
+    }
+
+    // ==========================================
+    // SALARY BOOK / PASSBOOK LEDGER
+    // ==========================================
+
+    static async getSalaryBook(params?: {
+        profileId?: string | null
+        year?: number | null
+        departmentId?: string | null
+        status?: string | null
+    }) {
+        const { profileId, year, departmentId, status } = params || {}
+
+        const conditions: any[] = []
+        if (profileId) {
+            conditions.push(eq(monthlyAttendanceSummary.profile_id, profileId))
+        }
+        if (year) {
+            conditions.push(eq(monthlyAttendanceSummary.year, year))
+        }
+
+        const rawSummaries = await db.query.monthlyAttendanceSummary.findMany({
+            where: conditions.length > 0 ? and(...conditions) : undefined,
+            with: {
+                profile: {
+                    columns: {
+                        id: true,
+                        full_name: true,
+                        email: true,
+                        mobile_no: true,
+                        role: true,
+                        department_id: true,
+                        designation_id: true,
+                        payslip_enabled: true,
+                        avatar_url: true,
+                        date_of_birth: true,
+                    },
+                    with: {
+                        designation: {
+                            columns: { id: true, name: true }
+                        },
+                        department: {
+                            columns: { id: true, name: true }
+                        }
+                    }
+                },
+                payments: true
+            },
+            orderBy: [desc(monthlyAttendanceSummary.year), desc(monthlyAttendanceSummary.month)],
+        })
+
+        // Apply in-memory filtering for department and status if provided
+        let filteredSummaries = rawSummaries
+        if (departmentId) {
+            filteredSummaries = filteredSummaries.filter(s => s.profile?.department_id === departmentId)
+        }
+        if (status) {
+            if (status === 'paid') {
+                filteredSummaries = filteredSummaries.filter(s => {
+                    const takeHome = Number(s.take_home) || 0
+                    const paid = Number(s.paid_amount) || 0
+                    return (paid >= takeHome && takeHome > 0) || s.status === 'paid'
+                })
+            } else if (status === 'partially_paid') {
+                filteredSummaries = filteredSummaries.filter(s => {
+                    const takeHome = Number(s.take_home) || 0
+                    const paid = Number(s.paid_amount) || 0
+                    return paid > 0 && paid < takeHome
+                })
+            } else if (status === 'unpaid') {
+                filteredSummaries = filteredSummaries.filter(s => {
+                    const paid = Number(s.paid_amount) || 0
+                    return paid === 0
+                })
+            } else {
+                filteredSummaries = filteredSummaries.filter(s => s.status === status)
+            }
+        }
+
+        // Available distinct years across all summaries
+        const yearSet = new Set<number>()
+        const currentYear = new Date().getFullYear()
+        yearSet.add(currentYear)
+        yearSet.add(currentYear - 1)
+        for (const s of rawSummaries) {
+            if (s.year) yearSet.add(s.year)
+        }
+        const availableYears = Array.from(yearSet).sort((a, b) => b - a)
+
+        // Process records
+        let grandTotalGross = 0
+        let grandTotalAbsenceDeductions = 0
+        let grandTotalNet = 0
+        let grandTotalAdvanceRecovery = 0
+        let grandTotalTakeHome = 0
+        let grandTotalPaid = 0
+        let grandTotalBalanceDue = 0
+
+        const processedRecords = filteredSummaries.map(s => {
+            const gross = Number(s.gross_salary) || 0
+            const absence = Number(s.absence_deduction) || 0
+            const net = Number(s.net_salary) || 0
+            const advance = Number(s.advance_recovery) || 0
+            const takeHome = Number(s.take_home) || 0
+            const paid = Number(s.paid_amount) || 0
+            const balanceDue = Math.max(0, parseFloat((takeHome - paid).toFixed(2)))
+
+            grandTotalGross += gross
+            grandTotalAbsenceDeductions += absence
+            grandTotalNet += net
+            grandTotalAdvanceRecovery += advance
+            grandTotalTakeHome += takeHome
+            grandTotalPaid += paid
+            grandTotalBalanceDue += balanceDue
+
+            let paymentStatus: 'paid' | 'partially_paid' | 'unpaid' = 'unpaid'
+            if (paid >= takeHome && takeHome > 0) {
+                paymentStatus = 'paid'
+            } else if (paid > 0 && paid < takeHome) {
+                paymentStatus = 'partially_paid'
+            }
+
+            return {
+                id: s.id,
+                profileId: s.profile_id,
+                month: s.month,
+                year: s.year,
+                monthName: `${MONTH_NAMES[s.month - 1]} ${s.year}`,
+                totalWorkingDays: s.total_working_days,
+                totalPresentDays: s.total_present_days,
+                totalAbsentDays: s.total_absent_days,
+                totalHalfDays: s.total_half_days,
+                totalLeaves: Number(s.total_leaves) || 0,
+                totalExtraHours: Number(s.total_extra_hours) || 0,
+                status: s.status,
+                grossSalary: gross,
+                absenceDeduction: absence,
+                netSalary: net,
+                advanceRecovery: advance,
+                takeHome: takeHome,
+                paidAmount: paid,
+                balanceDue: balanceDue,
+                paymentStatus,
+                paidMode: s.paid_mode,
+                payDate: s.pay_date,
+                payReferenceNo: s.pay_reference_no,
+                paymentRemarks: s.payment_remarks,
+                paidAt: s.paid_at ? s.paid_at.toISOString() : null,
+                salaryBreakdown: s.salary_breakdown as any,
+                profile: s.profile ? {
+                    id: s.profile.id,
+                    fullName: s.profile.full_name || s.profile.email,
+                    email: s.profile.email,
+                    mobileNo: s.profile.mobile_no,
+                    role: s.profile.role,
+                    designationName: s.profile.designation?.name || 'Staff',
+                    departmentName: s.profile.department?.name || 'General',
+                    departmentId: s.profile.department_id,
+                    avatarUrl: s.profile.avatar_url,
+                } : null,
+                payments: (s.payments || []).map(p => ({
+                    id: p.id,
+                    amount: Number(p.amount) || 0,
+                    paidMode: p.paid_mode,
+                    payDate: p.pay_date,
+                    payReferenceNo: p.pay_reference_no,
+                    paymentRemarks: p.payment_remarks,
+                    createdAt: p.created_at ? p.created_at.toISOString() : null
+                }))
+            }
+        })
+
+        // Employee Ledger Aggregation (Grouping by employee)
+        const employeeMap = new Map<string, any>()
+        for (const r of processedRecords) {
+            if (!r.profile) continue
+            const pid = r.profileId
+            if (!employeeMap.has(pid)) {
+                employeeMap.set(pid, {
+                    profile: r.profile,
+                    payslipCount: 0,
+                    totalGross: 0,
+                    totalDeductions: 0,
+                    totalTakeHome: 0,
+                    totalPaid: 0,
+                    totalBalanceDue: 0,
+                    latestMonthYear: r.monthName,
+                    latestStatus: r.status,
+                    records: []
+                })
+            }
+            const emp = employeeMap.get(pid)
+            emp.payslipCount++
+            emp.totalGross += r.grossSalary
+            emp.totalDeductions += (r.absenceDeduction + r.advanceRecovery)
+            emp.totalTakeHome += r.takeHome
+            emp.totalPaid += r.paidAmount
+            emp.totalBalanceDue += r.balanceDue
+            emp.records.push(r)
+        }
+
+        const employeeLedger = Array.from(employeeMap.values()).map(e => ({
+            ...e,
+            totalGross: parseFloat(e.totalGross.toFixed(2)),
+            totalDeductions: parseFloat(e.totalDeductions.toFixed(2)),
+            totalTakeHome: parseFloat(e.totalTakeHome.toFixed(2)),
+            totalPaid: parseFloat(e.totalPaid.toFixed(2)),
+            totalBalanceDue: parseFloat(e.totalBalanceDue.toFixed(2)),
+        }))
+
+        return {
+            records: processedRecords,
+            employeeLedger,
+            grandTotals: {
+                totalPayslips: processedRecords.length,
+                totalGross: parseFloat(grandTotalGross.toFixed(2)),
+                totalAbsenceDeductions: parseFloat(grandTotalAbsenceDeductions.toFixed(2)),
+                totalNet: parseFloat(grandTotalNet.toFixed(2)),
+                totalAdvanceRecovery: parseFloat(grandTotalAdvanceRecovery.toFixed(2)),
+                totalTakeHome: parseFloat(grandTotalTakeHome.toFixed(2)),
+                totalPaid: parseFloat(grandTotalPaid.toFixed(2)),
+                totalBalanceDue: parseFloat(grandTotalBalanceDue.toFixed(2)),
+            },
+            availableYears
+        }
     }
 }
 

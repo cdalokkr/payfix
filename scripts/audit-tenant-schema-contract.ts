@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { sql } from 'drizzle-orm';
 import { centralDb } from '../lib/db';
 import { inspectTenantSchemaContract } from '../lib/tenant/schema-contract';

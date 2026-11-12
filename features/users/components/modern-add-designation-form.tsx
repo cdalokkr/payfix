@@ -20,7 +20,7 @@ interface ModernAddDesignationFormProps {
     className?: string
     title?: string
     description?: string
-    editingDesignation?: { id: string, name: string, description: string | null, role: "admin" | "moderator" | "employee" | string | null } | null
+    editingDesignation?: { id: string, name: string, description: string | null, role: "admin" | "moderator" | "employee" | string | null, department_id?: string | null } | null
     isDeleteMode?: boolean
 }
 
@@ -55,6 +55,12 @@ export function ModernAddDesignationForm({
     // Handle open state
     const isOpen = open || internalOpen
 
+    useEffect(() => {
+        if (isOpen) {
+            utils.departments.getAll.invalidate()
+        }
+    }, [isOpen, utils])
+
     const handleOpenChange = (newOpen: boolean) => {
         if (onOpenChange) {
             onOpenChange(newOpen)
@@ -83,6 +89,7 @@ export function ModernAddDesignationForm({
             name: '',
             description: '',
             role: 'employee',
+            departmentId: null,
         },
     })
 
@@ -94,12 +101,14 @@ export function ModernAddDesignationForm({
                     name: editingDesignation.name,
                     description: editingDesignation.description || ' ',
                     role: (editingDesignation.role as "admin" | "moderator" | "employee") || 'employee',
+                    departmentId: editingDesignation.department_id || null,
                 })
             } else {
                 form.reset({
                     name: '',
                     description: '',
                     role: 'employee',
+                    departmentId: null,
                 })
             }
         }

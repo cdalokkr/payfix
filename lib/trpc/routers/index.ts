@@ -21,17 +21,27 @@ import { clientsRouter } from './clients'
 import { complaintsRouter } from './complaints'
 import { ticketsRouter } from './tickets'
 import { superadminRouter } from './superadmin'
+import { departmentsRouter } from './departments'
+import { shiftsRouter } from './shifts'
+import { billingRouter } from './billing'
+import { aiRouter } from './ai'
 
 export const appRouter = router({
+  ai: aiRouter,
   auth: authRouter,
   profile: profileRouter,
   superadmin: superadminRouter,
+  billing: billingRouter,
+  departments: departmentsRouter,
+  shifts: shiftsRouter,
   admin: router({
     users: adminUsersRouter,
     dashboard: adminDashboardRouter,
     analytics: adminAnalyticsRouter,
     reports: adminReportsRouter,
     designation: designationRouter,
+    departments: departmentsRouter,
+    shifts: shiftsRouter,
     officeLocations: officeLocationsRouter,
     kioskDevices: kioskDevicesRouter,
     salary: salaryRouter,

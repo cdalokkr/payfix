@@ -1,20 +1,45 @@
 "use client"
 
-import React, { useState, useCallback, useMemo } from 'react'
+import React, { useState, useCallback, useMemo, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { ColumnDef } from "@tanstack/react-table"
 import { trpc } from "@/lib/trpc/client"
 import { motion, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
-import { Search, X, User, UserStar, Shield, CircleUserRound, Mail, Phone, Calendar as CalendarIcon, Users, Activity, Download, Filter, TrendingUp, Clock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Loader2, CheckCircle2, History } from "lucide-react"
-// hugeicons removed - using Users and Activity from lucide-react
+import {
+  Search,
+  X,
+  User,
+  UserStar,
+  Shield,
+  CircleUserRound,
+  Mail,
+  Phone,
+  Calendar as CalendarIcon,
+  Users,
+  Activity,
+  Download,
+  Filter,
+  TrendingUp,
+  Clock,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Loader2,
+  CheckCircle2,
+  History,
+  ShieldAlert,
+  ArrowLeft,
+  RefreshCw,
+  SlidersHorizontal,
+  Check
+} from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ActivityLogFeed, getActivityIcon, getActivityTypeColor } from "@/components/dashboard/activity-log-feed"
-import { getDefaultAvatarUrl } from "@/lib/utils/avatar-helper"
+import { ActivityLogFeed, getActivityIcon, getActivityTypeColor, UserActivity } from "@/components/dashboard/activity-log-feed"
 import {
   Select,
   SelectContent,
@@ -38,7 +63,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
-import { format } from "date-fns"
+import { format, isValid } from "date-fns"
 import { MetricCard } from "@/components/dashboard/metric-card"
 import CreateUserButton, { AsyncState } from "@/components/ui/create-user-button"
 
@@ -55,20 +80,51 @@ interface SearchUser {
   designation?: { name: string } | { name: string }[] | null
 }
 
-import type { UserActivity } from "@/components/dashboard/activity-log-feed"
+const SYSTEM_MODULES = [
+  { id: 'auth', label: 'Auth & Access' },
+  { id: 'attendance', label: 'Attendance' },
+  { id: 'leaves', label: 'Leaves' },
+  { id: 'shifts', label: 'Shifts & Rosters' },
+  { id: 'salary', label: 'Salary & Payroll' },
+  { id: 'departments', label: 'Deptt. & Desig.' },
+  { id: 'profile', label: 'Profile' },
+  { id: 'settings', label: 'Settings' },
+]
 
-export function AnalyticsTab({ role = 'admin' }: { role?: 'admin' | 'moderator' }) {
+const SYSTEM_ACTIVITY_TYPES = [
+  { id: 'login', label: 'Login' },
+  { id: 'logout', label: 'Logout' },
+  { id: 'check_in', label: 'Check-in' },
+  { id: 'check_out', label: 'Check-out' },
+  { id: 'create', label: 'Create' },
+  { id: 'update', label: 'Update / Edit' },
+  { id: 'delete', label: 'Delete / Remove' },
+  { id: 'approval', label: 'Approval' },
+  { id: 'export', label: 'Export' },
+]
+
+interface AnalyticsTabProps {
+  role?: 'admin' | 'moderator'
+  defaultModule?: string
+}
+
+export function AnalyticsTab({ role = 'admin', defaultModule }: AnalyticsTabProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [searchStatus, setSearchStatus] = useState<AsyncState>('idle')
   const [selectedUser, setSelectedUser] = useState<string | null>(null)
   const [showDropdown, setShowDropdown] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
+
+  // Filters
   const [activityTypeFilter, setActivityTypeFilter] = useState<string[]>([])
   const [appliedActivityTypeFilter, setAppliedActivityTypeFilter] = useState<string[]>([])
-  const [moduleFilter, setModuleFilter] = useState<string[]>([])
-  const [appliedModuleFilter, setAppliedModuleFilter] = useState<string[]>([])
+  const [moduleFilter, setModuleFilter] = useState<string[]>(defaultModule ? [defaultModule] : [])
+  const [appliedModuleFilter, setAppliedModuleFilter] = useState<string[]>(defaultModule ? [defaultModule] : [])
 
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date } | undefined>()
   const [appliedDateRange, setAppliedDateRange] = useState<{ from: Date; to: Date } | undefined>()
+
+  // Popover state
   const [isActivityPopoverOpen, setIsActivityPopoverOpen] = useState(false)
   const [isModulePopoverOpen, setIsModulePopoverOpen] = useState(false)
   const [isDatePopoverOpen, setIsDatePopoverOpen] = useState(false)
@@ -77,17 +133,20 @@ export function AnalyticsTab({ role = 'admin' }: { role?: 'admin' | 'moderator' 
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
 
-  // Search users
+  // TRPC utils for pre-fetching / exporting
+  const utils = trpc.useUtils()
+
+  // Search users for autocomplete
   const { data: searchResults, isLoading: isSearching, refetch: refetchSearch } = (role === 'admin'
     ? trpc.admin.reports.searchUsers
     : trpc.moderator.reports.searchUsers).useQuery(
       { query: searchQuery },
       {
-        enabled: false, // Only search on button click
+        enabled: false,
       }
     )
 
-  // Get user profile details (only fetches once per user selection)
+  // Get user profile details (when a user is selected)
   const userProfileQuery = (role === 'admin'
     ? trpc.admin.reports.getUserProfile
     : trpc.moderator.reports.getUserProfile) as any
@@ -100,70 +159,78 @@ export function AnalyticsTab({ role = 'admin' }: { role?: 'admin' | 'moderator' 
     }
   )
 
-  // Get user activities (refetches on filter change)
-  const { data: userActivitiesData, isLoading: isLoadingActivities, isFetching: isFetchingActivities } = (role === 'admin'
+  // Get activities (workspace-wide or filtered by user, always active)
+  const {
+    data: userActivitiesData,
+    isLoading: isLoadingActivities,
+    isFetching: isFetchingActivities,
+    refetch: refetchActivities,
+  } = (role === 'admin'
     ? trpc.admin.reports.getUserActivities
     : trpc.moderator.reports.getUserActivities).useQuery(
       {
-        userId: selectedUser!,
+        userId: selectedUser || undefined,
         page: currentPage,
         limit: pageSize,
         activityType: appliedActivityTypeFilter.length > 0 ? appliedActivityTypeFilter : undefined,
         module: appliedModuleFilter.length > 0 ? appliedModuleFilter : undefined,
         startDate: appliedDateRange?.from ? new Date(new Date(appliedDateRange.from).setHours(0, 0, 0, 0)).toISOString() : undefined,
         endDate: appliedDateRange?.to ? new Date(new Date(appliedDateRange.to).setHours(23, 59, 59, 999)).toISOString() : appliedDateRange?.from ? new Date(new Date(appliedDateRange.from).setHours(23, 59, 59, 999)).toISOString() : undefined,
+        search: searchQuery.trim() || undefined,
       },
       {
-        enabled: !!selectedUser,
+        enabled: true,
         placeholderData: (previousData) => previousData,
       }
     )
 
-  // Get user status history
-  const { data: statusHistory, isLoading: isLoadingHistory } = trpc.admin.reports.getUserStatusHistory.useQuery(
+  // Get user status history (only when user is selected and role is admin)
+  const { data: statusHistory } = trpc.admin.reports.getUserStatusHistory.useQuery(
     { userId: selectedUser! },
     { enabled: !!selectedUser && role === 'admin' }
   )
 
-  // Handle search
+  // Handle user search execution
   const handleSearch = useCallback(async () => {
-    if (!searchQuery.trim()) return;
+    if (!searchQuery.trim()) return
 
-    setSearchStatus('loading');
+    setSearchStatus('loading')
     try {
-      const result = await refetchSearch();
+      const result = await refetchSearch()
       if (!result.data || result.data.length === 0) {
-        setSearchStatus('error');
-        setTimeout(() => setSearchStatus('idle'), 2000);
-        return;
+        setSearchStatus('error')
+        setTimeout(() => setSearchStatus('idle'), 2000)
+        return
       }
-      setSearchStatus('success');
-      setShowDropdown(true);
-      setTimeout(() => setSearchStatus('idle'), 2000);
-    } catch (error) {
-      setSearchStatus('error');
-      setTimeout(() => setSearchStatus('idle'), 2000);
+      setSearchStatus('success')
+      setShowDropdown(true)
+      setTimeout(() => setSearchStatus('idle'), 2000)
+    } catch {
+      setSearchStatus('error')
+      setTimeout(() => setSearchStatus('idle'), 2000)
     }
   }, [searchQuery, refetchSearch])
 
-  // Handle reset
-  const handleReset = useCallback(() => {
-    setSearchQuery("")
+  // Handle reset to workspace-wide mode
+  const handleResetToAllUsers = useCallback(() => {
     setSelectedUser(null)
+    setSearchQuery("")
     setShowDropdown(false)
-    setActivityTypeFilter([])
-    setAppliedActivityTypeFilter([])
-    setModuleFilter([])
-    setAppliedModuleFilter([])
-    setDateRange(undefined)
-    setAppliedDateRange(undefined)
-    setIsActivityPopoverOpen(false)
-    setIsModulePopoverOpen(false)
-    setIsDatePopoverOpen(false)
     setCurrentPage(1)
   }, [])
 
-  // Handle user selection
+  // Full reset including filters
+  const handleResetFilters = useCallback(() => {
+    setActivityTypeFilter([])
+    setAppliedActivityTypeFilter([])
+    setModuleFilter(defaultModule ? [defaultModule] : [])
+    setAppliedModuleFilter(defaultModule ? [defaultModule] : [])
+    setDateRange(undefined)
+    setAppliedDateRange(undefined)
+    setCurrentPage(1)
+  }, [defaultModule])
+
+  // Handle user select from search dropdown
   const handleUserSelect = useCallback((user: SearchUser) => {
     setSelectedUser(user.id)
     setShowDropdown(false)
@@ -171,9 +238,71 @@ export function AnalyticsTab({ role = 'admin' }: { role?: 'admin' | 'moderator' 
     setCurrentPage(1)
   }, [])
 
-  // Helper function to get role badge color
-  const getRoleBadgeColor = (role?: string): string => {
-    switch (role?.toLowerCase()) {
+  // Export audit logs as CSV
+  const handleExportCSV = useCallback(async () => {
+    setIsExporting(true)
+    try {
+      const exportQuery = role === 'admin'
+        ? utils.admin.reports.exportAuditLogs
+        : utils.moderator.reports.exportAuditLogs
+
+      const result = await exportQuery.fetch({
+        userId: selectedUser || undefined,
+        activityType: appliedActivityTypeFilter.length > 0 ? appliedActivityTypeFilter : undefined,
+        module: appliedModuleFilter.length > 0 ? appliedModuleFilter : undefined,
+        startDate: appliedDateRange?.from ? new Date(new Date(appliedDateRange.from).setHours(0, 0, 0, 0)).toISOString() : undefined,
+        endDate: appliedDateRange?.to ? new Date(new Date(appliedDateRange.to).setHours(23, 59, 59, 999)).toISOString() : appliedDateRange?.from ? new Date(new Date(appliedDateRange.from).setHours(23, 59, 59, 999)).toISOString() : undefined,
+        search: searchQuery.trim() || undefined,
+      })
+
+      const rawItems = (result && result.activities && result.activities.length > 0)
+        ? result.activities
+        : (userActivitiesData?.activities || [])
+
+      if (rawItems.length === 0) {
+        setIsExporting(false)
+        return
+      }
+
+      const headers = ["Date & Time", "Actor Name", "Actor Email", "Actor Role", "Module", "Activity Type", "Description", "IP Address"]
+      const rows = rawItems.map((item: any) => [
+        item.formattedDate || (item.created_at ? format(new Date(item.created_at), "yyyy-MM-dd HH:mm:ss") : "N/A"),
+        item.actorName || item.actor?.name || item.profiles?.full_name || "System",
+        item.actorEmail || item.actor?.email || item.profiles?.email || "N/A",
+        item.actorRole || item.actor?.role || item.profiles?.role || "N/A",
+        item.module || "general",
+        item.activityType || item.activity_type || "N/A",
+        item.description || "N/A",
+        item.ipAddress || item.metadata?.ip || item.metadata?.ipAddress || "N/A"
+      ])
+
+      const csvContent = [
+        headers.join(","),
+        ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      ].join("\n")
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+      const link = document.createElement("a")
+      const url = URL.createObjectURL(blob)
+      link.setAttribute("href", url)
+      const filename = selectedUser
+        ? `audit-trail-${userProfileData?.profile?.email || 'user'}-${format(new Date(), "yyyy-MM-dd")}.csv`
+        : `workspace-audit-trail-${format(new Date(), "yyyy-MM-dd")}.csv`
+      link.setAttribute("download", filename)
+      link.style.visibility = "hidden"
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    } catch (err) {
+      console.error("Export error:", err)
+    } finally {
+      setIsExporting(false)
+    }
+  }, [role, utils, selectedUser, appliedActivityTypeFilter, appliedModuleFilter, appliedDateRange, searchQuery, userProfileData, userActivitiesData])
+
+  // Helper functions
+  const getRoleBadgeColor = (roleStr?: string): string => {
+    switch (roleStr?.toLowerCase()) {
       case 'admin':
         return "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-500/20 dark:text-purple-400 dark:border-purple-500/30"
       case 'moderator':
@@ -204,81 +333,53 @@ export function AnalyticsTab({ role = 'admin' }: { role?: 'admin' | 'moderator' 
     return designation.name || "N/A"
   }
 
-
-  // Activity columns
-  const activityColumns: ColumnDef<UserActivity>[] = useMemo(() => [
-    {
-      accessorKey: "activity_type",
-      header: "Activity Type",
-      size: 140,
-      cell: ({ row }) => {
-        const type = row.getValue("activity_type") as string
-        return (
-          <Badge className={cn("capitalize border", getActivityTypeColor(type))}>
-            {type || "Unknown"}
-          </Badge>
-        )
-      },
-    },
-    {
-      accessorKey: "description",
-      header: "Description",
-      size: 700,
-      cell: ({ row }) => {
-        const description = row.getValue("description") as string | null
-        return (
-          <div className="max-w-[700px] min-w-[500px]">
-            <p className="text-sm whitespace-normal break-words leading-relaxed">{description || "No description"}</p>
-          </div>
-        )
-      },
-    },
-    {
-      accessorKey: "created_at",
-      header: "Date & Time",
-      size: 180,
-      cell: ({ row }) => {
-        const date = row.getValue("created_at") as string
-        return (
-          <div className="text-sm text-muted-foreground whitespace-nowrap">
-            {format(new Date(date), "MMM dd, yyyy HH:mm:ss")}
-          </div>
-        )
-      },
-    },
-  ], [])
-
-  // Get unique activity types for filter
-  // Get unique activity types for filter from statistics (all activities)
-  const activityTypes = useMemo(() => {
-    if (!userProfileData?.statistics?.byType) return []
-    return Object.keys(userProfileData.statistics.byType)
-  }, [userProfileData?.statistics])
-
-  const modules = useMemo(() => {
-    return userProfileData?.modules || []
-  }, [userProfileData?.modules])
-
   const profile = userProfileData?.profile
-  const activities = userActivitiesData?.activities || []
+  const activities = (userActivitiesData?.activities || []) as UserActivity[]
   const statistics = userProfileData?.statistics
+  const pagination = userActivitiesData?.pagination || { total: 0, page: 1, limit: pageSize, totalPages: 1 }
+
+  const hasActiveFilters = appliedActivityTypeFilter.length > 0 ||
+    appliedModuleFilter.length > 0 ||
+    !!appliedDateRange ||
+    !!selectedUser
 
   return (
     <div className="space-y-6">
-      {/* Search Section */}
-      <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle>Search User History</CardTitle>
-          <CardDescription>
-            Search users by name, email, or mobile number to view their complete activity history
-          </CardDescription>
+      {/* Search & Mode Header */}
+      <Card className="shadow-lg border-border/50">
+        <CardHeader className="pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <CardTitle className="text-xl flex items-center gap-2">
+                <History className="h-5 w-5 text-primary" />
+                {selectedUser ? "User Audit History" : "Workspace Audit Trail & Logs"}
+              </CardTitle>
+              <CardDescription className="text-xs">
+                {selectedUser
+                  ? `Viewing complete activity history for user ${profile?.email || searchQuery}`
+                  : "Monitor and search real-time activities across all organization members"}
+              </CardDescription>
+            </div>
+
+            {selectedUser && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleResetToAllUsers}
+                className="h-8 gap-1.5 text-xs font-medium"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                View All Users Audit Trail
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <div className="flex gap-2">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search by name, email, or mobile number..."
+                placeholder="Search user by name, email, or mobile..."
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value)
@@ -289,50 +390,60 @@ export function AnalyticsTab({ role = 'admin' }: { role?: 'admin' | 'moderator' 
                     handleSearch()
                   }
                 }}
-                className="pl-10"
+                className="pl-9 h-10"
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery("")
+                    setShowDropdown(false)
+                    if (selectedUser) {
+                      handleResetToAllUsers()
+                    }
+                  }}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+
+              {/* Autocomplete Dropdown */}
               <AnimatePresence>
                 {showDropdown && searchResults && searchResults.length > 0 && (
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
-                    className="absolute z-50 w-full mt-1 bg-background border border-border rounded-lg shadow-lg max-h-60 overflow-auto"
+                    className="absolute z-50 w-full mt-1 bg-background border border-border rounded-lg shadow-xl max-h-60 overflow-auto"
                   >
                     {searchResults.map((user: SearchUser) => (
-                      <motion.div
+                      <div
                         key={user.id}
-                        whileHover={{ backgroundColor: "hsl(var(--muted))" }}
-                        className="p-3 cursor-pointer border-b border-border last:border-b-0"
+                        className="p-3 cursor-pointer hover:bg-muted/70 border-b border-border/50 last:border-b-0 transition-colors flex items-center justify-between"
                         onClick={() => handleUserSelect(user)}
                       >
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-10 w-10">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Avatar className="h-8 w-8">
                             <AvatarImage src={user.avatar_url || undefined} />
                             <AvatarFallback>
                               {user.first_name?.[0] || user.email[0].toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate">
-                              {`${user.first_name || ''} ${user.last_name || ''}`.trim() || "Unknown User"}
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">
+                              {`${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email}
                             </p>
-                            <p className="text-sm text-muted-foreground truncate">{user.email}</p>
-                            {user.mobile_no && (
-                              <p className="text-xs text-muted-foreground">{user.mobile_no}</p>
-                            )}
+                            <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                           </div>
-                          <Badge
-                            variant="outline"
-                            className={cn(
-                              "text-[10px] font-bold uppercase tracking-wider",
-                              getRoleBadgeColor(user.role)
-                            )}
-                          >
-                            {user.role}
-                          </Badge>
                         </div>
-                      </motion.div>
+                        <Badge
+                          variant="outline"
+                          className={cn("text-[10px] font-bold uppercase tracking-wider ml-2 flex-shrink-0", getRoleBadgeColor(user.role))}
+                        >
+                          {user.role}
+                        </Badge>
+                      </div>
                     ))}
                   </motion.div>
                 )}
@@ -341,27 +452,27 @@ export function AnalyticsTab({ role = 'admin' }: { role?: 'admin' | 'moderator' 
             <CreateUserButton
               onClick={handleSearch}
               loadingText="Searching..."
-              successText="Record Found !!"
-              errorText="No Record Found"
+              successText="Found"
+              errorText="No match"
               disabled={!searchQuery.trim()}
-              className="min-w-[140px] w-auto"
+              className="min-w-[120px] w-auto h-10"
               asyncState={searchStatus}
               mode="search"
               size="md"
             >
-              Search
+              Find User
             </CreateUserButton>
           </div>
         </CardContent>
       </Card>
 
-      {/* User Details Section */}
+      {/* Selected User Profile Details */}
       <AnimatePresence>
         {selectedUser && profile && (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
+            exit={{ opacity: 0, y: -15 }}
             className="space-y-6"
           >
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -378,18 +489,13 @@ export function AnalyticsTab({ role = 'admin' }: { role?: 'admin' | 'moderator' 
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="pt-4">
                   <div className="flex flex-col md:flex-row gap-4 md:gap-6">
-                    {/* Column 1 - Avatar Only */}
+                    {/* Avatar */}
                     <div className="flex justify-center md:justify-start md:items-center flex-shrink-0">
-                      <motion.div
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        transition={{ delay: 0.2 }}
-                        className="relative"
-                      >
+                      <div className="relative">
                         <Avatar className={cn(
-                          "h-28 w-28 md:h-36 md:w-36 border-4 shadow-lg transition-all duration-300",
+                          "h-24 w-24 md:h-32 md:w-32 border-4 shadow-lg transition-all duration-300",
                           profile.status === 'active'
                             ? "border-green-500 shadow-green-500/20"
                             : profile.status === 'deleted'
@@ -400,95 +506,57 @@ export function AnalyticsTab({ role = 'admin' }: { role?: 'admin' | 'moderator' 
                             src={profile.avatar_url || undefined}
                             alt={`${profile.first_name || ''} ${profile.last_name || ''}`.trim()}
                           />
-                          <AvatarFallback className="text-2xl md:text-3xl">
+                          <AvatarFallback className="text-2xl">
                             {profile.first_name?.[0] || profile.email[0].toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
                         <div className={cn(
-                          "absolute -bottom-1 -right-1 h-6 w-6 rounded-full border-4 border-background",
+                          "absolute -bottom-1 -right-1 h-5 w-5 rounded-full border-2 border-background",
                           profile.status === 'active' ? "bg-green-500" : profile.status === 'deleted' ? "bg-red-500" : "bg-amber-500"
                         )} />
-                        {profile.status === 'deleted' && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-background/60 backdrop-blur-[1px] rounded-full">
-                            <span className="text-red-600 dark:text-red-400 text-xs font-bold uppercase tracking-tighter rotate-[-15deg] border-2 border-red-600 dark:border-red-400 px-1 py-0.5 rounded animate-in fade-in zoom-in duration-500">
-                              Deleted
-                            </span>
-                          </div>
-                        )}
-                      </motion.div>
+                      </div>
                     </div>
 
-                    {/* Column 2 - Name, [Mobile + Role], [DOB + Sex], Email */}
-                    <div className="space-y-3 flex-1 flex flex-col justify-center min-w-0">
-                      {/* Name */}
+                    {/* Information Grid */}
+                    <div className="space-y-2.5 flex-1 flex flex-col justify-center min-w-0">
                       <div className="flex items-center gap-2">
-                        <div className="p-2 bg-muted rounded-lg flex-shrink-0">
-                          <CircleUserRound className="h-5 w-5 text-foreground" />
+                        <div className="p-1.5 bg-muted rounded-lg flex-shrink-0">
+                          <CircleUserRound className="h-4 w-4 text-foreground" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs text-muted-foreground">Name</p>
+                          <p className="text-[11px] text-muted-foreground">Full Name</p>
                           <p className="text-sm font-semibold truncate">
                             {`${profile.first_name || ''} ${profile.middle_name || ''} ${profile.last_name || ''}`.trim() || "N/A"}
                           </p>
                         </div>
                       </div>
 
-                      {/* Row 2: DOB + Sex */}
-                      <div className="grid grid-cols-2 gap-4 md:gap-6">
+                      <div className="grid grid-cols-2 gap-3">
                         <div className="flex items-center gap-2">
-                          <div className="p-2 bg-muted rounded-lg flex-shrink-0">
-                            <CalendarIcon className="h-5 w-5 text-foreground" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs text-muted-foreground">Date of Birth</p>
-                            <p className="text-sm font-semibold truncate">
-                              {profile.date_of_birth
-                                ? format(new Date(profile.date_of_birth), "MMM dd, yyyy")
-                                : "N/A"}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <div className="p-2 bg-muted rounded-lg flex-shrink-0">
-                            <Users className="h-5 w-5 text-foreground" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs text-muted-foreground">Sex</p>
-                            <p className="text-sm font-semibold capitalize">{profile.sex || "N/A"}</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Row 3: Role + Designation */}
-                      <div className="grid grid-cols-2 gap-4 md:gap-6">
-                        <div className="flex items-center gap-2">
-                          <div className="p-2 bg-muted rounded-lg flex-shrink-0">
+                          <div className="p-1.5 bg-muted rounded-lg flex-shrink-0">
                             {profile.role === "admin" ? (
-                              <UserStar className="h-5 w-5 text-foreground" />
+                              <UserStar className="h-4 w-4 text-foreground" />
                             ) : (
-                              <User className="h-5 w-5 text-foreground" />
+                              <User className="h-4 w-4 text-foreground" />
                             )}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs text-muted-foreground">Role</p>
-                            <span
-                              className={cn(
-                                "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize border",
-                                getRoleBadgeColor(profile.role)
-                              )}
-                            >
+                            <p className="text-[11px] text-muted-foreground">Role</p>
+                            <span className={cn(
+                              "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize border",
+                              getRoleBadgeColor(profile.role)
+                            )}>
                               {profile.role}
                             </span>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <div className="p-2 bg-muted rounded-lg flex-shrink-0">
-                            <Shield className="h-5 w-5 text-foreground" />
+                          <div className="p-1.5 bg-muted rounded-lg flex-shrink-0">
+                            <Shield className="h-4 w-4 text-foreground" />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs text-muted-foreground">Designation</p>
+                            <p className="text-[11px] text-muted-foreground">Designation</p>
                             <p className="text-sm font-semibold truncate">
                               {getDesignationName(profile.designation)}
                             </p>
@@ -496,53 +564,52 @@ export function AnalyticsTab({ role = 'admin' }: { role?: 'admin' | 'moderator' 
                         </div>
                       </div>
 
-                      {/* Row 4: Mobile */}
                       <div className="flex items-center gap-2">
-                        <div className="p-2 bg-muted rounded-lg flex-shrink-0">
-                          <Phone className="h-5 w-5 text-foreground" />
+                        <div className="p-1.5 bg-muted rounded-lg flex-shrink-0">
+                          <Mail className="h-4 w-4 text-foreground" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs text-muted-foreground">Mobile Number</p>
-                          <p className="text-sm font-semibold">{profile.mobile_no || "N/A"}</p>
-                        </div>
-                      </div>
-
-                      {/* Row 5: Email */}
-                      <div className="flex items-center gap-2">
-                        <div className="p-2 bg-muted rounded-lg flex-shrink-0">
-                          <Mail className="h-5 w-5 text-foreground" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs text-muted-foreground">Email ID</p>
+                          <p className="text-[11px] text-muted-foreground">Email</p>
                           <p className="text-sm font-semibold truncate">{profile.email || "N/A"}</p>
                         </div>
                       </div>
+
+                      {profile.mobile_no && (
+                        <div className="flex items-center gap-2">
+                          <div className="p-1.5 bg-muted rounded-lg flex-shrink-0">
+                            <Phone className="h-4 w-4 text-foreground" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[11px] text-muted-foreground">Mobile</p>
+                            <p className="text-sm font-semibold">{profile.mobile_no}</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
               {/* Activity Statistics Card */}
-              {statistics && statistics.total > 0 && (
-                <Card className="shadow-lg border-border/50 bg-background/60 backdrop-blur-xl overflow-hidden h-full flex flex-col">
+              {statistics && (
+                <Card className="shadow-lg border-border/50 bg-background/60 backdrop-blur-xl h-full flex flex-col">
                   <CardHeader className="pb-0">
                     <div className="flex items-center gap-2">
                       <div className="p-2 rounded-lg bg-purple-500/20">
                         <Activity className="h-6 w-6 text-purple-600 dark:text-purple-400" />
                       </div>
                       <div>
-                        <CardTitle className="text-lg">Activity Statistics</CardTitle>
-                        <CardDescription className="text-xs">Summary of user activities</CardDescription>
+                        <CardTitle className="text-lg">User Activity Summary</CardTitle>
+                        <CardDescription className="text-xs">Summary of user actions performed</CardDescription>
                       </div>
                     </div>
                   </CardHeader>
-                  <CardContent className="flex-1 flex items-center">
-                    {/* Statistics Grid - 2 columns with vertical centering */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+                  <CardContent className="flex-1 flex items-center pt-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
                       <MetricCard
                         title="Total Activities"
                         value={statistics.total}
-                        description="All activities"
+                        description="All lifetime events"
                         icon={<Activity className="h-5 w-5 text-muted-foreground" />}
                         loading={isLoadingProfile}
                         iconBgColor="bg-blue-500/20"
@@ -556,11 +623,11 @@ export function AnalyticsTab({ role = 'admin' }: { role?: 'admin' | 'moderator' 
                       <MetricCard
                         title="Last Activity"
                         value={
-                          statistics.lastActivity
+                          statistics.lastActivity && isValid(new Date(statistics.lastActivity))
                             ? format(new Date(statistics.lastActivity), "MMM dd, yyyy")
                             : "N/A"
                         }
-                        description="Most recent action"
+                        description="Most recent timestamp"
                         icon={<CalendarIcon className="h-5 w-5 text-muted-foreground" />}
                         loading={isLoadingProfile}
                         iconBgColor="bg-green-500/20"
@@ -576,22 +643,22 @@ export function AnalyticsTab({ role = 'admin' }: { role?: 'admin' | 'moderator' 
               )}
             </div>
 
-            {/* Status History Section */}
+            {/* Status History Section (Admin only) */}
             {role === 'admin' && statusHistory && statusHistory.length > 0 && (
-              <Card className="shadow-lg border-border/50 bg-background/60 backdrop-blur-xl">
-                <CardHeader className="pb-4">
+              <Card className="shadow-lg border-border/50">
+                <CardHeader className="pb-3">
                   <div className="flex items-center gap-2">
                     <div className="p-2 rounded-lg bg-amber-500/20">
                       <History className="h-5 w-5 text-amber-600 dark:text-amber-400" />
                     </div>
                     <div>
-                      <CardTitle className="text-lg">Account Status History</CardTitle>
-                      <CardDescription className="text-xs">Log of status changes and reasons</CardDescription>
+                      <CardTitle className="text-base">Account Status History</CardTitle>
+                      <CardDescription className="text-xs">Log of status updates and reasons</CardDescription>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="relative overflow-hidden rounded-xl border bg-background/40">
+                  <div className="overflow-hidden rounded-lg border bg-background/40">
                     <Table>
                       <TableHeader className="bg-muted/50">
                         <TableRow>
@@ -603,12 +670,12 @@ export function AnalyticsTab({ role = 'admin' }: { role?: 'admin' | 'moderator' 
                       </TableHeader>
                       <TableBody>
                         {statusHistory.map((history: any) => (
-                          <TableRow key={history.id} className="hover:bg-muted/50 transition-colors">
+                          <TableRow key={history.id}>
                             <TableCell className="text-xs font-medium">
                               {format(new Date(history.created_at), "MMM dd, yyyy HH:mm")}
                             </TableCell>
                             <TableCell>
-                              <Badge className={cn("text-[10px] font-bold uppercase tracking-wider", getStatusBadgeColor(history.new_status))}>
+                              <Badge className={cn("text-[10px] font-bold uppercase", getStatusBadgeColor(history.new_status))}>
                                 {history.new_status}
                               </Badge>
                             </TableCell>
@@ -616,10 +683,7 @@ export function AnalyticsTab({ role = 'admin' }: { role?: 'admin' | 'moderator' 
                               {history.reason || <span className="text-muted-foreground italic">No reason provided</span>}
                             </TableCell>
                             <TableCell className="text-xs">
-                              <div className="flex flex-col">
-                                <span className="font-medium">{history.changed_by_profile?.full_name || 'System'}</span>
-                                <span className="text-[10px] text-muted-foreground">{history.changed_by_profile?.email}</span>
-                              </div>
+                              <span className="font-medium">{history.changed_by_profile?.full_name || 'System'}</span>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -630,509 +694,437 @@ export function AnalyticsTab({ role = 'admin' }: { role?: 'admin' | 'moderator' 
               </Card>
             )}
 
-            {/* Activity Breakdown Section */}
+            {/* Activity Distribution */}
             {statistics && statistics.total > 0 && Object.keys(statistics.byType).length > 0 && (
-              <Card className="shadow-lg border-border/50 bg-background/60 backdrop-blur-xl">
-                <CardHeader className="pb-4">
+              <Card className="shadow-lg border-border/50">
+                <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className="p-2 rounded-lg bg-indigo-500/20">
                         <TrendingUp className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
                       </div>
                       <div>
-                        <CardTitle className="text-lg">Activity Distribution</CardTitle>
-                        <CardDescription className="text-xs">Visual breakdown of actions performed</CardDescription>
+                        <CardTitle className="text-base">Activity Breakdown</CardTitle>
+                        <CardDescription className="text-xs">Actions performed by category</CardDescription>
                       </div>
                     </div>
-                    <Badge variant="secondary" className="text-xs font-semibold">
-                      {Object.keys(statistics.byType).length} Activity Types
+                    <Badge variant="secondary" className="text-xs">
+                      {Object.keys(statistics.byType).length} Types
                     </Badge>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 }}
-                    className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3"
-                  >
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
                     {Object.entries(statistics.byType)
                       .sort(([, a], [, b]) => (b as number) - (a as number))
-                      .map(([type, count], index) => {
+                      .map(([type, count]) => {
                         const Icon = getActivityIcon(type)
                         const colorClass = getActivityTypeColor(type)
                         return (
-                          <motion.div
+                          <div
                             key={type}
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            whileHover={{ y: -2, transition: { duration: 0.2 } }}
-                            transition={{ delay: 0.35 + index * 0.05 }}
                             className={cn(
-                              "flex flex-col p-3 rounded-xl border transition-all duration-300",
-                              "bg-background/40 hover:bg-background/80",
-                              "group cursor-default",
+                              "flex flex-col p-3 rounded-lg border bg-background/50 transition-all",
                               colorClass.split(' ').find(c => c.startsWith('border-')) || "border-border"
                             )}
                           >
-                            <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center justify-between mb-1.5">
                               <div className={cn(
-                                "p-1.5 rounded-lg transition-transform duration-300 group-hover:scale-110",
+                                "p-1 rounded-md",
                                 colorClass.split(' ').filter(c => c.startsWith('bg-') || c.startsWith('text-')).join(' ')
                               )}>
-                                <Icon className="h-4 w-4" />
+                                <Icon className="h-3.5 w-3.5" />
                               </div>
-                              <span className="text-lg font-bold tracking-tight">{count as number}</span>
+                              <span className="text-sm font-bold">{count as number}</span>
                             </div>
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground truncate">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground truncate">
                               {type.replace(/_/g, ' ')}
                             </p>
-                          </motion.div>
+                          </div>
                         )
                       })}
-                  </motion.div>
+                  </div>
                 </CardContent>
               </Card>
             )}
-
-            {/* Activity Logs Section */}
-            <Card className="shadow-lg">
-              <CardHeader className="pb-4">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="space-y-1">
-                    <CardTitle>Activity Logs</CardTitle>
-                    <CardDescription className="text-sm">
-                      Complete activity history ordered by most recent
-                      {statistics && (
-                        <span className="ml-2 font-medium">
-                          ({statistics.total} total activities)
-                        </span>
-                      )}
-                    </CardDescription>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Popover open={isActivityPopoverOpen} onOpenChange={setIsActivityPopoverOpen}>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" size="sm" className="h-8 border-dashed group pl-0 pr-3 overflow-hidden">
-                          <div className="h-full px-2 bg-muted border-r border-dashed flex items-center mr-2">
-                            <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-                          </div>
-                          Activity Type
-                          {appliedActivityTypeFilter.length > 0 && (
-                            <>
-                              <Badge variant="secondary" className="ml-2 rounded-sm px-1 font-normal">
-                                {appliedActivityTypeFilter.length}
-                              </Badge>
-                              <div
-                                role="button"
-                                tabIndex={0}
-                                className="ml-2 rounded-full p-0.5 hover:bg-slate-200 dark:hover:bg-slate-700 opacity-60 hover:opacity-100 transition-all"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setActivityTypeFilter([])
-                                  setAppliedActivityTypeFilter([])
-                                }}
-                              >
-                                <X className="h-3 w-3" />
-                              </div>
-                            </>
-                          )}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[200px] p-0" align="start">
-                        <div className="p-2 space-y-2">
-                          <div className="space-y-2 max-h-60 overflow-y-auto">
-                            {activityTypes.length > 0 ? (
-                              activityTypes.map((type) => (
-                                <div key={type} className="flex items-center space-x-2">
-                                  <Checkbox
-                                    id={`filter-${type}`}
-                                    checked={activityTypeFilter.includes(type)}
-                                    onCheckedChange={(checked) => {
-                                      if (checked) {
-                                        setActivityTypeFilter([...activityTypeFilter, type])
-                                      } else {
-                                        setActivityTypeFilter(activityTypeFilter.filter(t => t !== type))
-                                      }
-                                    }}
-                                  />
-                                  <Label htmlFor={`filter-${type}`} className="text-sm cursor-pointer w-full capitalize">
-                                    {type}
-                                  </Label>
-                                </div>
-                              ))
-                            ) : (
-                              <p className="text-sm text-muted-foreground px-2">No activity types available</p>
-                            )}
-                          </div>
-                          <div className="flex flex-col gap-2 pt-2 border-t">
-                            <Button
-                              size="sm"
-                              className="w-full"
-                              onClick={() => {
-                                setAppliedActivityTypeFilter(activityTypeFilter)
-                                setIsActivityPopoverOpen(false)
-                                setCurrentPage(1)
-                              }}
-                            >
-                              Apply Filter
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="w-full h-auto px-2 text-xs"
-                              onClick={() => {
-                                setActivityTypeFilter([])
-                                setAppliedActivityTypeFilter([])
-                                setCurrentPage(1)
-                              }}
-                              disabled={activityTypeFilter.length === 0 && appliedActivityTypeFilter.length === 0}
-                            >
-                              Clear selection
-                            </Button>
-                          </div>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-
-                    <Popover open={isModulePopoverOpen} onOpenChange={setIsModulePopoverOpen}>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" size="sm" className="h-8 border-dashed group pl-0 pr-3 overflow-hidden">
-                          <div className="h-full px-2 bg-muted border-r border-dashed flex items-center mr-2">
-                            <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-                          </div>
-                          Module
-                          {appliedModuleFilter.length > 0 && (
-                            <>
-                              <Badge variant="secondary" className="ml-2 rounded-sm px-1 font-normal">
-                                {appliedModuleFilter.length}
-                              </Badge>
-                              <div
-                                role="button"
-                                tabIndex={0}
-                                className="ml-2 rounded-full p-0.5 hover:bg-slate-200 dark:hover:bg-slate-700 opacity-60 hover:opacity-100 transition-all"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setModuleFilter([])
-                                  setAppliedModuleFilter([])
-                                }}
-                              >
-                                <X className="h-3 w-3" />
-                              </div>
-                            </>
-                          )}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[200px] p-0" align="start">
-                        <div className="p-2 space-y-2">
-                          <div className="space-y-2 max-h-60 overflow-y-auto">
-                            {modules.length > 0 ? (
-                              modules.map((mod: string) => (
-                                <div key={mod} className="flex items-center space-x-2">
-                                  <Checkbox
-                                    id={`module-${mod}`}
-                                    checked={moduleFilter.includes(mod)}
-                                    onCheckedChange={(checked) => {
-                                      if (checked) {
-                                        setModuleFilter([...moduleFilter, mod])
-                                      } else {
-                                        setModuleFilter(moduleFilter.filter(m => m !== mod))
-                                      }
-                                    }}
-                                  />
-                                  <Label htmlFor={`module-${mod}`} className="text-sm cursor-pointer w-full capitalize">
-                                    {mod}
-                                  </Label>
-                                </div>
-                              ))
-                            ) : (
-                              <p className="text-sm text-muted-foreground px-2">No modules available</p>
-                            )}
-                          </div>
-                          <div className="flex flex-col gap-2 pt-2 border-t">
-                            <Button
-                              size="sm"
-                              className="w-full"
-                              onClick={() => {
-                                setAppliedModuleFilter(moduleFilter)
-                                setIsModulePopoverOpen(false)
-                                setCurrentPage(1)
-                              }}
-                            >
-                              Apply Filter
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="w-full h-auto px-2 text-xs"
-                              onClick={() => {
-                                setModuleFilter([])
-                                setAppliedModuleFilter([])
-                                setCurrentPage(1)
-                              }}
-                              disabled={moduleFilter.length === 0 && appliedModuleFilter.length === 0}
-                            >
-                              Clear selection
-                            </Button>
-                          </div>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-
-                    <Popover open={isDatePopoverOpen} onOpenChange={setIsDatePopoverOpen}>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" size="sm" className="h-8 border-dashed group pl-0 pr-3 overflow-hidden">
-                          <div className="h-full px-2 bg-muted border-r border-dashed flex items-center mr-2">
-                            <CalendarIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                          </div>
-                          Date Range
-                          {appliedDateRange?.from ? (
-                            <>
-                              <span className="ml-2 font-normal">
-                                {appliedDateRange.to ? (
-                                  <>
-                                    {format(appliedDateRange.from, "LLL dd, y")} -{" "}
-                                    {format(appliedDateRange.to, "LLL dd, y")}
-                                  </>
-                                ) : (
-                                  format(appliedDateRange.from, "LLL dd, y")
-                                )}
-                              </span>
-                              <div
-                                role="button"
-                                tabIndex={0}
-                                className="ml-2 rounded-full p-0.5 hover:bg-slate-200 dark:hover:bg-slate-700 opacity-60 hover:opacity-100 transition-all"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setDateRange(undefined)
-                                  setAppliedDateRange(undefined)
-                                }}
-                              >
-                                <X className="h-3 w-3" />
-                              </div>
-                            </>
-                          ) : (
-                            <span className="ml-2 font-normal">Pick a date</span>
-                          )}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <div className="p-2 space-y-2">
-                          <Calendar
-                            initialFocus
-                            mode="range"
-                            defaultMonth={dateRange?.from}
-                            selected={dateRange}
-                            onSelect={(range) => {
-                              if (range?.from && range?.to) {
-                                setDateRange({ from: range.from, to: range.to })
-                              } else if (range?.from) {
-                                setDateRange({ from: range.from, to: range.from })
-                              } else {
-                                setDateRange(undefined)
-                              }
-                            }}
-                            numberOfMonths={1}
-                            captionLayout="dropdown"
-                            fromYear={1960}
-                            toYear={2030}
-                          />
-                          <div className="flex flex-col gap-2 pt-2 border-t">
-                            <Button
-                              size="sm"
-                              className="w-full"
-                              onClick={() => {
-                                setAppliedDateRange(dateRange)
-                                setIsDatePopoverOpen(false)
-                                setCurrentPage(1)
-                              }}
-                            >
-                              Apply Filter
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="w-full"
-                              onClick={() => {
-                                setDateRange(undefined)
-                                setAppliedDateRange(undefined)
-                                setCurrentPage(1)
-                              }}
-                              disabled={!dateRange && !appliedDateRange}
-                            >
-                              Clear date range
-                            </Button>
-                          </div>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => {
-                        if (!userActivitiesData?.activities) return
-
-                        // Create CSV content
-                        const headers = ["Activity Type", "Description", "Date & Time"]
-                        const rows = userActivitiesData.activities.map((activity: UserActivity) => [
-                          activity.activity_type || "Unknown",
-                          activity.description || "No description",
-                          activity.created_at ? format(new Date(activity.created_at), "MMM dd, yyyy HH:mm:ss") : "N/A"
-                        ])
-
-                        const csvContent = [
-                          headers.join(","),
-                          ...rows.map(row => row.map(cell => `"${cell}"`).join(","))
-                        ].join("\n")
-
-                        // Download CSV
-                        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
-                        const link = document.createElement("a")
-                        const url = URL.createObjectURL(blob)
-                        link.setAttribute("href", url)
-                        link.setAttribute("download", `user-activity-${profile?.email || 'user'}-${format(new Date(), "yyyy-MM-dd")}.csv`)
-                        link.style.visibility = "hidden"
-                        document.body.appendChild(link)
-                        link.click()
-                        document.body.removeChild(link)
-                      }}
-                      disabled={!userActivitiesData?.activities || userActivitiesData.activities.length === 0}
-                      title="Export CSV"
-                    >
-                      <Download className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <ActivityLogFeed
-                  activities={activities}
-                  isLoading={isLoadingActivities}
-                  skeletonCount={pageSize}
-                />
-
-                {/* Pagination Controls */}
-                {userActivitiesData?.pagination && userActivitiesData.pagination.total > 0 && (
-                  <div className="flex items-center justify-between px-2 mt-8 pt-6 border-t border-border/50">
-                    <div className="flex-1 text-sm text-muted-foreground font-medium">
-                      Showing {(userActivitiesData.pagination.page - 1) * userActivitiesData.pagination.limit + 1} to {Math.min(userActivitiesData.pagination.page * userActivitiesData.pagination.limit, userActivitiesData.pagination.total)} of {userActivitiesData.pagination.total} activities
-                    </div>
-                    <div className="flex items-center space-x-6 lg:space-x-8">
-                      <div className="flex items-center space-x-2">
-                        <p className="text-sm font-medium">Rows per page</p>
-                        <Select
-                          value={`${pageSize}`}
-                          onValueChange={(value) => {
-                            setPageSize(Number(value))
-                            setCurrentPage(1)
-                          }}
-                        >
-                          <SelectTrigger className="h-8 w-[70px]">
-                            <SelectValue placeholder={pageSize} />
-                          </SelectTrigger>
-                          <SelectContent side="top">
-                            {[10, 20, 30, 40, 50].map((size) => (
-                              <SelectItem key={size} value={`${size}`}>
-                                {size}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="flex w-[100px] items-center justify-center text-sm font-medium">
-                        Page {userActivitiesData.pagination.page} of {userActivitiesData.pagination.totalPages}
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Button
-                          variant="outline"
-                          className="hidden h-8 w-8 p-0 lg:flex transition-all active:scale-95"
-                          onClick={() => setCurrentPage(1)}
-                          disabled={currentPage === 1 || isFetchingActivities}
-                        >
-                          <span className="sr-only">Go to first page</span>
-                          {isFetchingActivities ? (
-                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                          ) : (
-                            <ChevronsLeft className="h-4 w-4" />
-                          )}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          className="h-8 w-8 p-0 transition-all active:scale-95"
-                          onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                          disabled={currentPage === 1 || isFetchingActivities}
-                        >
-                          <span className="sr-only">Go to previous page</span>
-                          {isFetchingActivities ? (
-                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                          ) : (
-                            <ChevronLeft className="h-4 w-4" />
-                          )}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          className="h-8 w-8 p-0 transition-all active:scale-95"
-                          onClick={() => setCurrentPage(prev => Math.min(userActivitiesData.pagination.totalPages, prev + 1))}
-                          disabled={currentPage === userActivitiesData.pagination.totalPages || isFetchingActivities}
-                        >
-                          <span className="sr-only">Go to next page</span>
-                          {isFetchingActivities ? (
-                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4" />
-                          )}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          className="hidden h-8 w-8 p-0 lg:flex transition-all active:scale-95"
-                          onClick={() => setCurrentPage(userActivitiesData.pagination.totalPages)}
-                          disabled={currentPage === userActivitiesData.pagination.totalPages || isFetchingActivities}
-                        >
-                          <span className="sr-only">Go to last page</span>
-                          {isFetchingActivities ? (
-                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                          ) : (
-                            <ChevronsRight className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Loading State for User Details */}
-      {
-        selectedUser && isLoadingProfile && !profile && (
-          <Card className="shadow-lg">
-            <CardContent className="py-8">
-              <div className="space-y-4">
-                <Skeleton className="h-8 w-64" />
-                <Skeleton className="h-32 w-full" />
-              </div>
-            </CardContent>
-          </Card>
-        )
-      }
+      {/* Workspace Summary Cards (When in All-Users mode) */}
+      {!selectedUser && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <MetricCard
+            title="Total Audit Events"
+            value={pagination.total.toLocaleString()}
+            description="Across whole workspace"
+            icon={<History className="h-5 w-5 text-blue-600 dark:text-blue-400" />}
+            loading={isLoadingActivities && !userActivitiesData}
+            iconBgColor="bg-blue-500/20"
+            iconColor="text-blue-700 dark:text-blue-400"
+            borderColor="border-blue-200/50 dark:border-blue-900/50"
+            gradientColor="from-blue-500/10 to-indigo-500/10"
+            cardBgColor="bg-blue-50/40 dark:bg-blue-950/20"
+          />
 
-      {/* Empty State */}
-      {
-        !selectedUser && !isSearching && (
-          <Card className="shadow-lg">
-            <CardContent className="py-12 text-center">
-              <Search className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">Search for a User</h3>
-              <p className="text-muted-foreground">
-                Enter a name, email, or mobile number to view their complete activity history
-              </p>
-            </CardContent>
-          </Card>
-        )
-      }
-    </div >
+          <MetricCard
+            title="Filtered Scope"
+            value={appliedModuleFilter.length > 0 ? `${appliedModuleFilter.length} Modules` : "All Modules"}
+            description={appliedActivityTypeFilter.length > 0 ? `${appliedActivityTypeFilter.length} activity types` : "All event types"}
+            icon={<SlidersHorizontal className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />}
+            loading={isLoadingActivities && !userActivitiesData}
+            iconBgColor="bg-indigo-500/20"
+            iconColor="text-indigo-700 dark:text-indigo-400"
+            borderColor="border-indigo-200/50 dark:border-indigo-900/50"
+            gradientColor="from-indigo-500/10 to-purple-500/10"
+            cardBgColor="bg-indigo-50/40 dark:bg-indigo-950/20"
+          />
+
+          <MetricCard
+            title="Audit Status"
+            value="Active & Live"
+            description="Tenant isolation verified"
+            icon={<Shield className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />}
+            loading={isLoadingActivities && !userActivitiesData}
+            iconBgColor="bg-emerald-500/20"
+            iconColor="text-emerald-700 dark:text-emerald-400"
+            borderColor="border-emerald-200/50 dark:border-emerald-900/50"
+            gradientColor="from-emerald-500/10 to-teal-500/10"
+            cardBgColor="bg-emerald-50/40 dark:bg-emerald-950/20"
+          />
+        </div>
+      )}
+
+      {/* Main Activity Log Feed Section */}
+      <Card className="shadow-lg border-border/50">
+        <CardHeader className="pb-3">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-base sm:text-lg">
+                  {selectedUser ? "User Activity Logs" : "Activity & Event Logs"}
+                </CardTitle>
+                <Badge variant="outline" className="text-xs">
+                  {pagination.total} events
+                </Badge>
+              </div>
+              <CardDescription className="text-xs">
+                {selectedUser
+                  ? "Chronological history of this user's interactions with system modules"
+                  : "Complete tenant audit trail ordered by most recent occurrence"}
+              </CardDescription>
+            </div>
+
+            {/* Filter Toolbar */}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Activity Type Filter Popover */}
+              <Popover open={isActivityPopoverOpen} onOpenChange={setIsActivityPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8 border-dashed gap-1 text-xs">
+                    <Filter className="h-3.5 w-3.5 text-muted-foreground mr-1" />
+                    Type
+                    {appliedActivityTypeFilter.length > 0 && (
+                      <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+                        {appliedActivityTypeFilter.length}
+                      </Badge>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[220px] p-2" align="start">
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold px-1">Filter by Activity Type</p>
+                    <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                      {SYSTEM_ACTIVITY_TYPES.map((type) => (
+                        <label
+                          key={type.id}
+                          className="flex items-center space-x-2 p-1.5 rounded hover:bg-muted cursor-pointer text-xs"
+                        >
+                          <Checkbox
+                            checked={activityTypeFilter.includes(type.id)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setActivityTypeFilter([...activityTypeFilter, type.id])
+                              } else {
+                                setActivityTypeFilter(activityTypeFilter.filter(t => t !== type.id))
+                              }
+                            }}
+                          />
+                          <span className="capitalize">{type.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="flex flex-col gap-1.5 pt-2 border-t">
+                      <Button
+                        size="sm"
+                        className="h-7 text-xs w-full"
+                        onClick={() => {
+                          setAppliedActivityTypeFilter(activityTypeFilter)
+                          setIsActivityPopoverOpen(false)
+                          setCurrentPage(1)
+                        }}
+                      >
+                        Apply Filter
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-[11px] w-full text-muted-foreground"
+                        onClick={() => {
+                          setActivityTypeFilter([])
+                          setAppliedActivityTypeFilter([])
+                          setCurrentPage(1)
+                        }}
+                      >
+                        Clear
+                      </Button>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+
+              {/* Module Filter Popover */}
+              <Popover open={isModulePopoverOpen} onOpenChange={setIsModulePopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8 border-dashed gap-1 text-xs">
+                    <Filter className="h-3.5 w-3.5 text-muted-foreground mr-1" />
+                    Module
+                    {appliedModuleFilter.length > 0 && (
+                      <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+                        {appliedModuleFilter.length}
+                      </Badge>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[220px] p-2" align="start">
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold px-1">Filter by Module</p>
+                    <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                      {SYSTEM_MODULES.map((mod) => (
+                        <label
+                          key={mod.id}
+                          className="flex items-center space-x-2 p-1.5 rounded hover:bg-muted cursor-pointer text-xs"
+                        >
+                          <Checkbox
+                            checked={moduleFilter.includes(mod.id)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setModuleFilter([...moduleFilter, mod.id])
+                              } else {
+                                setModuleFilter(moduleFilter.filter(m => m !== mod.id))
+                              }
+                            }}
+                          />
+                          <span>{mod.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="flex flex-col gap-1.5 pt-2 border-t">
+                      <Button
+                        size="sm"
+                        className="h-7 text-xs w-full"
+                        onClick={() => {
+                          setAppliedModuleFilter(moduleFilter)
+                          setIsModulePopoverOpen(false)
+                          setCurrentPage(1)
+                        }}
+                      >
+                        Apply Filter
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-[11px] w-full text-muted-foreground"
+                        onClick={() => {
+                          setModuleFilter([])
+                          setAppliedModuleFilter([])
+                          setCurrentPage(1)
+                        }}
+                      >
+                        Clear
+                      </Button>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+
+              {/* Date Range Picker */}
+              <Popover open={isDatePopoverOpen} onOpenChange={setIsDatePopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8 border-dashed gap-1 text-xs">
+                    <CalendarIcon className="h-3.5 w-3.5 text-muted-foreground mr-1" />
+                    {appliedDateRange?.from ? (
+                      appliedDateRange.to ? (
+                        `${format(appliedDateRange.from, "MMM dd")} - ${format(appliedDateRange.to, "MMM dd")}`
+                      ) : (
+                        format(appliedDateRange.from, "MMM dd, yyyy")
+                      )
+                    ) : (
+                      "Date Range"
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-2" align="start">
+                  <Calendar
+                    initialFocus
+                    mode="range"
+                    defaultMonth={dateRange?.from}
+                    selected={dateRange}
+                    onSelect={(range) => {
+                      if (range?.from && range?.to) {
+                        setDateRange({ from: range.from, to: range.to })
+                      } else if (range?.from) {
+                        setDateRange({ from: range.from, to: range.from })
+                      } else {
+                        setDateRange(undefined)
+                      }
+                    }}
+                    numberOfMonths={1}
+                  />
+                  <div className="flex items-center justify-between pt-2 border-t mt-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs text-muted-foreground"
+                      onClick={() => {
+                        setDateRange(undefined)
+                        setAppliedDateRange(undefined)
+                        setCurrentPage(1)
+                      }}
+                    >
+                      Clear
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => {
+                        setAppliedDateRange(dateRange)
+                        setIsDatePopoverOpen(false)
+                        setCurrentPage(1)
+                      }}
+                    >
+                      Apply
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+
+              {/* Reset Filters Button */}
+              {hasActiveFilters && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleResetFilters}
+                  className="h-8 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3.5 w-3.5 mr-1" />
+                  Reset
+                </Button>
+              )}
+
+              {/* Export CSV Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportCSV}
+                disabled={isExporting || activities.length === 0}
+                className="h-8 gap-1.5 text-xs ml-auto"
+                title="Export audit log report as CSV"
+              >
+                {isExporting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="h-3.5 w-3.5 text-muted-foreground" />
+                )}
+                Export CSV
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent>
+          <ActivityLogFeed
+            activities={activities}
+            isLoading={isLoadingActivities}
+            skeletonCount={pageSize}
+          />
+
+          {/* Pagination Controls */}
+          {pagination.total > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t border-border/50">
+              <div className="text-xs text-muted-foreground">
+                Showing {((pagination.page - 1) * pagination.limit) + 1} to {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} events
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground">Per page:</span>
+                  <Select
+                    value={`${pageSize}`}
+                    onValueChange={(val) => {
+                      setPageSize(Number(val))
+                      setCurrentPage(1)
+                    }}
+                  >
+                    <SelectTrigger className="h-7 w-[65px] text-xs">
+                      <SelectValue placeholder={pageSize} />
+                    </SelectTrigger>
+                    <SelectContent side="top">
+                      {[10, 20, 30, 50].map((size) => (
+                        <SelectItem key={size} value={`${size}`} className="text-xs">
+                          {size}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="text-xs font-medium">
+                  Page {pagination.page} of {pagination.totalPages}
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => setCurrentPage(1)}
+                    disabled={currentPage === 1 || isFetchingActivities}
+                  >
+                    <ChevronsLeft className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1 || isFetchingActivities}
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => setCurrentPage(p => Math.min(pagination.totalPages, p + 1))}
+                    disabled={currentPage >= pagination.totalPages || isFetchingActivities}
+                  >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => setCurrentPage(pagination.totalPages)}
+                    disabled={currentPage >= pagination.totalPages || isFetchingActivities}
+                  >
+                    <ChevronsRight className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   )
 }

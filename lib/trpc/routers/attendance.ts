@@ -4,7 +4,7 @@
 import { z } from 'zod'
 import { router, protectedProcedure, adminProcedure, moderatorProcedure } from '../server'
 import { TRPCError } from '@trpc/server'
-import { attendance, profiles, leaves, officeSettings, officeClosures, activities, notifications } from '@/lib/db/schema'
+import { attendance, profiles, departments, leaves, officeSettings, officeClosures, activities, notifications } from '@/lib/db/schema'
 import { eq, and, gte, lte, desc, sql, inArray, or, isNull } from 'drizzle-orm'
 import { AttendanceService } from '@/lib/services/attendance.service'
 import { LeavesService } from '@/lib/services/leaves.service'
@@ -107,7 +107,7 @@ export const attendanceRouter = router({
             const result = await AttendanceService.clockIn({
                 profileId: ctx.profile.id,
                 fullName: ctx.profile.full_name || undefined,
-                email: ctx.profile.email,
+                email: ctx.profile.email || 'no-email@payfix.internal',
                 localDate: input?.localDate,
                 isExtraDay: input?.isExtraDay,
                 latitude: input?.latitude,
@@ -181,7 +181,7 @@ export const attendanceRouter = router({
             const result = await AttendanceService.clockOut({
                 profileId: ctx.profile.id,
                 fullName: ctx.profile.full_name || undefined,
-                email: ctx.profile.email,
+                email: ctx.profile.email || 'no-email@payfix.internal',
                 localDate: input?.localDate,
                 latitude: input?.latitude,
                 longitude: input?.longitude,
@@ -254,7 +254,7 @@ export const attendanceRouter = router({
                 remarks: input.remarks,
                 isHalfDay: input.isHalfDay,
                 verifiedBy: ctx.profile.id,
-                verifierName: ctx.profile.full_name || ctx.profile.email
+                verifierName: ctx.profile.full_name || ctx.profile.email || 'Admin'
             })
             // Invalidate dashboard cache immediately on server
             invalidateDashboardCache()
@@ -327,7 +327,7 @@ export const attendanceRouter = router({
                 status: input.status,
                 remarks: input.remarks,
                 verifiedBy: ctx.profile.id,
-                verifierName: ctx.profile.full_name || ctx.profile.email
+                verifierName: ctx.profile.full_name || ctx.profile.email || 'Admin'
             })
 
             invalidateDashboardCache()
@@ -370,7 +370,7 @@ export const attendanceRouter = router({
                 status: input.status,
                 remarks: input.remarks,
                 updatedBy: ctx.profile.id,
-                updaterName: ctx.profile.full_name || ctx.profile.email
+                updaterName: ctx.profile.full_name || ctx.profile.email || 'Admin'
             })
 
             invalidateDashboardCache()
@@ -410,7 +410,7 @@ export const attendanceRouter = router({
                 attendanceId: input.attendanceId,
                 sessions: input.sessions,
                 updatedBy: ctx.profile.id,
-                updaterName: ctx.profile.full_name || ctx.profile.email
+                updaterName: ctx.profile.full_name || ctx.profile.email || 'Admin'
             })
 
             invalidateDashboardCache()
@@ -444,7 +444,7 @@ export const attendanceRouter = router({
                 status: input.status,
                 remarks: input.remarks,
                 verifiedBy: ctx.profile.id,
-                verifierName: ctx.profile.full_name || ctx.profile.email
+                verifierName: ctx.profile.full_name || ctx.profile.email || 'Admin'
             })
 
             // Invalidate dashboard cache immediately on server
@@ -476,13 +476,15 @@ export const attendanceRouter = router({
             dayType: z.string().optional(),
             isHalfDay: z.boolean().optional(),
             isExtraDay: z.boolean().optional(),
+            isExtraShift: z.boolean().optional(),
+            extraShiftType: z.enum(['full', 'half']).nullable().optional(),
             remarks: z.string().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
             const result = await AttendanceService.manualUpdate({
                 ...input,
                 updatedBy: ctx.profile.id,
-                updaterName: ctx.profile.full_name || ctx.profile.email
+                updaterName: ctx.profile.full_name || ctx.profile.email || 'Admin'
             })
 
             // Invalidate dashboard cache immediately on server
@@ -532,6 +534,7 @@ export const attendanceRouter = router({
 
     applyLeave: protectedProcedure
         .input(z.object({
+            profileId: z.string().uuid().optional(),
             leaveType: z.string().optional(),
             startDate: z.string(),
             endDate: z.string(),
@@ -541,16 +544,52 @@ export const attendanceRouter = router({
         }))
         .mutation(async ({ ctx, input }) => {
             try {
-                return await LeavesService.applyLeave({
-                    profileId: ctx.profile.id,
+                let targetProfileId = ctx.profile.id
+                let isManagerApplying = false
+
+                if (input.profileId && input.profileId !== ctx.profile.id) {
+                    const isAdminOrMod = ctx.profile.role === 'admin' || ctx.profile.role === 'moderator' || ctx.profile.role === 'super_admin'
+                    if (!isAdminOrMod) {
+                        const targetUser = await ctx.db.query.profiles.findFirst({
+                            where: eq(profiles.id, input.profileId),
+                            columns: { id: true, department_id: true, full_name: true }
+                        })
+                        if (!targetUser?.department_id) {
+                            throw new TRPCError({ code: 'FORBIDDEN', message: 'You are not authorized to apply leave for this employee' })
+                        }
+                        const dept = await ctx.db.query.departments.findFirst({
+                            where: eq(departments.id, targetUser.department_id)
+                        })
+                        if (dept?.manager_id !== ctx.profile.id) {
+                            throw new TRPCError({ code: 'FORBIDDEN', message: 'You can only apply leave for staff in your department' })
+                        }
+                    }
+                    targetProfileId = input.profileId
+                    isManagerApplying = true
+                }
+
+                const result = await LeavesService.applyLeave({
+                    profileId: targetProfileId,
                     leaveType: input.leaveType,
                     startDate: input.startDate,
                     endDate: input.endDate,
                     isHalfDay: input.isHalfDay,
                     halfDayPeriod: input.halfDayPeriod,
-                    reason: input.reason
+                    reason: isManagerApplying ? `(Applied by Manager ${ctx.profile.full_name || ''}) ${input.reason || ''}`.trim() : input.reason
                 })
+
+                if (isManagerApplying && result?.id) {
+                    await LeavesService.approveLeave({
+                        id: result.id,
+                        status: 'approved',
+                        approvedBy: ctx.profile.id,
+                        remarks: 'Approved upon creation by Department Manager'
+                    })
+                }
+
+                return result
             } catch (err: any) {
+                if (err instanceof TRPCError) throw err
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: err.message || 'Failed to apply for leave'

@@ -195,7 +195,9 @@ export function ModernAddUserForm({
     dateOfBirth: editingUser?.date_of_birth || "",
     sex: getValidSex(editingUser?.sex),
     role: (editingUser?.role as "admin" | "moderator" | "employee") || "employee",
+    departmentId: editingUser?.department_id || "",
     designationId: editingUser?.designation_id || "",
+    biometricDeviceId: (editingUser as any)?.biometricDeviceId || (editingUser as any)?.biometric_device_user_id || "",
     allowedModules: editingUser?.allowed_modules || [],
   } : {
     firstName: "",
@@ -208,7 +210,9 @@ export function ModernAddUserForm({
     dateOfBirth: "",
     sex: "" as const,
     role: "employee",
+    departmentId: "",
     designationId: "",
+    biometricDeviceId: "",
     allowedModules: [],
   }
 
@@ -242,7 +246,9 @@ export function ModernAddUserForm({
         dateOfBirth: editingUser?.date_of_birth || "",
         sex: getValidSex(editingUser?.sex),
         role: (editingUser?.role as "admin" | "moderator" | "employee") || "employee",
+        departmentId: editingUser?.department_id || "",
         designationId: editingUser?.designation_id || "",
+        biometricDeviceId: (editingUser as any)?.biometricDeviceId || (editingUser as any)?.biometric_device_user_id || "",
         allowedModules: editingUser?.allowed_modules || [],
         password: "",
         confirmPassword: ""
@@ -608,7 +614,9 @@ export function ModernAddUserForm({
             ...editData,
             userId: editingUser.id,
             role: data.role as "admin" | "moderator" | "employee",
+            departmentId: (data.departmentId as string) || null,
             designationId: (data.designationId as string) || null,
+            biometricDeviceId: (data.biometricDeviceId as string) || null,
             allowedModules: data.role === 'employee' ? data.allowedModules : [],
           })
         }
@@ -619,14 +627,16 @@ export function ModernAddUserForm({
           firstName: data.firstName,
           middleName: data.middleName ?? '',
           lastName: data.lastName,
-          email: data.email,
+          email: data.email || undefined,
           password: data.password!,
           confirmPassword: data.confirmPassword!,
           mobileNo: data.mobileNo ?? '',
           dateOfBirth: data.dateOfBirth,
           sex: data.sex as "male" | "female",
           role: data.role as "admin" | "moderator" | "employee",
-          designationId: data.designationId as string, // Added designationId
+          departmentId: (data.departmentId as string) || undefined,
+          designationId: (data.designationId as string) || undefined,
+          biometricDeviceId: (data.biometricDeviceId as string) || undefined,
           allowedModules: data.role === 'employee' ? (data.allowedModules as any) : [],
         }
         await createUserMutation.mutateAsync(createData)

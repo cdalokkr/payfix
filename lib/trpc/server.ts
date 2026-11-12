@@ -174,6 +174,15 @@ export const protectedProcedure = publicProcedure.use(async ({ ctx, next }) => {
     })
   }
 
+  // Check tenant status for non-superadmin users (expired/suspended tenants resolve to ctx.tenant = null)
+  if (ctx.profile.role !== 'super_admin' && !ctx.tenant) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'Workspace is unavailable or subscription has expired.',
+      cause: { performance: ctx.performance }
+    })
+  }
+
   return next({
     ctx: {
       ...ctx,
@@ -250,14 +259,20 @@ export const moderatorProcedure = protectedProcedure.use(async ({ ctx, next }) =
   }
 
   if (ctx.profile.role !== 'admin' && ctx.profile.role !== 'moderator' && ctx.profile.role !== 'super_admin') {
-    throw new TRPCError({
-      code: 'FORBIDDEN',
-      cause: {
-        performance: ctx.performance,
-        userRole: ctx.profile.role,
-        requiredRole: 'moderator/admin'
-      }
-    })
+    const managedDept = await ctx.db.query.departments.findFirst({
+      where: (depts, { eq }) => eq(depts.manager_id, ctx.profile.id),
+      columns: { id: true, name: true }
+    }).catch(() => null);
+    if (!managedDept) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        cause: {
+          performance: ctx.performance,
+          userRole: ctx.profile.role,
+          requiredRole: 'moderator/admin/department_manager'
+        }
+      });
+    }
   }
   return next({ ctx })
 })

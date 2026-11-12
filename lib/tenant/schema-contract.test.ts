@@ -20,10 +20,16 @@ const alignmentMigration = readFileSync(
 
 describe('tenant schema contract', () => {
     it('contains every tenant business table and excludes control-plane tables', () => {
-        expect(CANONICAL_TENANT_TABLES).toHaveLength(31);
+        expect(CANONICAL_TENANT_TABLES).toHaveLength(37);
         expect(CANONICAL_TENANT_TABLES).toContain('biometric_verification_attempts');
         expect(CANONICAL_TENANT_TABLES).toContain('salary_payments');
         expect(CANONICAL_TENANT_TABLES).toContain('biometric_consumed_proofs');
+        expect(CANONICAL_TENANT_TABLES).toContain('departments');
+        expect(CANONICAL_TENANT_TABLES).toContain('office_shifts');
+        expect(CANONICAL_TENANT_TABLES).toContain('shift_roster');
+        expect(CANONICAL_TENANT_TABLES).toContain('employee_shift_assignments');
+        expect(CANONICAL_TENANT_TABLES).toContain('monthly_bonuses');
+        expect(CANONICAL_TENANT_TABLES).toContain('department_managers_history');
         expect(CANONICAL_TENANT_TABLES).not.toContain('tenants' as never);
         expect(CANONICAL_TENANT_TABLES).not.toContain('tenant_branding' as never);
     });

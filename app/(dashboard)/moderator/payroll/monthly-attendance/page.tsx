@@ -1,16 +1,16 @@
 import { DashboardPageLayout } from "@/components/dashboard/dashboard-page-layout"
 import { ErrorBoundary } from "@/components/ui/error-boundary"
-import { MonthlyAttendanceCompilation } from "@/features/attendance/MonthlyAttendanceCompilation"
+import { UnifiedPayrollHub } from "@/features/attendance/UnifiedPayrollHub"
 
 export default function ModeratorMonthlyAttendancePage() {
     return (
         <div className="min-h-screen bg-background">
             <DashboardPageLayout
-                heading="Monthly Attendance"
-                description="Compile and confirm monthly attendance for payroll"
+                heading="Payroll & Payslips"
+                description="Compile attendance, configure bonuses, and generate employee payslips in one unified workflow"
             >
                 <ErrorBoundary level="section">
-                    <MonthlyAttendanceCompilation basePath="/moderator/payroll" />
+                    <UnifiedPayrollHub basePath="/moderator/payroll" defaultTab="attendance" />
                 </ErrorBoundary>
             </DashboardPageLayout>
         </div>

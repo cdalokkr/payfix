@@ -9,7 +9,7 @@ import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import { profiles, activities, designations, attendance } from '@/lib/db/schema'
 import { eq, and, desc, count } from 'drizzle-orm'
-import { performLogout, preSeedSessionCache } from '@/lib/auth/optimized-context'
+import { performLogout, preSeedSessionCache, invalidateUserSession } from '@/lib/auth/optimized-context'
 import { formatActivityDescription } from '@/lib/utils/activity-logger'
 import { queryManager } from '@/lib/db/optimized-query-manager'
 import { createClient } from '@supabase/supabase-js'
@@ -38,18 +38,39 @@ export const authRouter = router({
       }
 
       const { centralDb: loginCentralDb } = await import('@/lib/db');
+      const rawIdentifier = (input.identifier || input.email || '').trim();
+      const isPhone = /^\d{10}$/.test(rawIdentifier) || (!rawIdentifier.includes('@') && /^\d+$/.test(rawIdentifier));
+
+      let effectiveEmail = rawIdentifier;
+      let profileByPhone: any = null;
+
+      if (isPhone) {
+        profileByPhone = await loginCentralDb.query.profiles.findFirst({
+          where: eq(profiles.mobile_no, rawIdentifier),
+        });
+
+        if (!profileByPhone) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'No account registered with this mobile number.',
+            cause: { type: AuthErrorTypes.EMAIL_NOT_FOUND, field: 'identifier' }
+          });
+        }
+
+        effectiveEmail = profileByPhone.email || `mobile_${rawIdentifier}@${profileByPhone.tenant_id || 'payfix'}.internal`;
+      }
 
       try {
         // 0. PRE-AUTH OPTIMIZATION: Check if user is deactivated before expensive auth call
         // Query centralDb (public.profiles) so we don't trigger tenant_primary pool warmup.
-        const preCheck = await loginCentralDb.query.profiles.findFirst({
-          where: eq(profiles.email, input.email),
+        const preCheck = profileByPhone || await loginCentralDb.query.profiles.findFirst({
+          where: eq(profiles.email, effectiveEmail),
           columns: { status: true, id: true }
         })
 
         if (preCheck?.status === 'deactive' || preCheck?.status === 'deleted') {
           const isDeleted = preCheck?.status === 'deleted'
-          console.warn(`[Auth] Fast-rejected login attempt for ${preCheck?.status} email:`, input.email)
+          console.warn(`[Auth] Fast-rejected login attempt for ${preCheck?.status} account:`, rawIdentifier)
 
           // Clear any residual session cache for this user if we found their ID
           if (preCheck.id) {
@@ -95,12 +116,12 @@ export const authRouter = router({
 
       try {
         const { data, error } = await ctx.supabase.auth.signInWithPassword({
-          email: input.email,
+          email: effectiveEmail,
           password: input.password,
         })
 
         console.log('[Auth] Login attempt:', {
-          email: input.email.replace(/(.{2})(.*)(@.*)/, '$1***$3'), // Mask email
+          identifier: rawIdentifier,
           success: !error && !!data.user,
           userId: data.user?.id,
           error: error?.message
@@ -407,16 +428,94 @@ export const authRouter = router({
             } catch {
               // lastLogout is non-critical, ignore errors
             }
+          }
+        }
 
-            // WARMUP OPTIMIZATION: Warm up the CORRECT tenant connection pool in the background.
-            // This avoids warming up primary for tenant users.
+        // Check user status
+        if (profileData.status === 'deactive' || profileData.status === 'deleted') {
+          const isDeleted = profileData.status === 'deleted'
+          console.warn(`[Auth] Blocked login and clearing session for ${profileData.status} user:`, data.user.id)
+
+          // CRITICAL: Sign out and clear session even though Supabase auth succeeded
+          await ctx.supabase.auth.signOut()
+          await performLogout(data.user.id)
+
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: isDeleted
+              ? 'Your account is deleted. Please contact administrator.'
+              : 'Your account has been deactivated. Please contact administrator.',
+          })
+        }
+
+        // Check tenant workspace status and license expiry (super_admin platform owners are exempt)
+        if (profileData.role !== 'super_admin') {
+          try {
+            const { masterDb: mDb } = await import('@/lib/db/master-connection');
+            const { tenants: tenantsTable } = await import('@/lib/db/master-schema');
+
+            const userTenantSlug = (data as any).discoveredTenantSlug || ctx.tenant?.slug;
+            let tenantRecord: any = null;
+
+            if (profileData.tenant_id) {
+              tenantRecord = await mDb.query.tenants.findFirst({
+                where: eq(tenantsTable.id, profileData.tenant_id),
+              });
+            } else if (userTenantSlug && userTenantSlug !== 'primary') {
+              tenantRecord = await mDb.query.tenants.findFirst({
+                where: eq(tenantsTable.slug, userTenantSlug),
+              });
+            }
+
+            if (tenantRecord) {
+              const now = new Date();
+              const isSuspended = tenantRecord.status === 'suspended' || tenantRecord.status === 'cancelled';
+              const isExpired = tenantRecord.license_expires_at
+                ? now.getTime() > new Date(tenantRecord.license_expires_at).getTime()
+                : false;
+
+              if (isSuspended || isExpired) {
+                console.warn(`[Auth] Blocked login for tenant ${tenantRecord.slug} (status: ${tenantRecord.status}, expired: ${isExpired})`);
+                await ctx.supabase.auth.signOut();
+                await performLogout(data.user.id);
+
+                if (isSuspended) {
+                  throw new TRPCError({
+                    code: 'FORBIDDEN',
+                    message: 'Your workspace account has been suspended. Please contact your administrator or support to reactivate your access.',
+                  });
+                }
+
+                const expDateStr = tenantRecord.license_expires_at
+                  ? new Date(tenantRecord.license_expires_at).toLocaleDateString('en-GB', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                    })
+                  : 'recently';
+
+                throw new TRPCError({
+                  code: 'FORBIDDEN',
+                  message: `Your workspace subscription expired on ${expDateStr}. Please contact your administrator to renew your plan.`,
+                });
+              }
+            }
+          } catch (tenantCheckErr: any) {
+            if (tenantCheckErr instanceof TRPCError) throw tenantCheckErr;
+            console.error('[Auth] Error checking tenant expiry/suspension on login:', tenantCheckErr);
+          }
+        }
+
+        // WARMUP OPTIMIZATION: Warm up the active tenant connection pool in the background (only for valid active tenants)
+        if (profileData) {
+          const userTenantSlug = (data as any).discoveredTenantSlug || ctx.tenant?.slug;
+          if (userTenantSlug && userTenantSlug !== 'primary') {
             (async () => {
               try {
                 const { getTenantDb } = await import('@/lib/db/tenant-connection');
                 const { masterDb: mDb } = await import('@/lib/db/master-connection');
                 const { tenants: tenantsTable } = await import('@/lib/db/master-schema');
                 
-                // Lookup database URL and ID to construct correct connection
                 const tenantRecord = await mDb.query.tenants.findFirst({
                   where: eq(tenantsTable.slug, userTenantSlug)
                 });
@@ -439,23 +538,6 @@ export const authRouter = router({
               }
             })();
           }
-        }
-
-        // Check user status
-        if (profileData.status === 'deactive' || profileData.status === 'deleted') {
-          const isDeleted = profileData.status === 'deleted'
-          console.warn(`[Auth] Blocked login and clearing session for ${profileData.status} user:`, data.user.id)
-
-          // CRITICAL: Sign out and clear session even though Supabase auth succeeded
-          await ctx.supabase.auth.signOut()
-          await performLogout(data.user.id)
-
-          throw new TRPCError({
-            code: 'FORBIDDEN',
-            message: isDeleted
-              ? 'Your account is deleted. Please contact administrator.'
-              : 'Your account has been deactivated. Please contact administrator.',
-          })
         }
 
         // Log successful login activity — FIRE AND FORGET
@@ -506,6 +588,7 @@ export const authRouter = router({
         return {
           success: true,
           profile: profileData,
+          mustChangePassword: Boolean(profileData?.must_change_password || (data.user?.user_metadata as any)?.must_change_password),
           lastLogout: lastLogout,
           user: {
             id: data.user.id,
@@ -515,6 +598,11 @@ export const authRouter = router({
           warning: null as string | null
         }
       } catch (error) {
+        // Expected business rejection (account deactivated or expired workspace) - throw directly without error logging
+        if (error instanceof TRPCError && (error.code === 'FORBIDDEN' || error.code === 'BAD_REQUEST')) {
+          throw error
+        }
+        console.error('[AUTH ERROR CAUGHT]:', error)
         // Handle network or other errors outside of the signInWithPassword call
         if (error instanceof TRPCError) {
           throw error
@@ -1080,5 +1168,78 @@ export const authRouter = router({
       logPasswordChangeActivity()
 
       return { success: true, userId: ctx.user.id }
+    }),
+
+  setupInitialPassword: protectedProcedure
+    .input(z.object({
+      newPassword: z.string().min(8, 'Password must be at least 8 characters'),
+      confirmPassword: z.string(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (!ctx.supabase || !ctx.user) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Authentication service unavailable',
+        })
+      }
+
+      if (input.newPassword !== input.confirmPassword) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'New password and confirm password do not match',
+        })
+      }
+
+      // Update Supabase auth password and clear must_change_password in user metadata
+      const { error: updateError } = await ctx.supabase.auth.updateUser({
+        password: input.newPassword,
+        data: { must_change_password: false }
+      })
+
+      if (updateError) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: updateError.message || 'Failed to set up new password',
+        })
+      }
+
+      // Update must_change_password = false in profiles table
+      try {
+        await ctx.db
+          .update(profiles)
+          .set({
+            must_change_password: false,
+            updated_at: new Date()
+          })
+          .where(eq(profiles.id, ctx.user.id))
+      } catch (dbErr) {
+        console.error('[SetupInitialPassword] Failed to update profile flag:', dbErr)
+      }
+
+      // Invalidate user session cache
+      invalidateUserSession(ctx.user.id)
+
+      // Log activity
+      const logActivity = async () => {
+        try {
+          await ctx.db.insert(activities).values({
+            user_id: ctx.profile?.id || ctx.user.id,
+            activity_type: 'profile_update',
+            module: 'auth',
+            description: formatActivityDescription({
+              action: 'update',
+              actorRole: ctx.profile?.role || 'employee',
+              actorEmail: ctx.user.email || '',
+              module: 'auth',
+              changedFields: [{ name: 'Password', value: 'Initial password setup completed' }]
+            }),
+          })
+        } catch (err) {
+          console.error('[SetupInitialPassword] Logging error:', err)
+        }
+      }
+      logActivity()
+
+      return { success: true, message: 'Password setup completed successfully' }
     }),
 })

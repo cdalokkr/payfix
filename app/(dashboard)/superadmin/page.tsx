@@ -53,7 +53,7 @@ export default function SuperAdminDashboardPage() {
         />
         <MetricCard
           title="Active & Trial"
-          value={tenantsList?.filter(t => t.status === 'active' || t.status === 'trial').length || 0}
+          value={tenantsList?.filter(t => (t.status === 'active' || t.status === 'trial') && !(t as any).isExpired).length || 0}
           description="Healthy running workspaces"
           icon={<CheckCircle2 />}
           loading={loadingTenants}
@@ -69,19 +69,19 @@ export default function SuperAdminDashboardPage() {
           padding="p-3 sm:p-3.5"
         />
         <MetricCard
-          title="Suspended Workspaces"
-          value={tenantsList?.filter(t => t.status === 'suspended' || t.status === 'cancelled').length || 0}
-          description="Blocked or canceled contracts"
+          title="Suspended & Renewal Due"
+          value={tenantsList?.filter(t => t.status === 'suspended' || t.status === 'cancelled' || (t as any).isExpired || (t as any).effectiveStatus === 'renewal_due').length || 0}
+          description="Expired licenses or blocked contracts"
           icon={<XCircle />}
           loading={loadingTenants}
-          iconBgColor="bg-rose-500/20"
-          iconColor="text-rose-700 dark:text-rose-400"
+          iconBgColor="bg-amber-500/20"
+          iconColor="text-amber-700 dark:text-amber-400"
           borderColor="border-x-gray-200/80 border-b-gray-200/80 dark:border-x-zinc-800 dark:border-b-zinc-800"
-          gradientColor="from-rose-500/10 to-rose-500/5"
+          gradientColor="from-amber-500/10 to-amber-500/5"
           cardBgColor="bg-[#FFFFFF] dark:bg-zinc-900"
-          topBorderColor="border-t-rose-700 dark:border-t-rose-500"
-          hoverBorderColor="hover:border-t-rose-700 hover:border-x-rose-500/30 hover:border-b-rose-500/30 dark:hover:border-t-rose-500 dark:hover:border-x-rose-500/40 dark:hover:border-b-rose-500/40"
-          hoverShadowColor="hover:shadow-[0_8px_30px_rgba(225,29,72,0.12)] dark:hover:shadow-[0_8px_30px_rgba(248,113,113,0.2)]"
+          topBorderColor="border-t-amber-700 dark:border-t-amber-500"
+          hoverBorderColor="hover:border-t-amber-700 hover:border-x-amber-500/30 hover:border-b-amber-500/30 dark:hover:border-t-amber-500 dark:hover:border-x-amber-500/40 dark:hover:border-b-amber-500/40"
+          hoverShadowColor="hover:shadow-[0_8px_30px_rgba(245,158,11,0.12)] dark:hover:shadow-[0_8px_30px_rgba(251,191,36,0.2)]"
           delay={0.3}
           padding="p-3 sm:p-3.5"
         />

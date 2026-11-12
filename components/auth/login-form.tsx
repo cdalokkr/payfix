@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { loginSchema, type LoginInput } from "@/lib/validations/auth"
-import { Mail, ArrowRight, AlertCircle, Check } from "lucide-react"
+import { Mail, ArrowRight, AlertCircle, Check, User } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
 
@@ -40,7 +40,7 @@ export function LoginForm() {
   const [buttonState, setButtonState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const loading = buttonState === 'loading'
   const [authError, setAuthError] = useState<string | null>(null)
-  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({})
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string; identifier?: string }>({})
   const requestedReturnPath = typeof window === 'undefined'
     ? null
     : new URLSearchParams(window.location.search).get('next')
@@ -58,6 +58,7 @@ export function LoginForm() {
     resolver: zodResolver(loginSchema),
     mode: "onChange",
     defaultValues: {
+      identifier: "",
       email: "",
       password: "",
     },
@@ -102,7 +103,7 @@ export function LoginForm() {
       setButtonState('error')
       setTimeout(() => setButtonState('idle'), 2000)
 
-      const baseErrorMessage = 'Invalid email or password'
+      const baseErrorMessage = 'Invalid email/mobile or password'
       const errorData = error.data as { field?: string } | undefined
       const fieldToHighlight = errorData?.field || 'none'
 
@@ -113,20 +114,26 @@ export function LoginForm() {
         setAuthError(error.message)
       } else if (error.data?.code === 'FORBIDDEN') {
         setAuthError(error.message)
-      } else if (fieldToHighlight === 'email') {
-        setFieldErrors({ email: 'Email id not found' })
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('userProfile')
+          sessionStorage.removeItem('sessionProfile')
+          sessionStorage.removeItem('mobileUserCoords')
+          sessionStorage.removeItem('mobileGeofenceTimestamp')
+        }
+      } else if (fieldToHighlight === 'email' || fieldToHighlight === 'identifier') {
+        setFieldErrors({ identifier: error.message || 'Account not found' })
         setAuthError(baseErrorMessage)
       } else if (fieldToHighlight === 'password') {
         setFieldErrors({ password: 'Password not matched' })
         setAuthError(baseErrorMessage)
       } else if (fieldToHighlight === 'both') {
         setFieldErrors({
-          email: 'Email id not found',
+          identifier: 'Account not found',
           password: 'Password not matched',
         })
         setAuthError(baseErrorMessage)
       } else {
-        setAuthError(baseErrorMessage)
+        setAuthError(error.message || baseErrorMessage)
       }
     },
     onSuccess: async (data) => {
@@ -157,6 +164,10 @@ export function LoginForm() {
             redirectPath = (isMobileViewport && isPwaStandalone) ? '/mobile' : '/moderator'
           } else if (data.profile.role === 'employee') {
             redirectPath = isMobileViewport ? '/mobile' : '/employee'
+          }
+
+          if ((data as any).mustChangePassword || data.profile?.must_change_password) {
+            redirectPath = '/setup-password'
           }
         }
         if (safeReturnPath && !(data as any).redirectTo) redirectPath = safeReturnPath
@@ -272,6 +283,10 @@ export function LoginForm() {
         } else {
           redirectPath = '/admin'
         }
+
+        if ((data as any).mustChangePassword || data.profile?.must_change_password) {
+          redirectPath = '/setup-password'
+        }
       }
       if (safeReturnPath && !(data as any).redirectTo) redirectPath = safeReturnPath
 
@@ -294,7 +309,12 @@ export function LoginForm() {
     }
 
     try {
-      await loginMutation.mutateAsync(data)
+      const idVal = (data.identifier || data.email || '').trim()
+      await loginMutation.mutateAsync({
+        identifier: idVal,
+        email: idVal,
+        password: data.password,
+      })
     } catch (error) {
       // Handled by onError
     }
@@ -356,14 +376,15 @@ export function LoginForm() {
           noValidate
         >
           <Input
-            label="Email Address"
-            type="email"
-            id="login-email"
-            icon={<Mail size={16} />}
-            error={fieldErrors.email || errors.email?.message}
-            autoComplete="email"
+            label="Email or Mobile Number"
+            type="text"
+            id="login-identifier"
+            placeholder="name@company.com or 10-digit mobile"
+            icon={<User size={16} />}
+            error={fieldErrors.identifier || fieldErrors.email || errors.identifier?.message || errors.email?.message}
+            autoComplete="username"
             disabled={loading}
-            {...register("email")}
+            {...register("identifier")}
           />
 
           <PasswordInput

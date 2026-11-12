@@ -144,6 +144,10 @@ export function DashboardLayout({
   useDashboardCacheInvalidation(profile?.role === 'admin' || profile?.role === 'moderator' || storedProfile?.role === 'admin' || storedProfile?.role === 'moderator')
 
   useEffect(() => {
+    if (profile?.must_change_password) {
+      window.location.replace('/setup-password')
+      return
+    }
     if (profile) {
       const currentStored = getInitialProfile()
       if (!currentStored || currentStored.id !== profile.id || currentStored.avatar_url !== profile.avatar_url || currentStored.full_name !== profile.full_name || currentStored.role !== profile.role) {

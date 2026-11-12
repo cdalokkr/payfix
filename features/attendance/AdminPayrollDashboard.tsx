@@ -170,7 +170,7 @@ export function AdminPayrollDashboard() {
                             <CardDescription>Set office hours and manage holiday calendar</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <Link href="/admin/payroll/settings">
+                            <Link href="/admin/office-locations">
                                 <Button variant="outline" className="w-full group/btn">
                                     Manage Settings <ArrowRight className="ml-2 h-4 w-4 group-hover/btn:translate-x-1 transition-transform" />
                                 </Button>

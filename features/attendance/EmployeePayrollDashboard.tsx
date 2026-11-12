@@ -41,6 +41,8 @@ export function EmployeePayrollDashboard() {
         status: 'all'
     })
 
+    const { data: payslipAccess } = trpc.salary.getPayslipAccessSettings.useQuery()
+
     const todayStr = format(new Date(), 'yyyy-MM-dd')
     const todayRecord = useMemo(() => {
         if (!attendance) return undefined
@@ -258,8 +260,12 @@ export function EmployeePayrollDashboard() {
                                 <div className="p-3 w-fit rounded-xl bg-emerald-500/10 mb-2 group-hover:scale-110 transition-transform">
                                     <Briefcase className="h-6 w-6 text-emerald-600" />
                                 </div>
-                                <CardTitle>Salary & Advances</CardTitle>
-                                <CardDescription>View your monthly payslips and adjust loan/advance requests</CardDescription>
+                                <CardTitle>{payslipAccess?.isAccessible !== false ? "Salary & Advances" : "Personal Advances"}</CardTitle>
+                                <CardDescription>
+                                    {payslipAccess?.isAccessible !== false
+                                        ? "View your monthly payslips and adjust loan/advance requests"
+                                        : "View and manage your personal salary advances and loan adjustments"}
+                                </CardDescription>
                             </CardHeader>
                             <CardContent>
                                 <Link href="/employee/payroll/advances">

@@ -92,6 +92,40 @@ export async function POST(request: NextRequest) {
             return respond({ error: 'INVALID_PAIRING_CODE', message: 'This kiosk pairing is invalid or inactive.' }, { status: 401 })
         }
 
+        // Verify that tenant workspace subscription is active and not expired
+        if (pairingInfo.tenantSlug) {
+            const { masterDb } = await import('@/lib/db/master-connection');
+            const { tenants: tenantsTable } = await import('@/lib/db/master-schema');
+            const { eq } = await import('drizzle-orm');
+
+            const tenant = await masterDb.query.tenants.findFirst({
+                where: eq(tenantsTable.slug, pairingInfo.tenantSlug),
+                columns: { status: true, license_expires_at: true }
+            });
+
+            if (tenant) {
+                const now = Date.now();
+                const isSuspended = tenant.status === 'suspended' || tenant.status === 'cancelled';
+                const isExpired = tenant.license_expires_at ? now > new Date(tenant.license_expires_at).getTime() : false;
+
+                if (isSuspended || isExpired) {
+                    const expDateStr = tenant.license_expires_at
+                        ? new Date(tenant.license_expires_at).toLocaleDateString('en-GB', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric'
+                        })
+                        : '';
+                    return respond({
+                        error: 'LICENSE_EXPIRED',
+                        message: isSuspended
+                            ? 'Workspace account is suspended. Kiosk attendance is disabled.'
+                            : `Workspace subscription expired on ${expDateStr}. Kiosk attendance is disabled until renewed.`
+                    }, { status: 403 });
+                }
+            }
+        }
+
         const { frames, imageBase64, challenge, biometricPipelineVersion, latitude, longitude } = await request.json()
         auditFrameCount = Array.isArray(frames) ? frames.length : (typeof imageBase64 === 'string' ? 1 : 0)
         auditCapturePipelineVersion = typeof biometricPipelineVersion === 'string' ? biometricPipelineVersion : null

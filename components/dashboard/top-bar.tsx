@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -34,7 +35,7 @@ function TopBarComponent({
   const licenseExpiresAt = propLicenseExpiresAt || tenantInfo?.licenseExpiresAt;
 
   const getLicenseBadge = () => {
-    if (!licenseExpiresAt || !user || user.role !== "admin") return null;
+    if (!licenseExpiresAt || !user || (user.role !== "admin" && user.role !== "moderator")) return null;
     const days = Math.ceil((new Date(licenseExpiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
     
     const formattedDate = new Date(licenseExpiresAt).toLocaleDateString("en-US", {
@@ -43,25 +44,25 @@ function TopBarComponent({
       year: "numeric",
     });
 
-    if (days <= 0) {
-      return (
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-500/10 text-red-500 border border-red-500/20 shadow-sm animate-pulse">
-          Licence Expired
-        </span>
-      );
-    } else if (days <= 3) {
-      return (
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20 shadow-sm">
-          Licence Expires in {days} {days === 1 ? 'day' : 'days'}
-        </span>
-      );
-    } else {
-      return (
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 shadow-sm">
-          Valid until: {formattedDate}
-        </span>
-      );
-    }
+    const badge = days <= 0 ? (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-500/10 text-red-500 border border-red-500/20 shadow-sm animate-pulse hover:bg-red-500/20 transition-all cursor-pointer">
+        Licence Expired • Invoices
+      </span>
+    ) : days <= 15 ? (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shadow-sm hover:bg-amber-500/20 transition-all cursor-pointer">
+        Renewal Due: {days} {days === 1 ? 'day' : 'days'}
+      </span>
+    ) : (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shadow-sm hover:bg-emerald-500/20 transition-all cursor-pointer">
+        Valid until: {formattedDate}
+      </span>
+    );
+
+    return (
+      <Link href="/admin/billing" title="View workspace subscription, renewal timeline, and invoices">
+        {badge}
+      </Link>
+    );
   };
 
   return (

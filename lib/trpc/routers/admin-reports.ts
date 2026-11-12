@@ -547,21 +547,25 @@ export const adminReportsRouter = router({
       }
     }),
 
-  // Get filtered user activities
+  // Get filtered user activities or workspace-wide audit logs
   getUserActivities: adminProcedure
     .input(
       z.object({
-        userId: z.string().uuid(),
+        userId: z.string().uuid().optional().nullable(),
         page: z.number().default(1),
         limit: z.number().default(10),
         activityType: z.union([z.string(), z.array(z.string())]).optional(),
         module: z.union([z.string(), z.array(z.string())]).optional(),
         startDate: z.string().optional(),
         endDate: z.string().optional(),
+        search: z.string().optional(),
       })
     )
     .query(async ({ ctx, input }) => {
-      let filters = [eq(activities.user_id, input.userId)]
+      const filters: any[] = []
+      if (input.userId) {
+        filters.push(eq(activities.user_id, input.userId))
+      }
 
       if (input.activityType) {
         if (Array.isArray(input.activityType)) {
@@ -582,24 +586,64 @@ export const adminReportsRouter = router({
         }
       }
 
-      const where = and(...filters)
+      if (input.search && input.search.trim()) {
+        filters.push(ilike(activities.description, `%${input.search.trim()}%`))
+      }
+
+      const where = filters.length > 0 ? and(...filters) : undefined
 
       const totalResult = await ctx.db.select({ value: count() }).from(activities).where(where)
-      const total = totalResult[0].value
+      const total = totalResult[0]?.value || 0
 
       const data = await ctx.db.query.activities.findMany({
         where,
+        with: {
+          profile: {
+            with: { designation: true }
+          }
+        },
         orderBy: [desc(activities.created_at)],
         limit: input.limit,
         offset: (input.page - 1) * input.limit,
       })
 
       return {
-        activities: (data || []).map(a => ({
-          ...a,
-          created_at: a.created_at ? a.created_at.toISOString() : null,
-          user_id: a.user_id as string,
-        })),
+        activities: (data || []).map((a: any) => {
+          const prof = a.profile
+          const fullName = prof
+            ? [prof.first_name, prof.last_name].filter(Boolean).join(' ') || prof.full_name || 'System User'
+            : 'System'
+          return {
+            id: a.id,
+            user_id: a.user_id as string,
+            activity_type: a.activity_type,
+            module: a.module || 'general',
+            description: a.description,
+            metadata: a.metadata,
+            created_at: a.created_at ? a.created_at.toISOString() : null,
+            profiles: prof ? {
+              full_name: fullName,
+              email: prof.email,
+              role: prof.role,
+              designation: prof.designation ? { name: prof.designation.name } : null,
+            } : null,
+            actor: prof ? {
+              id: prof.id,
+              name: fullName,
+              email: prof.email,
+              role: prof.role,
+              avatarUrl: prof.avatar_url,
+              designation: prof.designation?.name || 'Staff',
+            } : {
+              id: a.user_id || 'system',
+              name: 'System',
+              email: 'system@payfix.in',
+              role: 'system',
+              avatarUrl: null,
+              designation: 'Automated Service',
+            }
+          }
+        }),
         pagination: {
           page: input.page,
           limit: input.limit,
@@ -607,6 +651,81 @@ export const adminReportsRouter = router({
           totalPages: Math.ceil(total / input.limit),
         },
       }
+    }),
+
+  // Export audit logs as formatted data for CSV download
+  exportAuditLogs: adminProcedure
+    .input(
+      z.object({
+        userId: z.string().uuid().optional().nullable(),
+        activityType: z.union([z.string(), z.array(z.string())]).optional(),
+        module: z.union([z.string(), z.array(z.string())]).optional(),
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+        search: z.string().optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const filters: any[] = []
+      if (input.userId) {
+        filters.push(eq(activities.user_id, input.userId))
+      }
+
+      if (input.activityType) {
+        if (Array.isArray(input.activityType)) {
+          if (input.activityType.length > 0) filters.push(sql`${activities.activity_type} IN ${input.activityType}`)
+        } else {
+          filters.push(eq(activities.activity_type, input.activityType as any))
+        }
+      }
+
+      if (input.startDate) filters.push(gte(activities.created_at, reportDate(input.startDate)))
+      if (input.endDate) filters.push(lt(activities.created_at, reportDate(input.endDate, true)))
+
+      if (input.module) {
+        if (Array.isArray(input.module)) {
+          if (input.module.length > 0) filters.push(sql`${activities.module} IN ${input.module}`)
+        } else {
+          filters.push(eq(activities.module, input.module))
+        }
+      }
+
+      if (input.search && input.search.trim()) {
+        filters.push(ilike(activities.description, `%${input.search.trim()}%`))
+      }
+
+      const where = filters.length > 0 ? and(...filters) : undefined
+
+      const data = await ctx.db.query.activities.findMany({
+        where,
+        with: {
+          profile: {
+            with: { designation: true }
+          }
+        },
+        orderBy: [desc(activities.created_at)],
+        limit: 1000,
+      })
+
+      return (data || []).map((a: any) => {
+        const prof = a.profile
+        const fullName = prof
+          ? [prof.first_name, prof.last_name].filter(Boolean).join(' ') || prof.full_name || 'System User'
+          : 'System'
+        return {
+          id: a.id,
+          timestamp: a.created_at ? a.created_at.toISOString() : '',
+          formattedDate: a.created_at ? format(a.created_at, 'yyyy-MM-dd HH:mm:ss') : '',
+          actorName: fullName,
+          actorEmail: prof?.email || 'N/A',
+          actorRole: prof?.role || 'system',
+          actorDesignation: prof?.designation?.name || 'Staff',
+          activityType: a.activity_type,
+          module: a.module || 'general',
+          description: a.description || '',
+          ipAddress: (a.metadata as any)?.ip || (a.metadata as any)?.ip_address || 'N/A',
+        }
+      })
     }),
 
   // Search users by name, email, or mobile number

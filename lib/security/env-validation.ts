@@ -42,6 +42,12 @@ const ENV_VARIABLES: EnvVariable[] = [
         isSecret: false,
         description: 'Application URL',
     },
+    {
+        name: 'COARENA_API_KEY',
+        required: false,
+        isSecret: true,
+        description: 'Coarena Model API key for AI completions',
+    },
 ]
 
 interface ValidationResult {

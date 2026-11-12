@@ -15,9 +15,10 @@ import { CardShell } from '@/features/attendance/CardShell'
 
 interface DesignationManagementProps {
     initialData?: Designation[]
+    embedded?: boolean
 }
 
-export default function DesignationManagement({ initialData }: DesignationManagementProps) {
+export default function DesignationManagement({ initialData, embedded = false }: DesignationManagementProps) {
     // Sheet Control States
     const [showAddSheet, setShowAddSheet] = useState(false)
     const [editingDesignation, setEditingDesignation] = useState<Designation | null>(null)
@@ -88,11 +89,8 @@ export default function DesignationManagement({ initialData }: DesignationManage
         deletingDesignation?.id
     ), [handleEdit, handleDelete, editingDesignation?.id, deletingDesignation?.id])
 
-    return (
-        <DashboardPageLayout
-            heading="Designation Management"
-            description="Setup and manage various job designations for your organization"
-        >
+    const content = (
+        <>
             <CardShell
                 title="Designations List"
                 description="Manage job designations and their associated roles."
@@ -215,6 +213,19 @@ export default function DesignationManagement({ initialData }: DesignationManage
                     }}
                 />
             )}
+        </>
+    )
+
+    if (embedded) {
+        return <div className="space-y-4">{content}</div>
+    }
+
+    return (
+        <DashboardPageLayout
+            heading="Designation Management"
+            description="Setup and manage various job designations for your organization"
+        >
+            {content}
         </DashboardPageLayout>
     )
 }

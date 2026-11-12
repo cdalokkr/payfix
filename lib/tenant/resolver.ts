@@ -37,6 +37,42 @@ export interface TenantMetadata {
 // In-memory cache for resolved hostnames to prevent overloading database
 const resolverCache = new Map<string, { data: TenantMetadata | null; expires: number }>();
 const CACHE_TTL = 3 * 60 * 1000; // 3 minutes cache expiration
+const RESOLVER_CACHE_MAX_ENTRIES = 500;
+
+function getCachedTenant(host: string): { data: TenantMetadata | null; expires: number } | null {
+    const entry = resolverCache.get(host);
+    if (!entry) return null;
+    if (Date.now() >= entry.expires) {
+        resolverCache.delete(host);
+        return null;
+    }
+    // Promote to Most Recently Used (tail of Map)
+    resolverCache.delete(host);
+    resolverCache.set(host, entry);
+    return entry;
+}
+
+function setCachedTenant(host: string, data: TenantMetadata | null): void {
+    const now = Date.now();
+    if (resolverCache.has(host)) {
+        resolverCache.delete(host);
+    }
+    if (resolverCache.size >= RESOLVER_CACHE_MAX_ENTRIES) {
+        // Pass 1: Evict expired entries
+        for (const [key, entry] of resolverCache.entries()) {
+            if (now >= entry.expires) {
+                resolverCache.delete(key);
+            }
+        }
+        // Pass 2: Evict LRU head if still at/over capacity
+        while (resolverCache.size >= RESOLVER_CACHE_MAX_ENTRIES) {
+            const lruKey = resolverCache.keys().next().value;
+            if (lruKey === undefined) break;
+            resolverCache.delete(lruKey);
+        }
+    }
+    resolverCache.set(host, { data, expires: now + CACHE_TTL });
+}
 
 import { isLocalOrPrivateIp, PRIMARY_TENANT_FALLBACK } from './schema-contract';
 
@@ -57,8 +93,8 @@ export async function resolveTenant(hostname: string, forceRefresh = false): Pro
     const host = hostname.split(':')[0].toLowerCase().trim();
 
     if (!forceRefresh) {
-        const cached = resolverCache.get(host);
-        if (cached && Date.now() < cached.expires) {
+        const cached = getCachedTenant(host);
+        if (cached) {
             return cached.data;
         }
     }
@@ -104,7 +140,7 @@ export async function resolveTenant(hostname: string, forceRefresh = false): Pro
         }
 
         if (!tenantRecord) {
-            resolverCache.set(host, { data: null, expires: Date.now() + CACHE_TTL });
+            setCachedTenant(host, null);
             return null;
         }
 
@@ -150,7 +186,7 @@ export async function resolveTenant(hostname: string, forceRefresh = false): Pro
             } : null,
         };
 
-        resolverCache.set(host, { data: tenantData, expires: Date.now() + CACHE_TTL });
+        setCachedTenant(host, tenantData);
         return tenantData;
 
     } catch (err) {
@@ -166,7 +202,7 @@ export async function resolveTenant(hostname: string, forceRefresh = false): Pro
         // Fallback 2: For main domain / localhost / private IP or primary slug, fallback to PRIMARY_TENANT_FALLBACK
         if (isMainDomain || slug === 'primary' || host === 'primary') {
             console.warn(`[Tenant Resolver] Using fallback primary tenant metadata for ${host}`);
-            resolverCache.set(host, { data: PRIMARY_TENANT_FALLBACK, expires: Date.now() + CACHE_TTL });
+            setCachedTenant(host, PRIMARY_TENANT_FALLBACK);
             return PRIMARY_TENANT_FALLBACK;
         }
 

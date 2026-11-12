@@ -11,7 +11,7 @@ import { trpc } from "@/lib/trpc/client"
 import { toast } from "sonner"
 import { format } from "date-fns"
 import { CardShell } from "./CardShell"
-import { Settings, Calendar as CalendarIcon, Loader2, Check, X, Clock, Palmtree } from "lucide-react"
+import { Settings, Calendar as CalendarIcon, Loader2, Check, X, Clock, Palmtree, CalendarDays } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DataTable } from "@/components/ui/data-table"
@@ -19,6 +19,8 @@ import { ColumnDef } from "@tanstack/react-table"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Card } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import ShiftManagementHub from "@/features/shifts/ShiftManagementHub"
+import DepartmentRosterBoard from "@/features/shifts/DepartmentRosterBoard"
 
 export function ModeratorOfficeSettings() {
     const utils = trpc.useUtils()
@@ -158,6 +160,20 @@ export function ModeratorOfficeSettings() {
                     >
                         <Palmtree className="size-4" />
                         Office Holiday
+                    </TabsTrigger>
+                    <TabsTrigger
+                        value="shifts"
+                        className="h-11 px-8 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary font-extrabold transition-all gap-2"
+                    >
+                        <Clock className="size-4" />
+                        Shifts & Rotation
+                    </TabsTrigger>
+                    <TabsTrigger
+                        value="roster"
+                        className="h-11 px-8 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary font-extrabold transition-all gap-2"
+                    >
+                        <CalendarDays className="size-4" />
+                        Department Roster
                     </TabsTrigger>
                 </TabsList>
             </div>
@@ -366,6 +382,14 @@ export function ModeratorOfficeSettings() {
                         </div>
                     </CardShell>
                 </div>
+            </TabsContent>
+
+            <TabsContent value="shifts" className="space-y-6 focus-visible:outline-none">
+                <ShiftManagementHub />
+            </TabsContent>
+
+            <TabsContent value="roster" className="space-y-6 focus-visible:outline-none">
+                <DepartmentRosterBoard />
             </TabsContent>
         </Tabs>
     )

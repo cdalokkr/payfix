@@ -112,6 +112,7 @@ export class SmartCache {
         const data = await db.select({
             id: designations.id,
             name: designations.name,
+            department_id: designations.department_id,
             description: designations.description,
             role: designations.role,
             created_at: designations.created_at,

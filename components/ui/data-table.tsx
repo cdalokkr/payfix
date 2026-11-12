@@ -45,6 +45,7 @@ interface DataTableProps<TData, TValue> {
     emptyIcon?: React.ReactNode
     emptyMessage?: string
     getRowId?: (row: TData) => string
+    getRowClassName?: (row: any) => string | undefined
     className?: string
 }
 
@@ -62,6 +63,7 @@ export function DataTable<TData, TValue>({
     emptyIcon,
     emptyMessage = "No Record Found",
     getRowId,
+    getRowClassName,
     className,
 }: DataTableProps<TData, TValue>) {
     const [internalRowSelection, setInternalRowSelection] = React.useState<RowSelectionState>({})
@@ -198,10 +200,11 @@ export function DataTable<TData, TValue>({
                                 <TableRow
                                     key={row.id}
                                     data-state={row.getIsSelected() && "selected"}
-                                    className={
+                                    className={cn(
                                         // @ts-expect-error - accessing id from original data which might not exist on TData
-                                        row.original?.id === recentlyUpdatedId ? "animate-fade-green" : ""
-                                    }
+                                        row.original?.id === recentlyUpdatedId ? "animate-fade-green" : "",
+                                        getRowClassName?.(row)
+                                    )}
                                 >
                                     {row.getVisibleCells().map((cell) => (
                                         <TableCell
@@ -267,7 +270,8 @@ export function DataTable<TData, TValue>({
                                     "p-4 border rounded-xl space-y-3 shadow-xs transition-all duration-200 border-border/60 premium-glass-card",
                                     row.getIsSelected() && "border-primary bg-primary/5",
                                     // @ts-expect-error
-                                    row.original?.id === recentlyUpdatedId ? "animate-fade-green" : ""
+                                    row.original?.id === recentlyUpdatedId ? "animate-fade-green" : "",
+                                    getRowClassName?.(row)
                                 )}
                             >
                                 {/* Header with actions and checkboxes */}

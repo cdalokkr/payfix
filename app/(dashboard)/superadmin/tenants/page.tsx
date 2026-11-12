@@ -11,7 +11,8 @@ import {
   Building2, Users, Globe, Fingerprint, Palette, Search, Edit2, Loader2, Trash2, Mail, Phone, Clock,
   Calendar, Power, Check, ChevronDown, Eye, ShieldCheck,
   CreditCard, DollarSign, UserCheck, Lock, Key, Activity, Plus, Gift, X,
-  CheckCircle2, XCircle, AlertCircle, MoreHorizontal, Briefcase, RefreshCw, ArrowUpDown
+  CheckCircle2, XCircle, AlertCircle, AlertTriangle, MoreHorizontal, Briefcase, RefreshCw, ArrowUpDown,
+  Printer
 } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -181,6 +182,8 @@ export default function TenantsPage() {
   const createTenantMutation = trpc.superadmin.createTenant.useMutation({
     onSuccess: () => {
       utils.superadmin.listTenants.invalidate();
+      utils.superadmin.getTenantInvoices.invalidate();
+      utils.superadmin.getTenantAuditLogs.invalidate();
     },
     onError: (err: any) => {
       toast.error(err.message || "Failed to provision tenant workspace");
@@ -191,6 +194,7 @@ export default function TenantsPage() {
     onSuccess: () => {
       toast.success("Tenant status updated successfully!");
       utils.superadmin.listTenants.invalidate();
+      utils.superadmin.getTenantAuditLogs.invalidate();
       setIsActionsOpen(false);
     },
     onError: (err: any) => {
@@ -201,6 +205,8 @@ export default function TenantsPage() {
   const updatePlanMutation = trpc.superadmin.updateTenantPlan.useMutation({
     onSuccess: () => {
       utils.superadmin.listTenants.invalidate();
+      utils.superadmin.getTenantInvoices.invalidate();
+      utils.superadmin.getTenantAuditLogs.invalidate();
     },
     onError: (err: any) => {
       toast.error(err.message || "Failed to update tenant plan");
@@ -210,6 +216,8 @@ export default function TenantsPage() {
   const renewTenantSubscriptionMutation = trpc.superadmin.renewTenantSubscription.useMutation({
     onSuccess: () => {
       utils.superadmin.listTenants.invalidate();
+      utils.superadmin.getTenantInvoices.invalidate();
+      utils.superadmin.getTenantAuditLogs.invalidate();
     },
     onError: (err: any) => {
       toast.error(err.message || "Failed to renew subscription");
@@ -219,6 +227,7 @@ export default function TenantsPage() {
   const updateAdminInfoMutation = trpc.superadmin.updateAdminInfo.useMutation({
     onSuccess: () => {
       utils.superadmin.listTenants.invalidate();
+      utils.superadmin.getTenantAuditLogs.invalidate();
     },
     onError: (err: any) => {
       toast.error(err.message || "Failed to update admin info");
@@ -226,6 +235,9 @@ export default function TenantsPage() {
   });
 
   const resetAdminPasswordMutation = trpc.superadmin.resetAdminPassword.useMutation({
+    onSuccess: () => {
+      utils.superadmin.getTenantAuditLogs.invalidate();
+    },
     onError: (err: any) => {
       toast.error(err.message || "Failed to reset admin password");
     }
@@ -329,7 +341,12 @@ export default function TenantsPage() {
       t.slug.toLowerCase().includes(searchTerm.toLowerCase()) ||
       t.adminEmail.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesStatus = statusFilter === "all" || t.status === statusFilter || (statusFilter === "active" && t.status === "trial");
+    const isDue = t.isExpired || t.effectiveStatus === "renewal_due";
+    const matchesStatus = statusFilter === "all" 
+      || (statusFilter === "active" && (t.status === "active" || t.status === "trial") && !isDue)
+      || (statusFilter === "suspended" && t.status === "suspended")
+      || (statusFilter === "cancelled" && t.status === "cancelled")
+      || (statusFilter === "renewal_due" && isDue);
     const matchesPlan = planFilter === "all" 
       || (planFilter === "free" && (!t.plan || t.plan.id === freeDbPlanId || t.plan.id === "free" || t.plan.name === "free" || t.plan.displayName?.toLowerCase() === "free plan"))
       || (t.plan?.id === planFilter || t.plan?.displayName === planFilter || t.plan?.name === planFilter);
@@ -357,6 +374,17 @@ export default function TenantsPage() {
 
   // Selected tenant from dropdown/list
   const selectedTenant = selectedTenantId ? (tenantsList?.find((t: any) => t.id === selectedTenantId) || null) : null;
+
+  // Real Invoices & Real Audit Logs for the selected tenant
+  const { data: realInvoices, isLoading: loadingInvoices } = trpc.superadmin.getTenantInvoices.useQuery(
+    { tenantId: selectedTenant?.id || "" },
+    { enabled: !!selectedTenant?.id }
+  );
+
+  const { data: realAuditLogs, isLoading: loadingAuditLogs } = trpc.superadmin.getTenantAuditLogs.useQuery(
+    { tenantId: selectedTenant?.id || "" },
+    { enabled: !!selectedTenant?.id }
+  );
 
   const handleOpenRenewModal = (tenant: any) => {
     const currentExpiry = tenant.licenseExpiresAt ? new Date(tenant.licenseExpiresAt) : new Date();
@@ -574,10 +602,10 @@ export default function TenantsPage() {
   }, [selectedTenant, freeDbPlanId]);
 
   // Metric counts
-  const totalTenantsCount = tenantsList?.length || 8;
-  const activeTenantsCount = tenantsList?.filter((t: any) => t.status === "active" || t.status === "trial").length || 6;
-  const suspendedTenantsCount = tenantsList?.filter((t: any) => t.status === "suspended").length || 2;
-  const freeTenantsCount = tenantsList?.filter((t: any) => !t.plan || t.plan.id === freeDbPlanId || t.plan.name === 'free').length || 5;
+  const totalTenantsCount = tenantsList?.length || 0;
+  const activeTenantsCount = tenantsList?.filter((t: any) => (t.status === "active" || t.status === "trial") && !t.isExpired && t.effectiveStatus !== "renewal_due").length || 0;
+  const suspendedTenantsCount = tenantsList?.filter((t: any) => t.status === "suspended" || t.status === "cancelled" || t.isExpired || t.effectiveStatus === 'renewal_due').length || 0;
+  const freeTenantsCount = tenantsList?.filter((t: any) => !t.plan || t.plan.id === freeDbPlanId || t.plan.id === "free" || t.plan.name === 'free' || t.plan.displayName?.toLowerCase() === "free plan").length || 0;
 
   const formattedExpiry = selectedTenant ? format(new Date(selectedTenant.licenseExpiresAt), "dd/MM/yyyy") : "";
 
@@ -593,80 +621,24 @@ export default function TenantsPage() {
     return `${diffDays <= 0 ? 1 : diffDays} days ago`;
   };
 
-  // Mock Invoice List for the active tenant
-  const getInvoicesList = (tenant: any) => {
-    if (!tenant) return [];
-    return [
-      { id: "INV-2026-0008", date: "Jun 21, 2026", amount: "₹0", status: "Paid" },
-      { id: "INV-2026-0007", date: "May 21, 2026", amount: "₹0", status: "Paid" },
-      { id: "INV-2026-0006", date: "Apr 21, 2026", amount: "₹0", status: "Paid" },
-      { id: "INV-2026-0005", date: "Mar 21, 2026", amount: "₹0", status: "Paid" },
-      { id: "INV-2026-0004", date: "Feb 21, 2026", amount: "₹0", status: "Paid" },
-    ];
-  };
-
-  // Mock Audit Logs List for the active tenant with category colors & Lucide icons
-  const getAuditLogsList = (tenant: any) => {
-    if (!tenant) return [];
-    const adminName = tenant.adminName || "SRP Admin";
-    return [
-      {
-        activity: "Plan Updated from Free Plan to Free Plan",
-        performedBy: adminName,
-        dateTime: "Jun 21, 2026 10:24 AM",
-        ip: "103.112.45.67",
-        bg: "bg-purple-100 text-purple-600",
-        icon: Lock
-      },
-      {
-        activity: "Invoice Generated INV-2026-0008",
-        performedBy: "System",
-        dateTime: "Jun 21, 2026 10:21 AM",
-        ip: "103.112.45.67",
-        bg: "bg-emerald-100 text-emerald-600",
-        icon: CreditCard
-      },
-      {
-        activity: "Payment Received for INV-2026-0008",
-        performedBy: "System",
-        dateTime: "Jun 21, 2026 10:22 AM",
-        ip: "103.112.45.67",
-        bg: "bg-amber-100 text-amber-600",
-        icon: DollarSign
-      },
-      {
-        activity: "Tenant Activated",
-        performedBy: adminName,
-        dateTime: "Jun 21, 2026 10:20 AM",
-        ip: "103.112.45.67",
-        bg: "bg-blue-100 text-blue-600",
-        icon: Key
-      },
-      {
-        activity: "Tenant Created / Signup",
-        performedBy: adminName,
-        dateTime: "Jun 21, 2026 10:15 AM",
-        ip: "103.112.45.67",
-        bg: "bg-indigo-100 text-indigo-600",
-        icon: Users
-      },
-      {
-        activity: "Contact Info Updated",
-        performedBy: adminName,
-        dateTime: "Jun 21, 2026 09:50 AM",
-        ip: "103.112.45.67",
-        bg: "bg-red-100 text-red-600",
-        icon: UserCheck
-      },
-      {
-        activity: `Login by Admin ${adminName}`,
-        performedBy: adminName,
-        dateTime: "Jun 21, 2026 09:12 AM",
-        ip: "103.112.45.67",
-        bg: "bg-orange-100 text-orange-600",
-        icon: ShieldCheck
-      },
-    ];
+  // Category colors and Lucide icons for real tenant audit logs
+  const getCategoryIconAndColor = (category: string) => {
+    switch (category) {
+      case 'plan':
+        return { icon: Lock, bg: 'bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400' };
+      case 'billing':
+        return { icon: CreditCard, bg: 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400' };
+      case 'security':
+        return { icon: Key, bg: 'bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400' };
+      case 'contact':
+        return { icon: UserCheck, bg: 'bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400' };
+      case 'status':
+        return { icon: Activity, bg: 'bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400' };
+      case 'auth':
+        return { icon: Clock, bg: 'bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400' };
+      default:
+        return { icon: Users, bg: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400' };
+    }
   };
 
   return (
@@ -703,14 +675,19 @@ export default function TenantsPage() {
           </div>
         </div>
 
-        {/* Card 3: Suspended Tenants */}
-        <div className="bg-white dark:bg-[#121B22] border border-slate-200/90 dark:border-slate-800/80 rounded-[16px] p-3.5 sm:p-4 shadow-xs flex items-center space-x-3.5 hover:shadow-md hover:border-red-200 dark:hover:border-red-500/30 transition-all duration-200 cursor-default">
-          <div className="w-11 h-11 bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-800/50 rounded-xl flex items-center justify-center text-red-600 dark:text-red-400 shrink-0">
+        {/* Card 3: Suspended & Renewal Due Tenants */}
+        <div className="bg-white dark:bg-[#121B22] border border-slate-200/90 dark:border-slate-800/80 rounded-[16px] p-3.5 sm:p-4 shadow-xs flex items-center space-x-3.5 hover:shadow-md hover:border-amber-200 dark:hover:border-amber-500/30 transition-all duration-200 cursor-default">
+          <div className={cn(
+            "w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border",
+            suspendedTenantsCount > 0
+              ? "bg-amber-50 dark:bg-amber-950/40 border-amber-200/80 dark:border-amber-800/50 text-amber-600 dark:text-amber-400"
+              : "bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-400"
+          )}>
             <Lock className="w-5 h-5 stroke-[1.8]" />
           </div>
           <div className="text-left">
             <div className="text-xl font-black text-slate-900 dark:text-white leading-none">{suspendedTenantsCount}</div>
-            <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1">Suspended Tenants</div>
+            <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1">Suspended & Renewal Due</div>
           </div>
         </div>
 
@@ -767,15 +744,20 @@ export default function TenantsPage() {
             <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">Select Tenant</label>
             <Combobox
               options={[
-                ...filteredTenants.map((t: any) => ({
-                  value: t.id,
-                  label: `${t.companyName} (${t.slug})`,
-                  icon: t.status === 'suspended'
-                    ? <XCircle className="w-3.5 h-3.5 text-red-500" />
-                    : t.status === 'cancelled'
-                    ? <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
-                    : <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                }))
+                ...filteredTenants.map((t: any) => {
+                  const isDue = t.isExpired || t.effectiveStatus === "renewal_due";
+                  return {
+                    value: t.id,
+                    label: `${t.companyName} (${t.slug})`,
+                    icon: t.status === 'suspended'
+                      ? <XCircle className="w-3.5 h-3.5 text-red-500" />
+                      : isDue
+                      ? <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                      : t.status === 'cancelled'
+                      ? <AlertCircle className="w-3.5 h-3.5 text-slate-400" />
+                      : <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                  };
+                })
               ]}
               value={selectedTenantId || ""}
               onSelect={(val: string) => setSelectedTenantId(val)}
@@ -791,8 +773,9 @@ export default function TenantsPage() {
               options={[
                 { value: "all", label: "All Status", icon: <Activity className="w-3.5 h-3.5 text-slate-400" /> },
                 { value: "active", label: "Active", icon: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> },
+                { value: "renewal_due", label: "Renewal Due", icon: <AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> },
                 { value: "suspended", label: "Suspended", icon: <XCircle className="w-3.5 h-3.5 text-red-500" /> },
-                { value: "cancelled", label: "Cancelled", icon: <AlertCircle className="w-3.5 h-3.5 text-amber-500" /> },
+                { value: "cancelled", label: "Cancelled", icon: <AlertCircle className="w-3.5 h-3.5 text-slate-400" /> },
               ]}
               value={statusFilter}
               onSelect={(val: string) => setStatusFilter(val)}
@@ -846,23 +829,39 @@ export default function TenantsPage() {
                   <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight leading-none">
                     {selectedTenant.companyName}
                   </h2>
-                  <span className={cn(
-                    "px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold tracking-wide uppercase flex items-center gap-1",
-                    selectedTenant.status === "active" || selectedTenant.status === "trial" 
-                      ? "bg-emerald-100/80 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60" 
-                      : selectedTenant.status === "suspended" 
-                      ? "bg-red-100/80 dark:bg-red-950/60 text-red-700 dark:text-red-400 border border-red-200/60 dark:border-red-800/60" 
-                      : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
-                  )}>
-                    {selectedTenant.status === "suspended" ? (
-                      <XCircle className="w-3 h-3 text-red-600 dark:text-red-400 stroke-[2.5]" />
-                    ) : selectedTenant.status === "cancelled" ? (
-                      <AlertCircle className="w-3 h-3 text-amber-600 dark:text-amber-400 stroke-[2.5]" />
-                    ) : (
-                      <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400 stroke-[2.5]" />
-                    )}
-                    {selectedTenant.status === "trial" ? "ACTIVE" : selectedTenant.status.toUpperCase()}
-                  </span>
+                  {(() => {
+                    const isDue = selectedTenant.isExpired || selectedTenant.effectiveStatus === "renewal_due";
+                    if (selectedTenant.status === "suspended") {
+                      return (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold tracking-wide uppercase flex items-center gap-1 bg-red-100/80 dark:bg-red-950/60 text-red-700 dark:text-red-400 border border-red-200/60 dark:border-red-800/60">
+                          <XCircle className="w-3 h-3 text-red-600 dark:text-red-400 stroke-[2.5]" />
+                          SUSPENDED
+                        </span>
+                      );
+                    }
+                    if (isDue) {
+                      return (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold tracking-wide uppercase flex items-center gap-1 bg-amber-100/80 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-200/60 dark:border-amber-800/60">
+                          <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400 stroke-[2.5]" />
+                          RENEWAL DUE
+                        </span>
+                      );
+                    }
+                    if (selectedTenant.status === "cancelled") {
+                      return (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold tracking-wide uppercase flex items-center gap-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                          <AlertCircle className="w-3 h-3 text-slate-500 stroke-[2.5]" />
+                          CANCELLED
+                        </span>
+                      );
+                    }
+                    return (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold tracking-wide uppercase flex items-center gap-1 bg-emerald-100/80 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400 stroke-[2.5]" />
+                        {selectedTenant.status === "trial" ? "TRIAL" : "ACTIVE"}
+                      </span>
+                    );
+                  })()}
                 </div>
 
                 {/* Tenant URL */}
@@ -1176,73 +1175,112 @@ export default function TenantsPage() {
 
             {activeTab === "payments" && (
               <div className="space-y-3 animate-in fade-in duration-200 text-left">
-                <div className="overflow-x-auto border border-slate-100 dark:border-slate-800 rounded-xl bg-white dark:bg-[#121B22] shadow-2xs">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-200/80 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-semibold bg-slate-50/70 dark:bg-slate-800/40">
-                        <th className="py-2.5 px-3">Invoice #</th>
-                        <th className="py-2.5 px-3">Invoice Date</th>
-                        <th className="py-2.5 px-3">Amount</th>
-                        <th className="py-2.5 px-3">Status</th>
-                        <th className="py-2.5 px-3 text-right">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                      {getInvoicesList(selectedTenant).map((inv) => (
-                        <tr key={inv.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/50 transition-colors">
-                          <td className="py-2.5 px-3 font-semibold text-slate-900 dark:text-slate-100">{inv.id}</td>
-                          <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400 whitespace-nowrap">{inv.date}</td>
-                          <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-slate-100">{inv.amount}</td>
-                          <td className="py-2.5 px-3">
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100/80 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60">
-                              {inv.status}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 text-right">
-                            <button
-                              type="button"
-                              onClick={() => setSelectedInvoice(inv)}
-                              className="px-2.5 py-1 text-[11px] font-semibold border border-slate-200 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-300 hover:text-[#635BFF] dark:hover:text-[#0BDBB9] hover:border-indigo-300 dark:hover:border-[#0BDBB9]/40 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/40 inline-flex items-center gap-1 transition-all cursor-pointer"
-                            >
-                              View PDF
-                            </button>
-                          </td>
+                {loadingInvoices ? (
+                  <div className="flex items-center justify-center py-12 text-slate-400 gap-2.5">
+                    <Loader2 className="w-4 h-4 animate-spin text-[#635BFF]" />
+                    <span className="text-xs font-medium">Loading workspace invoices...</span>
+                  </div>
+                ) : !realInvoices || realInvoices.length === 0 ? (
+                  <div className="text-center py-10 px-4 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/40 dark:bg-[#121B22]/40">
+                    <CreditCard className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300">No invoices recorded</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Billing invoices generate automatically when a workspace renews or subscribes.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto border border-slate-100 dark:border-slate-800 rounded-xl bg-white dark:bg-[#121B22] shadow-2xs">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-200/80 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-semibold bg-slate-50/70 dark:bg-slate-800/40">
+                          <th className="py-2.5 px-3">Invoice #</th>
+                          <th className="py-2.5 px-3">Invoice Date</th>
+                          <th className="py-2.5 px-3">Plan / Description</th>
+                          <th className="py-2.5 px-3">Amount</th>
+                          <th className="py-2.5 px-3">Status</th>
+                          <th className="py-2.5 px-3 text-right">Action</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                        {realInvoices.map((inv: any) => (
+                          <tr key={inv.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/50 transition-colors">
+                            <td className="py-2.5 px-3 font-mono font-bold text-slate-900 dark:text-slate-100">{inv.id}</td>
+                            <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400 whitespace-nowrap">{inv.date}</td>
+                            <td className="py-2.5 px-3 font-medium text-slate-700 dark:text-slate-300">{inv.planName || "Subscription Plan"}</td>
+                            <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-slate-100">{inv.amount}</td>
+                            <td className="py-2.5 px-3">
+                              <span className={cn(
+                                "px-2 py-0.5 rounded-full text-[10px] font-bold border",
+                                inv.status?.toLowerCase() === "paid"
+                                  ? "bg-emerald-100/80 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border-emerald-200/60 dark:border-emerald-800/60"
+                                  : inv.status?.toLowerCase() === "pending" || inv.status?.toLowerCase() === "due"
+                                  ? "bg-amber-100/80 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border-amber-200/60 dark:border-amber-800/60"
+                                  : "bg-rose-100/80 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400 border-rose-200/60 dark:border-rose-800/60"
+                              )}>
+                                {inv.status}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-right">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedInvoice(inv)}
+                                className="px-2.5 py-1 text-[11px] font-semibold border border-slate-200 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-300 hover:text-[#635BFF] dark:hover:text-[#0BDBB9] hover:border-indigo-300 dark:hover:border-[#0BDBB9]/40 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/40 inline-flex items-center gap-1 transition-all cursor-pointer"
+                              >
+                                View PDF
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
 
             {activeTab === "logs" && (
               <div className="space-y-4 animate-in fade-in duration-200 text-left">
-                <div className="relative border-l-2 border-indigo-150 dark:border-indigo-900/60 ml-4 pl-6 space-y-5 py-2">
-                  {getAuditLogsList(selectedTenant).map((log, idx) => {
-                    const IconComp = log.icon;
-                    return (
-                      <div key={idx} className="relative">
-                        <span className="absolute -left-[31px] top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#635BFF] dark:bg-[#0BDBB9] text-white dark:text-[#0A1118] ring-4 ring-white dark:ring-[#121B22] shadow-xs">
-                          <span className="h-1.5 w-1.5 rounded-full bg-white dark:bg-[#0A1118]" />
-                        </span>
-                        <div className="space-y-0.5">
-                          <div className="flex items-center justify-between gap-4">
-                            <div className="flex items-center space-x-2">
-                              <div className={`w-5 h-5 rounded-full ${log.bg} flex items-center justify-center shrink-0`}>
-                                <IconComp className="w-3 h-3 stroke-[2]" />
+                {loadingAuditLogs ? (
+                  <div className="flex items-center justify-center py-12 text-slate-400 gap-2.5">
+                    <Loader2 className="w-4 h-4 animate-spin text-[#635BFF]" />
+                    <span className="text-xs font-medium">Loading audit events...</span>
+                  </div>
+                ) : !realAuditLogs || realAuditLogs.length === 0 ? (
+                  <div className="text-center py-10 px-4 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/40 dark:bg-[#121B22]/40">
+                    <Clock className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300">No audit events recorded</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Platform changes, renewals, and security operations will be logged here.</p>
+                  </div>
+                ) : (
+                  <div className="relative border-l-2 border-indigo-150 dark:border-indigo-900/60 ml-4 pl-6 space-y-5 py-2">
+                    {realAuditLogs.map((log: any, idx: number) => {
+                      const { icon: IconComp, bg } = getCategoryIconAndColor(log.category);
+                      return (
+                        <div key={log.id || idx} className="relative">
+                          <span className="absolute -left-[31px] top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#635BFF] dark:bg-[#0BDBB9] text-white dark:text-[#0A1118] ring-4 ring-white dark:ring-[#121B22] shadow-xs">
+                            <span className="h-1.5 w-1.5 rounded-full bg-white dark:bg-[#0A1118]" />
+                          </span>
+                          <div className="space-y-0.5">
+                            <div className="flex items-center justify-between gap-4">
+                              <div className="flex items-center space-x-2">
+                                <div className={`w-5 h-5 rounded-full ${bg} flex items-center justify-center shrink-0`}>
+                                  <IconComp className="w-3 h-3 stroke-[2]" />
+                                </div>
+                                <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">{log.activity}</h4>
                               </div>
-                              <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">{log.activity}</h4>
+                              <span className="text-[10.5px] text-slate-400 dark:text-slate-500 font-semibold whitespace-nowrap">{log.dateTime}</span>
                             </div>
-                            <span className="text-[10.5px] text-slate-400 dark:text-slate-500 font-semibold whitespace-nowrap">{log.dateTime}</span>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium pl-7">
+                              Performed by <span className="font-semibold text-slate-700 dark:text-slate-200">{log.performedBy}</span>
+                              {log.actorEmail && log.actorEmail !== log.performedBy && (
+                                <span className="text-slate-400 font-normal"> ({log.actorEmail})</span>
+                              )}
+                              {" "}• IP <span className="font-mono text-[10.5px] dark:text-slate-300">{log.ip}</span>
+                            </p>
                           </div>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium pl-7">
-                            Performed by <span className="font-semibold text-slate-700 dark:text-slate-200">{log.performedBy}</span> • IP <span className="font-mono text-[10.5px] dark:text-slate-300">{log.ip}</span>
-                          </p>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
@@ -1449,31 +1487,68 @@ export default function TenantsPage() {
               </button>
             </div>
 
-            <div className="space-y-3 text-xs text-slate-600 dark:text-slate-300 bg-slate-50/60 dark:bg-[#0B131A]/60 p-4 rounded-xl border border-slate-100 dark:border-slate-800">
-              <div className="flex justify-between">
+            <div className="space-y-2.5 text-xs text-slate-600 dark:text-slate-300 bg-slate-50/60 dark:bg-[#0B131A]/60 p-4 rounded-xl border border-slate-100 dark:border-slate-800">
+              <div className="flex justify-between items-center">
                 <span className="font-semibold text-slate-500 dark:text-slate-400">Invoice Number:</span>
                 <span className="font-mono font-bold text-[#635BFF]">{selectedInvoice.id}</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between items-center">
                 <span className="font-semibold text-slate-500 dark:text-slate-400">Billing Date:</span>
                 <span className="font-bold text-slate-800 dark:text-slate-200">{selectedInvoice.date}</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between items-center">
                 <span className="font-semibold text-slate-500 dark:text-slate-400">Subscription Tier:</span>
-                <span className="font-bold text-slate-800 dark:text-slate-200">{selectedTenant?.plan?.displayName || "Free Plan"}</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200">{selectedInvoice.planName || selectedTenant?.plan?.displayName || "Free Plan"}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="font-semibold text-slate-500 dark:text-slate-400">Total Amount Paid:</span>
-                <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">{selectedInvoice.amount}</span>
+              <div className="flex justify-between items-center">
+                <span className="font-semibold text-slate-500 dark:text-slate-400">Billing Cycle:</span>
+                <span className="font-medium text-slate-800 dark:text-slate-200 capitalize">{selectedInvoice.billingCycle || "Monthly"}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60">
+              {selectedInvoice.periodStart && (
+                <div className="flex justify-between items-center">
+                  <span className="font-semibold text-slate-500 dark:text-slate-400">Covered Period:</span>
+                  <span className="font-mono text-[11px] text-slate-700 dark:text-slate-300">
+                    {selectedInvoice.periodStart} - {selectedInvoice.periodEnd || "Ongoing"}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between items-center">
+                <span className="font-semibold text-slate-500 dark:text-slate-400">Payment Method:</span>
+                <span className="font-medium text-slate-700 dark:text-slate-300">{selectedInvoice.paymentMethod || "Direct Platform Billing"}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="font-semibold text-slate-500 dark:text-slate-400">Transaction ID:</span>
+                <span className="font-mono text-[11px] text-slate-600 dark:text-slate-400">{selectedInvoice.transactionId || "N/A"}</span>
+              </div>
+              <div className="pt-2 border-t border-slate-200/80 dark:border-slate-800 flex justify-between items-center">
+                <span className="font-bold text-slate-900 dark:text-slate-100">Total Amount Paid:</span>
+                <span className="font-extrabold text-emerald-600 dark:text-emerald-400 text-base">{selectedInvoice.amount}</span>
+              </div>
+              <div className="flex justify-between items-center pt-1">
+                <span className="font-semibold text-slate-500 dark:text-slate-400">Payment Status:</span>
+                <span className={cn(
+                  "px-2.5 py-0.5 rounded-full text-[10px] font-bold border",
+                  selectedInvoice.status?.toLowerCase() === "paid"
+                    ? "bg-emerald-100/80 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border-emerald-200/60 dark:border-emerald-800/60"
+                    : selectedInvoice.status?.toLowerCase() === "pending" || selectedInvoice.status?.toLowerCase() === "due"
+                    ? "bg-amber-100/80 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border-amber-200/60 dark:border-amber-800/60"
+                    : "bg-rose-100/80 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400 border-rose-200/60 dark:border-rose-800/60"
+                )}>
                   {selectedInvoice.status}
                 </span>
               </div>
             </div>
 
-            <div className="flex justify-end pt-2">
+            <div className="flex items-center justify-between pt-2">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="h-9 px-3.5 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <Printer className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+                Print / Save PDF
+              </button>
+
               <button
                 type="button"
                 onClick={() => setSelectedInvoice(null)}

@@ -6,7 +6,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { format } from "date-fns"
 import Link from "next/link"
 import { motion } from "framer-motion"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { trpc } from "@/lib/trpc/client"
 import { ProfilePhotoCapture } from "@/features/mobile/profile-photo-capture"
 
@@ -136,6 +136,22 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
     const [isDesktop, setIsDesktop] = useState(false)
     const [isPhotoCaptureOpen, setIsPhotoCaptureOpen] = useState(false)
     const [hardwareInfo] = useState(() => getHardwareAccelerationInfo())
+
+    // Check if payslip features are accessible for this employee/workspace
+    const { data: payslipAccess } = trpc.salary.getPayslipAccessSettings.useQuery(undefined, {
+        staleTime: 60000,
+    })
+
+    const filteredQuickActions = useMemo(() => {
+        return quickActions.filter(action => {
+            if (action.href === '/mobile/payslip') {
+                if (payslipAccess && payslipAccess.isAccessible === false) {
+                    return false
+                }
+            }
+            return true
+        })
+    }, [payslipAccess])
     useEffect(() => {
         // Pre-warm face recognition models & MediaPipe vision in background
         FaceVerificationService.initialize().catch(() => {})
@@ -673,7 +689,7 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
                     <div className="h-px bg-slate-200 dark:bg-slate-800 flex-1 ml-4" />
                 </div>
                 <div className="grid grid-cols-3 gap-3 px-2 pb-4 pt-1">
-                    {quickActions.map((action) => (
+                    {filteredQuickActions.map((action) => (
                         <Link key={action.label} href={action.href} prefetch={true}>
                             <motion.div
                                 whileTap={{ scale: 0.95 }}

@@ -25,6 +25,7 @@ export const designationRouter = router({
             const [data] = await ctx.db.insert(designations)
                 .values({
                     name: input.name,
+                    department_id: input.departmentId || null,
                     description: input.description,
                     role: input.role,
                 })
@@ -77,6 +78,7 @@ export const designationRouter = router({
             const [data] = await ctx.db.update(designations)
                 .set({
                     name: input.name,
+                    department_id: input.departmentId || null,
                     description: input.description,
                     role: input.role,
                 })
@@ -180,6 +182,21 @@ export const designationRouter = router({
             SmartCache.invalidateDesignations()
 
             return { success: true }
+        }),
+
+    getByDepartment: adminProcedure
+        .input(z.object({ departmentId: z.string().uuid().optional().nullable() }))
+        .query(async ({ ctx, input }) => {
+            const data = await ctx.db.query.designations.findMany({
+                where: input.departmentId ? eq(designations.department_id, input.departmentId) : undefined,
+                orderBy: [desc(designations.name)],
+            })
+            return (data || []).map(d => ({
+                ...d,
+                created_at: d.created_at ? d.created_at.toISOString() : null,
+                updated_at: d.updated_at ? d.updated_at.toISOString() : null,
+                role: d.role as any,
+            }))
         }),
 })
 

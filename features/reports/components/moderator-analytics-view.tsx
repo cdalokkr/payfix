@@ -120,8 +120,8 @@ export function ModeratorAnalyticsView() {
             <Tabs defaultValue="overview" className="space-y-4">
                 <TabsList>
                     <TabsTrigger value="overview">Overview</TabsTrigger>
-                    <TabsTrigger value="analytics">Analytics</TabsTrigger>
-                    <TabsTrigger value="notifications">Notifications</TabsTrigger>
+                    <TabsTrigger value="audit">Audit Trail & Activities</TabsTrigger>
+                    <TabsTrigger value="security">Security & Access Logs</TabsTrigger>
                 </TabsList>
                 <TabsContent value="overview" className="space-y-4">
                     {/* Stats Cards */}
@@ -242,19 +242,11 @@ export function ModeratorAnalyticsView() {
                         </div>
                     </div>
                 </TabsContent>
-                <TabsContent value="analytics" className="space-y-4">
+                <TabsContent value="audit" className="space-y-4">
                     <AnalyticsTab role="moderator" />
                 </TabsContent>
-                <TabsContent value="notifications" className="space-y-4">
-                    <Card className="shadow-lg">
-                        <CardHeader>
-                            <CardTitle>Notifications</CardTitle>
-                            <CardDescription>System notifications and alerts</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <p className="text-muted-foreground">Notifications content coming soon...</p>
-                        </CardContent>
-                    </Card>
+                <TabsContent value="security" className="space-y-4">
+                    <AnalyticsTab role="moderator" defaultModule="auth" />
                 </TabsContent>
             </Tabs>
         </DashboardPageLayout>

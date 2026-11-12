@@ -27,6 +27,15 @@ export interface UserActivity {
     description: string | null
     created_at: string | null
     module?: string | null
+    metadata?: any
+    actor?: {
+        id?: string
+        name?: string
+        email?: string
+        role?: string
+        avatarUrl?: string | null
+        designation?: string | null
+    }
     profiles?: {
         email: string
         full_name: string | null
@@ -92,6 +101,15 @@ export const getActivityIcon = (type: string) => {
     if (t.includes('export')) return Download
     if (t.includes('import')) return Activity
     return Activity
+}
+
+// Helper to format actor name cleanly if it was stored in ALL CAPS
+const formatActorName = (name?: string | null) => {
+    if (!name) return ""
+    if (name === name.toUpperCase() && name.length > 3) {
+        return name.toLowerCase().replace(/\b\w/g, c => c.toUpperCase())
+    }
+    return name
 }
 
 export function ActivityLogFeed({
@@ -183,19 +201,39 @@ export function ActivityLogFeed({
                         <div className="flex-1 min-w-0">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-1">
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                    {activity.profiles?.role && (
+                                    {/* Actor Role Badge */}
+                                    {(activity.actor?.role || activity.profiles?.role) && (
                                         <span className={cn(
-                                            "text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full select-none",
-                                            activity.profiles.role === 'admin' && "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400",
-                                            activity.profiles.role === 'moderator' && "bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400",
-                                            activity.profiles.role === 'employee' && "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400"
+                                            "text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full select-none border",
+                                            (activity.actor?.role || activity.profiles?.role) === 'admin' && "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-500/20 dark:text-purple-400 dark:border-purple-500/30",
+                                            (activity.actor?.role || activity.profiles?.role) === 'moderator' && "bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-500/20 dark:text-indigo-400 dark:border-indigo-500/30",
+                                            (activity.actor?.role || activity.profiles?.role) === 'employee' && "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/30"
                                         )}>
-                                            {activity.profiles.role}
+                                            {activity.actor?.role || activity.profiles?.role}
                                         </span>
                                     )}
-                                    {activity.profiles?.designation?.name && (
-                                        <span className="text-[9px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border border-blue-200/20 dark:border-blue-500/20 px-2 py-0.5 rounded-md select-none">
-                                            {activity.profiles.designation.name}
+
+                                    {/* Module Badge */}
+                                    {activity.module && (
+                                        <span className={cn(
+                                            "text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md select-none border",
+                                            activity.module.toLowerCase() === 'auth' && "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800",
+                                            activity.module.toLowerCase() === 'attendance' && "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800",
+                                            activity.module.toLowerCase() === 'leaves' && "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800",
+                                            (activity.module.toLowerCase() === 'departments' || activity.module.toLowerCase() === 'organization') && "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800",
+                                            activity.module.toLowerCase() === 'shifts' && "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800",
+                                            (activity.module.toLowerCase() === 'salary' || activity.module.toLowerCase() === 'payroll') && "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-800",
+                                            activity.module.toLowerCase() === 'profile' && "bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-300 dark:border-cyan-800",
+                                            !['auth', 'attendance', 'leaves', 'departments', 'organization', 'shifts', 'salary', 'payroll', 'profile'].includes(activity.module.toLowerCase()) && "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700"
+                                        )}>
+                                            {activity.module}
+                                        </span>
+                                    )}
+
+                                    {/* Designation Badge */}
+                                    {(activity.actor?.designation || activity.profiles?.designation?.name) && (
+                                        <span className="text-[9px] font-semibold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700 px-2 py-0.5 rounded-md select-none">
+                                            {activity.actor?.designation || activity.profiles?.designation?.name}
                                         </span>
                                     )}
                                 </div>
@@ -204,17 +242,22 @@ export function ActivityLogFeed({
                                     {activity.created_at && isValid(new Date(activity.created_at)) ? format(new Date(activity.created_at), "MMM dd, yyyy HH:mm:ss") : "N/A"}
                                 </div>
                             </div>
-                            <p className="text-xs sm:text-[13px] leading-relaxed tracking-tight text-foreground/80 break-words font-medium">
-                                {/* Dynamic format: name - email - activity */}
-                                {activity.profiles?.full_name && (
-                                    <span className="font-semibold text-foreground">{activity.profiles.full_name}</span>
+                            <p className="text-xs sm:text-[13px] leading-relaxed text-foreground/80 break-words font-normal">
+                                {/* Dynamic format: Actor Name (Actor Email) — Description */}
+                                {(activity.actor?.name || activity.profiles?.full_name) && (
+                                    <span className="font-normal text-foreground">
+                                        {formatActorName(activity.actor?.name || activity.profiles?.full_name)}
+                                    </span>
                                 )}
-                                {activity.profiles?.full_name && activity.profiles?.email && ' - '}
-                                {activity.profiles?.email && (
-                                    <span className="text-primary/80 font-semibold hover:underline cursor-pointer">[{activity.profiles.email}]</span>
+                                {(activity.actor?.email || activity.profiles?.email) && (
+                                    <span className="text-muted-foreground/80 font-normal ml-1 text-xs">
+                                        ({activity.actor?.email || activity.profiles?.email})
+                                    </span>
                                 )}
-                                {(activity.profiles?.full_name || activity.profiles?.email) && ' - '}
-                                <span className="text-foreground/70 font-normal">{activity.description || "No description provided"}</span>
+                                {(activity.actor?.name || activity.profiles?.full_name) && (
+                                    <span className="text-muted-foreground/50 mx-1">—</span>
+                                )}
+                                <span className="text-foreground/90 font-normal">{activity.description || "No description provided"}</span>
                             </p>
                         </div>
                     </div>

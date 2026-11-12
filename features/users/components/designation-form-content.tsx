@@ -32,6 +32,7 @@ import CreateUserButton, { AsyncState } from "@/components/ui/create-user-button
 import { cn } from "@/lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
 import { DesignationInput } from '@/lib/validations/auth'
+import { trpc } from '@/lib/trpc/client'
 
 export type DesignationFormValues = DesignationInput
 
@@ -70,6 +71,13 @@ export const DesignationFormContent = memo(function DesignationFormContent({
 }: DesignationFormContentProps) {
     const { getValues } = form
     const values = getValues()
+
+    const { data: departments } = trpc.departments.getAll.useQuery(undefined, {
+        staleTime: 0,
+        refetchOnMount: 'always',
+    })
+
+    const selectedDepartmentName = departments?.find(d => d.id === values.departmentId)?.name || "General / All Departments"
 
     // If in delete mode, render the read-only view
     if (isDeleteMode) {
@@ -113,6 +121,10 @@ export const DesignationFormContent = memo(function DesignationFormContent({
                                     </AccordionTrigger>
                                     <AccordionContent className="px-4 pb-4 pt-4">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <ReadOnlyField
+                                                label="Department"
+                                                value={selectedDepartmentName}
+                                            />
                                             <ReadOnlyField
                                                 label="Role"
                                                 value={values.role === 'admin' ? 'Administrator' : values.role === 'moderator' ? 'Moderator' : 'Employee'}
@@ -199,14 +211,42 @@ export const DesignationFormContent = memo(function DesignationFormContent({
                                         </div>
                                     </AccordionTrigger>
                                     <AccordionContent className="px-4 pb-4 pt-4 space-y-4">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
+                                            <FormField
+                                                control={form.control}
+                                                name="departmentId"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Department</FormLabel>
+                                                        <Select
+                                                            onValueChange={(val) => field.onChange(val === "all" ? null : val)}
+                                                            value={field.value || "all"}
+                                                        >
+                                                            <FormControl>
+                                                                <SelectTrigger className="w-full">
+                                                                    <SelectValue placeholder="General / All" />
+                                                                </SelectTrigger>
+                                                            </FormControl>
+                                                            <SelectContent>
+                                                                <SelectItem value="all">General / All Departments</SelectItem>
+                                                                {departments?.map((dept) => (
+                                                                    <SelectItem key={dept.id} value={dept.id}>
+                                                                        {dept.name}
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                            />
                                             <FormField
                                                 control={form.control}
                                                 name="role"
                                                 render={({ field }) => (
                                                     <FormItem>
                                                         <FormLabel>Role *</FormLabel>
-                                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                        <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
                                                             <FormControl>
                                                                 <SelectTrigger className="w-full">
                                                                     <SelectValue placeholder="Select a role" />

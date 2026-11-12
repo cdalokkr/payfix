@@ -7,7 +7,7 @@ import { sql } from 'drizzle-orm';
  * public schema is only a compatibility fallback for business tables that
  * tenant_primary does not contain; it is never modified by provisioning.
  */
-export const TENANT_SCHEMA_VERSION = '2026-08-30.1';
+export const TENANT_SCHEMA_VERSION = '2026-11-13.1';
 export const TENANT_SCHEMA_TEMPLATE = 'tenant_primary';
 
 export const CANONICAL_TENANT_TABLES = [
@@ -42,6 +42,12 @@ export const CANONICAL_TENANT_TABLES = [
     'salary_payments',
     'biometric_verification_attempts',
     'biometric_consumed_proofs',
+    'departments',
+    'department_managers_history',
+    'office_shifts',
+    'employee_shift_assignments',
+    'shift_roster',
+    'monthly_bonuses',
 ] as const;
 
 export type CanonicalTenantTable = (typeof CANONICAL_TENANT_TABLES)[number];
@@ -51,14 +57,14 @@ export type CanonicalTenantTable = (typeof CANONICAL_TENANT_TABLES)[number];
  * than inferred from whichever source schema happens to be available.
  */
 export const CANONICAL_TENANT_COLUMNS: Record<CanonicalTenantTable, readonly string[]> = {
-    designations: ['id', 'name', 'description', 'role', 'created_at', 'updated_at'],
+    designations: ['id', 'name', 'description', 'role', 'created_at', 'updated_at', 'department_id'],
     profiles: [
         'id', 'tenant_id', 'email', 'full_name', 'avatar_url', 'role',
         'designation_id', 'first_name', 'middle_name', 'last_name', 'mobile_no',
         'date_of_birth', 'sex', 'status', 'avatar_status', 'allowed_modules',
         'face_embedding', 'face_embedding_512', 'face_embedding_pipeline_version',
         'face_quality_score', 'face_enrolled_at', 'face_photo_url',
-        'created_at', 'updated_at',
+        'created_at', 'updated_at', 'department_id', 'payslip_enabled', 'must_change_password',
     ],
     activities: ['id', 'user_id', 'activity_type', 'module', 'description', 'metadata', 'created_at'],
     attendance: [
@@ -67,7 +73,8 @@ export const CANONICAL_TENANT_COLUMNS: Record<CanonicalTenantTable, readonly str
         'status', 'remarks', 'verified_by', 'is_extra_day', 'is_half_day', 'source',
         'device_id', 'location_id', 'selfie_url', 'checkin_latitude',
         'checkin_longitude', 'checkin_location_name', 'face_match_score',
-        'created_at', 'updated_at',
+        'created_at', 'updated_at', 'shift_id', 'shift_name', 'duty_hours',
+        'extra_hours', 'is_extra_shift', 'extra_shift_type',
     ],
     leaves: [
         'id', 'profile_id', 'leave_type', 'start_date', 'end_date', 'reason',
@@ -186,6 +193,35 @@ export const CANONICAL_TENANT_COLUMNS: Record<CanonicalTenantTable, readonly str
     biometric_consumed_proofs: [
         'jti', 'profile_id', 'action', 'expires_at', 'created_at',
     ],
+    departments: [
+        'id', 'name', 'code', 'description', 'manager_id', 'location_id',
+        'is_active', 'created_at', 'updated_at',
+    ],
+    department_managers_history: [
+        'id', 'department_id', 'manager_id', 'appointed_by', 'start_date',
+        'end_date', 'status', 'handover_notes', 'created_at',
+    ],
+    office_shifts: [
+        'id', 'location_id', 'department_id', 'name', 'code', 'start_time',
+        'end_time', 'duration_hours', 'is_overnight', 'buffer_minutes',
+        'break_minutes', 'min_half_day_hours', 'min_full_day_hours',
+        'is_default', 'color', 'is_active', 'created_at', 'updated_at',
+    ],
+    employee_shift_assignments: [
+        'id', 'profile_id', 'location_id', 'duty_hours', 'shift_mode',
+        'assigned_shift_ids', 'rotation_type', 'rotation_shift_ids',
+        'rotation_start_date', 'effective_from', 'effective_to',
+        'created_at', 'updated_at',
+    ],
+    shift_roster: [
+        'id', 'profile_id', 'department_id', 'shift_id', 'date', 'status',
+        'is_extra_shift', 'notes', 'allotted_by', 'created_at', 'updated_at',
+        'extra_shift_type',
+    ],
+    monthly_bonuses: [
+        'id', 'profile_id', 'month', 'year', 'amount', 'bonus_type',
+        'title', 'remarks', 'created_by', 'created_at', 'updated_at',
+    ],
 };
 
 export const TENANT_REQUIRED_INDEXES = [
@@ -204,6 +240,32 @@ export const TENANT_REQUIRED_INDEXES = [
     ['kiosk_devices', 'kiosk_devices_terminal_id_idx'],
     ['monthly_attendance_summary', 'monthly_attendance_summary_profile_month_year_idx'],
     ['salary_payments', 'salary_payments_idempotency_key_idx'],
+    ['departments', 'idx_departments_manager_id'],
+    ['departments', 'idx_departments_location_id'],
+    ['departments', 'idx_departments_active'],
+    ['office_shifts', 'idx_office_shifts_dept_id'],
+    ['office_shifts', 'idx_office_shifts_loc_id'],
+    ['office_shifts', 'idx_office_shifts_active'],
+    ['employee_shift_assignments', 'idx_emp_shift_assign_profile_id'],
+    ['employee_shift_assignments', 'idx_emp_shift_assign_active_uniq'],
+    ['employee_shift_assignments', 'idx_emp_shift_assign_dates'],
+    ['shift_roster', 'idx_shift_roster_profile_date_uniq'],
+    ['shift_roster', 'idx_shift_roster_profile_date'],
+    ['shift_roster', 'idx_shift_roster_dept_date_cov'],
+    ['shift_roster', 'idx_shift_roster_date'],
+    ['shift_roster', 'idx_shift_roster_shift_id'],
+    ['monthly_bonuses', 'idx_monthly_bonuses_period'],
+    ['attendance', 'idx_attendance_shift_id'],
+    ['attendance', 'idx_attendance_location_id'],
+    ['attendance', 'idx_attendance_location_date_status'],
+    ['shift_roster', 'idx_shift_roster_date_status'],
+    ['departments', 'idx_departments_location_active'],
+    ['departments', 'uq_departments_code'],
+    ['office_shifts', 'idx_office_shifts_loc_dept_active'],
+    ['monthly_attendance_summary', 'idx_monthly_summary_paid_by'],
+    ['monthly_attendance_summary', 'idx_monthly_summary_set_salary_by'],
+    ['profiles', 'idx_profiles_department_id'],
+    ['designations', 'idx_designations_department_id'],
 ] as const;
 
 export const TENANT_REQUIRED_FOREIGN_KEYS = [
@@ -254,6 +316,24 @@ export const TENANT_REQUIRED_FOREIGN_KEYS = [
     ['salary_payments', 'summary_id', 'monthly_attendance_summary', 'id'],
     ['salary_payments', 'paid_by', 'profiles', 'id'],
     ['biometric_consumed_proofs', 'profile_id', 'profiles', 'id'],
+    ['departments', 'location_id', 'office_locations', 'id'],
+    ['departments', 'manager_id', 'profiles', 'id'],
+    ['office_shifts', 'location_id', 'office_locations', 'id'],
+    ['office_shifts', 'department_id', 'departments', 'id'],
+    ['employee_shift_assignments', 'profile_id', 'profiles', 'id'],
+    ['employee_shift_assignments', 'location_id', 'office_locations', 'id'],
+    ['shift_roster', 'profile_id', 'profiles', 'id'],
+    ['shift_roster', 'department_id', 'departments', 'id'],
+    ['shift_roster', 'shift_id', 'office_shifts', 'id'],
+    ['shift_roster', 'allotted_by', 'profiles', 'id'],
+    ['department_managers_history', 'department_id', 'departments', 'id'],
+    ['department_managers_history', 'manager_id', 'profiles', 'id'],
+    ['department_managers_history', 'appointed_by', 'profiles', 'id'],
+    ['monthly_bonuses', 'profile_id', 'profiles', 'id'],
+    ['monthly_bonuses', 'created_by', 'profiles', 'id'],
+    ['profiles', 'department_id', 'departments', 'id'],
+    ['designations', 'department_id', 'departments', 'id'],
+    ['attendance', 'shift_id', 'office_shifts', 'id'],
 ] as const;
 
 export interface TenantSchemaContractReport {

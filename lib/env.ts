@@ -36,6 +36,10 @@ const envSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   NEXT_PUBLIC_APP_URL: z.string().url().optional(),
+  COARENA_API_KEY: z.string().optional(),
+  COARENA_OPENAI_BASE_URL: z.string().url().optional(),
+  COARENA_ANTHROPIC_BASE_URL: z.string().url().optional(),
+  COARENA_DEFAULT_MODEL: z.string().optional(),
 }).superRefine((values, ctx) => {
   // Keep test and development imports usable without deployment secrets.
   if (values.NODE_ENV === 'production') {
@@ -83,4 +87,8 @@ export const env = envSchema.parse({
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
   NODE_ENV: process.env.NODE_ENV,
   NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+  COARENA_API_KEY: process.env.COARENA_API_KEY,
+  COARENA_OPENAI_BASE_URL: process.env.COARENA_OPENAI_BASE_URL,
+  COARENA_ANTHROPIC_BASE_URL: process.env.COARENA_ANTHROPIC_BASE_URL,
+  COARENA_DEFAULT_MODEL: process.env.COARENA_DEFAULT_MODEL,
 })

@@ -744,6 +744,13 @@ export function AdminAttendanceVerification() {
                         getRowId={getRowId}
                         rowSelection={rowSelection}
                         onRowSelectionChange={setRowSelection}
+                        getRowClassName={(row) => {
+                            const rec = row.original
+                            if (rec?.is_half_day || getRecordDayType(rec) === 'Half Day') {
+                                return 'bg-amber-500/[0.09] dark:bg-amber-500/[0.15] border-l-4 border-l-amber-500 hover:bg-amber-500/[0.12]'
+                            }
+                            return undefined
+                        }}
                         className="[&_td]:px-2.5 [&_th]:px-2.5 [&_td]:py-1.5 md:[&_td]:px-3 md:[&_th]:px-3 md:[&_td]:py-2"
                         toolbar={(table) => (
                             <AttendanceTableToolbar
@@ -802,7 +809,9 @@ export function AdminAttendanceVerification() {
                         dayType: data.dayType,
                         remarks: data.remarks,
                         isHalfDay: data.isHalfDay,
-                        isExtraDay: data.isExtraDay
+                        isExtraDay: data.isExtraDay,
+                        isExtraShift: data.isExtraShift,
+                        extraShiftType: data.extraShiftType
                     })
                 }}
             />
