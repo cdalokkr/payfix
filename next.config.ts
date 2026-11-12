@@ -52,8 +52,8 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        // All other routes — security headers + no-cache for HTML pages
-        source: '/(.*)',
+        // All other routes — security headers + no-cache for HTML pages (excluding static/image assets)
+        source: '/((?!_next/static|_next/image|favicon.ico|images/).*)',
         headers: [
           // Prevent clickjacking
           {

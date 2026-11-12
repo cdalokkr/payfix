@@ -28,6 +28,8 @@
     "seed:admin": "node scripts/seed-admin.js",
     "repair:tenant-admins": "tsx scripts/repair-tenant-admins.ts",
     "advisor": "tsx scripts/coding-advisor.ts",
+    "advisor:gemini": "tsx scripts/coding-advisor.ts",
+    "audit:gemini": "tsx scripts/audit-payfix-gemini.ts",
     "db:setup:info": "echo 'To setup fresh DB, run SQL from supabase/setup-fresh-db.sql in Supabase Editor'",
     "db:pull": "drizzle-kit pull",
     "db:generate": "drizzle-kit generate",

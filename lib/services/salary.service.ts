@@ -608,16 +608,18 @@ export class SalaryService {
             const incentiveAmt = Number(salarySetup.incentive) || 0
             const otherDeductions = Number(salarySetup.other_deductions) || 0
 
-            const bonusRecord = await client.query.monthlyBonuses.findFirst({
+            const bonusRecords = await client.query.monthlyBonuses.findMany({
                 where: and(
                     eq(monthlyBonuses.profile_id, existingSummary.profile_id),
                     eq(monthlyBonuses.month, existingSummary.month),
                     eq(monthlyBonuses.year, existingSummary.year)
                 )
             })
-            const bonusAmt = metrics.monthlyBonus !== undefined ? metrics.monthlyBonus : (Number(bonusRecord?.amount) || 0)
-            const bonusTitle = metrics.bonusTitle || bonusRecord?.title || 'Monthly Bonus'
-            const bonusType = metrics.bonusType || bonusRecord?.bonus_type || 'festival_bonus'
+            const bonusAmt = metrics.monthlyBonus !== undefined
+                ? metrics.monthlyBonus
+                : bonusRecords.reduce((sum: number, b: any) => sum + (Number(b?.amount) || 0), 0)
+            const bonusTitle = metrics.bonusTitle || bonusRecords[0]?.title || 'Monthly Bonus'
+            const bonusType = metrics.bonusType || bonusRecords[0]?.bonus_type || 'festival_bonus'
 
             const currentBD = (existingSummary.salary_breakdown as Record<string, any>) || {}
             const extraShiftEquiv = metrics.extraShiftEquivalentDays !== undefined 
@@ -1355,65 +1357,71 @@ export class SalaryService {
 
     /** Generate payslips for confirmed summaries */
     static async generatePayslips(ids: string[]) {
-        const summaries = await db.query.monthlyAttendanceSummary.findMany({
-            where: and(
-                inArray(monthlyAttendanceSummary.id, ids),
-                eq(monthlyAttendanceSummary.status, 'set_for_salary')
-            ),
-            with: {
-                profile: {
-                    columns: { full_name: true, email: true }
-                }
-            }
-        })
-
-        if (summaries.length === 0) {
-            throw new TRPCError({
-                code: 'BAD_REQUEST',
-                message: 'No valid summaries found for payslip generation. Ensure records are marked "Set for Salary".'
-            })
+        if (!ids.length) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'No summary IDs supplied.' })
         }
 
-        const firstSummary = summaries[0]
-        const lastDayOfMonth = new Date(firstSummary.year, firstSummary.month, 0).getDate()
-        const startOfMonth = `${firstSummary.year}-${String(firstSummary.month).padStart(2, '0')}-01`
-        const endOfMonth = `${firstSummary.year}-${String(firstSummary.month).padStart(2, '0')}-${lastDayOfMonth}`
-
-        // Pre-fetch all salary setups, location data, monthly bonuses, and extra shifts in parallel
-        const profileIds = summaries.map(s => s.profile_id)
-        const [allSalarySetups, officeSettingsData, allLocations, punchLocations, allBonuses, allExtraShifts] = await Promise.all([
-            db.query.employeeSalarySetup.findMany({
-                where: inArray(employeeSalarySetup.profile_id, profileIds),
-                orderBy: [desc(employeeSalarySetup.effective_from_year), desc(employeeSalarySetup.effective_from_month)],
-            }),
-            SmartCache.getOfficeSettingsCached(),
-            SmartCache.getOfficeLocationsCached(),
-            db.query.attendance.findMany({
+        return await db.transaction(async (tx) => {
+            const summaries = await tx.query.monthlyAttendanceSummary.findMany({
                 where: and(
-                    inArray(attendance.profile_id, profileIds),
-                    isNotNull(attendance.location_id)
+                    inArray(monthlyAttendanceSummary.id, ids),
+                    eq(monthlyAttendanceSummary.status, 'set_for_salary')
                 ),
-                columns: { profile_id: true, location_id: true }
-            }),
-            db.query.monthlyBonuses.findMany({
-                where: and(
-                    inArray(monthlyBonuses.profile_id, profileIds),
-                    eq(monthlyBonuses.month, firstSummary.month),
-                    eq(monthlyBonuses.year, firstSummary.year)
-                )
-            }),
-            db.query.attendance.findMany({
-                where: and(
-                    inArray(attendance.profile_id, profileIds),
-                    gte(attendance.date, startOfMonth),
-                    lte(attendance.date, endOfMonth),
-                    or(
-                        eq(attendance.is_extra_shift, true),
-                        isNotNull(attendance.extra_shift_type)
-                    )
-                )
+                with: {
+                    profile: {
+                        columns: { full_name: true, email: true }
+                    }
+                }
             })
-        ])
+
+            if (summaries.length === 0) {
+                throw new TRPCError({
+                    code: 'BAD_REQUEST',
+                    message: 'No valid summaries found for payslip generation. Ensure records are marked "Set for Salary".'
+                })
+            }
+
+            const firstSummary = summaries[0]
+            const lastDayOfMonth = new Date(firstSummary.year, firstSummary.month, 0).getDate()
+            const startOfMonth = `${firstSummary.year}-${String(firstSummary.month).padStart(2, '0')}-01`
+            const endOfMonth = `${firstSummary.year}-${String(firstSummary.month).padStart(2, '0')}-${lastDayOfMonth}`
+
+            // Pre-fetch all salary setups, location data, monthly bonuses, and extra shifts in parallel
+            const profileIds = summaries.map(s => s.profile_id)
+            const [allSalarySetups, officeSettingsData, allLocations, punchLocations, allBonuses, allExtraShifts] = await Promise.all([
+                tx.query.employeeSalarySetup.findMany({
+                    where: inArray(employeeSalarySetup.profile_id, profileIds),
+                    orderBy: [desc(employeeSalarySetup.effective_from_year), desc(employeeSalarySetup.effective_from_month)],
+                }),
+                SmartCache.getOfficeSettingsCached(),
+                SmartCache.getOfficeLocationsCached(),
+                tx.query.attendance.findMany({
+                    where: and(
+                        inArray(attendance.profile_id, profileIds),
+                        isNotNull(attendance.location_id)
+                    ),
+                    columns: { profile_id: true, location_id: true }
+                }),
+                tx.query.monthlyBonuses.findMany({
+                    where: and(
+                        inArray(monthlyBonuses.profile_id, profileIds),
+                        eq(monthlyBonuses.month, firstSummary.month),
+                        eq(monthlyBonuses.year, firstSummary.year)
+                    )
+                }),
+                tx.query.attendance.findMany({
+                    where: and(
+                        inArray(attendance.profile_id, profileIds),
+                        gte(attendance.date, startOfMonth),
+                        lte(attendance.date, endOfMonth),
+                        inArray(attendance.status, ['verified', 'pending']),
+                        or(
+                            eq(attendance.is_extra_shift, true),
+                            isNotNull(attendance.extra_shift_type)
+                        )
+                    )
+                })
+            ])
 
         const profileLocationIdMap = new Map<string, string>()
         for (const pl of punchLocations) {
@@ -1520,7 +1528,7 @@ export class SalaryService {
             ))
 
             // Fetch pending and adjusted advances list
-            const advancesList = await db.select({
+            const advancesList = await tx.select({
                 amount: employeeAdvances.amount,
                 particulars: employeeAdvances.particulars,
             }).from(employeeAdvances).where(and(
@@ -1593,7 +1601,7 @@ export class SalaryService {
             }
 
             // Update summary with payslip data
-            const [updated] = await db.update(monthlyAttendanceSummary).set({
+            const [updated] = await tx.update(monthlyAttendanceSummary).set({
                 status: 'payslip_generated',
                 gross_salary: grossSalary.toFixed(2),
                 absence_deduction: absenceDeduction.toFixed(2),
@@ -1609,7 +1617,7 @@ export class SalaryService {
                 const lastDay = new Date(summary.year, summary.month, 0).getDate()
                 const endDate = `${summary.year}-${String(summary.month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
 
-                await db.update(employeeAdvances).set({
+                await tx.update(employeeAdvances).set({
                     status: 'adjusted',
                     adjusted_in_month: summary.month,
                     adjusted_in_year: summary.year,
@@ -1628,7 +1636,7 @@ export class SalaryService {
                     )
                 ))
             } else {
-                await db.update(employeeAdvances).set({
+                await tx.update(employeeAdvances).set({
                     status: 'pending',
                     adjusted_in_month: null,
                     adjusted_in_year: null,
@@ -1654,12 +1662,12 @@ export class SalaryService {
                 const carryForwardParticulars = `Salary deficit carry-forward from ${MONTH_NAMES[summary.month - 1]} ${summary.year} payslip`
 
                 // Delete any existing carry-forward advance for this month/year first to prevent duplicate carry-forward
-                await db.delete(employeeAdvances).where(and(
+                await tx.delete(employeeAdvances).where(and(
                     eq(employeeAdvances.profile_id, summary.profile_id),
                     eq(employeeAdvances.particulars, carryForwardParticulars)
                 ))
 
-                await db.insert(employeeAdvances).values({
+                await tx.insert(employeeAdvances).values({
                     profile_id: summary.profile_id,
                     date: advanceDate,
                     amount: carryForwardAmount.toFixed(2),
@@ -1673,6 +1681,7 @@ export class SalaryService {
         }
 
         return results
+        })
     }
 
     /** Get individual payslip detail */
@@ -1911,6 +1920,13 @@ export class SalaryService {
             }
             if (summary.status !== 'payslip_generated') {
                 throw new TRPCError({ code: 'BAD_REQUEST', message: 'Payslip must be generated before marking as paid' })
+            }
+
+            if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
+                throw new TRPCError({
+                    code: 'BAD_REQUEST',
+                    message: 'Payment amount must be a positive number.'
+                })
             }
 
             // 3. Calculate remaining balance inside the lock

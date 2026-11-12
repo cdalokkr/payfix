@@ -13,16 +13,17 @@ export class ProfileService {
      * Ensure profile_photo_requests table exists in the current tenant schema.
      * Safe to call multiple times — uses IF NOT EXISTS.
      */
-    private static isSchemaEnsured = false
+    private static _ensuredSchemas = new Set<string>()
 
     /**
      * Cache schema assurance in memory so DDL queries are not executed on every attendance punch.
-     * Mirrors the ensureAttendanceSchema() pattern from AttendanceService.
+     * Mirrors the ensureAttendanceSchema() pattern from AttendanceService per tenant.
      */
     static async ensurePhotoRequestsSchema() {
-        if (this.isSchemaEnsured) return
+        const schemaKey = tenantStorage.getStore()?.tenantSchema || tenantStorage.getStore()?.tenantId || 'public'
+        if (this._ensuredSchemas.has(schemaKey)) return
         if (process.env.ALLOW_RUNTIME_SCHEMA_FALLBACK !== 'true') {
-            this.isSchemaEnsured = true
+            this._ensuredSchemas.add(schemaKey)
             return
         }
         try {
@@ -52,7 +53,7 @@ export class ProfileService {
                     ADD COLUMN IF NOT EXISTS "face_enrolled_at" timestamp with time zone,
                     ADD COLUMN IF NOT EXISTS "face_photo_url" text;
             `)
-            this.isSchemaEnsured = true
+            this._ensuredSchemas.add(schemaKey)
         } catch (e) {
             // Ignore — table already exists or concurrent creation
         }
