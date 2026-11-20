@@ -155,7 +155,12 @@ export function getTenantDb(
         connect_timeout: 30,
         backoff: (attempt) => Math.min(attempt * 0.25, 2),
         max_lifetime: 60 * 30, // Refresh connections every 30 minutes
-        connection: connectionParams
+        connection: connectionParams,
+        onnotice: (notice) => {
+            // Ignore routine "already exists, skipping" notices from DDL checks
+            if (notice.code === '42P07' || notice.code === '42701') return;
+            console.info(`[DB Notice] ${notice.message}`);
+        }
     });
 
     const db = drizzle(client, { schema });

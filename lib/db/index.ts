@@ -27,7 +27,12 @@ function getCentralDb() {
             idle_timeout: 20,
             connect_timeout: 30,
             backoff: (attempt) => Math.min(attempt * 0.25, 2),
-            max_lifetime: 60 * 30 // 30 minutes
+            max_lifetime: 60 * 30, // 30 minutes
+            onnotice: (notice) => {
+                // Ignore routine "already exists, skipping" notices from DDL checks
+                if (notice.code === '42P07' || notice.code === '42701') return;
+                console.info(`[DB Notice] ${notice.message}`);
+            }
         });
         _centralDb = drizzle(_client, { schema });
     }

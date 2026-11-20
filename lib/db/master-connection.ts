@@ -25,6 +25,11 @@ function getMasterDb() {
             idle_timeout: 20,
             connect_timeout: 30,
             backoff: (attempt) => Math.min(attempt * 0.25, 2),
+            onnotice: (notice) => {
+                // Ignore routine "already exists, skipping" notices from DDL checks
+                if (notice.code === '42P07' || notice.code === '42701') return;
+                console.info(`[DB Notice] ${notice.message}`);
+            }
         });
         _masterDb = drizzle(_client, { schema: masterSchema });
     }
