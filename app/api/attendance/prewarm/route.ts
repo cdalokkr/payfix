@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server'
 import { FaceServiceClient } from '@/lib/face-service-client'
 
-export const dynamic = 'force-dynamic'
-
 export async function GET() {
     try {
         const result = await FaceServiceClient.prewarm()

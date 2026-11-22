@@ -96,6 +96,9 @@ export class FaceServiceClient {
      * in the background by pinging /health. Throttled to at most once per 60 seconds.
      */
     static async prewarm(): Promise<{ ok: boolean; latencyMs?: number; engine?: string }> {
+        if (process.env.NEXT_PHASE === 'phase-production-build') {
+            return { ok: true }
+        }
         const now = Date.now()
         if (now - this.lastPrewarmTimestamp < 60000) {
             return { ok: true }
