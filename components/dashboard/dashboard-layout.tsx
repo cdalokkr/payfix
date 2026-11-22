@@ -58,6 +58,7 @@ function DashboardSkeleton() {
 interface DashboardLayoutProps {
   children?: ReactNode
   tenantBrand?: string | null
+  tenantLogo?: string | null
   tenantLicenseExpiresAt?: string | null
 }
 
@@ -114,6 +115,7 @@ function getInitialProfile(): Profile | null {
 export function DashboardLayout({ 
   children,
   tenantBrand,
+  tenantLogo,
   tenantLicenseExpiresAt
 }: DashboardLayoutProps) {
   const pathname = usePathname()
@@ -206,6 +208,7 @@ export function DashboardLayout({
           <TopBar 
             user={null} 
             tenantBrand={tenantBrand} 
+            tenantLogo={tenantLogo}
             tenantLicenseExpiresAt={tenantLicenseExpiresAt} 
           />
           <div className="flex-1 w-full pt-6 pb-4 px-4">
@@ -239,6 +242,7 @@ export function DashboardLayout({
           role={displayRole || 'employee'}
           tenants={tenants}
           defaultTenant={defaultTenant}
+          tenantLogo={tenantLogo}
           onTenantSwitch={handleTenantSwitch}
           user={currentUser}
           className={cn(currentRole === 'employee' && "hidden lg:flex")}
@@ -247,6 +251,7 @@ export function DashboardLayout({
           <TopBar 
             user={currentUser} 
             tenantBrand={tenantBrand} 
+            tenantLogo={tenantLogo}
             tenantLicenseExpiresAt={tenantLicenseExpiresAt} 
           />
           <div className="flex-1 overflow-y-auto pt-6 pb-20 lg:pb-4 scroll-smooth bg-background">

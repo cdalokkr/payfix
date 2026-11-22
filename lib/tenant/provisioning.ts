@@ -442,12 +442,38 @@ async function alignCanonicalTenantSchema(
             ON ${sql.raw(schemaName)}.shift_roster ("profile_id", "date");
         CREATE INDEX IF NOT EXISTS "idx_shift_roster_dept_date_cov"
             ON ${sql.raw(schemaName)}.shift_roster ("department_id", "date") INCLUDE ("profile_id", "shift_id", "status", "is_extra_shift");
+        CREATE UNIQUE INDEX IF NOT EXISTS "attendance_sessions_one_active_per_profile_day"
+            ON ${sql.raw(schemaName)}.attendance_sessions ("profile_id", "date") WHERE "status" = 'active';
+        CREATE UNIQUE INDEX IF NOT EXISTS "monthly_attendance_summary_profile_month_year_idx"
+            ON ${sql.raw(schemaName)}.monthly_attendance_summary ("profile_id", "month", "year");
+        CREATE INDEX IF NOT EXISTS "idx_monthly_summary_paid_by"
+            ON ${sql.raw(schemaName)}.monthly_attendance_summary ("paid_by");
+        CREATE INDEX IF NOT EXISTS "idx_monthly_summary_set_salary_by"
+            ON ${sql.raw(schemaName)}.monthly_attendance_summary ("set_for_salary_by");
+        CREATE INDEX IF NOT EXISTS "idx_attendance_location_date_status"
+            ON ${sql.raw(schemaName)}.attendance ("location_id", "date", "status");
+        CREATE INDEX IF NOT EXISTS "idx_shift_roster_date_status"
+            ON ${sql.raw(schemaName)}.shift_roster ("date", "status");
+        CREATE INDEX IF NOT EXISTS "idx_departments_location_active"
+            ON ${sql.raw(schemaName)}.departments ("location_id", "is_active");
+        CREATE UNIQUE INDEX IF NOT EXISTS "uq_departments_code"
+            ON ${sql.raw(schemaName)}.departments ("code") WHERE "code" IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS "idx_office_shifts_loc_dept_active"
+            ON ${sql.raw(schemaName)}.office_shifts ("location_id", "department_id", "is_active");
         CREATE INDEX IF NOT EXISTS "idx_shift_roster_date"
             ON ${sql.raw(schemaName)}.shift_roster ("date");
         CREATE INDEX IF NOT EXISTS "idx_shift_roster_shift_id"
             ON ${sql.raw(schemaName)}.shift_roster ("shift_id");
         CREATE INDEX IF NOT EXISTS "idx_monthly_bonuses_period"
             ON ${sql.raw(schemaName)}.monthly_bonuses ("year", "month");
+        CREATE INDEX IF NOT EXISTS "idx_profiles_tenant_role_created"
+            ON ${sql.raw(schemaName)}.profiles ("tenant_id", "role", "created_at" DESC);
+        CREATE INDEX IF NOT EXISTS "idx_profiles_status_role"
+            ON ${sql.raw(schemaName)}.profiles ("status", "role");
+        CREATE INDEX IF NOT EXISTS "idx_attendance_profile_date"
+            ON ${sql.raw(schemaName)}.attendance ("profile_id", "date" DESC);
+        CREATE INDEX IF NOT EXISTS "idx_activities_user_created"
+            ON ${sql.raw(schemaName)}.activities ("user_id", "created_at" DESC);
     `);
 
     const foreignKeyRows = requiredForeignKeys

@@ -88,6 +88,50 @@ export class FaceServiceClient {
         return token ? { Authorization: `Bearer ${token}` } : {}
     }
 
+    private static lastPrewarmTimestamp = 0
+    private static activePrewarmPromise: Promise<{ ok: boolean; latencyMs?: number; engine?: string }> | null = null
+
+    /**
+     * Wakes up the Google Cloud Run (develop) or Hugging Face Space (main) container
+     * in the background by pinging /health. Throttled to at most once per 60 seconds.
+     */
+    static async prewarm(): Promise<{ ok: boolean; latencyMs?: number; engine?: string }> {
+        if (process.env.NEXT_PHASE === 'phase-production-build') {
+            return { ok: true }
+        }
+        const now = Date.now()
+        if (now - this.lastPrewarmTimestamp < 60000) {
+            return { ok: true }
+        }
+        if (this.activePrewarmPromise) {
+            return this.activePrewarmPromise
+        }
+
+        this.activePrewarmPromise = (async () => {
+            const start = Date.now()
+            try {
+                const baseUrl = this.getBaseUrl().replace(/\/$/, '')
+                const resp = await fetch(`${baseUrl}/health`, {
+                    method: 'GET',
+                    headers: this.getAuthHeaders(),
+                    signal: AbortSignal.timeout(6000),
+                })
+                if (resp.ok) {
+                    this.lastPrewarmTimestamp = Date.now()
+                    const data = await resp.json().catch(() => ({}))
+                    return { ok: true, latencyMs: Date.now() - start, engine: data?.engine }
+                }
+            } catch (err: any) {
+                console.warn('[FaceServiceClient] Background prewarm ping failed:', err?.message || err)
+            } finally {
+                this.activePrewarmPromise = null
+            }
+            return { ok: false, latencyMs: Date.now() - start }
+        })()
+
+        return this.activePrewarmPromise
+    }
+
     /**
      * Accept a canonical portrait only when the service itself supplied either its
      * 3:4 contract label or dimensions that prove that exact ratio. This never

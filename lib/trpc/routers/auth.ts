@@ -888,7 +888,7 @@ export const authRouter = router({
       const { tenants } = await import('@/lib/db/master-schema');
 
       const tenant = await masterDb.query.tenants.findFirst({
-        where: eq(tenants.admin_email, ctx.user.email),
+        where: eq(tenants.admin_email, ctx.user.email || ''),
       });
 
       return {
@@ -908,7 +908,7 @@ export const authRouter = router({
 
       // Find the tenant for this user
       const tenant = await masterDb.query.tenants.findFirst({
-        where: eq(tenants.admin_email, ctx.user.email),
+        where: eq(tenants.admin_email, ctx.user.email || ''),
       });
 
       if (!tenant) {
@@ -1009,13 +1009,16 @@ export const authRouter = router({
               const { centralDb } = await import('@/lib/db');
               const userRole = ctx.profile?.role || 'employee';
 
+              const targetUserId = ctx.profile?.id || ctx.user?.id;
+              if (!targetUserId) return;
+
               // If super_admin, log in public schema.
               // Otherwise, scan and find the correct tenant schema to avoid FK violations.
               let activitySchema = 'public';
               if (userRole !== 'super_admin') {
                 try {
                   const scanResult = await centralDb.execute(sqlTag`
-                    SELECT public.find_profile_across_schemas(${ctx.profile?.id || ctx.user.id}::uuid) as profile;
+                    SELECT public.find_profile_across_schemas(${targetUserId}::uuid) as profile;
                   `);
                   const profileJson = scanResult[0]?.profile as any;
                   if (profileJson && profileJson.tenant_schema) {
@@ -1029,13 +1032,13 @@ export const authRouter = router({
               const description = formatActivityDescription({
                 action: 'logout',
                 actorRole: userRole,
-                actorEmail: ctx.user.email || '',
+                actorEmail: ctx.user?.email || '',
                 module: 'auth'
               });
 
               await centralDb.execute(sqlTag`
                 INSERT INTO ${sqlTag.raw(activitySchema)}.activities (user_id, activity_type, module, description)
-                VALUES (${ctx.profile?.id || ctx.user.id}, 'logout', 'auth', ${description});
+                VALUES (${targetUserId}, 'logout', 'auth', ${description});
               `);
             } catch (err) {
               console.error('[AUTH-LOGOUT] Background activity logging failed:', err);

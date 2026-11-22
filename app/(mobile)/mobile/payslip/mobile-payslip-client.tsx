@@ -20,6 +20,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { addTenantPdfHeader } from "@/lib/report-utils"
 
 
 const containerVars = {
@@ -110,6 +111,12 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
     const [year, setYear] = useState<number>(defaultYear)
     const [isDownloading, setIsDownloading] = useState<string | null>(null)
 
+    // Load tenant business branding for PDF letterhead
+    const { data: orgData } = trpc.organization.getBranding.useQuery(undefined, {
+        staleTime: 5 * 60 * 1000,
+        refetchOnWindowFocus: false,
+    })
+
     // Check if payslips are accessible
     const { data: payslipAccess, isLoading: isAccessLoading } = trpc.salary.getPayslipAccessSettings.useQuery()
     const isAccessible = payslipAccess ? payslipAccess.isAccessible !== false : true
@@ -146,11 +153,11 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
             
             const doc = new jsPDF();
             
-            doc.setFontSize(20);
-            doc.text("SALARY SLIP", 105, 20, { align: "center" });
-            
-            doc.setFontSize(10);
-            doc.text(`For the month of ${monthName} ${slip.year}`, 105, 28, { align: "center" });
+            // Add official tenant business letterhead with logo, address & GSTIN
+            const startY = await addTenantPdfHeader(doc, orgData?.branding, {
+                title: "SALARY SLIP",
+                subtitle: `For the month of ${monthName} ${slip.year}`,
+            });
             
             const tableBodyRows = [
                 ['Employee Name', profile.full_name || '—', 'Month Days', bd?.total_working_days || '—'],
@@ -161,10 +168,8 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                 ['', '', 'Extra Days', bd?.extra_days || '0'],
             ];
 
-
-
             autoTable(doc, {
-                startY: 40,
+                startY: startY,
                 body: tableBodyRows,
                 theme: 'grid',
                 styles: { fontSize: 9, cellPadding: 3 },
@@ -281,6 +286,15 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                 });
             }
             
+            // Add custom payslip notes / disclaimer footer if configured
+            if (orgData?.branding?.payslipNotes) {
+                const pageHeight = (doc as any).internal?.pageSize?.getHeight() || 297;
+                doc.setFontSize(8);
+                doc.setFont('helvetica', 'italic');
+                doc.setTextColor(148, 163, 184);
+                doc.text(orgData.branding.payslipNotes, 14, pageHeight - 12);
+            }
+
             const fileName = `Salary_Slip_${profile.full_name?.replace(/\s+/g, '_')}_${monthName}_${slip.year}.pdf`;
             doc.save(fileName);
         } catch (error) {

@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -10,11 +11,13 @@ import { NotificationBell } from "@/components/dashboard/notification-bell"
 import { Profile } from "@/types"
 import { trpc } from "@/lib/trpc/client"
 import { Building2, ShieldAlert } from "lucide-react"
+import { TenantLogo } from "@/components/brand/TenantLogo"
 
 interface TopBarProps {
   className?: string
   user?: Profile | null
   tenantBrand?: string | null
+  tenantLogo?: string | null
   tenantLicenseExpiresAt?: string | null
 }
 
@@ -22,9 +25,11 @@ function TopBarComponent({
   className, 
   user,
   tenantBrand,
+  tenantLogo,
   tenantLicenseExpiresAt: propLicenseExpiresAt
 }: TopBarProps) {
-  const isSuperAdmin = user?.role === 'super_admin';
+  const pathname = usePathname();
+  const isSuperAdmin = user?.role === 'super_admin' || pathname?.startsWith('/superadmin');
 
   const hasPropData = !!tenantBrand;
   const { data: tenantInfo } = trpc.profile.getTenantInfo.useQuery(undefined, {
@@ -91,7 +96,7 @@ function TopBarComponent({
           <>
             <div className="h-6 w-px bg-border/40 hidden sm:block" />
             <div className="hidden sm:flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-muted-foreground/70 shrink-0" />
+              <TenantLogo size="xs" logoUrl={tenantLogo} appName={finalBrandName} className="shrink-0" />
               <span className="text-sm font-semibold text-foreground/90 truncate max-w-[200px]">
                 {finalBrandName}
               </span>

@@ -3,6 +3,8 @@
 import React, { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Download, FileSpreadsheet, FileText, Loader2 } from 'lucide-react'
+import { trpc } from '@/lib/trpc/client'
+import { addTenantPdfHeader } from '@/lib/report-utils'
 
 interface ExportActionsProps {
   month: number
@@ -13,6 +15,11 @@ interface ExportActionsProps {
 export function ExportActions({ month, year, summaryData }: ExportActionsProps) {
   const [isExportingExcel, setIsExportingExcel] = useState(false)
   const [isExportingPdf, setIsExportingPdf] = useState(false)
+
+  const { data: orgData } = trpc.organization.getBranding.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  })
 
   const handleExportExcel = async () => {
     try {
@@ -49,8 +56,11 @@ export function ExportActions({ month, year, summaryData }: ExportActionsProps) 
       const autoTable = (await import('jspdf-autotable')).default
 
       const doc = new jsPDF()
-      doc.setFontSize(16)
-      doc.text(`Payroll Summary - ${month}/${year}`, 14, 20)
+      
+      const startY = await addTenantPdfHeader(doc, orgData?.branding, {
+        title: "Payroll Summary",
+        subtitle: `Period: ${month}/${year}`
+      })
 
       const tableRows = summaryData.map((s, idx) => [
         idx + 1,
@@ -62,7 +72,7 @@ export function ExportActions({ month, year, summaryData }: ExportActionsProps) 
       ])
 
       autoTable(doc, {
-        startY: 30,
+        startY: startY,
         head: [['#', 'Profile ID', 'Working Days', 'Present', 'Absent', 'Status']],
         body: tableRows,
       })

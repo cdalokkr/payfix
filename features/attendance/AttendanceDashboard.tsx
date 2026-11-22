@@ -14,6 +14,7 @@ import { CompactMetricCard } from "@/components/dashboard/compact-metric-card"
 import { useUserRealtimeDashboard } from "@/hooks/use-realtime-dashboard-data"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useProfile } from "@/lib/context/profile-context"
+import { generatePDF as generateBrandedPdf } from "@/lib/report-utils"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -37,6 +38,12 @@ export function AttendanceDashboard() {
     const isMobile = useIsMobile()
     const utils = trpc.useUtils()
     const [isDownloading, setIsDownloading] = useState(false)
+
+    // Load tenant business branding for PDF export
+    const { data: orgData } = trpc.organization.getBranding.useQuery(undefined, {
+        staleTime: 5 * 60 * 1000,
+        refetchOnWindowFocus: false,
+    })
 
     // Enable real-time updates for the employee
     useUserRealtimeDashboard(
@@ -198,35 +205,9 @@ export function AttendanceDashboard() {
         URL.revokeObjectURL(url)
     }
 
-    // Helper: Generate PDF
+    // Helper: Generate PDF with tenant branding
     const generatePDF = async (title: string, headers: string[], rows: string[][], filename: string) => {
-        const [{ jsPDF }, { default: autoTable }] = await Promise.all([
-            import('jspdf'),
-            import('jspdf-autotable'),
-        ])
-        const doc = new jsPDF()
-
-        // Title
-        doc.setFontSize(18)
-        doc.setTextColor(51, 51, 51)
-        doc.text(title, 14, 22)
-
-        // Date
-        doc.setFontSize(10)
-        doc.setTextColor(128, 128, 128)
-        doc.text(`Generated on: ${format(new Date(), "MMM dd, yyyy 'at' HH:mm:ss")}`, 14, 30)
-
-        // Table
-        autoTable(doc, {
-            head: [headers],
-            body: rows,
-            startY: 40,
-            styles: { fontSize: 9, cellPadding: 3 },
-            headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: 'bold' },
-            alternateRowStyles: { fillColor: [249, 250, 251] },
-        })
-
-        doc.save(filename)
+        await generateBrandedPdf(title, headers, rows, filename, orgData?.branding)
     }
 
     const handleDownloadReport = async (formatType: 'csv' | 'pdf') => {

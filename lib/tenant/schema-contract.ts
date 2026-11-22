@@ -266,6 +266,10 @@ export const TENANT_REQUIRED_INDEXES = [
     ['monthly_attendance_summary', 'idx_monthly_summary_set_salary_by'],
     ['profiles', 'idx_profiles_department_id'],
     ['designations', 'idx_designations_department_id'],
+    ['profiles', 'idx_profiles_tenant_role_created'],
+    ['profiles', 'idx_profiles_status_role'],
+    ['attendance', 'idx_attendance_profile_date'],
+    ['activities', 'idx_activities_user_created'],
 ] as const;
 
 export const TENANT_REQUIRED_FOREIGN_KEYS = [

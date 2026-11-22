@@ -44,25 +44,39 @@ export async function GET(request: NextRequest) {
         });
     }
 
+    const headerBrand = request.headers.get('x-tenant-brand');
+    const headerLogo = request.headers.get('x-tenant-logo');
+    const headerTheme = request.headers.get('x-tenant-theme');
+    
+    let parsedTheme: { primary?: string; secondary?: string; logo?: string } = {};
+    if (headerTheme) {
+        try {
+            parsedTheme = JSON.parse(headerTheme);
+        } catch {
+            // ignore JSON error
+        }
+    }
+
     const tenantSlug = request.headers.get('x-tenant-slug') 
         || request.nextUrl.searchParams.get('tenant');
         
     let tenant: TenantMetadata | null = null;
-    if (tenantSlug) {
-        // Resolve tenant branding from central DB using slug
-        tenant = await resolveTenant(tenantSlug);
-    } else {
-        // Try to resolve from hostname if search parameter is not provided
-        const hostname = request.headers.get('host') || '';
-        tenant = await resolveTenant(hostname);
+    // Only query database if header branding is not already injected by proxy
+    if (!headerBrand) {
+        if (tenantSlug) {
+            tenant = await resolveTenant(tenantSlug);
+        } else {
+            const hostname = request.headers.get('host') || '';
+            tenant = await resolveTenant(hostname);
+        }
     }
 
-    const appName = tenant?.branding?.app_name || 'PayFix';
+    const appName = headerBrand || tenant?.branding?.app_name || 'PayFix';
     const shortName = tenant?.branding?.short_name || appName;
     const tagline = tenant?.branding?.tagline || `${appName} - Employee Portal`;
-    const primaryColor = tenant?.branding?.primary_color || '#4f46e5';
-    const secondaryColor = tenant?.branding?.secondary_color || '#020617';
-    const logoUrl = tenant?.branding?.logo_url || '/icons/icon-192x192.png';
+    const primaryColor = parsedTheme.primary || tenant?.branding?.primary_color || '#4f46e5';
+    const secondaryColor = parsedTheme.secondary || tenant?.branding?.secondary_color || '#020617';
+    const logoUrl = headerLogo || parsedTheme.logo || tenant?.branding?.logo_url || '/icons/icon-192x192.png';
     const pwaDisplay = tenant?.branding?.pwa_display || 'standalone';
     const pwaOrientation = tenant?.branding?.pwa_orientation || 'portrait';
 
@@ -99,7 +113,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(manifest, {
         headers: {
             'Content-Type': 'application/manifest+json',
-            'Cache-Control': 'public, max-age=600, stale-while-revalidate=1200'
+            'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400'
         }
     });
 }

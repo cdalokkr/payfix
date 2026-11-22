@@ -18,10 +18,18 @@ interface CachedConnection {
     lastUsed: number;
 }
 
-const connectionPoolCache = new Map<string, CachedConnection>();
+// Anchor connection pool and lockout cache to globalThis to survive Turbopack HMR and worker scopes
+const globalForTenantDb = globalThis as unknown as {
+    tenantConnectionPoolCache?: Map<string, CachedConnection>;
+    tenantLockoutCache?: Map<string, { blocked: boolean; expires: number }>;
+    tenantPruneTimer?: NodeJS.Timeout;
+};
+
+const connectionPoolCache = globalForTenantDb.tenantConnectionPoolCache ?? new Map<string, CachedConnection>();
+globalForTenantDb.tenantConnectionPoolCache = connectionPoolCache;
 
 // Prune idle connections in serverless environment (cleanup worker)
-if (process.env.NODE_ENV !== 'test') {
+if (process.env.NODE_ENV !== 'test' && !globalForTenantDb.tenantPruneTimer) {
     const pruneTimer = setInterval(() => {
         const now = Date.now();
         const IDLE_TIMEOUT = 10 * 60 * 1000; // 10 minutes
@@ -39,10 +47,12 @@ if (process.env.NODE_ENV !== 'test') {
     if (typeof pruneTimer.unref === 'function') {
         pruneTimer.unref();
     }
+    globalForTenantDb.tenantPruneTimer = pruneTimer;
 }
 
 // Map to cache blocked/suspended tenant IDs to enforce fast, non-blocking DB-level lockout
-const tenantLockoutCache = new Map<string, { blocked: boolean; expires: number }>();
+const tenantLockoutCache = globalForTenantDb.tenantLockoutCache ?? new Map<string, { blocked: boolean; expires: number }>();
+globalForTenantDb.tenantLockoutCache = tenantLockoutCache;
 const LOCKOUT_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
 
 /**

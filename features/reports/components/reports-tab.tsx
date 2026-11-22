@@ -373,6 +373,12 @@ interface ReportsTabProps {
 }
 
 export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
+    // Tenant Branding for PDF Reports
+    const { data: orgData } = trpc.organization.getBranding.useQuery(undefined, {
+        staleTime: 5 * 60 * 1000,
+        refetchOnWindowFocus: false,
+    });
+
     // Consolidated State Settings
     const [selectedReportId, setSelectedReportId] = useState<string>('users')
     const [roleFilter, setRoleFilter] = useState<string>('all')
@@ -473,7 +479,7 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
                 const csvContent = generateCSV(data.headers, data.rows)
                 downloadFile(csvContent, filename, 'text/csv;charset=utf-8;')
             } else {
-                await generatePDF(pdfTitle, data.headers, data.rows, filename)
+                await generatePDF(pdfTitle, data.headers, data.rows, filename, orgData?.branding)
             }
 
             setDownloadStatus('success')

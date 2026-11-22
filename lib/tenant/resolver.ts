@@ -31,6 +31,20 @@ export interface TenantMetadata {
         splash_url: string | null;
         pwa_display: string;
         pwa_orientation: string;
+        // Business details & report layout
+        company_legal_name?: string | null;
+        company_address?: string | null;
+        city?: string | null;
+        state?: string | null;
+        pincode?: string | null;
+        country?: string | null;
+        contact_email?: string | null;
+        contact_phone?: string | null;
+        website?: string | null;
+        tax_id?: string | null;
+        report_logo_height?: number | null;
+        report_logo_alignment?: string | null;
+        payslip_notes?: string | null;
     } | null;
 }
 
@@ -183,6 +197,19 @@ export async function resolveTenant(hostname: string, forceRefresh = false): Pro
                 splash_url: brandingRecord.splash_url,
                 pwa_display: brandingRecord.pwa_display,
                 pwa_orientation: brandingRecord.pwa_orientation,
+                company_legal_name: brandingRecord.company_legal_name || null,
+                company_address: brandingRecord.company_address || null,
+                city: brandingRecord.city || null,
+                state: brandingRecord.state || null,
+                pincode: brandingRecord.pincode || null,
+                country: brandingRecord.country || 'India',
+                contact_email: brandingRecord.contact_email || null,
+                contact_phone: brandingRecord.contact_phone || null,
+                website: brandingRecord.website || null,
+                tax_id: brandingRecord.tax_id || null,
+                report_logo_height: brandingRecord.report_logo_height ?? 24,
+                report_logo_alignment: brandingRecord.report_logo_alignment || 'left',
+                payslip_notes: brandingRecord.payslip_notes || null,
             } : null,
         };
 
@@ -219,9 +246,16 @@ export function clearResolverCache(slug?: string): void {
         resolverCache.clear();
         return;
     }
-    for (const [key] of resolverCache.entries()) {
-        if (key === slug || key.includes(slug)) {
+    for (const [key, entry] of resolverCache.entries()) {
+        if (key === slug || key.includes(slug) || entry.data?.id === slug || entry.data?.slug === slug) {
             resolverCache.delete(key);
         }
     }
+}
+
+/**
+ * Specifically clears tenant branding resolver cache after logo or branding updates.
+ */
+export function clearTenantBrandingCache(tenantIdOrSlug?: string): void {
+    clearResolverCache(tenantIdOrSlug);
 }

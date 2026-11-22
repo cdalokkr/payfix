@@ -15,12 +15,19 @@ let createContextCallCount = 0
 const authCallTimes: number[] = []
 const MAX_AUTH_TIMES = 100
 
+// React cache() memoizes context creation across a single Server Component render tree
+const getCachedServerComponentContext = cache(async () => {
+  return createOptimizedContext();
+});
+
 export const createContext = async (opts?: { req: Request }) => {
   createContextCallCount++
   const startTime = performance.now()
 
   try {
-    const context = await createOptimizedContext(opts?.req)
+    const context = opts?.req
+      ? await createOptimizedContext(opts.req)
+      : await getCachedServerComponentContext()
 
 
     // Record timing for performance monitoring
