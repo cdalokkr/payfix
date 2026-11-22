@@ -76,15 +76,18 @@ const globalForAuth = globalThis as unknown as {
   sessionCache?: Map<string, SessionCache>
   userToHashCache?: Map<string, string>
   userIdSessionCache?: Map<string, SessionCache>
+  verifiedTokenCache?: Map<string, { user: User; expiresAt: number }>
 }
 
 const sessionCache = globalForAuth.sessionCache ?? new Map<string, SessionCache>()
 const userToHashCache = globalForAuth.userToHashCache ?? new Map<string, string>()
 const userIdSessionCache = globalForAuth.userIdSessionCache ?? new Map<string, SessionCache>()
+const verifiedTokenCache = globalForAuth.verifiedTokenCache ?? new Map<string, { user: User; expiresAt: number }>()
 
 globalForAuth.sessionCache = sessionCache
 globalForAuth.userToHashCache = userToHashCache
 globalForAuth.userIdSessionCache = userIdSessionCache
+globalForAuth.verifiedTokenCache = verifiedTokenCache
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 const CONTEXT_CACHE_PREFIX = 'ctx:'
 
@@ -428,8 +431,30 @@ export async function createOptimizedContext(
       console.log(`[AUTH-PERF] Lazy client creation: ${(performance.now() - tClientStart).toFixed(2)}ms`);
     }
 
-    const { data: authData, error: userError } = await supabase.auth.getUser()
-    const user = authData?.user || null
+    let user: User | null = null
+    let userError: any = null
+
+    // Fast-path: Reuse freshly verified user for this session to eliminate duplicate WAN calls to Supabase
+    if (cookieHash && verifiedTokenCache.has(cookieHash)) {
+      const cachedToken = verifiedTokenCache.get(cookieHash)!
+      if (Date.now() < cachedToken.expiresAt) {
+        user = cachedToken.user
+      } else {
+        verifiedTokenCache.delete(cookieHash)
+      }
+    }
+
+    if (!user) {
+      const { data: authData, error } = await supabase.auth.getUser()
+      user = authData?.user || null
+      userError = error
+      if (user && cookieHash) {
+        verifiedTokenCache.set(cookieHash, {
+          user,
+          expiresAt: Date.now() + 60 * 1000 // 60s fast-cache across sequential/concurrent sub-queries
+        })
+      }
+    }
 
     if (!user || userError) {
       const finalMetrics = endAuthTiming(metrics, {
@@ -609,6 +634,11 @@ export function invalidateUserSession(userId: string): void {
       removed++
     }
   }
+  for (const [key, val] of verifiedTokenCache.entries()) {
+    if (val.user.id === userId) {
+      verifiedTokenCache.delete(key)
+    }
+  }
   userToHashCache.delete(userId)
   console.log(`[AUTH-CACHE] Invalidated ${removed} session entr${removed === 1 ? 'y' : 'ies'} for ${userId}`)
 }
@@ -617,6 +647,7 @@ export function invalidateUserSession(userId: string): void {
 export function invalidateAllSessions(): void {
   sessionCache.clear()
   userToHashCache.clear()
+  verifiedTokenCache.clear()
   cacheHitCount = 0
   createContextCallCount = 0
   totalContextTime = 0

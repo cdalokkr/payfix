@@ -82,6 +82,14 @@ export const adminNavItems: NavGroup[] = [
     icon: "Building2",
     items: [
       {
+        title: "Company & Logo",
+        href: "/admin/business-profile",
+        icon: "Building2",
+        moduleId: "settings",
+        requiredRole: "admin",
+        description: "Business logo, legal details, and report letterhead"
+      },
+      {
         title: "Deptt. & Desig.",
         href: "/admin/departments",
         icon: "Building2",
@@ -251,6 +259,13 @@ export const moderatorNavItems: NavGroup[] = [
         icon: "Receipt",
         moduleId: "settings",
         description: "Workspace subscription, renewal timeline, and invoices"
+      },
+      {
+        title: "Company & Logo",
+        href: "/moderator/business-profile",
+        icon: "Building2",
+        moduleId: "settings",
+        description: "Business logo, legal details, and report letterhead"
       },
     ]
   },

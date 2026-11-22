@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -184,6 +184,8 @@ export function BiometricDevicesManager() {
     const [savingUserId, setSavingUserId] = useState<string | null>(null);
     const [isAutoAssigning, setIsAutoAssigning] = useState<boolean>(false);
     const [isExporting, setIsExporting] = useState<boolean>(false);
+    const isFetchingDevicesRef = useRef(false);
+    const isFetchingMappingsRef = useRef(false);
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
@@ -192,6 +194,8 @@ export function BiometricDevicesManager() {
     }, []);
 
     const fetchDevices = async () => {
+        if (isFetchingDevicesRef.current) return;
+        isFetchingDevicesRef.current = true;
         setIsLoading(true);
         try {
             const res = await fetch('/api/biometric/devices');
@@ -211,10 +215,13 @@ export function BiometricDevicesManager() {
             toast.error('Failed to load biometric devices');
         } finally {
             setIsLoading(false);
+            isFetchingDevicesRef.current = false;
         }
     };
 
     const fetchUserMappings = async () => {
+        if (isFetchingMappingsRef.current) return;
+        isFetchingMappingsRef.current = true;
         setIsMappingLoading(true);
         try {
             const res = await fetch('/api/biometric/users/mapping');
@@ -230,6 +237,7 @@ export function BiometricDevicesManager() {
             console.error('Error loading user biometric mappings:', e);
         } finally {
             setIsMappingLoading(false);
+            isFetchingMappingsRef.current = false;
         }
     };
 

@@ -32,6 +32,7 @@ import {
 } from "lucide-react"
 
 import { ProfilePhotoCapture } from "@/features/mobile/profile-photo-capture"
+import { TenantLogo } from "@/components/brand/TenantLogo"
 
 interface MobileHeaderProps {
     profile: {
@@ -115,6 +116,11 @@ export function MobileHeader({ profile }: MobileHeaderProps) {
                             <span className="text-sm font-semibold text-foreground leading-tight">{firstName}</span>
                         </div>
                     </button>
+
+                    {/* Center: Tenant Business Logo badge */}
+                    <div className="flex items-center">
+                        <TenantLogo size="xs" />
+                    </div>
 
                     {/* Right: Actions */}
                     <div className="flex items-center gap-1">

@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, varchar, date, numeric, integer, boolean, pgEnum, jsonb, real, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, varchar, date, numeric, integer, boolean, pgEnum, jsonb, real, uniqueIndex, index } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // Enums
@@ -119,7 +119,10 @@ export const profiles = pgTable('profiles', {
     must_change_password: boolean('must_change_password').default(false),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
-});
+}, (table) => [
+    index('idx_profiles_tenant_role_created').on(table.tenant_id, table.role, table.created_at.desc()),
+    index('idx_profiles_status_role').on(table.status, table.role),
+]);
 
 
 
@@ -132,7 +135,9 @@ export const activities = pgTable('activities', {
     description: text('description'),
     metadata: jsonb('metadata'),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
-});
+}, (table) => [
+    index('idx_activities_user_created').on(table.user_id, table.created_at.desc()),
+]);
 
 // Attendance
 export const attendance = pgTable('attendance', {
@@ -168,7 +173,9 @@ export const attendance = pgTable('attendance', {
     face_match_score: numeric('face_match_score', { precision: 5, scale: 4 }),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
-});
+}, (table) => [
+    index('idx_attendance_profile_date').on(table.profile_id, table.date.desc()),
+]);
 
 // Attendance Sessions (Multiple Check-In & Check-Out sessions per day)
 export const attendanceSessions = pgTable('attendance_sessions', {

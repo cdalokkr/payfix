@@ -85,7 +85,8 @@ export const adminUsersRouter = router({
       if (input.getAll) {
         users = await ctx.db.query.profiles.findMany({
           columns: {
-            face_embedding: false, // Exclude heavy face embedding column for faster fetch
+            face_embedding: false,
+            face_embedding_512: false,
           },
           where,
           with: {
@@ -105,6 +106,7 @@ export const adminUsersRouter = router({
           ctx.db.query.profiles.findMany({
             columns: {
               face_embedding: false,
+              face_embedding_512: false,
             },
             where,
             with: {

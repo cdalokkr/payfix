@@ -73,6 +73,23 @@ export const tenantBranding = pgTable('tenant_branding', {
     pwa_display: text('pwa_display').default('standalone').notNull(),
     pwa_orientation: text('pwa_orientation').default('portrait').notNull(),
     
+    // Business & Contact Information (for Reports, Payslips & Official Invoices)
+    company_legal_name: text('company_legal_name'),
+    company_address: text('company_address'),
+    city: varchar('city', { length: 100 }),
+    state: varchar('state', { length: 100 }),
+    pincode: varchar('pincode', { length: 20 }),
+    country: varchar('country', { length: 100 }).default('India'),
+    contact_email: text('contact_email'),
+    contact_phone: varchar('contact_phone', { length: 30 }),
+    website: text('website'),
+    tax_id: varchar('tax_id', { length: 50 }),
+    
+    // PDF Report & Payslip Layout Customization
+    report_logo_height: integer('report_logo_height').default(24),
+    report_logo_alignment: varchar('report_logo_alignment', { length: 20 }).default('left'),
+    payslip_notes: text('payslip_notes'),
+    
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 

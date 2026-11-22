@@ -10,18 +10,19 @@ if (typeof dns?.setDefaultResultOrder === 'function') {
     dns.setDefaultResultOrder('ipv4first');
 }
 
-// Lazy singleton: connection is only created on first use at runtime,
-// NOT during module evaluation at build time (Vercel build has no DATABASE_URL).
-let _client: postgres.Sql | null = null;
-let _centralDb: ReturnType<typeof drizzle> | null = null;
+// Lazy singleton anchored to globalThis so HMR and route handlers preserve active connection pool
+const globalForCentralDb = globalThis as unknown as {
+    centralClient?: postgres.Sql | null;
+    centralDbInstance?: ReturnType<typeof drizzle> | null;
+};
 
 function getCentralDb() {
-    if (!_centralDb) {
+    if (!globalForCentralDb.centralDbInstance) {
         const connectionString = process.env.DATABASE_URL;
         if (!connectionString) {
             throw new Error('DATABASE_URL environment variable is missing.');
         }
-        _client = postgres(connectionString, {
+        globalForCentralDb.centralClient = postgres(connectionString, {
             prepare: false,
             max: 20,
             idle_timeout: 20,
@@ -34,9 +35,9 @@ function getCentralDb() {
                 console.info(`[DB Notice] ${notice.message}`);
             }
         });
-        _centralDb = drizzle(_client, { schema });
+        globalForCentralDb.centralDbInstance = drizzle(globalForCentralDb.centralClient, { schema });
     }
-    return _centralDb;
+    return globalForCentralDb.centralDbInstance;
 }
 
 // Re-export centralDb as a getter-backed proxy so existing imports keep working

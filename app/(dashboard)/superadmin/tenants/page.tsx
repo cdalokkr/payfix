@@ -58,6 +58,36 @@ const securitySchema = z.object({
   path: ["confirmPassword"],
 });
 
+// Dedicated Tenant Avatar for Workspace Banner with Dynamic Logo Support
+function TenantBannerAvatar({ logoUrl, companyName }: { logoUrl?: string | null; companyName: string }) {
+  const [imgError, setImgError] = useState(false);
+
+  // Reset error state if logoUrl changes
+  useEffect(() => {
+    setImgError(false);
+  }, [logoUrl]);
+
+  if (logoUrl && !imgError) {
+    return (
+      <div className="w-12 h-12 sm:w-13 sm:h-13 rounded-2xl border border-slate-200/90 dark:border-slate-800/80 bg-white dark:bg-[#0B131A] p-1.5 flex items-center justify-center shadow-md shadow-slate-200/40 dark:shadow-none shrink-0 overflow-hidden">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={logoUrl}
+          alt={companyName}
+          onError={() => setImgError(true)}
+          className="w-full h-full object-contain"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-12 h-12 sm:w-13 sm:h-13 bg-[#635BFF] rounded-2xl flex items-center justify-center text-white font-black text-xl sm:text-2xl shadow-md shadow-indigo-200 dark:shadow-indigo-950 shrink-0">
+      {companyName.charAt(0).toUpperCase()}
+    </div>
+  );
+}
+
 export default function TenantsPage() {
   const utils = trpc.useUtils();
   const [searchTerm, setSearchTerm] = useState("");
@@ -819,9 +849,10 @@ export default function TenantsPage() {
           {/* TOP TENANT BANNER */}
           <div className="bg-white dark:bg-[#121B22] border border-slate-200/90 dark:border-slate-800/80 rounded-[16px] p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-start sm:items-center space-x-4">
-              <div className="w-12 h-12 sm:w-13 sm:h-13 bg-[#635BFF] rounded-2xl flex items-center justify-center text-white font-black text-xl sm:text-2xl shadow-md shadow-indigo-200 dark:shadow-indigo-950 shrink-0">
-                {selectedTenant.companyName.charAt(0).toUpperCase()}
-              </div>
+              <TenantBannerAvatar
+                logoUrl={selectedTenant.branding?.logoUrl}
+                companyName={selectedTenant.companyName}
+              />
 
               <div className="space-y-1 text-left">
                 {/* Name & Status Badge with Lucide Icon */}

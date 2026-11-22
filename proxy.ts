@@ -36,7 +36,7 @@ interface CachedProxyProfile {
     expiresAt: number;
 }
 const proxyProfileCache = new Map<string, CachedProxyProfile>();
-const PROXY_PROFILE_CACHE_TTL = 60 * 1000; // 60s
+const PROXY_PROFILE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache to eliminate 1.5s cross-schema RPC re-query during navigation
 
 // ============================================
 // Main Proxy Function
@@ -213,6 +213,7 @@ export async function proxy(request: NextRequest) {
     requestHeaders.delete('x-tenant-db-url')
     requestHeaders.delete('x-tenant-schema')
     requestHeaders.delete('x-tenant-brand')
+    requestHeaders.delete('x-tenant-logo')
     requestHeaders.delete('x-tenant-theme')
     requestHeaders.delete('x-tenant-license-expires-at')
     requestHeaders.delete(TENANT_HEALTH_PROBE_TOKEN_HEADER)
@@ -233,6 +234,7 @@ export async function proxy(request: NextRequest) {
         requestHeaders.set('x-tenant-db-url', tenant.database_url || '');
         requestHeaders.set('x-tenant-schema', tenant.tenant_schema || '');
         requestHeaders.set('x-tenant-brand', tenant.branding?.app_name || tenant.company_name);
+        requestHeaders.set('x-tenant-logo', tenant.branding?.logo_url || '');
         requestHeaders.set('x-tenant-license-expires-at', tenant.license_expires_at ? new Date(tenant.license_expires_at).toISOString() : '');
         requestHeaders.set('x-tenant-theme', JSON.stringify({
             primary: tenant.branding?.primary_color || '#4f46e5',
@@ -326,11 +328,12 @@ export async function proxy(request: NextRequest) {
     let user: any = null
     let profile: any = null
 
-    // Skip auth resolution for unauthenticated requests or public auth POST endpoints.
+    // Skip auth resolution for unauthenticated requests, public auth POST endpoints, or manifest/static assets.
     const hasAuthCookies = request.cookies.getAll().some(cookie => cookie.name.includes('-auth-token'))
     const isLoginOrSignupPost = (pathname.includes('auth.login') || pathname.includes('auth.registerTenant')) && request.method === 'POST';
+    const isPublicStaticOrManifest = pathname === '/api/manifest' || pathname === '/manifest.json' || pathname === '/api/attendance/prewarm' || pathname.startsWith('/icons/') || pathname.startsWith('/_next/');
 
-    if (!hasAuthCookies || isLoginOrSignupPost) {
+    if (!hasAuthCookies || isLoginOrSignupPost || isPublicStaticOrManifest) {
         user = null
         profile = null
     } else {
@@ -363,6 +366,7 @@ export async function proxy(request: NextRequest) {
                     requestHeaders.set('x-tenant-db-url', cached.tenant.database_url || '');
                     requestHeaders.set('x-tenant-schema', cached.tenant.tenant_schema || '');
                     requestHeaders.set('x-tenant-brand', cached.tenant.branding?.app_name || cached.tenant.company_name);
+                    requestHeaders.set('x-tenant-logo', cached.tenant.branding?.logo_url || '');
                     requestHeaders.set('x-tenant-license-expires-at', cached.tenant.license_expires_at ? new Date(cached.tenant.license_expires_at).toISOString() : '');
                     requestHeaders.set('x-tenant-theme', JSON.stringify({
                         primary: cached.tenant.branding?.primary_color || '#4f46e5',
@@ -433,6 +437,7 @@ export async function proxy(request: NextRequest) {
                                 requestHeaders.set('x-tenant-db-url', discoveredTenant.database_url || '');
                                 requestHeaders.set('x-tenant-schema', discoveredTenant.tenant_schema || '');
                                 requestHeaders.set('x-tenant-brand', discoveredTenant.branding?.app_name || discoveredTenant.company_name);
+                                requestHeaders.set('x-tenant-logo', discoveredTenant.branding?.logo_url || '');
                                 requestHeaders.set('x-tenant-license-expires-at', discoveredTenant.license_expires_at ? new Date(discoveredTenant.license_expires_at).toISOString() : '');
                                 requestHeaders.set('x-tenant-theme', JSON.stringify({
                                     primary: discoveredTenant.branding?.primary_color || '#4f46e5',
@@ -730,6 +735,7 @@ export async function proxy(request: NextRequest) {
         response.headers.set('x-tenant-id', tenant.id);
         response.headers.set('x-tenant-slug', tenant.slug);
         response.headers.set('x-tenant-brand', tenant.branding?.app_name || tenant.company_name);
+        response.headers.set('x-tenant-logo', tenant.branding?.logo_url || '');
     }
 
     // ============================================

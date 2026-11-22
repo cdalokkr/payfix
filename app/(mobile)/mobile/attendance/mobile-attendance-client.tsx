@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 
 import { trpc } from '@/lib/trpc/client'
 import { Loader2 } from 'lucide-react'
+import { prewarmBiometricService } from '@/lib/biometric-camera-prewarm'
 
 interface MobileAttendanceClientProps {
     profile: {
@@ -36,6 +37,7 @@ export function MobileAttendanceClient({ profile, action }: MobileAttendanceClie
 
     useEffect(() => {
         router.prefetch('/mobile')
+        prewarmBiometricService()
     }, [router])
 
     const handleComplete = () => {

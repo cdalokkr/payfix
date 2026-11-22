@@ -8,18 +8,19 @@ if (typeof dns?.setDefaultResultOrder === 'function') {
     dns.setDefaultResultOrder('ipv4first');
 }
 
-// Lazy singleton: connection created on first use at runtime,
-// NOT during module evaluation at build time (Vercel build has no DATABASE_URL).
-let _client: postgres.Sql | null = null;
-let _masterDb: ReturnType<typeof drizzle> | null = null;
+// Lazy singleton anchored to globalThis so HMR and route handlers preserve active connection pool
+const globalForMasterDb = globalThis as unknown as {
+    masterClient?: postgres.Sql | null;
+    masterDbInstance?: ReturnType<typeof drizzle> | null;
+};
 
 function getMasterDb() {
-    if (!_masterDb) {
+    if (!globalForMasterDb.masterDbInstance) {
         const connectionString = process.env.DATABASE_URL;
         if (!connectionString) {
             throw new Error('DATABASE_URL environment variable is missing.');
         }
-        _client = postgres(connectionString, {
+        globalForMasterDb.masterClient = postgres(connectionString, {
             prepare: false,
             max: 5, // Master control database queries are light and infrequent
             idle_timeout: 20,
@@ -31,9 +32,9 @@ function getMasterDb() {
                 console.info(`[DB Notice] ${notice.message}`);
             }
         });
-        _masterDb = drizzle(_client, { schema: masterSchema });
+        globalForMasterDb.masterDbInstance = drizzle(globalForMasterDb.masterClient, { schema: masterSchema });
     }
-    return _masterDb;
+    return globalForMasterDb.masterDbInstance;
 }
 
 export const masterDb = new Proxy({} as any, {

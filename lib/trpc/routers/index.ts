@@ -24,6 +24,7 @@ import { superadminRouter } from './superadmin'
 import { departmentsRouter } from './departments'
 import { shiftsRouter } from './shifts'
 import { billingRouter } from './billing'
+import { organizationRouter } from './organization'
 import { aiRouter } from './ai'
 
 export const appRouter = router({
@@ -32,6 +33,7 @@ export const appRouter = router({
   profile: profileRouter,
   superadmin: superadminRouter,
   billing: billingRouter,
+  organization: organizationRouter,
   departments: departmentsRouter,
   shifts: shiftsRouter,
   admin: router({

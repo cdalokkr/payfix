@@ -24,14 +24,21 @@ export default async function ModeratorLayout({ children }: ModeratorLayoutProps
 
     // Prefetch critical data for the dashboard to eliminate initial loading skeletons
     const dehydratedState = await getCachedDehydratedState(async (client, queryClient) => {
-        await queryClient.prefetchQuery({
-            queryKey: [['profile', 'get'], { type: 'query' }],
-            queryFn: () => client.profile.get(),
-        });
+        await Promise.all([
+            queryClient.prefetchQuery({
+                queryKey: [['profile', 'get'], { type: 'query' }],
+                queryFn: () => client.profile.get(),
+            }),
+            queryClient.prefetchQuery({
+                queryKey: [['organization', 'getBranding'], { type: 'query' }],
+                queryFn: () => client.organization.getBranding(),
+            }),
+        ]);
     });
 
     const headerStore = await headers();
     const tenantBrand = headerStore.get('x-tenant-brand');
+    const tenantLogo = headerStore.get('x-tenant-logo');
     const tenantLicenseExpiresAt = headerStore.get('x-tenant-license-expires-at');
 
     return (
@@ -39,6 +46,7 @@ export default async function ModeratorLayout({ children }: ModeratorLayoutProps
             <HydrationBoundary state={dehydratedState}>
                 <DashboardLayout 
                     tenantBrand={tenantBrand} 
+                    tenantLogo={tenantLogo}
                     tenantLicenseExpiresAt={tenantLicenseExpiresAt}
                 >
                     {children}
