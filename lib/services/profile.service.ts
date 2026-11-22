@@ -317,17 +317,24 @@ export class ProfileService {
      */
     static async getPhotoRequestStats() {
         await ProfileService.ensurePhotoRequestsSchema()
-        const [pending, approved, rejected] = await Promise.all([
-            db.select({ count: count() }).from(profilePhotoRequests).where(eq(profilePhotoRequests.status, 'pending')),
-            db.select({ count: count() }).from(profilePhotoRequests).where(eq(profilePhotoRequests.status, 'approved')),
-            db.select({ count: count() }).from(profilePhotoRequests).where(eq(profilePhotoRequests.status, 'rejected')),
-        ])
+        const statusRows = await db
+            .select({
+                status: profilePhotoRequests.status,
+                count: count(),
+            })
+            .from(profilePhotoRequests)
+            .groupBy(profilePhotoRequests.status)
+
+        const getCount = (status: string) => Number(statusRows.find(r => r.status === status)?.count || 0)
+        const pending = getCount('pending')
+        const approved = getCount('approved')
+        const rejected = getCount('rejected')
 
         return {
-            pending: pending[0].count,
-            approved: approved[0].count,
-            rejected: rejected[0].count,
-            total: pending[0].count + approved[0].count + rejected[0].count
+            pending,
+            approved,
+            rejected,
+            total: pending + approved + rejected,
         }
     }
 
@@ -337,6 +344,19 @@ export class ProfileService {
     static async getAllPhotoRequests() {
         await ProfileService.ensurePhotoRequestsSchema()
         return await db.query.profilePhotoRequests.findMany({
+            columns: {
+                id: true,
+                profile_id: true,
+                pending_photo_url: true,
+                pending_photo_sha256: true,
+                pending_face_embedding_pipeline_version: true,
+                diagnostics: true,
+                status: true,
+                reviewed_by: true,
+                reviewed_at: true,
+                rejection_reason: true,
+                created_at: true,
+            },
             with: {
                 profile: {
                     columns: {
