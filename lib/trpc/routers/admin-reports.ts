@@ -64,19 +64,23 @@ export const adminReportsRouter = router({
           today: sql<number>`count(*) filter (where ${activities.created_at} >= ${todayStart.toISOString()}::timestamp)`
         }).from(activities),
 
-        // 4. Active users (last 7 days)
-        ctx.db.select({ user_id: activities.user_id })
+        // 4. Active users count (unique active users in last 7 days)
+        ctx.db.select({ count: sql<number>`count(distinct ${activities.user_id})` })
           .from(activities)
           .where(gte(activities.created_at, sevenDaysAgo)),
 
-        // 5. Activities in the requested period
-        ctx.db.query.activities.findMany({
-          where: and(
-            gte(activities.created_at, startDate),
-            lt(activities.created_at, endDate)
-          ),
-          columns: { activity_type: true, user_id: true }
-        }),
+        // 5. Activities in the requested period (aggregated by user and activity_type)
+        ctx.db.select({
+          user_id: activities.user_id,
+          activity_type: activities.activity_type,
+          count: count(),
+        })
+        .from(activities)
+        .where(and(
+          gte(activities.created_at, startDate),
+          lt(activities.created_at, endDate)
+        ))
+        .groupBy(activities.user_id, activities.activity_type),
 
         // 6. Profiles data
         ctx.db.query.profiles.findMany({
@@ -103,7 +107,8 @@ export const adminReportsRouter = router({
       if (activitiesInPeriod) {
         activitiesInPeriod.forEach((activity: any) => {
           if (activity.user_id) {
-            userActivityCounts.set(activity.user_id, (userActivityCounts.get(activity.user_id) || 0) + 1)
+            const rowCount = Number(activity.count || 0)
+            userActivityCounts.set(activity.user_id, (userActivityCounts.get(activity.user_id) || 0) + rowCount)
           }
         })
       }
@@ -159,7 +164,8 @@ export const adminReportsRouter = router({
                   activityTypesMap.set(activity.user_id, new Map<string, number>())
                 }
                 const userTypes = activityTypesMap.get(activity.user_id)!
-                userTypes.set(type, (userTypes.get(type) || 0) + 1)
+                const rowCount = Number(activity.count || 0)
+                userTypes.set(type, (userTypes.get(type) || 0) + rowCount)
               }
             })
           }
@@ -251,6 +257,7 @@ export const adminReportsRouter = router({
           const type = activity.activity_type || 'unknown'
           const userId = activity.user_id
           const role = roleMap.get(userId) || 'employee' // Default to employee if unknown
+          const rowCount = Number(activity.count || 0)
 
           if (!activityRoleCounts.has(type)) {
             activityRoleCounts.set(type, { admin: 0, employee: 0 })
@@ -258,9 +265,9 @@ export const adminReportsRouter = router({
 
           const counts = activityRoleCounts.get(type)!
           if (role === 'admin') {
-            counts.admin++
+            counts.admin += rowCount
           } else {
-            counts.employee++
+            counts.employee += rowCount
           }
         })
       }
@@ -295,7 +302,7 @@ export const adminReportsRouter = router({
         : 0
 
       // Calculate unique active users
-      const activeUsersCount = new Set(activeUsersResult.map((a: any) => a.user_id)).size
+      const activeUsersCount = Number(activeUsersResult[0]?.count || 0)
 
       return {
         stats: {
