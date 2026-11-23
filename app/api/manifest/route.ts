@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { resolveTenant, type TenantMetadata } from '@/lib/tenant/resolver';
 
 export async function GET(request: NextRequest) {
     const type = request.nextUrl.searchParams.get('type');
@@ -39,70 +38,85 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(kioskManifest, {
             headers: {
                 'Content-Type': 'application/manifest+json',
-                'Cache-Control': 'public, max-age=600, stale-while-revalidate=1200'
+                'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800'
             }
         });
     }
 
-    const headerBrand = request.headers.get('x-tenant-brand');
-    const headerLogo = request.headers.get('x-tenant-logo');
-    const headerTheme = request.headers.get('x-tenant-theme');
-    
-    let parsedTheme: { primary?: string; secondary?: string; logo?: string } = {};
-    if (headerTheme) {
-        try {
-            parsedTheme = JSON.parse(headerTheme);
-        } catch {
-            // ignore JSON error
-        }
-    }
-
-    const tenantSlug = request.headers.get('x-tenant-slug') 
-        || request.nextUrl.searchParams.get('tenant');
-        
-    let tenant: TenantMetadata | null = null;
-    // Only query database if header branding is not already injected by proxy
-    if (!headerBrand) {
-        if (tenantSlug) {
-            tenant = await resolveTenant(tenantSlug);
-        } else {
-            const hostname = request.headers.get('host') || '';
-            tenant = await resolveTenant(hostname);
-        }
-    }
-
-    const appName = headerBrand || tenant?.branding?.app_name || 'PayFix';
-    const shortName = tenant?.branding?.short_name || appName;
-    const tagline = tenant?.branding?.tagline || `${appName} - Employee Portal`;
-    const primaryColor = parsedTheme.primary || tenant?.branding?.primary_color || '#4f46e5';
-    const secondaryColor = parsedTheme.secondary || tenant?.branding?.secondary_color || '#020617';
-    const logoUrl = headerLogo || parsedTheme.logo || tenant?.branding?.logo_url || '/icons/icon-192x192.png';
-    const pwaDisplay = tenant?.branding?.pwa_display || 'standalone';
-    const pwaOrientation = tenant?.branding?.pwa_orientation || 'portrait';
-
+    // Standard Universal PayFix PWA Manifest across all tenants
     const manifest = {
         id: '/mobile',
-        name: appName,
-        short_name: shortName,
-        description: tagline,
+        name: 'PayFix Attendance',
+        short_name: 'PayFix',
+        description: 'Employee attendance tracking with location and biometric verification',
         start_url: '/mobile',
         scope: '/',
-        display: pwaDisplay,
-        orientation: pwaOrientation,
-        background_color: secondaryColor,
-        theme_color: primaryColor,
+        display: 'standalone',
+        orientation: 'portrait',
+        background_color: '#020617',
+        theme_color: '#4f46e5',
         icons: [
             {
-                src: logoUrl,
+                src: '/icons/icon-72x72.png',
+                sizes: '72x72',
+                type: 'image/png',
+                purpose: 'any maskable'
+            },
+            {
+                src: '/icons/icon-96x96.png',
+                sizes: '96x96',
+                type: 'image/png',
+                purpose: 'any maskable'
+            },
+            {
+                src: '/icons/icon-128x128.png',
+                sizes: '128x128',
+                type: 'image/png',
+                purpose: 'any maskable'
+            },
+            {
+                src: '/icons/icon-144x144.png',
+                sizes: '144x144',
+                type: 'image/png',
+                purpose: 'any maskable'
+            },
+            {
+                src: '/icons/icon-152x152.png',
+                sizes: '152x152',
+                type: 'image/png',
+                purpose: 'any maskable'
+            },
+            {
+                src: '/icons/icon-192x192.png',
                 sizes: '192x192',
                 type: 'image/png',
                 purpose: 'any maskable'
             },
             {
-                src: logoUrl,
+                src: '/icons/icon-384x384.png',
+                sizes: '384x384',
+                type: 'image/png',
+                purpose: 'any maskable'
+            },
+            {
+                src: '/icons/icon-512x512.png',
                 sizes: '512x512',
                 type: 'image/png',
                 purpose: 'any maskable'
+            }
+        ],
+        shortcuts: [
+            {
+                name: 'Mark Attendance',
+                short_name: 'Attendance',
+                description: 'Mark your daily attendance',
+                url: '/mobile/attendance',
+                icons: [
+                    {
+                        src: '/icons/icon-96x96.png',
+                        sizes: '96x96'
+                    }
+                ]
             }
         ],
         categories: ['business', 'productivity'],
@@ -113,7 +127,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(manifest, {
         headers: {
             'Content-Type': 'application/manifest+json',
-            'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400'
+            'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800'
         }
     });
 }
