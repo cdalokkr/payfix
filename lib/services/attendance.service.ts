@@ -1,5 +1,5 @@
 import { db } from '@/lib/db'
-import { attendance, attendanceSessions, biometricRawLogs, activities, officeSettings, officeClosures, officeLocations, notifications, leaves, profiles, biometricConsumedProofs } from '@/lib/db/schema'
+import { attendance, attendanceSessions, officeShifts, biometricRawLogs, activities, officeSettings, officeClosures, officeLocations, notifications, leaves, profiles, biometricConsumedProofs } from '@/lib/db/schema'
 import { eq, and, gte, lte, desc, sql, inArray, isNotNull } from 'drizzle-orm'
 import { throwAppError } from '@/lib/errors/app-errors'
 import { SmartCache } from '@/lib/cache/smart-cache'
@@ -560,10 +560,16 @@ export class AttendanceService {
 
             if (activeSession) {
                 if (activeSession.date !== today) {
-                    // Auto-close stale active session from an earlier day so current day can start
-                    await tx.update(attendanceSessions)
-                        .set({ status: 'completed', check_out: activeSession.check_in })
-                        .where(eq(attendanceSessions.id, activeSession.id))
+                    const sessionAgeHours = (now.getTime() - new Date(activeSession.check_in).getTime()) / (1000 * 60 * 60)
+                    if (sessionAgeHours <= 18) {
+                        // Ongoing overnight shift in progress across midnight! User must clock out first.
+                        throwAppError('ALREADY_CLOCKED_IN', 'An active attendance session from your overnight shift is currently in progress. Please clock out first.')
+                    } else {
+                        // Truly stale session from earlier date (> 18h) -> auto-close so current day can start
+                        await tx.update(attendanceSessions)
+                            .set({ status: 'completed', check_out: activeSession.check_in })
+                            .where(eq(attendanceSessions.id, activeSession.id))
+                    }
                 } else {
                     throwAppError('ALREADY_CLOCKED_IN', 'An active attendance session is currently in progress. Please clock out first.')
                 }
@@ -866,20 +872,44 @@ export class AttendanceService {
             const totalWorkHours = totalMins / 60
             const dutyHours = Number(record?.duty_hours) || 8.0
 
-            let isHalfDay = record?.is_half_day || false
-            let finalRemarks = remarks || record?.remarks || null
-
-            // Half-day auto calculation: if worked < scheduled duty hours and >= 40% of duty hours
-            if (totalWorkHours > 0 && totalWorkHours < (dutyHours - 0.25)) {
-                if (totalWorkHours >= (dutyHours * 0.40)) {
-                    isHalfDay = true
-                    const halfDayNote = `Half Day (Incomplete duty: ${totalWorkHours.toFixed(1)}h / ${dutyHours.toFixed(1)}h)`
-                    finalRemarks = finalRemarks && !finalRemarks.includes('Half Day') ? `${finalRemarks} • ${halfDayNote}` : halfDayNote
+            let shiftInfo: any = null
+            try {
+                if (record?.shift_id) {
+                    shiftInfo = await tx.query.officeShifts.findFirst({
+                        where: eq(officeShifts.id, record.shift_id)
+                    })
+                } else if (record?.location_id) {
+                    const loc = await tx.query.officeLocations.findFirst({
+                        where: eq(officeLocations.id, record.location_id)
+                    })
+                    if (loc) {
+                        shiftInfo = {
+                            start_time: loc.check_in_time,
+                            end_time: loc.check_out_time,
+                            buffer_minutes: loc.buffer_minutes,
+                            is_overnight: loc.check_out_time < loc.check_in_time,
+                        }
+                    }
                 }
+            } catch {
+                // Ignore shift lookup failure
             }
 
-            // Extra hours calculation: if worked beyond assigned duty hours
-            const extraHours = Math.max(0, parseFloat((totalWorkHours - dutyHours).toFixed(2)))
+            const { calculateShiftAttendanceMetrics } = await import('@/lib/services/shifts.service')
+            const metrics = calculateShiftAttendanceMetrics({
+                checkIn: record?.first_check_in || record?.check_in,
+                checkOut: now,
+                totalWorkHours,
+                dutyHours,
+                shift: shiftInfo
+            })
+
+            let isHalfDay = record?.is_half_day || metrics.isHalfDay
+            let finalRemarks = remarks || record?.remarks || null
+            if (metrics.remarksNote && (!finalRemarks || !finalRemarks.includes('Half Day'))) {
+                finalRemarks = finalRemarks ? `${finalRemarks} • ${metrics.remarksNote}` : metrics.remarksNote
+            }
+            const extraHours = metrics.extraHours
 
             const [data] = await tx.update(attendance).set({
                 check_out: now,
@@ -920,6 +950,8 @@ export class AttendanceService {
         status,
         remarks,
         isHalfDay,
+        isExtraShift,
+        extraShiftType,
         verifiedBy,
         verifierName
     }: {
@@ -927,6 +959,8 @@ export class AttendanceService {
         status: 'verified' | 'rejected'
         remarks?: string
         isHalfDay?: boolean
+        isExtraShift?: boolean
+        extraShiftType?: 'full' | 'half' | null
         verifiedBy: string
         verifierName: string
     }) {
@@ -991,13 +1025,23 @@ export class AttendanceService {
             }
         }
 
-        const [data] = await db.update(attendance).set({
+        const updatePayload: any = {
             status,
             remarks,
             is_half_day: isHalfDay ?? false,
             verified_by: verifiedBy,
             updated_at: new Date()
-        }).where(eq(attendance.id, recordId)).returning()
+        }
+
+        if (isExtraShift !== undefined) {
+            updatePayload.is_extra_shift = isExtraShift
+            updatePayload.extra_shift_type = extraShiftType || (isExtraShift ? 'full' : null)
+        } else if (extraShiftType !== undefined) {
+            updatePayload.extra_shift_type = extraShiftType
+            updatePayload.is_extra_shift = Boolean(extraShiftType)
+        }
+
+        const [data] = await db.update(attendance).set(updatePayload).where(eq(attendance.id, recordId)).returning()
 
         if (!data) throwAppError('DATABASE_ERROR', 'Failed to verify attendance')
 

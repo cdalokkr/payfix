@@ -4,7 +4,7 @@
 import { z } from 'zod'
 import { router, protectedProcedure, adminProcedure, moderatorProcedure } from '../server'
 import { TRPCError } from '@trpc/server'
-import { attendance, profiles, departments, leaves, officeSettings, officeClosures, activities, notifications } from '@/lib/db/schema'
+import { attendance, attendanceSessions, profiles, departments, leaves, officeSettings, officeClosures, activities, notifications } from '@/lib/db/schema'
 import { eq, and, gte, lte, desc, sql, inArray, or, isNull } from 'drizzle-orm'
 import { AttendanceService } from '@/lib/services/attendance.service'
 import { LeavesService } from '@/lib/services/leaves.service'
@@ -23,6 +23,18 @@ export const attendanceRouter = router({
         .input(z.object({ localDate: z.string() }))
         .query(async ({ ctx, input }): Promise<{ status: 'not_clocked_in' | 'clocked_in' | 'marked' }> => {
             await AttendanceService.ensureAttendanceSchema()
+
+            // 1. Check for active session first (handles overnight shifts crossing midnight)
+            const activeSession = await ctx.db.query.attendanceSessions.findFirst({
+                where: and(
+                    eq(attendanceSessions.profile_id, ctx.profile.id),
+                    eq(attendanceSessions.status, 'active')
+                ),
+                orderBy: [desc(attendanceSessions.created_at)]
+            })
+            if (activeSession) return { status: 'clocked_in' };
+
+            // 2. Check today's attendance record
             const record = await ctx.db.query.attendance.findFirst({
                 where: and(
                     eq(attendance.profile_id, ctx.profile.id),
@@ -51,6 +63,36 @@ export const attendanceRouter = router({
     getMobileAttendance: protectedProcedure
         .query(async ({ ctx }) => {
             const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Kolkata' })
+
+            // 1. Check if user has an ongoing active session (e.g. overnight shift crossing midnight)
+            const activeSession = await ctx.db.query.attendanceSessions.findFirst({
+                where: and(
+                    eq(attendanceSessions.profile_id, ctx.profile.id),
+                    eq(attendanceSessions.status, 'active')
+                ),
+                orderBy: [desc(attendanceSessions.created_at)]
+            })
+
+            if (activeSession?.attendance_id) {
+                const parentRecord = await ctx.db.query.attendance.findFirst({
+                    where: eq(attendance.id, activeSession.attendance_id),
+                    columns: {
+                        id: true,
+                        date: true,
+                        check_in: true,
+                        check_out: true,
+                        first_check_in: true,
+                        last_check_out: true,
+                        current_session_status: true,
+                        total_sessions: true,
+                        working_hours: true,
+                        status: true
+                    }
+                })
+                if (parentRecord) return parentRecord
+            }
+
+            // 2. Default to today's record
             const record = await ctx.db.query.attendance.findFirst({
                 where: and(
                     eq(attendance.profile_id, ctx.profile.id),
@@ -58,6 +100,7 @@ export const attendanceRouter = router({
                 ),
                 columns: {
                     id: true,
+                    date: true,
                     check_in: true,
                     check_out: true,
                     first_check_in: true,
@@ -252,6 +295,8 @@ export const attendanceRouter = router({
             status: z.enum(['verified', 'rejected']),
             remarks: z.string().optional(),
             isHalfDay: z.boolean().optional(),
+            isExtraShift: z.boolean().optional(),
+            extraShiftType: z.enum(['full', 'half']).nullable().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
             const result = await AttendanceService.verifyAttendance({
@@ -259,6 +304,8 @@ export const attendanceRouter = router({
                 status: input.status,
                 remarks: input.remarks,
                 isHalfDay: input.isHalfDay,
+                isExtraShift: input.isExtraShift,
+                extraShiftType: input.extraShiftType,
                 verifiedBy: ctx.profile.id,
                 verifierName: ctx.profile.full_name || ctx.profile.email || 'Admin'
             })

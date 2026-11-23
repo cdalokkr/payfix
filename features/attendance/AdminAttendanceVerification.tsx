@@ -26,6 +26,7 @@ import { AttendanceSessionsDrawer } from "./attendance-sessions-drawer"
 import { BulkDailyUpload } from "./BulkDailyUpload"
 import { CardShell } from "./CardShell"
 import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
     Dialog,
     DialogContent,
@@ -218,7 +219,9 @@ export function AdminAttendanceVerification() {
                 id: verificationDialog.record.id,
                 status: verificationDialog.action,
                 remarks: verificationDialog.record.remarks ?? undefined,
-                isHalfDay: verificationDialog.record.is_half_day ?? undefined
+                isHalfDay: verificationDialog.record.is_half_day ?? undefined,
+                isExtraShift: verificationDialog.record.is_extra_shift ?? undefined,
+                extraShiftType: verificationDialog.record.extra_shift_type ?? undefined
             })
 
             // Mark verification dialog as success immediately
@@ -259,7 +262,9 @@ export function AdminAttendanceVerification() {
                     id,
                     status: action,
                     remarks: record?.remarks ?? undefined,
-                    isHalfDay: record?.is_half_day ?? undefined
+                    isHalfDay: record?.is_half_day ?? undefined,
+                    isExtraShift: record?.is_extra_shift ?? undefined,
+                    extraShiftType: record?.extra_shift_type ?? undefined
                 })
                 successCount++
             } catch (err) {
@@ -979,6 +984,50 @@ export function AdminAttendanceVerification() {
                                             {verificationDialog.record.check_out ? format(new Date(verificationDialog.record.check_out), 'hh:mm a') : '—'}
                                         </span>
                                     </div>
+                                </div>
+                            )}
+
+                            {/* Shift Assignment & Extra Shift Selection */}
+                            {verificationDialog.action === 'verified' && verificationDialog.status === 'idle' && (
+                                <div className="p-3 rounded-xl border border-slate-200/70 dark:border-slate-800/70 bg-slate-50/50 dark:bg-slate-900/40 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-[11px] font-bold text-foreground">
+                                            Shift Assignment / Duty Type
+                                        </Label>
+                                        {verificationDialog.record.is_extra_shift && (
+                                            <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 font-bold">
+                                                {verificationDialog.record.extra_shift_type === 'half' ? 'Extra Shift (Half)' : 'Extra Shift (Full)'}
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <Select
+                                        value={
+                                            verificationDialog.record.is_extra_shift
+                                                ? (verificationDialog.record.extra_shift_type === 'half' ? 'extra_half' : 'extra_full')
+                                                : (verificationDialog.record.is_half_day ? 'half_day' : 'regular')
+                                        }
+                                        onValueChange={(val) => {
+                                            setVerificationDialog(prev => ({
+                                                ...prev,
+                                                record: {
+                                                    ...prev.record,
+                                                    is_extra_shift: val === 'extra_full' || val === 'extra_half',
+                                                    extra_shift_type: val === 'extra_full' ? 'full' : (val === 'extra_half' ? 'half' : null),
+                                                    is_half_day: val === 'half_day',
+                                                }
+                                            }))
+                                        }}
+                                    >
+                                        <SelectTrigger className="h-9 text-xs bg-white dark:bg-slate-950">
+                                            <SelectValue placeholder="Select Shift Duty Type" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="regular">Regular Duty (Standard Shift)</SelectItem>
+                                            <SelectItem value="half_day">Half Day Duty</SelectItem>
+                                            <SelectItem value="extra_full">⚡ Extra Shift (Full Day Overtime)</SelectItem>
+                                            <SelectItem value="extra_half">⚡ Extra Shift (Half Day Overtime)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                             )}
 
