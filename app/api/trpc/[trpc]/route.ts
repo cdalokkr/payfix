@@ -7,6 +7,8 @@ import { appRouter } from '@/lib/trpc/routers'
 import { createContext } from '@/lib/trpc/server'
 import { runWithRequestHeaders } from '@/lib/tenant/with-context'
 
+export const maxDuration = 60
+
 // Security headers for API responses
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
