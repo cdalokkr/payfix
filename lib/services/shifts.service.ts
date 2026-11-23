@@ -68,12 +68,128 @@ export function computeShiftDuration(startTime: string, endTime: string): { dura
     }
 }
 
+export function calculateShiftAttendanceMetrics({
+    checkIn,
+    checkOut,
+    totalWorkHours,
+    dutyHours,
+    shift
+}: {
+    checkIn?: Date | null
+    checkOut?: Date | null
+    totalWorkHours: number
+    dutyHours: number
+    shift?: {
+        start_time?: string | null
+        end_time?: string | null
+        buffer_minutes?: number | null
+        duration_hours?: number | null
+        is_overnight?: boolean | null
+    } | null
+}): {
+    creditedWorkHours: number
+    extraHours: number
+    isHalfDay: boolean
+    remarksNote: string | null
+} {
+    const scheduledDuty = Number(dutyHours) || 8.0
+    const bufferMins = shift?.buffer_minutes !== undefined && shift?.buffer_minutes !== null 
+        ? Number(shift.buffer_minutes) 
+        : 15
+
+    let earlyExtraMins = 0
+    let lateExtraMins = 0
+
+    if (checkIn && shift?.start_time) {
+        const shiftStartMins = parseTimeToMinutes(shift.start_time)
+        const checkInDate = new Date(checkIn)
+        const checkInISTStr = checkInDate.toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour12: false })
+        const [ciH, ciM] = checkInISTStr.split(':').map(Number)
+        const checkInMins = (ciH || 0) * 60 + (ciM || 0)
+
+        // 15 min buffer before shift start:
+        // Marking in within 15 min before shift start does NOT count as extra hours.
+        // If employee arrives earlier than (shiftStartMins - bufferMins), the excess counts as extra hours.
+        const earlyMins = shiftStartMins - checkInMins
+        if (earlyMins > bufferMins) {
+            earlyExtraMins = earlyMins - bufferMins
+        }
+    }
+
+    if (checkOut && shift?.end_time) {
+        const shiftEndMins = parseTimeToMinutes(shift.end_time)
+        const checkOutDate = new Date(checkOut)
+        const checkOutISTStr = checkOutDate.toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour12: false })
+        const [coH, coM] = checkOutISTStr.split(':').map(Number)
+        let checkOutMins = (coH || 0) * 60 + (coM || 0)
+
+        const isOvernight = shift.is_overnight || (shiftEndMins < parseTimeToMinutes(shift.start_time || '00:00'))
+        if (isOvernight && checkOutMins < parseTimeToMinutes(shift.start_time || '00:00')) {
+            checkOutMins += 24 * 60
+        }
+        let adjustedShiftEndMins = shiftEndMins
+        if (isOvernight && shiftEndMins < parseTimeToMinutes(shift.start_time || '00:00')) {
+            adjustedShiftEndMins += 24 * 60
+        }
+
+        // 15 min buffer after shift end:
+        // Marking out within 15 min after shift end does NOT count as extra hours.
+        // If employee departs later than (adjustedShiftEndMins + bufferMins), the excess counts as extra hours.
+        const lateMins = checkOutMins - adjustedShiftEndMins
+        if (lateMins > bufferMins) {
+            lateExtraMins = lateMins - bufferMins
+        }
+    }
+
+    const hasShiftTimes = Boolean(shift?.start_time && shift?.end_time)
+
+    let extraHours = 0
+    if (hasShiftTimes) {
+        // Authoritative extra hours derived from shift start/end buffers:
+        // Within 15 min before shift start and 15 min after shift end is grace (0 extra hours).
+        // Only punches beyond the 15 min grace window count towards extra hours.
+        if (earlyExtraMins > 0 || lateExtraMins > 0) {
+            extraHours = parseFloat(((earlyExtraMins + lateExtraMins) / 60).toFixed(2))
+        } else {
+            extraHours = 0
+        }
+    } else if (totalWorkHours > scheduledDuty) {
+        // Fallback when specific shift times are not known (flexible duty hours):
+        // Any work beyond scheduledDuty + buffer (0.25h) is extra
+        const excessHours = totalWorkHours - scheduledDuty
+        if (excessHours > (bufferMins / 60)) {
+            extraHours = parseFloat((excessHours - (bufferMins / 60)).toFixed(2))
+        }
+    }
+
+    // Half-day auto calculation: if worked < scheduled duty hours and >= 40% of duty hours
+    let isHalfDay = false
+    let remarksNote: string | null = null
+    if (totalWorkHours > 0 && totalWorkHours < (scheduledDuty - 0.25)) {
+        if (totalWorkHours >= (scheduledDuty * 0.40)) {
+            isHalfDay = true
+            remarksNote = `Half Day (Incomplete duty: ${totalWorkHours.toFixed(1)}h / ${scheduledDuty.toFixed(1)}h)`
+        }
+    }
+
+    return {
+        creditedWorkHours: parseFloat(totalWorkHours.toFixed(2)),
+        extraHours: parseFloat(extraHours.toFixed(2)),
+        isHalfDay,
+        remarksNote
+    }
+}
+
 const _shiftSchemaEnsured = new Set<string>()
 
 export class ShiftService {
     static async ensureSchema() {
         const schemaKey = tenantStorage.getStore()?.tenantSchema || 'public'
         if (_shiftSchemaEnsured.has(schemaKey)) return
+        if (process.env.ALLOW_RUNTIME_SCHEMA_FALLBACK !== 'true') {
+            _shiftSchemaEnsured.add(schemaKey)
+            return
+        }
         try {
             await db.execute(sql`
                 CREATE TABLE IF NOT EXISTS "office_shifts" (
