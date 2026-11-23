@@ -32,7 +32,7 @@ globalForTenantDb.tenantConnectionPoolCache = connectionPoolCache;
 if (process.env.NODE_ENV !== 'test' && !globalForTenantDb.tenantPruneTimer) {
     const pruneTimer = setInterval(() => {
         const now = Date.now();
-        const IDLE_TIMEOUT = 10 * 60 * 1000; // 10 minutes
+        const IDLE_TIMEOUT = process.env.VERCEL ? 30 * 1000 : 10 * 60 * 1000; // 30s on Vercel, 10m on persistent dev
         for (const [key, cached] of connectionPoolCache.entries()) {
             if (now - cached.lastUsed > IDLE_TIMEOUT) {
                 console.log(`[DB Router] Closing idle connection pool: ${key}`);
@@ -42,7 +42,7 @@ if (process.env.NODE_ENV !== 'test' && !globalForTenantDb.tenantPruneTimer) {
                 });
             }
         }
-    }, 5 * 60 * 1000); // Check every 5 minutes
+    }, process.env.VERCEL ? 30 * 1000 : 5 * 60 * 1000);
 
     if (typeof pruneTimer.unref === 'function') {
         pruneTimer.unref();
@@ -161,8 +161,8 @@ export function getTenantDb(
     const client = postgres(targetDbUrl, {
         prepare: false,
         max: process.env.VERCEL ? 3 : (isCustomExternalDb ? 10 : 4), // Fewer connections per lambda in serverless to prevent Supabase pool starvation
-        idle_timeout: 20,
-        connect_timeout: 30,
+        idle_timeout: process.env.VERCEL ? 5 : 20,
+        connect_timeout: 10,
         backoff: (attempt) => Math.min(attempt * 0.25, 2),
         max_lifetime: 60 * 30, // Refresh connections every 30 minutes
         connection: connectionParams,
