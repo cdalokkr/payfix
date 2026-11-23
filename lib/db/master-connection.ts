@@ -22,7 +22,7 @@ function getMasterDb() {
         }
         globalForMasterDb.masterClient = postgres(connectionString, {
             prepare: false,
-            max: 5, // Master control database queries are light and infrequent
+            max: process.env.VERCEL ? 2 : 5, // Master control database queries are light and infrequent
             idle_timeout: 20,
             connect_timeout: 30,
             backoff: (attempt) => Math.min(attempt * 0.25, 2),

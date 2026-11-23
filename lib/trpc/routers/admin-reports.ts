@@ -61,7 +61,7 @@ export const adminReportsRouter = router({
         // 3. Consolidated Activity stats (Total and Today)
         ctx.db.select({
           total: count(),
-          today: sql<number>`count(*) filter (where ${activities.created_at} >= ${todayStart.toISOString()}::timestamp)`
+          today: sql<number>`count(*) filter (where ${activities.created_at} >= ${todayStart.toISOString()}::timestamptz)`
         }).from(activities),
 
         // 4. Active users count (unique active users in last 7 days)
@@ -373,13 +373,13 @@ export const adminReportsRouter = router({
         ctx.db.select({
           totalLogins: sql<number>`count(*) filter (where ${activities.activity_type} = 'login')`,
           totalActions: count(),
-          todayActivities: sql<number>`count(*) filter (where ${activities.created_at} >= ${todayStart.toISOString()}::timestamp)`
+          todayActivities: sql<number>`count(*) filter (where ${activities.created_at} >= ${todayStart.toISOString()}::timestamptz)`
         }).from(activities).where(eq(activities.user_id, profileId)),
 
         // 2. Consolidated Weekly Trend Stats
         ctx.db.select({
-          currentWeek: sql<number>`count(*) filter (where ${activities.created_at} >= ${weekAgo.toISOString()}::timestamp)`,
-          previousWeek: sql<number>`count(*) filter (where ${activities.created_at} >= ${twoWeeksAgo.toISOString()}::timestamp and ${activities.created_at} < ${weekAgo.toISOString()}::timestamp)`
+          currentWeek: sql<number>`count(*) filter (where ${activities.created_at} >= ${weekAgo.toISOString()}::timestamptz)`,
+          previousWeek: sql<number>`count(*) filter (where ${activities.created_at} >= ${twoWeeksAgo.toISOString()}::timestamptz and ${activities.created_at} < ${weekAgo.toISOString()}::timestamptz)`
         }).from(activities).where(eq(activities.user_id, profileId)),
 
         // 3. Activity Chart Data (last 7 days)

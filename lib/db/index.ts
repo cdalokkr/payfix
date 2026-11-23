@@ -24,7 +24,7 @@ function getCentralDb() {
         }
         globalForCentralDb.centralClient = postgres(connectionString, {
             prepare: false,
-            max: 20,
+            max: process.env.VERCEL ? 3 : 20,
             idle_timeout: 20,
             connect_timeout: 30,
             backoff: (attempt) => Math.min(attempt * 0.25, 2),

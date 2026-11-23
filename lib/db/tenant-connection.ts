@@ -160,7 +160,7 @@ export function getTenantDb(
 
     const client = postgres(targetDbUrl, {
         prepare: false,
-        max: isCustomExternalDb ? 10 : 4, // More connections for custom external DBs, fewer for shared schemas
+        max: process.env.VERCEL ? 3 : (isCustomExternalDb ? 10 : 4), // Fewer connections per lambda in serverless to prevent Supabase pool starvation
         idle_timeout: 20,
         connect_timeout: 30,
         backoff: (attempt) => Math.min(attempt * 0.25, 2),
