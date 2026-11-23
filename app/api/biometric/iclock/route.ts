@@ -155,6 +155,7 @@ export async function POST(req: NextRequest) {
                                 email: 'adms@essl.local',
                                 localDate,
                                 source: 'biometric',
+                                trustedHardwareSync: true,
                             });
                         } else if (!activeSession && punchType === 0) {
                             await AttendanceService.clockIn({
@@ -163,7 +164,8 @@ export async function POST(req: NextRequest) {
                                 localDate,
                                 source: 'biometric',
                                 deviceId: sn,
-                                locationId: locationId || undefined
+                                locationId: locationId || undefined,
+                                trustedHardwareSync: true,
                             });
                         }
                     }

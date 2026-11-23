@@ -132,37 +132,40 @@ export const attendanceRouter = router({
                 recordId: result.id
             }, ctx.profile.id)
 
-            // Send notifications to admins and moderators
-            const adminModerators = await ctx.db.query.profiles.findMany({
-                where: or(eq(profiles.role, 'admin'), eq(profiles.role, 'moderator')),
-                columns: { id: true, role: true }
-            })
+            // Dispatch notifications to admins and moderators asynchronously without blocking client
+            void (async () => {
+                try {
+                    const adminModerators = await ctx.db
+                        .select({ id: profiles.id, role: profiles.role })
+                        .from(profiles)
+                        .where(or(eq(profiles.role, 'admin'), eq(profiles.role, 'moderator')))
 
-            // Send notifications to admins and moderators with role-specific links
-            await Promise.all(adminModerators.map(async (user) => {
-                const role = user.role || 'admin'
-                const link = role === 'admin' ? '/admin/payroll/attendance' : '/moderator/payroll/attendance'
-                const title = 'Employee Clocked In'
-                const message = `${ctx.profile.full_name || ctx.profile.email} has clocked in`
+                    await Promise.all(adminModerators.map(async (user) => {
+                        const role = user.role || 'admin'
+                        const link = role === 'admin' ? '/admin/payroll/attendance' : '/moderator/payroll/attendance'
+                        const title = 'Employee Clocked In'
+                        const message = `${ctx.profile.full_name || ctx.profile.email} has clocked in`
 
-                // Insert notification to DB
-                await ctx.db.insert(notifications).values({
-                    user_id: user.id,
-                    title,
-                    message,
-                    type: 'attendance',
-                    link
-                })
+                        await ctx.db.insert(notifications).values({
+                            user_id: user.id,
+                            title,
+                            message,
+                            type: 'attendance',
+                            link
+                        })
 
-                // Broadcast to the specific user (since postgres_changes may not work due to RLS)
-                broadcastServerEvent('new_notification', {
-                    title,
-                    message,
-                    type: 'attendance',
-                    link,
-                    targetUserId: user.id
-                }, user.id)
-            }))
+                        broadcastServerEvent('new_notification', {
+                            title,
+                            message,
+                            type: 'attendance',
+                            link,
+                            targetUserId: user.id
+                        }, user.id)
+                    }))
+                } catch (notifErr) {
+                    console.error('[ATTENDANCE-NOTIFY] Failed to dispatch admin clock-in notifications:', notifErr)
+                }
+            })()
 
             return result
         }),
@@ -205,37 +208,40 @@ export const attendanceRouter = router({
                 recordId: result.id
             }, ctx.profile.id)
 
-            // Send notifications to admins and moderators
-            const adminModerators = await ctx.db.query.profiles.findMany({
-                where: or(eq(profiles.role, 'admin'), eq(profiles.role, 'moderator')),
-                columns: { id: true, role: true }
-            })
+            // Dispatch notifications to admins and moderators asynchronously without blocking client
+            void (async () => {
+                try {
+                    const adminModerators = await ctx.db
+                        .select({ id: profiles.id, role: profiles.role })
+                        .from(profiles)
+                        .where(or(eq(profiles.role, 'admin'), eq(profiles.role, 'moderator')))
 
-            // Send notifications to admins and moderators with role-specific links
-            await Promise.all(adminModerators.map(async (user) => {
-                const role = user.role || 'admin'
-                const link = role === 'admin' ? '/admin/payroll/attendance' : '/moderator/payroll/attendance'
-                const title = 'Employee Clocked Out'
-                const message = `${ctx.profile.full_name || ctx.profile.email} has clocked out`
+                    await Promise.all(adminModerators.map(async (user) => {
+                        const role = user.role || 'admin'
+                        const link = role === 'admin' ? '/admin/payroll/attendance' : '/moderator/payroll/attendance'
+                        const title = 'Employee Clocked Out'
+                        const message = `${ctx.profile.full_name || ctx.profile.email} has clocked out`
 
-                // Insert notification to DB
-                await ctx.db.insert(notifications).values({
-                    user_id: user.id,
-                    title,
-                    message,
-                    type: 'attendance',
-                    link
-                })
+                        await ctx.db.insert(notifications).values({
+                            user_id: user.id,
+                            title,
+                            message,
+                            type: 'attendance',
+                            link
+                        })
 
-                // Broadcast to the specific user (since postgres_changes may not work due to RLS)
-                broadcastServerEvent('new_notification', {
-                    title,
-                    message,
-                    type: 'attendance',
-                    link,
-                    targetUserId: user.id
-                }, user.id)
-            }))
+                        broadcastServerEvent('new_notification', {
+                            title,
+                            message,
+                            type: 'attendance',
+                            link,
+                            targetUserId: user.id
+                        }, user.id)
+                    }))
+                } catch (notifErr) {
+                    console.error('[ATTENDANCE-NOTIFY] Failed to dispatch admin clock-out notifications:', notifErr)
+                }
+            })()
 
             return result
         }),

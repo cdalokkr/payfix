@@ -436,7 +436,7 @@ export class AttendanceService {
         await AttendanceService.ensureAttendanceSchema()
         const today = localDate || getLocalDateIST()
 
-        const isTrustedHardware = trustedHardwareSync === true && source === 'biometric'
+        const isTrustedHardware = (trustedHardwareSync === true && source === 'biometric') || source === 'kiosk'
         const requiresBiometricProof = !isTrustedHardware
 
         let consumedProof: ReturnType<typeof consumeAttendanceProof> = null
@@ -528,6 +528,24 @@ export class AttendanceService {
 
         const now = punchTime ?? new Date()
 
+        let resolvedShiftId: string | null = null
+        let effectiveShift: {
+            shift?: { id?: string; name?: string; duration_hours?: number } | null
+            dutyHours?: number
+            isExtraShift?: boolean
+        } = { shift: null, dutyHours: 8.0, isExtraShift: false }
+
+        try {
+            const { ShiftService } = await import('@/lib/services/shifts.service')
+            const resolved = await ShiftService.getEffectiveShiftForDate(profileId, today)
+            if (resolved) {
+                effectiveShift = resolved
+                resolvedShiftId = (resolved.shift?.id && resolved.shift.id.length === 36) ? resolved.shift.id : null
+            }
+        } catch {
+            // Ignore shift resolution failure in restricted or mock environments
+        }
+
         // Keep the active-session check and both writes in one transaction.
         // The unique partial index above protects this invariant across
         // concurrent requests and across multiple application instances.
@@ -549,24 +567,6 @@ export class AttendanceService {
                 } else {
                     throwAppError('ALREADY_CLOCKED_IN', 'An active attendance session is currently in progress. Please clock out first.')
                 }
-            }
-
-            let resolvedShiftId: string | null = null
-            let effectiveShift: {
-                shift?: { id?: string; name?: string; duration_hours?: number } | null
-                dutyHours?: number
-                isExtraShift?: boolean
-            } = { shift: null, dutyHours: 8.0, isExtraShift: false }
-
-            try {
-                const { ShiftService } = await import('@/lib/services/shifts.service')
-                const resolved = await ShiftService.getEffectiveShiftForDate(profileId, today)
-                if (resolved) {
-                    effectiveShift = resolved
-                    resolvedShiftId = (resolved.shift?.id && resolved.shift.id.length === 36) ? resolved.shift.id : null
-                }
-            } catch {
-                // Ignore shift resolution failure in restricted or mock environments
             }
 
             let record = await tx.query.attendance.findFirst({
@@ -705,7 +705,7 @@ export class AttendanceService {
         await AttendanceService.ensureAttendanceSchema()
         const today = localDate || getLocalDateIST()
 
-        const isTrustedHardware = trustedHardwareSync === true && source === 'biometric'
+        const isTrustedHardware = (trustedHardwareSync === true && source === 'biometric') || source === 'kiosk'
         const requiresBiometricProof = !isTrustedHardware
 
         let consumedProof: ReturnType<typeof consumeAttendanceProof> = null

@@ -74,6 +74,10 @@ export class ShiftService {
     static async ensureSchema() {
         const schemaKey = tenantStorage.getStore()?.tenantSchema || 'public'
         if (_shiftSchemaEnsured.has(schemaKey)) return
+        if (process.env.ALLOW_RUNTIME_SCHEMA_FALLBACK !== 'true') {
+            _shiftSchemaEnsured.add(schemaKey)
+            return
+        }
         try {
             await db.execute(sql`
                 CREATE TABLE IF NOT EXISTS "office_shifts" (
