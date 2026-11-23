@@ -157,10 +157,13 @@ export function getTenantDb(
 
     const connectionParams: Record<string, any> = {};
     connectionParams.search_path = safeSchemaName;
+    // Prevent unreleased locks or runaway queries from holding serverless functions indefinitely
+    connectionParams.statement_timeout = 15000;
+    connectionParams.lock_timeout = 10000;
 
     const client = postgres(targetDbUrl, {
         prepare: false,
-        max: process.env.VERCEL ? 3 : (isCustomExternalDb ? 10 : 4), // Fewer connections per lambda in serverless to prevent Supabase pool starvation
+        max: process.env.VERCEL ? 5 : (isCustomExternalDb ? 10 : 4), // Generous headroom for parallel queries without pool starvation
         idle_timeout: process.env.VERCEL ? 5 : 20,
         connect_timeout: 10,
         backoff: (attempt) => Math.min(attempt * 0.25, 2),

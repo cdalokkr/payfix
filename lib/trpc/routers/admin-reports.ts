@@ -44,12 +44,13 @@ export const adminReportsRouter = router({
       todayStart.setHours(0, 0, 0, 0)
       const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
 
+      console.time('[REPORT-PERF] total getReportsData')
+      console.time('[REPORT-PERF] batch 1 - profiles')
+
+      // Batch 1: Profiles stats and profiles list (fast, runs on profiles table)
       const [
         roleCounts,
         statusCounts,
-        activityStats,
-        activeUsersResult,
-        activitiesInPeriod,
         profilesData,
       ] = await Promise.all([
         // 1. Consolidated Role counts
@@ -58,18 +59,37 @@ export const adminReportsRouter = router({
         // 2. Consolidated Status counts
         ctx.db.select({ status: profiles.status, count: count() }).from(profiles).groupBy(profiles.status),
 
-        // 3. Consolidated Activity stats (Total and Today)
+        // 3. Profiles data (direct select avoids relational graph compilation overhead)
+        ctx.db.select({
+          id: profiles.id,
+          role: profiles.role,
+          first_name: profiles.first_name,
+          last_name: profiles.last_name,
+          email: profiles.email,
+          avatar_url: profiles.avatar_url,
+        }).from(profiles),
+      ])
+      console.timeEnd('[REPORT-PERF] batch 1 - profiles')
+
+      console.time('[REPORT-PERF] batch 2 - activities')
+      // Batch 2: Activities stats & user breakdown (runs on activities table with indexes)
+      const [
+        activityStats,
+        activeUsersResult,
+        activitiesInPeriod,
+      ] = await Promise.all([
+        // 4. Consolidated Activity stats (Total and Today)
         ctx.db.select({
           total: count(),
           today: sql<number>`count(*) filter (where ${activities.created_at} >= ${todayStart.toISOString()}::timestamptz)`
         }).from(activities),
 
-        // 4. Active users count (unique active users in last 7 days)
+        // 5. Active users count (unique active users in last 7 days)
         ctx.db.select({ count: sql<number>`count(distinct ${activities.user_id})` })
           .from(activities)
           .where(gte(activities.created_at, sevenDaysAgo)),
 
-        // 5. Activities in the requested period (aggregated by user and activity_type)
+        // 6. Activities in the requested period (aggregated by user and activity_type)
         ctx.db.select({
           user_id: activities.user_id,
           activity_type: activities.activity_type,
@@ -81,12 +101,8 @@ export const adminReportsRouter = router({
           lt(activities.created_at, endDate)
         ))
         .groupBy(activities.user_id, activities.activity_type),
-
-        // 6. Profiles data
-        ctx.db.query.profiles.findMany({
-          columns: { id: true, role: true, first_name: true, last_name: true, email: true, avatar_url: true }
-        }),
       ])
+      console.timeEnd('[REPORT-PERF] batch 2 - activities')
 
       // Map consolidated results back to original variables or stats object
       const totalUsers = roleCounts.reduce((acc, curr) => acc + Number(curr.count), 0)
@@ -279,6 +295,7 @@ export const adminReportsRouter = router({
       }))
 
       // Calculate trends (compare with previous period)
+      console.time('[REPORT-PERF] batch 3 - trends')
       const previousStartDate = new Date(startDate.getTime() - (endDate.getTime() - startDate.getTime()))
 
       const [previousStats, previousTodayActivities] = await Promise.all([
@@ -290,6 +307,8 @@ export const adminReportsRouter = router({
           )
         ),
       ])
+      console.timeEnd('[REPORT-PERF] batch 3 - trends')
+      console.timeEnd('[REPORT-PERF] total getReportsData')
 
       const previousTotalUsersCount = previousStats[0]?.value || 0
       const userGrowthPercent = previousTotalUsersCount > 0
