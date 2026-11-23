@@ -130,26 +130,46 @@ export function AdminAttendanceVerification() {
     const { profile } = useProfile()
     const { subscribe } = useSharedManagementChannel()
 
-    // Queries with real-time friendly settings - staleTime: 0 ensures immediate refetch on invalidation
-    const { data: attendance, isLoading, isFetching, refetch: refetchAttendance } = trpc.attendance.getAttendance.useQuery(
+    const queryInput = useMemo(() => ({
+        mode: 'all' as const,
+        startDate: dateFilter?.from ? format(dateFilter.from, 'yyyy-MM-dd') : undefined,
+        endDate: dateFilter?.to ? format(dateFilter.to, 'yyyy-MM-dd') : undefined,
+    }), [dateFilter])
+
+    // Queries with real-time friendly settings
+    const { data: attendance, isLoading, isFetching } = trpc.attendance.getAttendance.useQuery(
+        queryInput,
         {
-            mode: 'all',
-            startDate: dateFilter?.from ? format(dateFilter.from, 'yyyy-MM-dd') : undefined,
-            endDate: dateFilter?.to ? format(dateFilter.to, 'yyyy-MM-dd') : undefined,
-        },
-        {
-            staleTime: 0, // Always consider stale so invalidation triggers immediate refetch
+            staleTime: 5000, // 5s staleTime prevents immediate duplicate refetches
             refetchOnWindowFocus: false, // Rely on real-time instead
             placeholderData: (prev) => prev, // Retain old data on screen while background refetch runs
         }
     )
 
+    // Debounced smart refetch: Coalesces multiple broadcast events or mutations within 250ms into a single query
+    const smartRefetchTimerRef = useRef<NodeJS.Timeout | null>(null)
+    const triggerSmartRefetch = useCallback(() => {
+        if (smartRefetchTimerRef.current) {
+            clearTimeout(smartRefetchTimerRef.current)
+        }
+        smartRefetchTimerRef.current = setTimeout(() => {
+            utils.attendance.getAttendance.invalidate(queryInput)
+        }, 250)
+    }, [utils.attendance.getAttendance, queryInput])
+
+    useEffect(() => {
+        return () => {
+            if (smartRefetchTimerRef.current) {
+                clearTimeout(smartRefetchTimerRef.current)
+            }
+        }
+    }, [])
+
     const bulkVerifyMutation = trpc.attendance.bulkVerifyAttendance.useMutation({
         onSuccess: () => {
             toast.success('Successfully updated records')
             setRowSelection({})
-            utils.attendance.getAttendance.invalidate()
-            refetchAttendance()
+            triggerSmartRefetch()
         },
         onError: (error) => toast.error(error.message)
     })
@@ -157,20 +177,19 @@ export function AdminAttendanceVerification() {
 
     // Subscribe to shared management channel for real-time updates
     // Data table needs to update on ALL actions (clock-in, clock-out, verified, rejected)
-    // because it shows checkout times and status changes
     useEffect(() => {
         if (!profile?.id) return
 
         const unsubscribe = subscribe((category, payload) => {
             if (category === 'attendance_update' || category === 'dashboard_sync') {
                 const action = payload?.action || 'unknown'
-                console.log(`[ATTENDANCE-VERIFICATION] Received ${action} via shared channel, refetching table...`)
-                refetchAttendance()
+                console.log(`[ATTENDANCE-VERIFICATION] Received ${action} via shared channel, scheduling debounced refresh...`)
+                triggerSmartRefetch()
             }
         })
 
         return unsubscribe
-    }, [profile?.id, subscribe, refetchAttendance])
+    }, [profile?.id, subscribe, triggerSmartRefetch])
 
     const scheduledHoursMap = useMemo(() => {
         const map: Record<number, number> = {}
@@ -199,8 +218,7 @@ export function AdminAttendanceVerification() {
             if (!isBulkProcessingRef.current) {
                 toast.success(`Attendance marked as ${data.status}`)
             }
-            utils.attendance.getAttendance.invalidate()
-            refetchAttendance()
+            triggerSmartRefetch()
         },
         onError: (error) => {
             if (!isBulkProcessingRef.current) {
@@ -212,26 +230,53 @@ export function AdminAttendanceVerification() {
     const handleExecuteVerification = async () => {
         if (!verificationDialog.record || !verificationDialog.action) return
 
+        const recordId = verificationDialog.record.id
+        const action = verificationDialog.action
+        const remarks = verificationDialog.record.remarks ?? undefined
+        const isHalfDay = verificationDialog.record.is_half_day ?? undefined
+        const isExtraShift = verificationDialog.record.is_extra_shift ?? undefined
+        const extraShiftType = verificationDialog.record.extra_shift_type ?? undefined
+
         setVerificationDialog(prev => ({ ...prev, status: 'processing' }))
+
+        // Optimistically update React Query cache so the table row updates INSTANTLY
+        utils.attendance.getAttendance.setData(queryInput, (oldData) => {
+            if (!oldData) return oldData
+            return oldData.map((item) => {
+                if (item.id === recordId) {
+                    return {
+                        ...item,
+                        status: action,
+                        remarks: remarks ?? item.remarks,
+                        is_half_day: isHalfDay !== undefined ? isHalfDay : item.is_half_day,
+                        is_extra_shift: isExtraShift !== undefined ? isExtraShift : item.is_extra_shift,
+                        extra_shift_type: extraShiftType !== undefined ? extraShiftType : item.extra_shift_type,
+                        verified_by: profile?.id ?? item.verified_by
+                    }
+                }
+                return item
+            })
+        })
 
         try {
             await verifyMutation.mutateAsync({
-                id: verificationDialog.record.id,
-                status: verificationDialog.action,
-                remarks: verificationDialog.record.remarks ?? undefined,
-                isHalfDay: verificationDialog.record.is_half_day ?? undefined,
-                isExtraShift: verificationDialog.record.is_extra_shift ?? undefined,
-                extraShiftType: verificationDialog.record.extra_shift_type ?? undefined
+                id: recordId,
+                status: action,
+                remarks,
+                isHalfDay,
+                isExtraShift,
+                extraShiftType
             })
 
             // Mark verification dialog as success immediately
             setVerificationDialog(prev => ({ ...prev, status: 'success' }))
 
-            // Invalidate/refetch immediately in active mode so KPI metric cards update
-            await utils.attendance.getAttendance.invalidate()
-            refetchAttendance()
+            // Coalesced single refetch in background to reconcile metrics
+            triggerSmartRefetch()
 
         } catch (error: any) {
+            // Revert cache on error
+            utils.attendance.getAttendance.invalidate(queryInput)
             setVerificationDialog(prev => ({
                 ...prev,
                 status: 'error',
@@ -278,9 +323,8 @@ export function AdminAttendanceVerification() {
             }))
         }
 
-        // Sync/refresh immediately after all records complete
-        await utils.attendance.getAttendance.invalidate()
-        refetchAttendance()
+        // Sync/refresh cleanly after all records complete
+        triggerSmartRefetch()
 
         setBulkVerificationDialog(prev => ({
             ...prev,
@@ -301,8 +345,7 @@ export function AdminAttendanceVerification() {
         onSuccess: (data: any) => {
             toast.success("Record updated successfully")
             handleOpenChange(false)
-            utils.attendance.getAttendance.invalidate()
-            refetchAttendance()
+            triggerSmartRefetch()
         },
         onError: (error) => toast.error(error.message)
     })
@@ -704,15 +747,23 @@ export function AdminAttendanceVerification() {
                 icon={FileText}
                 contentClassName="min-h-0 p-3 md:p-4 pt-1.5 md:pt-2 h-full overflow-auto"
                 headerActions={
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1.5 rounded-xl h-8 text-xs"
-                        onClick={() => setIsBulkUploadOpen(true)}
-                    >
-                        <Upload className="h-3.5 w-3.5" />
-                        Bulk Upload
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        {isFetching && !isLoading && (
+                            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-primary/10 text-primary text-[11px] font-semibold border border-primary/20 animate-in fade-in duration-200">
+                                <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                                <span>Syncing...</span>
+                            </div>
+                        )}
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5 rounded-xl h-8 text-xs"
+                            onClick={() => setIsBulkUploadOpen(true)}
+                        >
+                            <Upload className="h-3.5 w-3.5" />
+                            Bulk Upload
+                        </Button>
+                    </div>
                 }
             >
                                 {activeQuickFilter !== 'all' && (
@@ -732,12 +783,12 @@ export function AdminAttendanceVerification() {
                     </div>
                 )}
                 <div className="relative">
-                    {(isFiltering || (isFetching && !isLoading)) && (
-                        <div className="absolute inset-0 bg-white/50 dark:bg-slate-950/50 backdrop-blur-[1px] flex items-center justify-center z-10 rounded-xl transition-all duration-200">
-                            <div className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-900 shadow-xl border border-slate-100 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-150">
-                                <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                                <span className="text-[10px] font-bold text-muted-foreground">
-                                    {isFiltering ? "Filtering logs..." : "Refreshing attendance logs..."}
+                    {isFiltering && (
+                        <div className="absolute inset-0 bg-white/40 dark:bg-slate-950/40 backdrop-blur-[1px] flex items-center justify-center z-10 rounded-xl transition-all duration-150">
+                            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white dark:bg-slate-900 shadow-lg border border-slate-100 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-100">
+                                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                <span className="text-xs font-semibold text-muted-foreground">
+                                    Filtering logs...
                                 </span>
                             </div>
                         </div>
@@ -789,13 +840,11 @@ export function AdminAttendanceVerification() {
                 onOpenChange={(open) => {
                     if (!open) {
                         setSessionsDialogRecord(null)
-                        refetchAttendance()
                     }
                 }}
                 record={sessionsDialogRecord}
                 onSessionUpdated={() => {
-                    utils.attendance.getAttendance.invalidate()
-                    refetchAttendance()
+                    triggerSmartRefetch()
                 }}
             />
 
@@ -826,7 +875,7 @@ export function AdminAttendanceVerification() {
                 onOpenChange={(open) => {
                     setIsBulkUploadOpen(open)
                     if (!open) {
-                        refetchAttendance()
+                        triggerSmartRefetch()
                     }
                 }}
             />
@@ -836,9 +885,6 @@ export function AdminAttendanceVerification() {
                 onOpenChange={(open) => {
                     if (verificationDialog.status === 'processing') return
                     setVerificationDialog(prev => ({ ...prev, isOpen: open }))
-                    if (!open) {
-                        refetchAttendance()
-                    }
                 }}
             >
                 <DialogContent className="max-w-[520px] w-[95vw] sm:w-full max-h-[90vh] flex flex-col p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-950">
@@ -1112,9 +1158,6 @@ export function AdminAttendanceVerification() {
                 onOpenChange={(open) => {
                     if (bulkVerificationDialog.status === 'processing') return
                     setBulkVerificationDialog(prev => ({ ...prev, isOpen: open }))
-                    if (!open) {
-                        refetchAttendance()
-                    }
                 }}
             >
                 <DialogContent className="max-w-[480px] w-[95vw] sm:w-full p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-200/60 dark:border-slate-800/60 bg-white dark:bg-slate-950">

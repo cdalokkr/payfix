@@ -1,5 +1,5 @@
 import { db } from '@/lib/db'
-import { attendance, attendanceSessions, officeShifts, biometricRawLogs, activities, officeSettings, officeClosures, officeLocations, notifications, leaves, profiles, biometricConsumedProofs } from '@/lib/db/schema'
+import { attendance, attendanceSessions, officeShifts, biometricRawLogs, activities, officeSettings, officeClosures, officeLocations, notifications, leaves, profiles, designations, biometricConsumedProofs } from '@/lib/db/schema'
 import { eq, and, gte, lte, desc, sql, inArray, isNotNull } from 'drizzle-orm'
 import { throwAppError } from '@/lib/errors/app-errors'
 import { SmartCache } from '@/lib/cache/smart-cache'
@@ -81,31 +81,34 @@ export class AttendanceService {
             throwAppError('UNAUTHORIZED', 'Profile ID is required for employee role')
         }
 
-        const [targetProfiles, settings, allClosures, allLocations] = await Promise.all([
-            db.query.profiles.findMany({
-                where: filterProfileId ? eq(profiles.id, filterProfileId) : eq(profiles.status, 'active'),
-                columns: {
-                    id: true,
-                    email: true,
-                    full_name: true,
-                    role: true,
-                    avatar_url: true,
-                    sex: true
-                },
-                with: {
-                    designation: {
-                        columns: {
-                            name: true
-                        }
-                    }
-                }
-            }),
+        const [rawProfiles, settings, allClosures, allLocations] = await Promise.all([
+            db.select({
+                id: profiles.id,
+                email: profiles.email,
+                full_name: profiles.full_name,
+                role: profiles.role,
+                avatar_url: profiles.avatar_url,
+                sex: profiles.sex,
+                designation_name: designations.name
+            })
+            .from(profiles)
+            .leftJoin(designations, eq(profiles.designation_id, designations.id))
+            .where(filterProfileId ? eq(profiles.id, filterProfileId) : eq(profiles.status, 'active')),
             SmartCache.getOfficeSettingsCached(),
             SmartCache.getOfficeClosuresCached(),
             SmartCache.getOfficeLocationsCached()
         ])
 
-        if (targetProfiles.length === 0) return []
+        if (rawProfiles.length === 0) return []
+        const targetProfiles = rawProfiles.map(p => ({
+            id: p.id,
+            email: p.email,
+            full_name: p.full_name,
+            role: p.role,
+            avatar_url: p.avatar_url,
+            sex: p.sex,
+            designation: p.designation_name ? { name: p.designation_name } : null
+        }))
         const employeeIds = targetProfiles.map(p => p.id)
 
         const defaultOffDays = settings?.off_days || [0]
@@ -114,28 +117,22 @@ export class AttendanceService {
 
         // Fetch leaves, actual attendance records & all sessions concurrently
         const [leavesList, actualRecords, allSessions] = await Promise.all([
-            db.query.leaves.findMany({
-                where: and(
-                    inArray(leaves.profile_id, employeeIds),
-                    inArray(leaves.status, ['approved', 'pending']),
-                    lte(leaves.start_date, dates[dates.length - 1]),
-                    gte(leaves.end_date, dates[0])
-                )
-            }),
-            db.query.attendance.findMany({
-                where: and(
-                    inArray(attendance.profile_id, employeeIds),
-                    gte(attendance.date, dates[0]),
-                    lte(attendance.date, dates[dates.length - 1])
-                )
-            }),
-            db.query.attendanceSessions.findMany({
-                where: and(
-                    inArray(attendanceSessions.profile_id, employeeIds),
-                    gte(attendanceSessions.date, dates[0]),
-                    lte(attendanceSessions.date, dates[dates.length - 1])
-                )
-            })
+            db.select().from(leaves).where(and(
+                inArray(leaves.profile_id, employeeIds),
+                inArray(leaves.status, ['approved', 'pending']),
+                lte(leaves.start_date, dates[dates.length - 1]),
+                gte(leaves.end_date, dates[0])
+            )),
+            db.select().from(attendance).where(and(
+                inArray(attendance.profile_id, employeeIds),
+                gte(attendance.date, dates[0]),
+                lte(attendance.date, dates[dates.length - 1])
+            )),
+            db.select().from(attendanceSessions).where(and(
+                inArray(attendanceSessions.profile_id, employeeIds),
+                gte(attendanceSessions.date, dates[0]),
+                lte(attendanceSessions.date, dates[dates.length - 1])
+            ))
         ])
 
         // Build a profile lookup map from targetProfiles to stitch profiles in memory (avoiding redundant DB joins)

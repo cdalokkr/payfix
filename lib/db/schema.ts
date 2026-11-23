@@ -204,7 +204,10 @@ export const attendanceSessions = pgTable('attendance_sessions', {
     remarks: text('remarks'),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),
-});
+}, (table) => [
+    index('idx_attendance_sessions_profile_date').on(table.profile_id, table.date.desc()),
+    index('idx_attendance_sessions_attendance_id').on(table.attendance_id),
+]);
 
 // Biometric Raw Logs (Auditing secondary punches)
 export const biometricRawLogs = pgTable('biometric_raw_logs', {
