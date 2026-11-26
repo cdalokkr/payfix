@@ -107,7 +107,7 @@ export function BulkUserImportDialog({ isOpen, onOpenChange, onSuccess }: BulkUs
             toast.loading("Generating sample template...")
             const ExcelJS = (await import('exceljs')).default
             const workbook = new ExcelJS.Workbook()
-            workbook.creator = 'PayFix'
+            workbook.creator = 'NIYAMO'
             workbook.created = new Date()
 
             const worksheet = workbook.addWorksheet('Staff Template', {
@@ -140,7 +140,7 @@ export function BulkUserImportDialog({ isOpen, onOpenChange, onSuccess }: BulkUs
             const url = window.URL.createObjectURL(blob)
             const a = document.createElement('a')
             a.href = url
-            a.download = 'PayFix_Bulk_User_Import_Template.xlsx'
+            a.download = 'NIYAMO_Bulk_User_Import_Template.xlsx'
             a.click()
             window.URL.revokeObjectURL(url)
             toast.dismiss()

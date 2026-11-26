@@ -18,7 +18,7 @@ export default function GlobalError({
       <body className="bg-slate-950 text-white">
         <main className="flex min-h-screen items-center justify-center px-6 py-16">
           <div className="w-full max-w-lg rounded-2xl border border-white/15 bg-white/5 p-8 text-center">
-            <h1 className="text-2xl font-semibold">PayFix is temporarily unavailable</h1>
+            <h1 className="text-2xl font-semibold">NIYAMO is temporarily unavailable</h1>
             <p className="mt-2 text-sm text-white/70">
               Please try again. No workspace data was changed.
             </p>

@@ -10,6 +10,7 @@ import { SelectCustom as Select } from "@/components/auth/ui/select";
 import { Button } from "@/components/auth/ui/button";
 import { companyStepSchema } from "@/lib/validations/signup-wizard";
 import { trpc } from "@/lib/trpc/client";
+import { DEFAULT_MAIN_DOMAIN, resolveClientBaseDomain } from "@/lib/tenant/domain-utils";
 import type { RegisterFormData } from "./types";
 
 const INDUSTRIES = [
@@ -73,22 +74,11 @@ export default function CompanyStep({
   const industry = watch("industry");
   const teamSize = watch("teamSize");
 
-  const [baseDomain, setBaseDomain] = useState("payfix.com");
+  const [baseDomain, setBaseDomain] = useState(DEFAULT_MAIN_DOMAIN);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const host = window.location.hostname;
-      if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".localhost")) {
-        const port = window.location.port ? `:${window.location.port}` : "";
-        setBaseDomain(`localhost${port}`);
-      } else {
-        const parts = host.split(".");
-        if (parts.length >= 2) {
-          setBaseDomain(parts.slice(-2).join("."));
-        } else {
-          setBaseDomain(host);
-        }
-      }
+      setBaseDomain(resolveClientBaseDomain(window.location.hostname, window.location.port));
     }
   }, []);
 

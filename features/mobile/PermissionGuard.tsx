@@ -71,12 +71,12 @@ export function PermissionGuard({ children, showOnlyIfDenied = false, isPwaServe
                         <div className="w-20 h-20 bg-white rounded-[1.5rem] flex items-center justify-center shadow-2xl border-4 border-white overflow-hidden">
                             <img
                                 src="/icons/icon-192x192.png"
-                                alt="PayFix Logo"
+                                alt="NIYAMO Logo"
                                 className="w-full h-full object-cover"
                             />
                         </div>
                         <div className="text-center">
-                            <h1 className="text-2xl font-black tracking-tight leading-none text-gray-900">PayFix</h1>
+                            <h1 className="text-2xl font-black tracking-tight leading-none text-gray-900">NIYAMO</h1>
                             <p className="text-[10px] text-blue-600 font-bold uppercase tracking-[0.2em] mt-2">Mobile Attendance</p>
                         </div>
                     </motion.div>
@@ -98,7 +98,7 @@ export function PermissionGuard({ children, showOnlyIfDenied = false, isPwaServe
                                 </div>
                                 <CardTitle className="text-2xl font-black tracking-tight">Access Required</CardTitle>
                                 <CardDescription className="px-4 font-medium">
-                                    PayFix needs camera and location access for secure attendance.
+                                    NIYAMO needs camera and location access for secure attendance.
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-6 pb-8">

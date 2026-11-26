@@ -102,7 +102,7 @@ export async function proxy(request: NextRequest) {
 
     
     // Redirect if tenant not found but trying to access subdomains
-    const mainDomain = process.env.NEXT_PUBLIC_MAIN_DOMAIN || 'payfix.com';
+    const mainDomain = (process.env.NEXT_PUBLIC_MAIN_DOMAIN || 'niyamo.auravics.com').toLowerCase();
     const hostWithoutPort = hostname.split(':')[0].toLowerCase();
     const isMainDomain = 
         hostWithoutPort === mainDomain || 

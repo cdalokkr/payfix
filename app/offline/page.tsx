@@ -16,7 +16,7 @@ export default function OfflinePage() {
   // Set document title and monitor browser online/offline status dynamically
   useEffect(() => {
     if (typeof window !== "undefined") {
-      document.title = "Offline | PayFix"
+      document.title = "Offline | NIYAMO"
       setOnlineStatus(navigator.onLine)
 
       const handleOnline = () => setOnlineStatus(true)

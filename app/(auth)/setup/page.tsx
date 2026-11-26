@@ -138,7 +138,7 @@ function SetupWizard() {
                 <h2 className="text-[15px] font-bold text-slate-800 dark:text-slate-200 truncate leading-tight">
                   {setupInfo.companyName}
                 </h2>
-                <p className="text-xs text-slate-400 dark:text-slate-500 truncate mt-0.5">{setupInfo.slug}.payfix.com</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 truncate mt-0.5">{setupInfo.slug}.{process.env.NEXT_PUBLIC_MAIN_DOMAIN || 'niyamo.auravics.com'}</p>
               </>
             ) : (
               <>

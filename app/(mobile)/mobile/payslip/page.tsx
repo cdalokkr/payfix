@@ -8,7 +8,7 @@ import { runWithRequestHeaders } from "@/lib/tenant/with-context"
 
 
 export const metadata = {
-    title: 'My PaySlips - Payfix',
+    title: 'My PaySlips - NIYAMO',
 }
 
 export default async function MobilePayslipPage() {

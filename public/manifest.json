@@ -1,7 +1,7 @@
 {
-    "name": "PayFix Attendance",
-    "short_name": "Attendance",
-    "description": "Employee attendance tracking with location verification",
+    "name": "NIYAMO Attendance",
+    "short_name": "NIYAMO",
+    "description": "Multi-tenant biometric attendance, geofencing & payroll platform",
     "start_url": "/mobile",
     "display": "standalone",
     "orientation": "portrait",

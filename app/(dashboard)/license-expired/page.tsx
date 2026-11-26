@@ -2,7 +2,7 @@ import { AlertOctagon, HelpCircle, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
 export const metadata = {
-  title: 'License Expired - PayFix',
+  title: 'License Expired - NIYAMO',
   description: 'Your license for this workspace has expired.',
 };
 
@@ -48,7 +48,7 @@ export default async function LicenseExpiredPage() {
           <div className="space-y-3">
             <a
               id="contact-support-btn"
-              href="mailto:support@saaskit.in?subject=PayFix License Renewal Request"
+              href="mailto:support@auravics.com?subject=NIYAMO License Renewal Request"
               className="flex items-center justify-center gap-2 w-full py-3 px-4 bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white font-bold rounded-xl transition-all duration-300 shadow-[0_4px_20px_rgba(220,38,38,0.2)]"
             >
               <HelpCircle className="h-4 w-4" />
@@ -68,7 +68,7 @@ export default async function LicenseExpiredPage() {
 
         {/* Footer info */}
         <p className="mt-8 text-center text-slate-600 text-xs">
-          &copy; {new Date().getFullYear()} PayFix SaaS Platform. All rights reserved.
+          &copy; {new Date().getFullYear()} NIYAMO SaaS Platform. All rights reserved.
         </p>
       </div>
     </div>

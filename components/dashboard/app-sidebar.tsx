@@ -76,7 +76,7 @@ export function AppSidebar({ role, tenants, defaultTenant, tenantLogo, onTenantS
                   </div>
                   <div className="grid flex-1 text-left text-sm leading-tight transition-all duration-300 group-data-[collapsible=icon]:w-0 group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:flex-none overflow-hidden">
                     <span className="truncate font-bold tracking-tight">
-                      PayFix
+                      NIYAMO
                     </span>
                     <span className="truncate text-[10px] uppercase tracking-widest text-indigo-500 dark:text-indigo-400 font-semibold">
                       Platform Admin
@@ -93,7 +93,7 @@ export function AppSidebar({ role, tenants, defaultTenant, tenantLogo, onTenantS
                   />
                   <div className="grid flex-1 text-left text-sm leading-tight transition-all duration-300 group-data-[collapsible=icon]:w-0 group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:flex-none overflow-hidden">
                     <span className="truncate font-bold tracking-tight">
-                      {orgData?.branding?.appName || defaultTenant?.name || 'PayFix'}
+                      {orgData?.branding?.appName || defaultTenant?.name || 'NIYAMO'}
                     </span>
                     <span className="truncate text-[10px] uppercase tracking-widest text-sidebar-foreground/50 font-semibold">
                       {orgData?.branding?.tagline || 'Workspace'}

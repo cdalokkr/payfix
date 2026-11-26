@@ -552,7 +552,7 @@ export function isLocalOrPrivateIp(host: string): boolean {
 export const PRIMARY_TENANT_FALLBACK = {
     id: 'c3e28d92-e3ea-4fe0-8efd-927ce550b666',
     slug: 'primary',
-    company_name: 'PayFix Corporate',
+    company_name: 'NIYAMO Corporate',
     custom_domain: null,
     status: 'active',
     tenant_schema: 'tenant_primary',
@@ -562,7 +562,7 @@ export const PRIMARY_TENANT_FALLBACK = {
     trial_end: new Date('2036-06-24T19:38:37.624Z'),
     trial_duration_days: 3650,
     trial_extended: false,
-    admin_email: 'admin@payfix.com',
+    admin_email: 'admin@niyamo.auravics.com',
     license_expires_at: new Date('2036-06-24T19:38:37.624Z'),
     branding: null,
 };

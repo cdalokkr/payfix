@@ -89,7 +89,7 @@ export function MpinSetup({ onComplete, isFirstTime = false }: MpinSetupProps) {
             const credential = await navigator.credentials.create({
                 publicKey: {
                     challenge: new Uint8Array(32),
-                    rp: { name: 'PayFix', id: window.location.hostname },
+                    rp: { name: 'NIYAMO', id: window.location.hostname },
                     user: {
                         id: new Uint8Array(16),
                         name: 'user',

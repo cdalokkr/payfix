@@ -42,7 +42,7 @@ async function resolveTenant(req: NextRequest) {
     return primaryTenant || {
         id: 'c3e28d92-e3ea-4fe0-8efd-927ce550b666',
         slug: 'primary',
-        company_name: 'PayFix Corporate'
+        company_name: 'NIYAMO Corporate'
     };
 }
 
@@ -109,7 +109,7 @@ export async function GET(req: NextRequest) {
 
         // Create Excel Workbook
         const workbook = new ExcelJS.Workbook();
-        workbook.creator = 'PayFix Biometric System';
+        workbook.creator = 'NIYAMO Biometric System';
         workbook.created = new Date();
 
         // -------------------------------------------------------------

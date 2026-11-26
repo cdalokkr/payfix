@@ -419,7 +419,7 @@ export function PayslipGeneration({
             // 1. Title Block
             worksheet.mergeCells('A1:U1')
             const titleCell = worksheet.getCell('A1')
-            titleCell.value = 'PAYFIX WORKSPACE - MONTHLY SALARY REGISTER'
+            titleCell.value = 'NIYAMO WORKSPACE - MONTHLY SALARY REGISTER'
             titleCell.font = { name: 'Calibri', size: 15, bold: true, color: { argb: 'FFFFFFFF' } }
             titleCell.alignment = { horizontal: 'center', vertical: 'middle' }
             titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF635BFF' } }

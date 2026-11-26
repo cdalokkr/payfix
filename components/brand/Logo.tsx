@@ -42,7 +42,7 @@ export default function Logo({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={masterAppLogoUrl}
-            alt="PayFix Platform"
+            alt="NIYAMO Platform"
             onError={() => setImgError(true)}
             className="w-full h-full object-contain p-1"
           />
@@ -55,7 +55,7 @@ export default function Logo({
           )}
         >
           <span className={cn("font-black tracking-tighter leading-none select-none text-white", sizeClasses.icon)}>
-            P
+            N
           </span>
         </div>
       )}
@@ -67,7 +67,7 @@ export default function Logo({
             sizeClasses.text
           )}
         >
-          Pay<span className="text-brand-primary">Fix</span>
+          NI<span className="text-brand-primary">YAMO</span>
         </span>
       )}
     </div>

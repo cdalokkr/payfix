@@ -112,4 +112,52 @@ describe('resolveTenant resilience and fallbacks', () => {
         expect(fallback?.slug).toBe('custom');
         expect(fallback?.tenant_schema).toBe('tenant_custom');
     });
+
+    it('resolves primary tenant for main domain niyamo.auravics.com and extracts subdomain slugs', async () => {
+        mockedMasterDb.query.tenants.findFirst.mockResolvedValueOnce({
+            id: 'c3e28d92-e3ea-4fe0-8efd-927ce550b666',
+            slug: 'primary',
+            company_name: 'NIYAMO Corporate',
+            custom_domain: null,
+            status: 'active',
+            tenant_schema: 'tenant_primary',
+            database_url: null,
+            biometric_api_key: null,
+            trial_start: new Date(),
+            trial_end: new Date(),
+            trial_duration_days: 3650,
+            trial_extended: false,
+            admin_email: 'admin@niyamo.auravics.com',
+            license_expires_at: new Date(),
+        });
+        mockedMasterDb.query.tenantBranding.findFirst.mockResolvedValueOnce(null);
+
+        const mainResult = await resolveTenant('niyamo.auravics.com');
+        expect(mainResult?.slug).toBe('primary');
+
+        mockedMasterDb.query.tenants.findFirst.mockResolvedValueOnce({
+            id: 'acme-id',
+            slug: 'acme',
+            company_name: 'Acme Corp',
+            custom_domain: null,
+            status: 'active',
+            tenant_schema: 'tenant_acme',
+            database_url: null,
+            biometric_api_key: null,
+            trial_start: new Date(),
+            trial_end: new Date(),
+            trial_duration_days: 30,
+            trial_extended: false,
+            admin_email: 'admin@acme.com',
+            license_expires_at: new Date(),
+        });
+        mockedMasterDb.query.tenantBranding.findFirst.mockResolvedValueOnce(null);
+
+        const subResult = await resolveTenant('acme.niyamo.auravics.com');
+        expect(subResult?.slug).toBe('acme');
+
+        mockedMasterDb.query.tenants.findFirst.mockResolvedValueOnce(null);
+        const spoofedSuffix = await resolveTenant('evilniyamo.auravics.com');
+        expect(spoofedSuffix).toBeNull();
+    });
 });

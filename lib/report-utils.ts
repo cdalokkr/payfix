@@ -59,7 +59,7 @@ export async function addTenantPdfHeader(
     const margin = 14;
     let yPos = 14;
 
-    const companyName = branding?.companyLegalName || branding?.appName || 'PayFix';
+    const companyName = branding?.companyLegalName || branding?.appName || 'NIYAMO';
     const logoHeight = branding?.reportLogoHeight || 20; // in mm
     const alignment = branding?.reportLogoAlignment || 'left';
 

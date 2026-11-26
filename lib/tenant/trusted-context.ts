@@ -149,7 +149,7 @@ function getCookieValue(cookieHeader: string | null, name: string): string | nul
 
 function isMainApplicationHost(hostname: string): boolean {
     const host = hostname.split(':')[0].toLowerCase().trim();
-    const mainDomain = (process.env.NEXT_PUBLIC_MAIN_DOMAIN || 'payfix.com').toLowerCase();
+    const mainDomain = (process.env.NEXT_PUBLIC_MAIN_DOMAIN || 'niyamo.auravics.com').toLowerCase();
 
     return !host
         || host === mainDomain

@@ -65,7 +65,7 @@ async function resolveCurrentTenant(req: NextRequest): Promise<ResolvedTenant> {
     return {
         id: primaryTenant?.id || 'c3e28d92-e3ea-4fe0-8efd-927ce550b666',
         slug: primaryTenant?.slug || 'primary',
-        company_name: primaryTenant?.company_name || 'PayFix Corporate',
+        company_name: primaryTenant?.company_name || 'NIYAMO Corporate',
         biometric_api_key: primaryTenant?.biometric_api_key || 'bfx_live_timewatch_primary_2026'
     };
 }

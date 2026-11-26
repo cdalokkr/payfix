@@ -8,7 +8,7 @@ import { runWithRequestHeaders } from "@/lib/tenant/with-context"
 
 
 export const metadata = {
-    title: 'My Advances - Payfix',
+    title: 'My Advances - NIYAMO',
 }
 
 export default async function MobileAdvancesPage() {

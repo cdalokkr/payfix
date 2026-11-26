@@ -39,7 +39,7 @@ export function ExportActions({ month, year, summaryData }: ExportActionsProps) 
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `Payfix_Payroll_${month}_${year}.xlsx`
+      link.download = `NIYAMO_Payroll_${month}_${year}.xlsx`
       link.click()
       URL.revokeObjectURL(url)
     } catch (err) {
@@ -77,7 +77,7 @@ export function ExportActions({ month, year, summaryData }: ExportActionsProps) 
         body: tableRows,
       })
 
-      doc.save(`Payfix_Payslip_Summary_${month}_${year}.pdf`)
+      doc.save(`NIYAMO_Payslip_Summary_${month}_${year}.pdf`)
     } catch (err) {
       console.error('[EXPORT] Failed to export PDF:', err)
     } finally {

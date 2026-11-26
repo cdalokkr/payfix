@@ -792,7 +792,7 @@ export function BusinessProfileManager() {
           <AlertDialogHeader>
             <AlertDialogTitle>Remove Business Logo?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to remove your custom business logo? The application interface, PWA, and reports will revert to the default PayFix organization mark.
+              Are you sure you want to remove your custom business logo? The application interface, PWA, and reports will revert to the default NIYAMO organization mark.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
