@@ -349,7 +349,7 @@ export function LoginForm() {
             </motion.span>
           </h2>
           <p className="hidden sm:block mt-2 text-[14px] text-slate-500 dark:text-slate-400">
-            Sign in to your secure PayFix workspace.
+            Sign in to your secure NIYAMO workspace.
           </p>
         </motion.div>
 

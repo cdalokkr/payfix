@@ -59,7 +59,7 @@ describe('trusted tenant context', () => {
 
         const valid = await resolveTrustedTenantFromRequest({
             headers: new Headers({
-                host: 'acme.payfix.com',
+                host: 'acme.niyamo.auravics.com',
                 'x-tenant-slug': 'acme',
                 'x-tenant-schema': 'tenant_acme',
                 'x-tenant-db-url': '',
@@ -70,7 +70,7 @@ describe('trusted tenant context', () => {
 
         const spoofed = await resolveTrustedTenantFromRequest({
             headers: new Headers({
-                host: 'acme.payfix.com',
+                host: 'acme.niyamo.auravics.com',
                 'x-tenant-slug': 'acme',
                 'x-tenant-schema': 'tenant_other',
             }),
@@ -80,19 +80,19 @@ describe('trusted tenant context', () => {
 
     it('uses the host for lookup instead of a spoofed tenant slug', async () => {
         mockedResolveTenant.mockImplementation(async (lookup) => {
-            if (lookup === 'acme.payfix.com') return tenant();
+            if (lookup === 'acme.niyamo.auravics.com') return tenant();
             return null;
         });
 
         const spoofed = await resolveTrustedTenantFromRequest({
             headers: new Headers({
-                host: 'acme.payfix.com',
+                host: 'acme.niyamo.auravics.com',
                 'x-tenant-slug': 'beta',
             }),
         } as Request);
 
         expect(spoofed).toBeNull();
-        expect(mockedResolveTenant).toHaveBeenCalledWith('acme.payfix.com', true);
+        expect(mockedResolveTenant).toHaveBeenCalledWith('acme.niyamo.auravics.com', true);
 
         mockedResolveTenant.mockClear();
         const missingHost = await resolveTrustedTenantFromRequest({
@@ -113,7 +113,7 @@ describe('trusted tenant context', () => {
 
         const context = await resolveTrustedTenantFromRequest({
             headers: new Headers({
-                host: 'payfix.vercel.app',
+                host: 'niyamo.auravics.com',
                 cookie: 'tenant_fallback=beta',
                 'x-tenant-slug': 'beta',
             }),

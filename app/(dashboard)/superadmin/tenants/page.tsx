@@ -7,6 +7,7 @@ import { BrandingTab } from "@/components/superadmin/branding-tab";
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { trpc } from "@/lib/trpc/client";
+import { DEFAULT_MAIN_DOMAIN, resolveClientBaseDomain } from "@/lib/tenant/domain-utils";
 import { 
   Building2, Users, Globe, Fingerprint, Palette, Search, Edit2, Loader2, Trash2, Mail, Phone, Clock,
   Calendar, Power, Check, ChevronDown, Eye, ShieldCheck,
@@ -98,22 +99,11 @@ export default function TenantsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [planFilter, setPlanFilter] = useState("all");
   const [sortOrder, setSortOrder] = useState<"name-asc" | "name-desc" | "newest" | "expiry">("name-asc");
-  const [baseDomain, setBaseDomain] = useState("payfix.com");
+  const [baseDomain, setBaseDomain] = useState(DEFAULT_MAIN_DOMAIN);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const host = window.location.hostname;
-      if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".localhost")) {
-        const port = window.location.port ? `:${window.location.port}` : "";
-        setBaseDomain(`localhost${port}`);
-      } else {
-        const parts = host.split(".");
-        if (parts.length >= 2) {
-          setBaseDomain(parts.slice(-2).join("."));
-        } else {
-          setBaseDomain(host);
-        }
-      }
+      setBaseDomain(resolveClientBaseDomain(window.location.hostname, window.location.port));
     }
   }, []);
 
@@ -1422,7 +1412,7 @@ export default function TenantsPage() {
             <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] leading-4 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-300">
               <Key className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>
-                This super-admin flow creates the account with the temporary password <strong className="font-bold">Payfix@2026!</strong>.
+                This super-admin flow creates the account with the temporary password <strong className="font-bold">Niyamo@2026!</strong>.
                 Share it securely with the primary admin and have them reset it after signing in.
               </span>
             </div>

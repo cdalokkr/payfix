@@ -9,6 +9,7 @@ import {
   Clock, ArrowUpRight, HelpCircle, Loader2, X, RefreshCw
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DEFAULT_MAIN_DOMAIN } from "@/lib/tenant/domain-utils";
 
 export default function AdminBillingPage() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -83,9 +84,9 @@ export default function AdminBillingPage() {
             <table class="header-table">
               <tr>
                 <td style="vertical-align: top;">
-                  <div class="logo-title">PayFix</div>
+                  <div class="logo-title">NIYAMO</div>
                   <div style="font-size: 12px; color: #64748b; font-weight: 600; margin-top: 2px;">Automated Workforce & Attendance Cloud Platform</div>
-                  <div style="font-size: 11.5px; color: #94a3b8; margin-top: 2px;">Support: billing@payfix.in • portal.payfix.in</div>
+                  <div style="font-size: 11.5px; color: #94a3b8; margin-top: 2px;">Support: billing@auravics.com • ${DEFAULT_MAIN_DOMAIN}</div>
                 </td>
                 <td style="vertical-align: top; text-align: right;">
                   <div style="font-size: 20px; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px;">Tax Invoice & Receipt</div>
@@ -101,7 +102,7 @@ export default function AdminBillingPage() {
               <div class="meta-col">
                 <div class="meta-heading">Billed To (Tenant Workspace)</div>
                 <div class="meta-text meta-highlight">${companyName}</div>
-                <div class="meta-text">Workspace Subdomain: <strong>${slug}.payfix.in</strong></div>
+                <div class="meta-text">Workspace Subdomain: <strong>${slug}.${DEFAULT_MAIN_DOMAIN}</strong></div>
                 ${adminEmail ? `<div class="meta-text">Primary Admin: ${adminEmail}</div>` : ''}
                 ${adminPhone ? `<div class="meta-text">Phone: ${adminPhone}</div>` : ''}
               </div>
@@ -162,14 +163,14 @@ export default function AdminBillingPage() {
               <div class="notes-body">
                 This document serves as an official confirmation of subscription and payment for <strong>${companyName}</strong>. 
                 Your workspace license is valid until <strong>${subInfo?.formattedExpiry || 'Scheduled Renewal'}</strong>.
-                For inquiries or enterprise quota expansion, contact your designated account representative at PayFix support.
+                For inquiries or enterprise quota expansion, contact your designated account representative at NIYAMO support.
               </div>
             </div>
 
             <!-- Footer -->
             <div class="footer-info">
               <div class="footer-left">
-                Computer-generated receipt • No physical signature required • PayFix SaaS Cloud
+                Computer-generated receipt • No physical signature required • NIYAMO SaaS Cloud
               </div>
               <div class="footer-right">
                 Printed: ${new Date().toLocaleDateString('en-GB')}
@@ -327,7 +328,7 @@ export default function AdminBillingPage() {
                   {subInfo.companyName}
                 </h3>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  <span>Workspace: <code className="font-semibold text-slate-800 dark:text-slate-200">{subInfo.slug}.payfix.in</code></span>
+                  <span>Workspace: <code className="font-semibold text-slate-800 dark:text-slate-200">{subInfo.slug}.{DEFAULT_MAIN_DOMAIN}</code></span>
                   <span>•</span>
                   <span>Created: <strong className="text-slate-700 dark:text-slate-300">{subInfo.formattedCreated}</strong></span>
                   <span>•</span>

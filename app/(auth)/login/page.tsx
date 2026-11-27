@@ -2,8 +2,8 @@ import { LoginForm } from "@/components/auth/login-form";
 import AuthShell from "@/components/auth/AuthShell";
 
 export const metadata = {
-  title: "Login - PayFix",
-  description: "Sign in to your secure workspace",
+  title: "Login - NIYAMO",
+  description: "Sign in to your secure NIYAMO workspace",
 };
 
 export default async function LoginPage() {

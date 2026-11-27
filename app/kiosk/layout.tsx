@@ -2,13 +2,13 @@ import type { Metadata } from 'next';
 import React from 'react';
 
 export const metadata: Metadata = {
-    title: 'PayFix Kiosk Terminal | Touchless Face Attendance',
+    title: 'NIYAMO Kiosk Terminal | Touchless Face Attendance',
     description: 'Always-On Entrance Selfie Attendance Kiosk for Employees',
     manifest: '/api/manifest?type=kiosk',
     appleWebApp: {
         capable: true,
         statusBarStyle: 'black-translucent',
-        title: 'PayFix Kiosk',
+        title: 'NIYAMO Kiosk',
     },
 };
 

@@ -1,5 +1,5 @@
 /**
- * Service Worker for PayFix Attendance PWA
+ * Service Worker for NIYAMO Attendance PWA
  * Handles caching, offline functionality, and push notifications
  */
 
@@ -111,7 +111,7 @@ async function networkFirstNavigation(request) {
         
         // If offline page is not found, return a fallback response instead of throwing
         return new Response(
-            '<!DOCTYPE html><html><head><title>Offline | PayFix</title><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;padding:2rem;text-align:center;background:#f8fafc;color:#0f172a;"><div style="max-width:400px;margin:4rem auto;background:white;padding:2.5rem;border-radius:1.5rem;box-shadow:0 10px 15px -3px rgba(0,0,0,0.05);border:1px solid #e2e8f0;"><h2 style="margin-top:0;font-weight:900;color:#e11d48;">Connection Lost</h2><p style="color:#64748b;font-size:0.95rem;line-height:1.6;">Your device is currently offline. Please check your internet connection.</p><button onclick="window.location.reload()" style="margin-top:1rem;background:#0ea5e9;color:white;border:none;padding:0.75rem 1.5rem;font-weight:700;border-radius:0.75rem;cursor:pointer;box-shadow:0 4px 6px -1px rgba(14,165,233,0.2);">Retry Connection</button></div></body></html>',
+            '<!DOCTYPE html><html><head><title>Offline | NIYAMO</title><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;padding:2rem;text-align:center;background:#f8fafc;color:#0f172a;"><div style="max-width:400px;margin:4rem auto;background:white;padding:2.5rem;border-radius:1.5rem;box-shadow:0 10px 15px -3px rgba(0,0,0,0.05);border:1px solid #e2e8f0;"><h2 style="margin-top:0;font-weight:900;color:#e11d48;">Connection Lost</h2><p style="color:#64748b;font-size:0.95rem;line-height:1.6;">Your device is currently offline. Please check your internet connection.</p><button onclick="window.location.reload()" style="margin-top:1rem;background:#0ea5e9;color:white;border:none;padding:0.75rem 1.5rem;font-weight:700;border-radius:0.75rem;cursor:pointer;box-shadow:0 4px 6px -1px rgba(14,165,233,0.2);">Retry Connection</button></div></body></html>',
             {
                 status: 503,
                 headers: { 'Content-Type': 'text/html' }
@@ -183,11 +183,11 @@ self.addEventListener('push', (event) => {
     console.log('[SW] Push notification received')
 
     let data = {
-        title: 'PayFix',
+        title: 'NIYAMO',
         body: 'You have a new notification',
         icon: '/icons/icon-192x192.png',
         badge: '/icons/badge-72x72.png',
-        tag: 'payfix-notification',
+        tag: 'niyamo-notification',
     }
 
     if (event.data) {

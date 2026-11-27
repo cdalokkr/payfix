@@ -3,8 +3,8 @@ import { SetupPasswordView } from '@/features/auth/SetupPasswordView'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 
 export const metadata: Metadata = {
-    title: 'Setup Initial Password - PayFix',
-    description: 'Set your new personal password to access your PayFix workspace.',
+    title: 'Setup Initial Password - NIYAMO',
+    description: 'Set your new personal password to access your NIYAMO workspace.',
     robots: 'noindex, nofollow',
 }
 

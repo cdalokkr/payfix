@@ -922,7 +922,7 @@ export function ExpressKioskApp() {
                                 <Input
                                     id="pairing-key"
                                     type="text"
-                                    placeholder="e.g. KSK-PAYFIX-9A82B"
+                                    placeholder="e.g. KSK-NIYAMO-9A82B"
                                     value={inputKey}
                                     onChange={(e) => setInputKey(e.target.value.toUpperCase())}
                                     className="bg-slate-950/80 border-slate-700 text-white font-mono tracking-wider font-bold text-center h-12 text-base focus-visible:ring-sky-500"
@@ -984,7 +984,7 @@ export function ExpressKioskApp() {
                     <div>
                         <div className="flex items-center gap-2">
                             <h1 className="text-base font-bold tracking-tight text-white leading-none">
-                                {pairedDevice?.locationName || 'PayFix Workspace'}
+                                {pairedDevice?.locationName || 'NIYAMO Workspace'}
                             </h1>
                         </div>
                         <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mt-0.5">

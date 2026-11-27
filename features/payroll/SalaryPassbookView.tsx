@@ -136,7 +136,7 @@ export function SalaryPassbookView({ basePath = "/admin/payroll", initialProfile
             toast.loading("Generating Passbook Excel...")
             const ExcelJS = (await import('exceljs')).default
             const workbook = new ExcelJS.Workbook()
-            workbook.creator = 'PayFix'
+            workbook.creator = 'NIYAMO'
             workbook.created = new Date()
 
             const activeProfileId = targetProfileId || selectedProfileId
@@ -460,7 +460,7 @@ export function SalaryPassbookView({ basePath = "/admin/payroll", initialProfile
             <div className="hidden print:block mb-4 border-b pb-4">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-xl font-bold">PayFix Employee Salary Passbook</h1>
+                        <h1 className="text-xl font-bold">NIYAMO Employee Salary Passbook</h1>
                         <p className="text-xs text-muted-foreground">Certified Salary & Payment Statement</p>
                     </div>
                     <div className="text-right text-xs">

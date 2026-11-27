@@ -89,7 +89,7 @@ export const billingRouter = router({
         adminName: (tenant as any).admin_name || 'Workspace Administrator',
         adminPhone: (tenant as any).admin_phone || 'N/A',
         branding: {
-          appName: branding?.app_name || 'PayFix',
+          appName: branding?.app_name || 'NIYAMO',
           logoUrl: branding?.logo_url || null,
           primaryColor: branding?.primary_color || '#4f46e5',
         },

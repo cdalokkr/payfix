@@ -127,7 +127,7 @@ export function BiometricDevicesManager() {
     const [locations, setLocations] = useState<LocationOption[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [apiKey, setApiKey] = useState<string>('bfx_live_timewatch_primary_2026');
-    const [tenantName, setTenantName] = useState<string>('PayFix Corporate');
+    const [tenantName, setTenantName] = useState<string>('NIYAMO Corporate');
     const [copiedUrl, setCopiedUrl] = useState<boolean>(false);
     const [copiedKey, setCopiedKey] = useState<boolean>(false);
     const [pushServerUrl, setPushServerUrl] = useState<string>('');
@@ -313,7 +313,7 @@ export function BiometricDevicesManager() {
             const a = document.createElement('a');
             a.href = url;
             const suffix = userId ? 'Single_User' : newOnly ? 'New_Users_Only' : 'All_Users';
-            a.download = `PayFix_Biometric_${suffix}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+            a.download = `NIYAMO_Biometric_${suffix}_${new Date().toISOString().slice(0, 10)}.xlsx`;
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
@@ -687,7 +687,7 @@ export function BiometricDevicesManager() {
                         {/* Server Endpoint */}
                         <div className="p-4 rounded-xl bg-muted/40 border border-border/70 space-y-2">
                             <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">
-                                PayFix Cloud / Local Listener URL
+                                NIYAMO Cloud / Local Listener URL
                             </label>
                             <div className="flex items-center gap-2">
                                 <code className="flex-1 p-2.5 rounded-lg bg-card text-emerald-700 dark:text-emerald-400 font-mono text-xs overflow-x-auto border border-border font-semibold shadow-xs" suppressHydrationWarning>

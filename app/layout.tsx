@@ -41,31 +41,31 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: {
-    default: 'PayFix Attendance',
-    template: '%s | PayFix'
+    default: 'NIYAMO — Workforce, Attendance & Payroll',
+    template: '%s | NIYAMO'
   },
-  description: 'Employee attendance tracking with location verification',
-  keywords: ['Next.js', 'Supabase', 'tRPC', 'React', 'Tailwind CSS', 'Attendance', 'PWA'],
-  authors: [{ name: 'PayFix' }],
-  creator: 'PayFix',
+  description: 'Multi-tenant biometric attendance, geofencing, shift rostering, and automated payroll platform',
+  keywords: ['Next.js', 'Supabase', 'tRPC', 'React', 'Tailwind CSS', 'Attendance', 'Payroll', 'Biometrics', 'PWA', 'NIYAMO'],
+  authors: [{ name: 'NIYAMO' }],
+  creator: 'NIYAMO',
   manifest: '/api/manifest',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'PayFix',
+    title: 'NIYAMO',
   },
   openGraph: {
     type: 'website',
     locale: 'en_US',
-    url: 'https://payfix.com',
-    title: 'PayFix Attendance',
-    description: 'Employee attendance tracking with location verification',
-    siteName: 'PayFix',
+    url: 'https://niyamo.auravics.com',
+    title: 'NIYAMO — Workforce, Attendance & Payroll',
+    description: 'Multi-tenant biometric attendance, geofencing, shift rostering, and automated payroll platform',
+    siteName: 'NIYAMO',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'PayFix Attendance',
-    description: 'Employee attendance tracking with location verification',
+    title: 'NIYAMO — Workforce, Attendance & Payroll',
+    description: 'Multi-tenant biometric attendance, geofencing, shift rostering, and automated payroll platform',
   },
   icons: {
     icon: '/favicon.ico',

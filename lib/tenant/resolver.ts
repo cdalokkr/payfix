@@ -113,14 +113,13 @@ export async function resolveTenant(hostname: string, forceRefresh = false): Pro
         }
     }
 
-    const mainDomain = (process.env.NEXT_PUBLIC_MAIN_DOMAIN || 'payfix.com').toLowerCase();
+    const mainDomain = (process.env.NEXT_PUBLIC_MAIN_DOMAIN || 'niyamo.auravics.com').toLowerCase();
     let isSubdomain = false;
     let slug = '';
 
-
-    if (host.endsWith(mainDomain)) {
-        const subdomain = host.replace(`.${mainDomain}`, '');
-        if (subdomain !== 'www' && subdomain !== host) {
+    if (host.endsWith(`.${mainDomain}`)) {
+        const subdomain = host.slice(0, -(`.${mainDomain}`.length));
+        if (subdomain && subdomain !== 'www') {
             slug = subdomain;
             isSubdomain = true;
         }

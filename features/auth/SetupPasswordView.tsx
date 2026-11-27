@@ -101,7 +101,7 @@ export function SetupPasswordView() {
                         Set Your New Password
                     </h1>
                     <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                        For your account security, you must create a new personal password before accessing your PayFix workspace.
+                        For your account security, you must create a new personal password before accessing your NIYAMO workspace.
                     </p>
                 </div>
 
@@ -203,7 +203,7 @@ export function SetupPasswordView() {
                 </div>
 
                 <p className="text-center text-[11px] text-muted-foreground">
-                    PayFix Workforce & Payroll Platform
+                    NIYAMO Workforce & Payroll Platform
                 </p>
             </div>
         </div>

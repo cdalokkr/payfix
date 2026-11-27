@@ -82,7 +82,7 @@ export default function BrandPanel({
             >
               {variant === "login"
                 ? "Access attendance, payroll, leave, tasks and HR operations from one secure workspace."
-                : "Join thousands of companies that trust PayFix to simplify their workforce management."}
+                : "Join thousands of companies that trust NIYAMO to simplify their workforce management."}
             </motion.p>
 
             {/* Key Points — parallel to widgets */}
@@ -121,7 +121,7 @@ export default function BrandPanel({
         variants={fadeUp}
         className="text-[10px] text-slate-400/70 dark:text-slate-600"
       >
-        © 2026 PayFix Inc. Enterprise Workforce Platform.
+        © 2026 NIYAMO. Enterprise Workforce Platform.
       </motion.p>
     </motion.div>
   );

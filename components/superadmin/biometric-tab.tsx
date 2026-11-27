@@ -53,7 +53,7 @@ export function BiometricTab({ tenant, baseDomain, onRefresh }: BiometricTabProp
     },
   });
 
-  const agentEnvSnippet = `# PayFix Biometric Agent Config (${tenant.companyName})
+  const agentEnvSnippet = `# NIYAMO Biometric Agent Config (${tenant.companyName})
 CLOUD_API_URL=https://${targetDomain}/api/biometric/sync
 BIOMETRIC_API_KEY=${activeKey}
 DEVICE_ID=MAIN-ENTRANCE-GATE`;

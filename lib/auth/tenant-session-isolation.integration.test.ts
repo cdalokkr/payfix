@@ -220,8 +220,8 @@ function configureSupabaseSessions() {
 }
 
 function seedTenantProfiles() {
-    mockTenantRecords.set('acme.payfix.com', tenants.acme);
-    mockTenantRecords.set('beta.payfix.com', tenants.beta);
+    mockTenantRecords.set('acme.niyamo.auravics.com', tenants.acme);
+    mockTenantRecords.set('beta.niyamo.auravics.com', tenants.beta);
     mockTenantRecords.set('acme', tenants.acme);
     mockTenantRecords.set('beta', tenants.beta);
     mockProfileRecords.set(`${tenants.acme.id}:${profiles.acme.id}`, profiles.acme);
@@ -265,8 +265,8 @@ describe('production-like tenant session isolation', () => {
         mockSessions.set('cookie-beta', { id: profiles.beta.id, email: profiles.beta.email });
 
         const [acmeContext, betaContext] = await Promise.all([
-            createOptimizedContext(requestFor('cookie-acme', 'acme.payfix.com')),
-            createOptimizedContext(requestFor('cookie-beta', 'beta.payfix.com')),
+            createOptimizedContext(requestFor('cookie-acme', 'acme.niyamo.auravics.com')),
+            createOptimizedContext(requestFor('cookie-beta', 'beta.niyamo.auravics.com')),
         ]);
 
         expect(acmeContext.tenant?.slug).toBe('acme');
@@ -280,7 +280,7 @@ describe('production-like tenant session isolation', () => {
 
     it('rejects revoked cookie and bearer sessions even after an old cache entry exists', async () => {
         mockSessions.set('cookie-acme', { id: profiles.acme.id, email: profiles.acme.email });
-        const request = requestFor('cookie-acme', 'acme.payfix.com');
+        const request = requestFor('cookie-acme', 'acme.niyamo.auravics.com');
 
         const first = await createOptimizedContext(request);
         expect(first.profile?.email).toBe(profiles.acme.email);
@@ -293,7 +293,7 @@ describe('production-like tenant session isolation', () => {
         mockSessions.set('bearer-acme', { id: profiles.acme.id, email: profiles.acme.email });
         const bearerRequest = {
             headers: new Headers({
-                host: 'acme.payfix.com',
+                host: 'acme.niyamo.auravics.com',
                 authorization: 'Bearer bearer-acme',
             }),
         } as Request;
@@ -308,7 +308,7 @@ describe('production-like tenant session isolation', () => {
 
     it('applies profile role/status changes after session invalidation and blocks suspended tenants', async () => {
         mockSessions.set('cookie-acme', { id: profiles.acme.id, email: profiles.acme.email });
-        const request = requestFor('cookie-acme', 'acme.payfix.com');
+        const request = requestFor('cookie-acme', 'acme.niyamo.auravics.com');
 
         const first = await createOptimizedContext(request);
         expect(first.profile?.role).toBe('employee');
@@ -324,7 +324,7 @@ describe('production-like tenant session isolation', () => {
         expect(changed.profile?.role).toBe('admin');
         expect(changed.profile?.status).toBe('inactive');
 
-        mockTenantRecords.set('acme.payfix.com', { ...tenants.acme, status: 'suspended' });
+        mockTenantRecords.set('acme.niyamo.auravics.com', { ...tenants.acme, status: 'suspended' });
         invalidateUserSession(profiles.acme.id);
 
         const suspended = await createOptimizedContext(request);
@@ -335,7 +335,7 @@ describe('production-like tenant session isolation', () => {
     it('does not let spoofed tenant headers select another registry tenant or public profile', async () => {
         mockSessions.set('cookie-acme', { id: profiles.acme.id, email: profiles.acme.email });
 
-        const context = await createOptimizedContext(requestFor('cookie-acme', 'acme.payfix.com', {
+        const context = await createOptimizedContext(requestFor('cookie-acme', 'acme.niyamo.auravics.com', {
             'x-tenant-id': tenants.beta.id,
             'x-tenant-slug': tenants.beta.slug,
             'x-tenant-schema': tenants.beta.tenant_schema,
@@ -347,9 +347,9 @@ describe('production-like tenant session isolation', () => {
 
     it('fails closed when the registry tenant is unavailable for a valid session', async () => {
         mockSessions.set('cookie-acme', { id: profiles.acme.id, email: profiles.acme.email });
-        mockTenantRecords.delete('acme.payfix.com');
+        mockTenantRecords.delete('acme.niyamo.auravics.com');
 
-        const context = await createOptimizedContext(requestFor('cookie-acme', 'acme.payfix.com'));
+        const context = await createOptimizedContext(requestFor('cookie-acme', 'acme.niyamo.auravics.com'));
 
         // A valid Supabase session alone must not authorize a tenant request.
         expect(context.user?.email).toBe(profiles.acme.email);
@@ -361,7 +361,7 @@ describe('production-like tenant session isolation', () => {
         mockSessions.set('cookie-acme', { id: profiles.acme.id, email: profiles.acme.email });
         failureInjection.tenantProfileLookup = true;
 
-        const context = await createOptimizedContext(requestFor('cookie-acme', 'acme.payfix.com'));
+        const context = await createOptimizedContext(requestFor('cookie-acme', 'acme.niyamo.auravics.com'));
 
         // The injected database failure must not fall through to a regular
         // public profile or manufacture an authenticated tenant profile.
@@ -376,7 +376,7 @@ describe('production-like tenant session isolation', () => {
             tenant_slug: profiles.acme.tenantSlug,
         });
 
-        const context = await createOptimizedContext(requestFor('cookie-acme', 'beta.payfix.com'));
+        const context = await createOptimizedContext(requestFor('cookie-acme', 'beta.niyamo.auravics.com'));
 
         expect(context.profile?.email).toBe(profiles.acme.email);
         expect(context.tenant?.slug).toBe('acme');

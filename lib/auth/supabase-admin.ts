@@ -5,7 +5,7 @@ import { createClient, type SupabaseClient, type User } from '@supabase/supabase
  * console. The UI labels it temporary and directs the administrator to reset
  * it after first login.
  */
-export const SUPERADMIN_DEFAULT_ADMIN_PASSWORD = 'Payfix@2026!';
+export const SUPERADMIN_DEFAULT_ADMIN_PASSWORD = 'Niyamo@2026!';
 
 export function createSupabaseAdminClient(): SupabaseClient {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;

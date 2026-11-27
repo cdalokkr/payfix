@@ -7,8 +7,8 @@ export async function GET(request: NextRequest) {
     if (type === 'kiosk') {
         const kioskManifest = {
             id: '/kiosk',
-            name: 'PayFix Attendance Kiosk Terminal',
-            short_name: 'PayFix Kiosk',
+            name: 'NIYAMO Attendance Kiosk Terminal',
+            short_name: 'NIYAMO Kiosk',
             description: 'Touchless Entrance Face Verification Attendance Kiosk',
             start_url: '/kiosk',
             scope: '/kiosk',
@@ -43,12 +43,12 @@ export async function GET(request: NextRequest) {
         });
     }
 
-    // Standard Universal PayFix PWA Manifest across all tenants
+    // Standard Universal NIYAMO PWA Manifest across all tenants
     const manifest = {
         id: '/mobile',
-        name: 'PayFix Attendance',
-        short_name: 'PayFix',
-        description: 'Employee attendance tracking with location and biometric verification',
+        name: 'NIYAMO Attendance',
+        short_name: 'NIYAMO',
+        description: 'Multi-tenant biometric attendance, geofencing & payroll platform',
         start_url: '/mobile',
         scope: '/',
         display: 'standalone',
