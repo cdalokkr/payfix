@@ -86,7 +86,7 @@ export const CANONICAL_TENANT_COLUMNS: Record<CanonicalTenantTable, readonly str
     analytics_metrics: ['id', 'metric_date', 'metric_name', 'metric_value', 'metadata', 'created_at'],
     office_settings: [
         'id', 'default_check_in', 'default_check_out', 'off_days',
-        'daily_working_hours', 'absent_deduction_multiplier', 'updated_at',
+        'daily_working_hours', 'absent_deduction_multiplier', 'pf_enabled', 'esi_enabled', 'updated_at',
     ],
     office_closures: ['id', 'date', 'reason', 'type', 'created_at', 'location_id'],
     employee_settings: [
@@ -135,7 +135,12 @@ export const CANONICAL_TENANT_COLUMNS: Record<CanonicalTenantTable, readonly str
     ],
     employee_salary_setup: [
         'id', 'profile_id', 'basic_salary', 'hra', 'da', 'ta', 'special_allowance',
-        'incentive', 'other_deductions', 'deduction_remark', 'effective_from_month',
+        'incentive', 'other_deductions', 'deduction_remark',
+        'pf_enabled', 'pf_uan', 'pf_mode', 'pf_employee_rate', 'pf_employer_rate',
+        'pf_ceiling_enabled', 'pf_fixed_amount',
+        'esi_enabled', 'esi_number', 'esi_mode', 'esi_employee_rate', 'esi_employer_rate',
+        'esi_limit_enabled', 'esi_fixed_amount',
+        'effective_from_month',
         'effective_from_year', 'effective_to_month', 'effective_to_year',
         'change_reason', 'is_active', 'created_by', 'created_at', 'updated_at',
     ],

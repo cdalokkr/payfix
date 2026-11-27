@@ -204,6 +204,8 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                         { label: 'Absence Deduction', amount: bd.absence_deduction }
                       ]
                 ),
+                ...(Number(bd.pf_employee) > 0 ? [{ label: `Provident Fund (PF)${bd.pf_uan ? ` • UAN ${bd.pf_uan}` : ''}`, amount: bd.pf_employee }] : []),
+                ...(Number(bd.esi_employee) > 0 ? [{ label: `ESI Contribution${bd.esi_number ? ` • IP ${bd.esi_number}` : ''}`, amount: bd.esi_employee }] : []),
                 { label: 'Other Deductions', amount: bd.other_deductions },
                 ...(bd.carry_forward_recovery !== undefined
                     ? [
@@ -468,6 +470,8 @@ export function MobilePayslipClient({ profile }: { profile: any }) {
                                                 { label: 'Absence Ded.', amount: bd.absence_deduction }
                                               ]
                                         ),
+                                        ...(Number(bd.pf_employee) > 0 ? [{ label: 'PF (Emp)', amount: bd.pf_employee }] : []),
+                                        ...(Number(bd.esi_employee) > 0 ? [{ label: 'ESI (Emp)', amount: bd.esi_employee }] : []),
                                         { label: 'Other Ded.', amount: bd.other_deductions },
                                         ...(bd.carry_forward_recovery !== undefined
                                             ? [

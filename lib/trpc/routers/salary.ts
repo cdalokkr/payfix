@@ -73,6 +73,20 @@ export const salaryRouter = router({
             incentive: z.string(),
             otherDeductions: z.string(),
             deductionRemark: z.string().optional(),
+            pfEnabled: z.boolean().optional().default(false),
+            pfUan: z.string().optional(),
+            pfMode: z.enum(['statutory', 'percentage', 'fixed']).optional().default('statutory'),
+            pfEmployeeRate: z.union([z.string(), z.number()]).optional(),
+            pfEmployerRate: z.union([z.string(), z.number()]).optional(),
+            pfCeilingEnabled: z.boolean().optional().default(true),
+            pfFixedAmount: z.union([z.string(), z.number()]).optional(),
+            esiEnabled: z.boolean().optional().default(false),
+            esiNumber: z.string().optional(),
+            esiMode: z.enum(['statutory', 'percentage', 'fixed']).optional().default('statutory'),
+            esiEmployeeRate: z.union([z.string(), z.number()]).optional(),
+            esiEmployerRate: z.union([z.string(), z.number()]).optional(),
+            esiLimitEnabled: z.boolean().optional().default(true),
+            esiFixedAmount: z.union([z.string(), z.number()]).optional(),
             effectiveFromMonth: z.number().min(1).max(12),
             effectiveFromYear: z.number().min(2020).max(2100),
             changeReason: z.string().optional(),
@@ -237,6 +251,22 @@ export const salaryRouter = router({
             return await SalaryService.getSalaryBook(input || {})
         }),
 
+    getPfEsiReport: moderatorProcedure
+        .input(z.object({
+            month: z.number().min(1).max(12),
+            year: z.number().min(2020).max(2100),
+            type: z.enum(['pf', 'esi', 'combined']).optional().default('combined'),
+            profileId: z.string().uuid().optional().nullable(),
+        }))
+        .query(async ({ input }) => {
+            return await SalaryService.getPfEsiReport({
+                month: input.month,
+                year: input.year,
+                type: input.type,
+                profileId: input.profileId,
+            })
+        }),
+
     // ==========================================
     // MONTHLY BONUSES & INCENTIVES
     // ==========================================
@@ -375,6 +405,24 @@ export const salaryRouter = router({
                 ...input,
                 paidBy: ctx.profile.id,
             })
+        }),
+
+    // ==========================================
+    // STATUTORY COMPLIANCE SETTINGS (Company-Level Optional PF & ESI)
+    // ==========================================
+
+    getStatutorySettings: moderatorProcedure
+        .query(async () => {
+            return await SalaryService.getStatutorySettings()
+        }),
+
+    updateStatutorySettings: moderatorProcedure
+        .input(z.object({
+            pfEnabled: z.boolean().optional(),
+            esiEnabled: z.boolean().optional(),
+        }))
+        .mutation(async ({ input }) => {
+            return await SalaryService.updateStatutorySettings(input)
         }),
 
     // ==========================================
