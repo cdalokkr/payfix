@@ -390,7 +390,7 @@ export function MobileAttendanceWizard({
         <div className="w-full max-w-md mx-auto space-y-6">
             <motion.div
                 layout
-                initial={{ opacity: 0, scale: 0.95 }}
+                initial={false}
                 animate={{ opacity: 1, scale: 1 }}
                 className="relative"
             >

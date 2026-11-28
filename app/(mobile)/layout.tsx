@@ -1,22 +1,24 @@
 import { headers, cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { TRPCProvider } from '@/lib/trpc/provider'
 import '@/app/globals.css'
 import { MobileHeader } from './mobile-header'
 import { MobileBottomNav } from './mobile-bottom-nav'
 import { PermissionGuard } from '@/features/mobile/PermissionGuard'
 import { OfflineBanner } from '@/components/ui/offline-banner'
 import { BiometricCameraPrewarm } from '@/features/mobile/biometric-camera-prewarm'
+import { MobileCameraTransitionProvider } from './mobile-camera-transition'
 
 export default async function MobileLayout({
     children,
 }: {
     children: React.ReactNode
 }) {
-    // Check PWA standalone status from server-side cookies
-    const cookieStore = await cookies()
+    // Check PWA standalone status from server-side cookies and tenant branding headers
+    const [cookieStore, headersList] = await Promise.all([cookies(), headers()])
     const isPwa = cookieStore.get('pwa_standalone')?.value === 'true'
+    const fallbackBrandName = headersList.get('x-tenant-brand') || null
+    const fallbackLogoUrl = headersList.get('x-tenant-logo') || null
 
     // Check authentication for current request
     const supabase = await createServerSupabaseClient()
@@ -52,11 +54,15 @@ export default async function MobileLayout({
     }
 
     return (
-        <TRPCProvider>
+        <MobileCameraTransitionProvider>
             <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
                 <BiometricCameraPrewarm />
                 {/* Sticky Header */}
-                <MobileHeader profile={profile} />
+                <MobileHeader
+                    profile={profile}
+                    fallbackBrandName={fallbackBrandName}
+                    fallbackLogoUrl={fallbackLogoUrl}
+                />
 
                 {/* Offline Network Resilience Banner */}
                 <OfflineBanner message="Offline Mode: Punches will sync automatically when reconnected." />
@@ -71,6 +77,6 @@ export default async function MobileLayout({
                 {/* Bottom Navigation */}
                 <MobileBottomNav />
             </div>
-        </TRPCProvider>
+        </MobileCameraTransitionProvider>
     )
 }

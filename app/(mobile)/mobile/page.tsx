@@ -1,6 +1,8 @@
+import { Suspense } from 'react'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
 import { MobileDashboard } from './mobile-dashboard'
+import MobileDashboardLoading from './loading'
 import { runWithRequestHeaders } from '@/lib/tenant/with-context'
 import { db } from '@/lib/db'
 import { attendance, profiles } from '@/lib/db/schema'
@@ -18,7 +20,7 @@ function getLocalDateIST(): string {
     return dateStr
 }
 
-export default async function MobilePage() {
+async function MobileDashboardContent() {
     const cookieStore = await cookies()
     const isPwa = cookieStore.get('pwa_standalone')?.value === 'true'
 
@@ -70,5 +72,13 @@ export default async function MobilePage() {
             todayAttendance={todayAttendance as any}
             isPwaServer={isPwa}
         />
+    )
+}
+
+export default function MobilePage() {
+    return (
+        <Suspense fallback={<MobileDashboardLoading />}>
+            <MobileDashboardContent />
+        </Suspense>
     )
 }

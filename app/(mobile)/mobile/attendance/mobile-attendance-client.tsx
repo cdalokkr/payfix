@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { trpc } from '@/lib/trpc/client'
 import { Loader2 } from 'lucide-react'
 import { prewarmBiometricService } from '@/lib/biometric-camera-prewarm'
+import { useMobileCameraTransition } from '../../mobile-camera-transition'
 
 interface MobileAttendanceClientProps {
     profile: {
@@ -23,7 +24,12 @@ interface MobileAttendanceClientProps {
 export function MobileAttendanceClient({ profile, action, isPwaServer }: MobileAttendanceClientProps) {
     const router = useRouter()
     const utils = trpc.useUtils()
+    const { hideCameraLaunchShell } = useMobileCameraTransition()
     const [isDesktop, setIsDesktop] = useState(false)
+
+    useEffect(() => {
+        hideCameraLaunchShell()
+    }, [hideCameraLaunchShell])
 
     useEffect(() => {
         setIsDesktop(window.innerWidth >= 1024)
@@ -42,11 +48,10 @@ export function MobileAttendanceClient({ profile, action, isPwaServer }: MobileA
     }, [router])
 
     const handleComplete = () => {
-        // Ensure cache is refreshed and transition immediately to mobile dashboard
+        // Ensure cache is refreshed and transition immediately to mobile dashboard without hard layout refresh
         void utils.attendance.getMobileAttendance.invalidate()
         void utils.attendance.getTodayStatus.invalidate()
         router.replace('/mobile')
-        router.refresh()
     }
 
     const handleCancel = () => {
