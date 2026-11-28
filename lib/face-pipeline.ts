@@ -21,10 +21,10 @@ export const BIOMETRIC_CAMERA_CONFIG = {
   minHeight: 640,
   aspectRatio: 0.75, // Portrait-first 3:4 preference; hardware may report another native ratio, while the server generates the canonical 3:4 portrait.
   // Cloud Run detection natively caps at 640px (480 × 640 for 3:4 portrait).
-  // A 640px natural capture preserves full ArcFace facial detail while cutting
-  // upload payload, accelerating mobile and kiosk uploads over cellular networks.
-  captureMaxDimension: 640,
-  captureJpegQuality: 0.80,
+  // Capturing at 720px (540 × 720) with 0.88 JPEG quality preserves crisp facial
+  // texture for 5-point ArcFace alignment while staying compact (~55–80 KB/frame).
+  captureMaxDimension: 720,
+  captureJpegQuality: 0.88,
   // Client-only face/eye guidance always runs from a tiny transient canvas. It
   // never produces an embedding, crop, authorization decision, or upload.
   guidanceCanvasWidth: 256,
