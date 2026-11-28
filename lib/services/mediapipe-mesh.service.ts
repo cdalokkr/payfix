@@ -67,8 +67,21 @@ function getScanCanvas(video: HTMLVideoElement): HTMLCanvasElement | null {
     const vh = video.videoHeight || 640;
     if (vw === 0 || vh === 0) return null;
 
+    // Match the centered 3:4 portrait area shown inside the oval reticle instead of shrinking
+    // wide landscape edges, increasing face pixel density for backlit TinyFaceDetector guidance.
+    const targetAspect = 0.75;
+    let cropW = vw;
+    let cropH = vh;
+    if (vw / vh > targetAspect) {
+        cropW = Math.round(vh * targetAspect);
+    } else {
+        cropH = Math.round(vw / targetAspect);
+    }
+    const sx = Math.max(0, Math.round((vw - cropW) / 2));
+    const sy = Math.max(0, Math.round((vh - cropH) / 2));
+
     const targetW = BIOMETRIC_CAMERA_CONFIG.guidanceCanvasWidth;
-    const targetH = Math.round((vh / vw) * targetW);
+    const targetH = Math.round((cropH / cropW) * targetW);
 
     if (!_scanCanvas) {
         _scanCanvas = document.createElement('canvas');
@@ -82,7 +95,7 @@ function getScanCanvas(video: HTMLVideoElement): HTMLCanvasElement | null {
 
     if (_scanCtx) {
         try {
-            _scanCtx.drawImage(video, 0, 0, targetW, targetH);
+            _scanCtx.drawImage(video, sx, sy, cropW, cropH, 0, 0, targetW, targetH);
             return _scanCanvas;
         } catch {
             return null;

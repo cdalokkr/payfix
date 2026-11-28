@@ -506,7 +506,24 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
           autoPlay
           muted
           playsInline
+          onLoadedData={() => {
+            if (!isStreamPlayingRef.current && videoRef.current?.videoWidth) {
+              isStreamPlayingRef.current = true;
+              setIsStreamPlaying(true);
+              markStartup('video');
+              onVideoReadyRef.current?.();
+            }
+          }}
+          onCanPlay={() => {
+            if (!isStreamPlayingRef.current && videoRef.current?.videoWidth) {
+              isStreamPlayingRef.current = true;
+              setIsStreamPlaying(true);
+              markStartup('video');
+              onVideoReadyRef.current?.();
+            }
+          }}
           onPlaying={() => {
+            isStreamPlayingRef.current = true;
             setIsStreamPlaying(true);
             markStartup('video');
             onVideoReadyRef.current?.();

@@ -30,7 +30,7 @@ export const BIOMETRIC_CAMERA_CONFIG = {
   guidanceCanvasWidth: 256,
   guidanceIntervalMs: 125,
   guidanceInputSize: 224 as const,
-  guidanceScoreThreshold: 0.45,
+  guidanceScoreThreshold: 0.30,
   // Biometric capture must never silently fall back to the rear camera.
   facingMode: { exact: 'user' } as const,
   inputSize: 416 as const,
