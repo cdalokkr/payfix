@@ -244,7 +244,7 @@ export const MediaPipeMeshService = {
                         // used for server liveness, canonicalization, matching,
                         // enrollment, or attendance.
                         .detectSingleFace(scanEl, new faceapi.TinyFaceDetectorOptions(LIVE_GUIDANCE_FACE_DETECT_OPTIONS))
-                        .withFaceLandmarks(true);
+                        .withFaceLandmarks(false);
 
                     if (detection && detection.landmarks) {
                         const pts = detection.landmarks.positions;
@@ -478,7 +478,7 @@ export const MediaPipeMeshService = {
                 const faceapi = window.faceapi;
                 const detection = await faceapi
                     .detectSingleFace(videoOrCanvas, new faceapi.TinyFaceDetectorOptions(FACE_DETECT_OPTIONS))
-                    .withFaceLandmarks(true);
+                    .withFaceLandmarks(false);
 
                 if (detection) {
                     const box = detection.detection.box;
