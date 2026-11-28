@@ -299,8 +299,10 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
       blinkConfirmed: false, prompt: 'Position face in mask', statusBadgeColor: 'blue',
       ear: 0, headPose: { yaw: 0, pitch: 0, roll: 0 },
     });
-    if (!streamRef.current?.active) void startCamera();
-  }, [captureResetKey, isOpen, startCamera]);
+    if (!streamRef.current?.active || videoRef.current?.srcObject !== streamRef.current) {
+      void startCamera();
+    }
+  }, [captureResetKey, isOpen, startCamera, videoRef]);
 
   useEffect(() => {
     isMountedRef.current = true;
