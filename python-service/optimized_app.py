@@ -54,6 +54,15 @@ class ExtractRequest(BaseModel):
     return_canonical_portrait: bool = True
 
 
+class BatchExtractRequest(BaseModel):
+    frames: List[str] = Field(..., min_length=1, max_length=5)
+    require_512: bool = True
+    require_128: bool = True
+    check_liveness: bool = True
+    return_cropped_face: bool = False
+    return_canonical_portrait_first_only: bool = True
+
+
 class DiagnosticsInfo(BaseModel):
     face_box: Optional[Dict[str, int]] = None
     face_coverage_pct: float = 0.0
@@ -325,42 +334,55 @@ def aligned_arcface_crop(image: Image.Image, landmarks: List[Dict[str, int]]) ->
     return Image.fromarray(aligned, mode="RGB")
 
 
-def crop_face_avatar(image: Image.Image, face_box: Dict[str, Any]) -> tuple[Image.Image, Image.Image, Image.Image]:
+def crop_face_avatar(
+    image: Image.Image,
+    face_box: Dict[str, Any],
+    include_cropped_face: bool = True,
+    include_canonical_portrait: bool = True,
+) -> tuple[Optional[Image.Image], Image.Image, Optional[Image.Image]]:
     image_width, image_height = image.size
     left, top, width, height = (face_box[key] for key in ("left", "top", "width", "height"))
     center_x, center_y = left + width / 2, top + height / 2
-    square_size = max(width, height) * 1.30
-    square = image.crop((
-        max(0, int(center_x - square_size / 2)),
-        max(0, int(center_y - square_size * 0.52)),
-        min(image_width, int(center_x + square_size / 2)),
-        min(image_height, int(center_y + square_size * 0.48)),
-    ))
 
-    # Cap the source window before positioning it so extreme close-ups still
-    # preserve a real 3:4 portrait instead of stretching an edge-clamped crop.
-    portrait_height = min(
-        max(height * 2.70, width * 2.20),
-        image_height,
-        image_width / 0.75,
-    )
-    portrait_width = portrait_height * 0.75
-    portrait_left = center_x - portrait_width / 2
-    # Bias very slightly upward to leave consistent space around the hair
-    # while retaining ears and chin in the review portrait.
-    portrait_top = top + height * 0.56 - portrait_height / 2
-    portrait_left = max(0, min(portrait_left, image_width - portrait_width))
-    portrait_top = max(0, min(portrait_top, image_height - portrait_height))
-    portrait = image.crop((
-        int(portrait_left),
-        int(portrait_top),
-        min(image_width, int(portrait_left + portrait_width)),
-        min(image_height, int(portrait_top + portrait_height)),
-    ))
+    square_resized: Optional[Image.Image] = None
+    if include_cropped_face:
+        square_size = max(width, height) * 1.30
+        square = image.crop((
+            max(0, int(center_x - square_size / 2)),
+            max(0, int(center_y - square_size * 0.52)),
+            min(image_width, int(center_x + square_size / 2)),
+            min(image_height, int(center_y + square_size * 0.48)),
+        ))
+        square_resized = square.resize((512, 512), Image.Resampling.LANCZOS)
+
+    portrait_resized: Optional[Image.Image] = None
+    if include_canonical_portrait:
+        # Cap the source window before positioning it so extreme close-ups still
+        # preserve a real 3:4 portrait instead of stretching an edge-clamped crop.
+        portrait_height = min(
+            max(height * 2.70, width * 2.20),
+            image_height,
+            image_width / 0.75,
+        )
+        portrait_width = portrait_height * 0.75
+        portrait_left = center_x - portrait_width / 2
+        # Bias very slightly upward to leave consistent space around the hair
+        # while retaining ears and chin in the review portrait.
+        portrait_top = top + height * 0.56 - portrait_height / 2
+        portrait_left = max(0, min(portrait_left, image_width - portrait_width))
+        portrait_top = max(0, min(portrait_top, image_height - portrait_height))
+        portrait = image.crop((
+            int(portrait_left),
+            int(portrait_top),
+            min(image_width, int(portrait_left + portrait_width)),
+            min(image_height, int(portrait_top + portrait_height)),
+        ))
+        portrait_resized = portrait.resize((480, 640), Image.Resampling.LANCZOS)
+
     return (
-        square.resize((512, 512), Image.Resampling.LANCZOS),
+        square_resized,
         aligned_arcface_crop(image, face_box["landmarks"]),
-        portrait.resize((480, 640), Image.Resampling.LANCZOS),
+        portrait_resized,
     )
 
 
@@ -419,7 +441,12 @@ def extract(payload: ExtractRequest) -> ExtractResponse:
         quality = assess_image_quality_and_liveness(image, primary)
         timings["liveness_ms"] = round((time.perf_counter() - quality_at) * 1000, 2)
         embedding_at = time.perf_counter()
-        crop_512, crop_112, portrait = crop_face_avatar(image, primary)
+        crop_512, crop_112, portrait = crop_face_avatar(
+            image,
+            primary,
+            include_cropped_face=payload.return_cropped_face,
+            include_canonical_portrait=payload.return_canonical_portrait,
+        )
         embedding_512 = compute_embedding(crop_112)
         timings["embedding_512_ms"] = round((time.perf_counter() - embedding_at) * 1000, 2)
 
@@ -450,11 +477,11 @@ def extract(payload: ExtractRequest) -> ExtractResponse:
         embedding_128=embedding_512[:128] if payload.require_128 else None,
         embedding=embedding_512 if payload.require_512 else embedding_512[:128],
         embedding_pipeline_version=EMBEDDING_PIPELINE_VERSION,
-        cropped_face_base64=encode_jpeg(crop_512, 90) if payload.return_cropped_face else None,
-        canonical_portrait_base64=encode_jpeg(portrait, 90) if payload.return_canonical_portrait else None,
-        canonical_portrait_aspect_ratio="3:4" if payload.return_canonical_portrait else None,
-        canonical_portrait_width=480 if payload.return_canonical_portrait else None,
-        canonical_portrait_height=640 if payload.return_canonical_portrait else None,
+        cropped_face_base64=encode_jpeg(crop_512, 90) if (payload.return_cropped_face and crop_512 is not None) else None,
+        canonical_portrait_base64=encode_jpeg(portrait, 90) if (payload.return_canonical_portrait and portrait is not None) else None,
+        canonical_portrait_aspect_ratio="3:4" if (payload.return_canonical_portrait and portrait is not None) else None,
+        canonical_portrait_width=480 if (payload.return_canonical_portrait and portrait is not None) else None,
+        canonical_portrait_height=640 if (payload.return_canonical_portrait and portrait is not None) else None,
         dimensions=512,
         quality_score=quality["liveness_score"],
         is_live=quality["is_live"],
@@ -482,7 +509,12 @@ def compare(payload: CompareRequest) -> CompareResponse:
 
 @app.on_event("startup")
 def warm_session() -> None:
-    get_session()
+    session = get_session()
+    try:
+        dummy_tensor = np.zeros((1, 3, 112, 112), dtype=np.float32)
+        session.run(None, {session.get_inputs()[0].name: dummy_tensor})
+    except Exception as error:
+        print(f"[ArcFace] Warmup inference skipped: {error}")
 
 
 @app.get("/health")
@@ -502,6 +534,22 @@ def health() -> Dict[str, Any]:
 @app.post("/extract", response_model=ExtractResponse)
 def extract_endpoint(payload: ExtractRequest, _: None = Depends(require_service_token)) -> ExtractResponse:
     return extract(payload)
+
+
+@app.post("/extract-batch")
+def extract_batch_endpoint(payload: BatchExtractRequest, _: None = Depends(require_service_token)) -> Dict[str, Any]:
+    results = [
+        extract(ExtractRequest(
+            image_base64=frame,
+            require_512=payload.require_512,
+            require_128=payload.require_128,
+            check_liveness=payload.check_liveness,
+            return_cropped_face=payload.return_cropped_face,
+            return_canonical_portrait=(index == 0) if payload.return_canonical_portrait_first_only else True,
+        ))
+        for index, frame in enumerate(payload.frames)
+    ]
+    return {"results": results}
 
 
 @app.post("/compare", response_model=CompareResponse)

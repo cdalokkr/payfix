@@ -1,20 +1,20 @@
 'use client'
 
 import { useEffect } from 'react'
-import { FaceVerificationService } from '@/lib/services/face-verification.service'
 import { FaceApiBrowserService } from '@/lib/services/faceapi-browser.service'
-import { MediaPipeMeshService } from '@/lib/services/mediapipe-mesh.service'
-import { prewarmBiometricCamera, stopPrewarmedBiometricCamera } from '@/lib/biometric-camera-prewarm'
+import { prewarmBiometricService, stopPrewarmedBiometricCamera } from '@/lib/biometric-camera-prewarm'
 
-/** Lives at the authenticated mobile-layout level so navigation does not cold-start the camera. */
+/**
+ * Lives at the authenticated mobile-layout level.
+ * Pre-warms only the remote biometric service container + lightweight local blink detector
+ * (no heavy ONNX/MediaPipe CDN downloads and no background camera hardware lock on non-camera tabs).
+ */
 export function BiometricCameraPrewarm() {
   useEffect(() => {
-    FaceVerificationService.initialize().catch(() => {})
+    prewarmBiometricService()
     FaceApiBrowserService.loadDetectorOnly().catch(() => {})
-    MediaPipeMeshService.initialize().catch(() => {})
-    void prewarmBiometricCamera()
 
-    // Pre-warm OS cached location coordinates in background so Today's attendance card resolves in <50ms
+    // Pre-warm OS cached location coordinates in background so Today's attendance card resolves cleanly
     if (typeof window !== 'undefined' && 'geolocation' in navigator) {
       try {
         const cachedTime = Number(sessionStorage.getItem('mobileGeofenceTimestamp') || localStorage.getItem('mobileGeofenceTimestamp') || 0)

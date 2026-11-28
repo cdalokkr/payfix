@@ -9,12 +9,12 @@ let lastServicePrewarm = 0
 
 /**
  * Pings the biometric AI verification service in background to eliminate Cloud Run cold starts.
- * Throttled on client to once per 45 seconds.
+ * Throttled on client to once per 25 seconds.
  */
-export function prewarmBiometricService(): void {
-  if (typeof window === 'undefined') return
+export function prewarmBiometricService(force = false): void {
+  if (typeof window === 'undefined' || typeof fetch !== 'function') return
   const now = Date.now()
-  if (now - lastServicePrewarm < 45000) return
+  if (!force && now - lastServicePrewarm < 25000) return
   lastServicePrewarm = now
 
   fetch('/api/attendance/prewarm', {
@@ -46,11 +46,24 @@ export function prewarmBiometricCamera(): Promise<MediaStream | null> {
   return warming
 }
 
-/** Transfers ownership to a camera modal; the modal is responsible for stopping it. */
+/** Transfers ownership synchronously if ready, or null. */
 export function takePrewarmedBiometricCamera(): MediaStream | null {
   const stream = warmedStream
   warmedStream = null
   return stream?.active ? stream : null
+}
+
+/** Transfers ownership once an in-flight prewarm resolves, preventing duplicate getUserMedia calls. */
+export async function takeOrAwaitPrewarmedBiometricCamera(): Promise<MediaStream | null> {
+  const ready = takePrewarmedBiometricCamera()
+  if (ready) return ready
+
+  if (warming) {
+    await warming
+    return takePrewarmedBiometricCamera()
+  }
+
+  return null
 }
 
 export function stopPrewarmedBiometricCamera() {

@@ -93,14 +93,15 @@ export class FaceServiceClient {
 
     /**
      * Wakes up the Google Cloud Run (develop) or Hugging Face Space (main) container
-     * in the background by pinging /health. Throttled to at most once per 60 seconds.
+     * in the background by pinging /health. Uses a 15s timeout so scale-to-zero cold starts
+     * can finish initializing ONNX before the first selfie arrives.
      */
     static async prewarm(): Promise<{ ok: boolean; latencyMs?: number; engine?: string }> {
         if (process.env.NEXT_PHASE === 'phase-production-build') {
             return { ok: true }
         }
         const now = Date.now()
-        if (now - this.lastPrewarmTimestamp < 60000) {
+        if (now - this.lastPrewarmTimestamp < 30000) {
             return { ok: true }
         }
         if (this.activePrewarmPromise) {
@@ -113,12 +114,14 @@ export class FaceServiceClient {
                 const baseUrl = this.getBaseUrl().replace(/\/$/, '')
                 const resp = await fetch(`${baseUrl}/health`, {
                     method: 'GET',
-                    headers: this.getAuthHeaders(),
-                    signal: AbortSignal.timeout(6000),
+                    headers: { Connection: 'keep-alive', ...this.getAuthHeaders() },
+                    signal: AbortSignal.timeout(15000),
                 })
                 if (resp.ok) {
-                    this.lastPrewarmTimestamp = Date.now()
                     const data = await resp.json().catch(() => ({}))
+                    if (data?.model_ready !== false) {
+                        this.lastPrewarmTimestamp = Date.now()
+                    }
                     return { ok: true, latencyMs: Date.now() - start, engine: data?.engine }
                 }
             } catch (err: any) {
@@ -147,6 +150,49 @@ export class FaceServiceClient {
             return { ...result, canonical_portrait_aspect_ratio: '3:4' }
         }
         return result
+    }
+
+    /**
+     * Extracts 512-d ArcFace vectors for multiple frames in a single HTTP roundtrip via
+     * /extract-batch when supported, falling back transparently to parallel /extract calls.
+     */
+    static async extractBatch(frames: string[], options: FaceExtractOptions = {}): Promise<FaceExtractResult[]> {
+        if (!frames.length) return []
+        const baseUrl = this.getBaseUrl().replace(/\/$/, '')
+        const cleanedFrames = frames.map((frame) =>
+            frame.replace(/^data:image\/(?:jpeg|png|webp);base64,/, '')
+        )
+
+        try {
+            const resp = await fetch(`${baseUrl}/extract-batch`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Connection: 'keep-alive', ...this.getAuthHeaders() },
+                body: JSON.stringify({
+                    frames: cleanedFrames,
+                    require_512: true,
+                    require_128: false,
+                    check_liveness: true,
+                    return_cropped_face: options.includeCroppedFace === true,
+                    return_canonical_portrait_first_only: options.returnCanonicalPortrait ?? true,
+                }),
+                signal: AbortSignal.timeout(20000),
+            })
+
+            if (resp.ok) {
+                const payload = (await resp.json()) as { results?: FaceExtractResult[] } | FaceExtractResult[]
+                const results = Array.isArray(payload) ? payload : payload?.results
+                if (Array.isArray(results) && results.length === frames.length) {
+                    return results.map((item) => this.normalizeCanonicalPortrait(item))
+                }
+            }
+        } catch {
+            // Fall through to per-frame parallel /extract for backward compatibility
+        }
+
+        return Promise.all(frames.map((frame, index) => this.extract(frame, {
+            ...options,
+            returnCanonicalPortrait: (options.returnCanonicalPortrait ?? true) && index === 0,
+        })))
     }
 
     /**

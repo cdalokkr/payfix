@@ -30,6 +30,7 @@ import { FaceVerificationService } from "@/lib/services/face-verification.servic
 import { captureNaturalBiometricFrame } from "@/lib/face-pipeline"
 import { OfflineSyncService } from "@/lib/services/offline-sync.service"
 import { BiometricCameraModal } from "@/components/biometrics/BiometricCameraModal"
+import { prewarmBiometricService } from "@/lib/biometric-camera-prewarm"
 
 
 
@@ -155,8 +156,11 @@ export function SelfieCapture({
     }, [])
 
     useEffect(() => {
-        if (status === 'streaming' && !cachedChallengeRef.current) {
-            void prefetchChallenge()
+        if (status === 'streaming') {
+            prewarmBiometricService()
+            if (!cachedChallengeRef.current) {
+                void prefetchChallenge()
+            }
         }
     }, [status, prefetchChallenge])
 
@@ -173,15 +177,18 @@ export function SelfieCapture({
         return result.challenge as string
     }, [])
 
-    const captureChallengeFrames = useCallback(async () => {
+    const captureChallengeFrames = useCallback(async (initialFrame?: string) => {
         const video = videoRef.current
         if (!video) return []
         const frames: string[] = []
-        for (let index = 0; index < 3; index += 1) {
+        if (initialFrame) {
+            frames.push(initialFrame)
+        }
+        while (frames.length < 3) {
+            await new Promise(resolve => setTimeout(resolve, 65))
             const capture = captureNaturalBiometricFrame(video)
             if (!capture) return []
             frames.push(capture.dataUrl)
-            if (index < 2) await new Promise(resolve => setTimeout(resolve, 130))
         }
         return frames
     }, [])
@@ -325,15 +332,17 @@ export function SelfieCapture({
         }
     }, [profileImageUrl, faceEmbedding, mode, onSubmitAttendance, stopCamera, readImageDimensions])
 
-    // Capture a natural frame; the server owns face crops, alignment, and identity decisions.
+    // Capture natural frames cleanly without discarding the initial snapshot.
     const capturePhoto = useCallback(() => {
         if (!videoRef.current || status !== 'streaming') return
-        const capture = captureNaturalBiometricFrame(videoRef.current)
-        if (!capture) { toast.error('Camera frame is not ready. Please try again.'); return }
+        const firstCapture = captureNaturalBiometricFrame(videoRef.current)
+        if (!firstCapture) { toast.error('Camera frame is not ready. Please try again.'); return }
         void (async () => {
             try {
-                const challenge = await getLivenessChallenge()
-                const frames = await captureChallengeFrames()
+                const [challenge, frames] = await Promise.all([
+                    getLivenessChallenge(),
+                    captureChallengeFrames(firstCapture.dataUrl),
+                ])
                 if (frames.length !== 3) throw new Error('Camera frames were not available. Please retake your selfie.')
                 executeVerify(frames[0], challenge, frames)
             } catch (error: any) {
@@ -343,13 +352,15 @@ export function SelfieCapture({
         })()
     }, [status, executeVerify, getLivenessChallenge, captureChallengeFrames])
 
-    // Auto-capture on verified in-mask eye blink
+    // Auto-capture on verified in-mask eye blink — reuse captured blink frame as frames[0]
     const handleAutoCapture = useCallback((dataUrl: string) => {
         toast.success('Blink verified! Verifying face biometrics 👁️')
         void (async () => {
             try {
-                const challenge = await getLivenessChallenge()
-                const frames = await captureChallengeFrames()
+                const [challenge, frames] = await Promise.all([
+                    getLivenessChallenge(),
+                    captureChallengeFrames(dataUrl),
+                ])
                 if (frames.length !== 3) throw new Error('Camera frames were not available. Please retake your selfie.')
                 executeVerify(frames[0] || dataUrl, challenge, frames)
             } catch (error: any) {
@@ -409,7 +420,7 @@ export function SelfieCapture({
     }, [mode, resetVerificationState])
 
     const [sessionTimeout, setSessionTimeout] = useState<number>(20)
-    const [resultCountdown, setResultCountdown] = useState<number>(4)
+    const [resultCountdown, setResultCountdown] = useState<number>(2)
 
     const capturePhotoRef = useRef(capturePhoto)
     useEffect(() => {
@@ -453,21 +464,19 @@ export function SelfieCapture({
         }
     }, [status, capturedImage, capturedAt, handleProceed])
 
-    // Verification Result Auto-Complete Timer: Gives user 4 seconds to view clear verification results
+    // Verification Result Auto-Complete Timer: Brief 1.5s display before returning to dashboard
     useEffect(() => {
         if (status === 'verified' && apiStatus === 'success' && !isNavigating) {
-            setResultCountdown(4)
-            const interval = setInterval(() => {
-                setResultCountdown(prev => {
-                    if (prev <= 1) {
-                        clearInterval(interval)
-                        handleComplete()
-                        return 0
-                    }
-                    return prev - 1
-                })
-            }, 1000)
-            return () => clearInterval(interval)
+            setResultCountdown(2)
+            const stepTimer = setTimeout(() => setResultCountdown(1), 750)
+            const doneTimer = setTimeout(() => {
+                handleComplete()
+                setResultCountdown(0)
+            }, 1500)
+            return () => {
+                clearTimeout(stepTimer)
+                clearTimeout(doneTimer)
+            }
         }
     }, [status, apiStatus, isNavigating, handleComplete])
 

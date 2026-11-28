@@ -17,9 +17,10 @@ interface MobileAttendanceClientProps {
         avatar_url: string | null
     }
     action: 'clock_in' | 'clock_out'
+    isPwaServer?: boolean
 }
 
-export function MobileAttendanceClient({ profile, action }: MobileAttendanceClientProps) {
+export function MobileAttendanceClient({ profile, action, isPwaServer }: MobileAttendanceClientProps) {
     const router = useRouter()
     const utils = trpc.useUtils()
     const [isDesktop, setIsDesktop] = useState(false)
@@ -84,6 +85,7 @@ export function MobileAttendanceClient({ profile, action }: MobileAttendanceClie
             profileImageUrl={profile.avatar_url}
             profileName={profile.full_name}
             profileEmail={profile.email}
+            isPwaServer={isPwaServer}
             onComplete={handleComplete}
             onCancel={handleCancel}
         />

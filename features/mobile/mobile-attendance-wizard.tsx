@@ -23,7 +23,7 @@ import { trpc } from "@/lib/trpc/client"
 import { SelfieCapture, type SelfieResult } from "./selfie-capture"
 import { format } from "date-fns"
 import { usePwaCheck } from "@/hooks/use-pwa-check"
-import { prewarmBiometricCamera, takePrewarmedBiometricCamera } from "@/lib/biometric-camera-prewarm"
+import { prewarmBiometricCamera, prewarmBiometricService, takePrewarmedBiometricCamera } from "@/lib/biometric-camera-prewarm"
 
 type WizardStep = 'locating' | 'outside_office' | 'selfie' | 'submitting' | 'complete' | 'error'
 
@@ -32,6 +32,7 @@ interface MobileAttendanceWizardProps {
     profileImageUrl: string | null
     profileName?: string | null
     profileEmail?: string | null
+    isPwaServer?: boolean
     onComplete: () => void
     onCancel: () => void
 }
@@ -76,13 +77,16 @@ export function MobileAttendanceWizard({
     profileImageUrl,
     profileName,
     profileEmail,
+    isPwaServer,
     onComplete,
     onCancel,
 }: MobileAttendanceWizardProps) {
-    const { isPwa, isReady } = usePwaCheck()
+    const { isPwa, isReady } = usePwaCheck(isPwaServer)
 
-    // Lock session action on mount so subsequent query invalidations in background NEVER remount SelfieCapture mid-verification
+    // Lock session action & initial prewarmed stream once on mount so background state updates
+    // NEVER flip preWarmedStream or remount SelfieCapture/BiometricCameraModal mid-session.
     const [sessionAction] = useState<'clock_in' | 'clock_out'>(() => action)
+    const [initialPrewarmedStream] = useState<MediaStream | null>(() => takePrewarmedBiometricCamera())
 
     const initialGeofence = getStoredGeofence()
     const initialCoords = getStoredCoords()
@@ -153,8 +157,11 @@ export function MobileAttendanceWizard({
             setIsRetryingLocation(true)
             setErrorMessage('')
         }
-        // Pre-warm camera hardware in background during location check so camera starts in <50ms once verified
-        void prewarmBiometricCamera()
+        // Ensure backend face container wakes cleanly while locating; only open camera if not already open.
+        prewarmBiometricService()
+        if (!initialPrewarmedStream && currentStep === 'locating') {
+            void prewarmBiometricCamera()
+        }
         try {
             if (typeof window === 'undefined' || !navigator.geolocation) {
                 if (!isBackgroundRecheck) {
@@ -234,11 +241,13 @@ export function MobileAttendanceWizard({
                 setIsRetryingLocation(false)
             }
         }
-    }, [utils])
+    }, [utils, initialPrewarmedStream, currentStep])
 
     useEffect(() => {
-        // Pre-warm camera hardware as early as possible
-        void prewarmBiometricCamera()
+        prewarmBiometricService()
+        if (!initialPrewarmedStream && currentStep === 'locating') {
+            void prewarmBiometricCamera()
+        }
 
         if (!isReady) return
 
@@ -248,7 +257,9 @@ export function MobileAttendanceWizard({
         } else {
             void verifyOfficeLocation(false)
         }
-    }, [isReady, isInitiallyAllowed, verifyOfficeLocation])
+    // Run location gate cleanly once readiness resolves without re-triggering camera on step changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isReady, isInitiallyAllowed])
 
     const handleSelfieCaptured = useCallback((result: SelfieResult) => {
         // Selfie captured but not verified yet - this is now handled in selfie-capture
@@ -500,7 +511,7 @@ export function MobileAttendanceWizard({
                         profileImageUrl={profileImageUrl}
                         profileName={profileName}
                         profileEmail={profileEmail}
-                        preWarmedStream={takePrewarmedBiometricCamera()}
+                        preWarmedStream={initialPrewarmedStream}
                         onCaptured={handleSelfieCaptured}
                         onVerified={handleVerified}
                         onSubmitAttendance={handleSubmitAttendance}

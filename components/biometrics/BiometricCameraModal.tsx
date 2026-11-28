@@ -8,7 +8,7 @@ import { X, RefreshCw, AlertCircle } from 'lucide-react';
 import { BIOMETRIC_CAMERA_CONFIG, BIOMETRIC_CAMERA_CONSTRAINTS, captureNaturalBiometricFrame, validateBiometricCameraFrame, lockCameraHardwareZoom } from '@/lib/face-pipeline';
 import { MediaPipeMeshService, InMaskLivenessStatus } from '@/lib/services/mediapipe-mesh.service';
 import { FaceApiBrowserService } from '@/lib/services/faceapi-browser.service';
-import { takePrewarmedBiometricCamera } from '@/lib/biometric-camera-prewarm';
+import { takeOrAwaitPrewarmedBiometricCamera } from '@/lib/biometric-camera-prewarm';
 
 interface BiometricCameraModalProps {
   isOpen: boolean;
@@ -79,10 +79,13 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   const videoRef = videoRefOut || internalVideoRef;
   const streamRef = useRef<MediaStream | null>(null);
   const isMountedRef = useRef(true);
+  const isOpenRef = useRef(isOpen);
+  const isStartingRef = useRef(false);
+  const warmedStreamRef = useRef<MediaStream | null | undefined>(warmedStream);
   const [isStreamPlaying, setIsStreamPlaying] = useState(false);
+  const isStreamPlayingRef = useRef(false);
   const [internalPreviewUrl, setInternalPreviewUrl] = useState<string | null>(null);
   const startupStartedAtRef = useRef<number | null>(null);
-  const [startupNow, setStartupNow] = useState<number | null>(null);
   const [startupMilestones, setStartupMilestones] = useState<{
     stream?: number;
     video?: number;
@@ -94,7 +97,19 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
     ? Math.max(startupMilestones.stream, startupMilestones.video, startupMilestones.guidance)
     : null;
   const mediaPipeDelegate = MediaPipeMeshService.getActiveDelegate();
-  const mediaPipeLabel = mediaPipeDelegate === 'Unknown' ? 'starting' : mediaPipeDelegate;
+  const mediaPipeLabel = mediaPipeDelegate === 'Unknown' ? 'local' : mediaPipeDelegate;
+
+  useEffect(() => {
+    isOpenRef.current = isOpen;
+  }, [isOpen]);
+
+  useEffect(() => {
+    warmedStreamRef.current = warmedStream;
+  }, [warmedStream]);
+
+  useEffect(() => {
+    isStreamPlayingRef.current = isStreamPlaying;
+  }, [isStreamPlaying]);
 
   const onStreamReadyRef = useRef(onStreamReady);
   const onVideoReadyRef = useRef(onVideoReady);
@@ -140,21 +155,15 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
       : current);
   }, []);
 
-  // Keep a small, visible stopwatch on the camera screen. This measures the
-  // user-visible startup path rather than guessing from network/API timings.
+  // Record user-visible startup timing without running a 10Hz interval re-render over live video.
   useEffect(() => {
     if (!isOpen) {
       startupStartedAtRef.current = null;
-      setStartupNow(null);
       setStartupMilestones({});
       return;
     }
-    const startedAt = performance.now();
-    startupStartedAtRef.current = startedAt;
-    setStartupNow(startedAt);
+    startupStartedAtRef.current = performance.now();
     setStartupMilestones({});
-    const interval = window.setInterval(() => setStartupNow(performance.now()), 100);
-    return () => window.clearInterval(interval);
   }, [isOpen]);
 
   useEffect(() => {
@@ -187,10 +196,12 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   }, [isOpen, isProcessing]);
 
   const stopStream = useCallback(() => {
+    isStartingRef.current = false;
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
+    isStreamPlayingRef.current = false;
     setIsStreamPlaying(false);
     MediaPipeMeshService.resetBlinkState();
     isCapturingRef.current = false;
@@ -198,43 +209,48 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
   }, []);
 
   const startCamera = useCallback(async () => {
-    if (!isOpen) return;
+    if (!isOpenRef.current || isStartingRef.current) return;
 
-    // Fast-path: use pre-warmed stream if active
-    if (warmedStream && warmedStream.active) {
-      streamRef.current = warmedStream;
-      void lockCameraHardwareZoom(warmedStream);
+    const attachStream = (stream: MediaStream) => {
+      streamRef.current = stream;
+      void lockCameraHardwareZoom(stream);
       markStartup('stream');
       isCapturingRef.current = false;
       isEvaluatingRef.current = false;
       MediaPipeMeshService.resetBlinkState();
-      // A MediaStream can exist before its first camera frame arrives. Keep
-      // the loading state until the video element reports that it can play.
-      setIsStreamPlaying(false);
-      if (videoRef.current) {
-        const video = videoRef.current;
-        video.srcObject = warmedStream;
-        video.setAttribute('playsinline', 'true');
-        video.muted = true;
-        video.play().catch(() => {});
+
+      const video = videoRef.current;
+      if (video) {
+        if (video.srcObject !== stream) {
+          isStreamPlayingRef.current = false;
+          setIsStreamPlaying(false);
+          video.srcObject = stream;
+          video.setAttribute('playsinline', 'true');
+          video.muted = true;
+          video.play().catch(() => {});
+        } else if (video.readyState >= 2 && video.videoWidth > 0) {
+          isStreamPlayingRef.current = true;
+          setIsStreamPlaying(true);
+          markStartup('video');
+        } else {
+          video.play().catch(() => {});
+        }
         FaceApiBrowserService.loadDetectorOnly().catch(() => {});
-        MediaPipeMeshService.initialize().catch(() => {});
-        onStreamReadyRef.current?.(warmedStream, video);
+        onStreamReadyRef.current?.(stream, video);
       }
+    };
+
+    // Fast-path: reuse already active modal stream — never stop/reopen!
+    if (streamRef.current && streamRef.current.active) {
+      attachStream(streamRef.current);
       return;
     }
 
-    // Stream is active — DO NOT STOP stream!
-    if (streamRef.current && streamRef.current.active) {
-      setIsStreamPlaying(false);
-      void lockCameraHardwareZoom(streamRef.current);
-      const video = videoRef.current;
-      if (video && video.srcObject !== streamRef.current) {
-        video.srcObject = streamRef.current;
-        video.play().catch(() => {});
-      } else if (video && video.readyState >= 2 && video.videoWidth > 0) {
-        setIsStreamPlaying(true);
-      }
+    // Fast-path: use pre-warmed stream passed once via ref if active
+    const candidateWarmed = warmedStreamRef.current;
+    if (candidateWarmed && candidateWarmed.active) {
+      warmedStreamRef.current = null;
+      attachStream(candidateWarmed);
       return;
     }
 
@@ -242,43 +258,21 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
     MediaPipeMeshService.resetBlinkState();
     isCapturingRef.current = false;
     isEvaluatingRef.current = false;
+    isStartingRef.current = true;
 
     try {
-      // Reuse the authenticated-layout prewarmed stream when available. The
-      // constraints remain exactly the shared biometric constraints.
-      const stream = takePrewarmedBiometricCamera() || await navigator.mediaDevices.getUserMedia({
+      // Reuse or await any in-flight prewarmed stream before requesting a new camera session.
+      const stream = (await takeOrAwaitPrewarmedBiometricCamera()) || await navigator.mediaDevices.getUserMedia({
         video: BIOMETRIC_CAMERA_CONSTRAINTS,
         audio: false,
       });
 
-      if (!isMountedRef.current) {
+      if (!isMountedRef.current || !isOpenRef.current) {
         stream.getTracks().forEach((t) => t.stop());
         return;
       }
 
-      streamRef.current = stream;
-      void lockCameraHardwareZoom(stream);
-      markStartup('stream');
-      setIsStreamPlaying(false);
-
-      if (videoRef.current) {
-        const video = videoRef.current;
-        video.srcObject = stream;
-        video.setAttribute('playsinline', 'true');
-        video.muted = true;
-        video.play().catch(() => {
-          // Remain in the startup state until the video element receives
-          // usable frames; a stream alone can still render a black preview.
-        });
-
-        // Fast preload detector for instant blink detection
-        FaceApiBrowserService.loadDetectorOnly().catch(() => {});
-        MediaPipeMeshService.initialize().catch(() => {});
-
-        if (onStreamReadyRef.current) {
-          onStreamReadyRef.current(stream, video);
-        }
-      }
+      attachStream(stream);
     } catch (err: any) {
       if (!isMountedRef.current) return;
       console.error('[BiometricCameraModal] Camera error:', err);
@@ -287,8 +281,10 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
       if (onCameraErrorRef.current) {
         onCameraErrorRef.current(err);
       }
+    } finally {
+      isStartingRef.current = false;
     }
-  }, [isOpen, markStartup, videoRef, warmedStream]);
+  }, [markStartup, videoRef]);
 
   // A retake must begin as a fresh liveness session, while retaining the
   // already-open front camera when it is still healthy.
@@ -321,7 +317,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
       });
 
     if (isOpen) {
-      startCamera();
+      void startCamera();
     } else {
       stopStream();
     }
@@ -330,7 +326,10 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
       isMountedRef.current = false;
       stopStream();
     };
-  }, [isOpen, startCamera, stopStream]);
+  // Keep camera ownership bound strictly to modal open/close so parent re-renders
+  // or warmedStream prop transitions NEVER kill and reopen the camera hardware.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   // Real-time In-Mask Liveness & Blink Tracking Loop
   useEffect(() => {
@@ -375,16 +374,24 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                 ear: 0, headPose: { yaw: 0, pitch: 0, roll: 0 },
               }), 1800)
             );
-            const status = await Promise.race([evalPromise, timeoutPromise]);
+            const nextStatus = await Promise.race([evalPromise, timeoutPromise]);
             if (isMountedRef.current) {
-              setLivenessStatus(status);
-              if (!isStreamPlaying) {
+              setLivenessStatus((prev) => (
+                prev.isFaceDetected === nextStatus.isFaceDetected &&
+                prev.isAlignedInMask === nextStatus.isAlignedInMask &&
+                prev.isBlinking === nextStatus.isBlinking &&
+                prev.blinkConfirmed === nextStatus.blinkConfirmed &&
+                prev.prompt === nextStatus.prompt &&
+                prev.statusBadgeColor === nextStatus.statusBadgeColor
+              ) ? prev : nextStatus);
+              if (!isStreamPlayingRef.current) {
+                isStreamPlayingRef.current = true;
                 setIsStreamPlaying(true);
               }
             }
 
             // Handle Blink Confirmed Auto-Capture
-            if (status.blinkConfirmed && onAutoCaptureRef.current && !isCapturingRef.current) {
+            if (nextStatus.blinkConfirmed && onAutoCaptureRef.current && !isCapturingRef.current) {
               isCapturingRef.current = true;
               setFlashSuccess(true);
 
@@ -403,12 +410,10 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                   try { navigator.vibrate([40, 60, 40]); } catch {}
                 }
 
-                setTimeout(() => {
-                  if (onAutoCaptureRef.current && capturedDataUrl) {
-                    onAutoCaptureRef.current(capturedDataUrl);
-                  }
-                  setTimeout(() => setFlashSuccess(false), 400);
-                }, 100);
+                if (onAutoCaptureRef.current && capturedDataUrl) {
+                  onAutoCaptureRef.current(capturedDataUrl);
+                }
+                setTimeout(() => setFlashSuccess(false), 350);
               }
             }
           } catch (err) {
@@ -429,7 +434,7 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
       cancelAnimationFrame(animId);
       isEvaluatingRef.current = false;
     };
-  }, [isOpen, enableAutoBlinkCapture, isProcessing, videoRef, isStreamPlaying, stopStream]);
+  }, [isOpen, enableAutoBlinkCapture, isProcessing, videoRef, stopStream]);
 
   if (!isOpen) return null;
 
@@ -586,10 +591,6 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                   strokeWidth="5.5"
                   strokeDasharray="none"
                   strokeOpacity="1.0"
-                  className="transition-all duration-300"
-                  style={{
-                    filter: 'drop-shadow(0 0 6px rgba(0, 0, 0, 0.95))',
-                  }}
                 />
 
                 {/* 2. Dynamic Countdown Progress Stroke directly along the SAME Oval Path */}
@@ -614,12 +615,6 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                         100 - (Math.max(0, Math.min(maxTimerRef.current, timerSeconds)) / (maxTimerRef.current || 1)) * 100
                       }`,
                       transition: 'stroke-dashoffset 1s linear',
-                      filter:
-                        timerSeconds <= (maxTimerRef.current <= 10 ? 3 : 5)
-                          ? 'drop-shadow(0px 0px 12px rgba(239, 68, 68, 0.95))'
-                          : isAligned
-                          ? 'drop-shadow(0px 0px 14px rgba(16, 185, 129, 0.95))'
-                          : 'drop-shadow(0px 0px 10px rgba(56, 189, 248, 0.85))',
                     }}
                   />
                 )}
@@ -696,10 +691,6 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                   height="12"
                   rx="6"
                   fill={isAligned ? '#34d399' : '#38bdf8'}
-                  style={{
-                    filter: isAligned ? 'drop-shadow(0 0 8px rgba(52, 211, 153, 0.9))' : 'drop-shadow(0 0 8px rgba(56, 189, 248, 0.8))',
-                    transition: 'fill 0.3s ease',
-                  }}
                 />
 
                 {/* Bottom Accent Alignment Marker directly on the oval bottom apex (Y=352) */}
@@ -710,16 +701,12 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                   height="12"
                   rx="6"
                   fill={isAligned ? '#34d399' : '#38bdf8'}
-                  style={{
-                    filter: isAligned ? 'drop-shadow(0 0 8px rgba(52, 211, 153, 0.9))' : 'drop-shadow(0 0 8px rgba(56, 189, 248, 0.8))',
-                    transition: 'fill 0.3s ease',
-                  }}
                 />
               </svg>
             </div>
 
             {/* 3. Real-time Status Badge & Dynamic Flow Guidance Indicator Overlay */}
-            <div className="z-30 mb-1 rounded-full bg-slate-900/95 px-3 py-1 backdrop-blur-md border border-slate-700 shadow-xl flex items-center gap-1.5">
+            <div className="z-30 mb-1 rounded-full bg-slate-900/95 px-3 py-1 border border-slate-700 shadow-lg flex items-center gap-1.5">
               {isProcessing ? (
                 <>
                   <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-sky-400/30 border-t-sky-400 shrink-0" />
@@ -757,13 +744,14 @@ export const BiometricCameraModal: React.FC<BiometricCameraModalProps> = ({
                 </>
               )}
             </div>
-            {startupStartedAtRef.current !== null && startupNow !== null && (
+            {(startupMilestones.stream !== undefined || startupMilestones.video !== undefined || startupMilestones.guidance !== undefined) && (
               <div className="z-30 mb-0.5 rounded-lg bg-slate-950/90 px-2.5 py-1 text-[8.5px] font-mono text-slate-300 border border-slate-700/80">
                 <div className="font-bold text-sky-300">
-                  {startupReadyMs !== null ? 'Camera ready in' : 'Camera startup'}:{' '}
-                  {((startupReadyMs ?? (startupNow - startupStartedAtRef.current)) / 1000).toFixed(1)}s
+                  {startupReadyMs !== null
+                    ? `Camera ready in: ${(startupReadyMs / 1000).toFixed(1)}s`
+                    : 'Camera initializing'}
                   <span className="ml-1.5 text-emerald-300">
-                    · MP {mediaPipeLabel}
+                    · {mediaPipeLabel}
                   </span>
                 </div>
                 <div className="mt-0.5 flex gap-2 text-[8px]">
