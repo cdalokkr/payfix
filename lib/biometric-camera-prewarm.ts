@@ -36,9 +36,9 @@ export function prewarmBiometricCamera(): Promise<MediaStream | null> {
   warming = navigator.mediaDevices.getUserMedia({
     video: BIOMETRIC_CAMERA_CONSTRAINTS,
     audio: false,
-  }).then(async (stream) => {
-    await lockCameraHardwareZoom(stream)
+  }).then((stream) => {
     warmedStream = stream
+    void lockCameraHardwareZoom(stream)
     return stream
   }).catch(() => null).finally(() => {
     warming = null

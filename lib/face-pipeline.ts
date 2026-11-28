@@ -42,9 +42,9 @@ export const BIOMETRIC_CAMERA_CONSTRAINTS: MediaTrackConstraints = {
   width: { ideal: BIOMETRIC_CAMERA_CONFIG.width, min: BIOMETRIC_CAMERA_CONFIG.minWidth },
   height: { ideal: BIOMETRIC_CAMERA_CONFIG.height, min: BIOMETRIC_CAMERA_CONFIG.minHeight },
   aspectRatio: { ideal: BIOMETRIC_CAMERA_CONFIG.aspectRatio },
-  // 24fps keeps blink guidance responsive while reducing decode, compositing,
-  // and battery pressure relative to a continuous 30fps high-resolution stream.
-  frameRate: { ideal: 24, max: 24 },
+  // Use native 30fps preview preference without a strict max: 24 cap so Android Camera2
+  // opens its default fast hardware pipeline without multi-second ISP reconfiguration.
+  frameRate: { ideal: 30 },
 };
 
 export function validateBiometricCameraFrame(width: number, height: number) {
@@ -73,7 +73,7 @@ export async function lockCameraHardwareZoom(stream: MediaStream | null | undefi
     if (capabilities && capabilities.zoom) {
       const minZoom = typeof capabilities.zoom.min === 'number' ? Math.max(1, capabilities.zoom.min) : 1;
       const currentSettings = (typeof track.getSettings === 'function' ? track.getSettings() : {}) as any;
-      if (typeof currentSettings.zoom === 'number' && currentSettings.zoom !== minZoom) {
+      if (typeof currentSettings.zoom === 'number' && Math.abs(currentSettings.zoom - minZoom) > 0.05) {
         await track.applyConstraints({
           advanced: [{ zoom: minZoom } as any],
         });
