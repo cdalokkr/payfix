@@ -119,12 +119,17 @@ export async function POST(request: NextRequest) {
             return respond({ error: 'Your approved profile has no valid biometric template. Please submit a new profile photo.' }, { status: 400 })
         }
 
-        const extractions = await Promise.all(submittedFrames.map((frame, index) => FaceServiceClient.extract(frame, {
-            includeCroppedFace: false,
-            // Primary frame 0 produces the canonical 3:4 portrait for verification feedback.
-            // Auxiliary frames 1 & 2 validate natural liveness and 512-d embeddings without redundant JPEG alignment.
-            returnCanonicalPortrait: index === 0,
-        })))
+        const extractions = typeof FaceServiceClient.extractBatch === 'function'
+            ? await FaceServiceClient.extractBatch(submittedFrames, {
+                includeCroppedFace: false,
+                // Primary frame 0 produces the canonical 3:4 portrait for verification feedback.
+                // Auxiliary frames 1 & 2 validate natural liveness and 512-d embeddings without redundant JPEG alignment.
+                returnCanonicalPortrait: true,
+            })
+            : await Promise.all(submittedFrames.map((frame, index) => FaceServiceClient.extract(frame, {
+                includeCroppedFace: false,
+                returnCanonicalPortrait: index === 0,
+            })))
         const frameFailure = findFrameFailure(extractions)
         if (frameFailure) {
             const failedFrame = frameFailure.result

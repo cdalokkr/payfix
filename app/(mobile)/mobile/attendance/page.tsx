@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { cookies } from 'next/headers'
 import { MobileAttendanceClient } from './mobile-attendance-client'
 import { redirect } from 'next/navigation'
 import { isDefaultAvatar } from '@/lib/utils/avatar-helper'
@@ -25,6 +26,9 @@ export default async function MobileAttendancePage({ searchParams }: PageProps) 
     const resolvedSearchParams = searchParams ? await searchParams : {}
     const requestedAction = resolvedSearchParams?.action === 'clock_out' ? 'clock_out' : resolvedSearchParams?.action === 'clock_in' ? 'clock_in' : null
 
+    const cookieStore = await cookies()
+    const isPwa = cookieStore.get('pwa_standalone')?.value === 'true'
+
     const supabase = await createServerSupabaseClient()
     const { data } = await supabase.auth.getUser()
     const user = data?.user || null
@@ -36,19 +40,20 @@ export default async function MobileAttendancePage({ searchParams }: PageProps) 
     // Get today's date in IST
     const today = getLocalDateIST()
 
-    // Fetch profile and tenant attendance record in proper tenant context
+    // Skip redundant todayAttendance DB query when ?action= is explicitly provided from dashboard
     const { profile, todayAttendance } = await runWithRequestHeaders(async () => {
-        const [profileRecord, attRecord] = await Promise.all([
-            db.query.profiles.findFirst({
-                where: eq(profiles.id, user.id)
-            }),
-            db.query.attendance.findFirst({
+        const profilePromise = db.query.profiles.findFirst({
+            where: eq(profiles.id, user.id)
+        })
+        const attPromise = requestedAction
+            ? Promise.resolve(null)
+            : db.query.attendance.findFirst({
                 where: and(
                     eq(attendance.profile_id, user.id),
                     eq(attendance.date, today)
                 )
             })
-        ])
+        const [profileRecord, attRecord] = await Promise.all([profilePromise, attPromise])
         return {
             profile: profileRecord || null,
             todayAttendance: attRecord || null
@@ -78,6 +83,7 @@ export default async function MobileAttendancePage({ searchParams }: PageProps) 
             key={action}
             profile={profile!}
             action={action}
+            isPwaServer={isPwa}
         />
     )
 }

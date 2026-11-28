@@ -47,10 +47,8 @@ import {
 } from "lucide-react"
 import { usePwaCheck } from "@/hooks/use-pwa-check"
 import { isDefaultAvatar } from "@/lib/utils/avatar-helper"
-import { FaceVerificationService } from "@/lib/services/face-verification.service"
 import { FaceApiBrowserService } from "@/lib/services/faceapi-browser.service"
-import { MediaPipeMeshService } from "@/lib/services/mediapipe-mesh.service"
-import { prewarmBiometricCamera } from "@/lib/biometric-camera-prewarm"
+import { prewarmBiometricCamera, prewarmBiometricService } from "@/lib/biometric-camera-prewarm"
 
 function getHardwareAccelerationInfo(): { backend: string; isGpu: boolean } {
     if (typeof window === 'undefined') return { backend: 'CPU', isGpu: false };
@@ -135,7 +133,7 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
     const { isPwa, isMobile, isReady } = usePwaCheck(isPwaServer)
     const [isDesktop, setIsDesktop] = useState(false)
     const [isPhotoCaptureOpen, setIsPhotoCaptureOpen] = useState(false)
-    const [hardwareInfo] = useState(() => getHardwareAccelerationInfo())
+    const [hardwareInfo, setHardwareInfo] = useState<{ backend: string; isGpu: boolean }>({ backend: 'WebGL GPU', isGpu: true })
 
     // Check if payslip features are accessible for this employee/workspace
     const { data: payslipAccess } = trpc.salary.getPayslipAccessSettings.useQuery(undefined, {
@@ -153,10 +151,13 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
         })
     }, [payslipAccess])
     useEffect(() => {
-        // Pre-warm face recognition models & MediaPipe vision in background
-        FaceVerificationService.initialize().catch(() => {})
+        // Warm backend verifier + lightweight local 549KB detector cleanly after mount (zero 160MB ONNX/MediaPipe stall)
+        prewarmBiometricService()
         FaceApiBrowserService.loadDetectorOnly().catch(() => {})
-        MediaPipeMeshService.initialize().catch(() => {})
+
+        const scheduleIdle = typeof window !== 'undefined' && 'requestIdleCallback' in window
+            ? (window as any).requestIdleCallback(() => setHardwareInfo(getHardwareAccelerationInfo()))
+            : setTimeout(() => setHardwareInfo(getHardwareAccelerationInfo()), 150)
 
         setIsDesktop(window.innerWidth >= 1024)
 
@@ -164,6 +165,11 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
         window.addEventListener('resize', handleResize)
         return () => {
             window.removeEventListener('resize', handleResize)
+            if (typeof window !== 'undefined' && 'cancelIdleCallback' in window && typeof scheduleIdle === 'number') {
+                (window as any).cancelIdleCallback(scheduleIdle)
+            } else {
+                clearTimeout(scheduleIdle as any)
+            }
         }
     }, [])
 
@@ -630,7 +636,7 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
                                                 <motion.div whileTap={{ scale: 0.97 }} className="w-full">
                                                     <Link
                                                         href={`/mobile/attendance?action=${isClockedIn ? 'clock_out' : 'clock_in'}`}
-                                                        prefetch={false}
+                                                        prefetch={true}
                                                         onPointerDown={() => void prewarmBiometricCamera()}
                                                         onTouchStart={() => void prewarmBiometricCamera()}
                                                         onMouseEnter={() => void prewarmBiometricCamera()}

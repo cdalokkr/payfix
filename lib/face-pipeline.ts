@@ -12,24 +12,19 @@ import {
 
 /** Shared camera configuration for enrollment, attendance, and kiosk capture. */
 export const BIOMETRIC_CAMERA_CONFIG = {
-  // A 960 × 1280 front-camera stream gives the browser exactly the detail needed
-  // for a 720 × 960 natural capture without asking lower-end phones and kiosk
-  // webcams to continuously decode a 5 MP stream.
-  //
-  // These are ideals rather than exact constraints: each device still selects its
-  // nearest supported front-camera mode. The server remains the authority for
-  // detection, canonicalization, liveness, and matching.
-  width: 960,
-  height: 1280,
+  // A 720 × 960 portrait front-camera stream settles much faster on Android
+  // hardware than forcing 1280 × 960 while exceeding the 640 × 480 minimum and
+  // preserving full facial detail for 480 × 640 server verification.
+  width: 720,
+  height: 960,
   minWidth: 480,
   minHeight: 640,
   aspectRatio: 0.75, // Portrait-first 3:4 preference; hardware may report another native ratio, while the server generates the canonical 3:4 portrait.
   // Cloud Run detection natively caps at 640px (480 × 640 for 3:4 portrait).
   // A 640px natural capture preserves full ArcFace facial detail while cutting
-  // upload payload by 75% (~1.8MB to ~350KB for 3 frames), accelerating mobile
-  // and kiosk uploads over cellular and Wi-Fi networks.
+  // upload payload, accelerating mobile and kiosk uploads over cellular networks.
   captureMaxDimension: 640,
-  captureJpegQuality: 0.84,
+  captureJpegQuality: 0.80,
   // Client-only face/eye guidance always runs from a tiny transient canvas. It
   // never produces an embedding, crop, authorization decision, or upload.
   guidanceCanvasWidth: 256,
@@ -62,13 +57,15 @@ export function validateBiometricCameraFrame(width: number, height: number) {
   };
 }
 
+const zoomLockedStreams = new WeakSet<MediaStream>();
+
 /**
  * Locks the active camera video track to 1.0x optical zoom (or minimum optical zoom).
- * Prevents Android devices (Xiaomi, Realme, Vivo, Samsung) with dual-FOV or portrait selfie defaults
- * from opening in a digitally zoomed or cropped mode.
+ * Guarded per MediaStream instance so repeated attachments do not stall Android drivers.
  */
 export async function lockCameraHardwareZoom(stream: MediaStream | null | undefined): Promise<void> {
-  if (!stream || !stream.active) return;
+  if (!stream || !stream.active || zoomLockedStreams.has(stream)) return;
+  zoomLockedStreams.add(stream);
   try {
     const track = stream.getVideoTracks()[0];
     if (!track) return;
@@ -76,7 +73,7 @@ export async function lockCameraHardwareZoom(stream: MediaStream | null | undefi
     if (capabilities && capabilities.zoom) {
       const minZoom = typeof capabilities.zoom.min === 'number' ? Math.max(1, capabilities.zoom.min) : 1;
       const currentSettings = (typeof track.getSettings === 'function' ? track.getSettings() : {}) as any;
-      if (currentSettings.zoom !== minZoom) {
+      if (typeof currentSettings.zoom === 'number' && currentSettings.zoom !== minZoom) {
         await track.applyConstraints({
           advanced: [{ zoom: minZoom } as any],
         });

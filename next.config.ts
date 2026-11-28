@@ -42,6 +42,16 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        // Cache static biometric guidance runtime and lightweight detector shards
+        source: '/(js|models)/(.*)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=2592000, stale-while-revalidate=86400',
+          },
+        ],
+      },
+      {
         // tRPC API — short cache with stale-while-revalidate for GET queries
         source: '/api/trpc/(.*)',
         headers: [
@@ -52,8 +62,8 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        // All other routes — security headers + no-cache for HTML pages (excluding static/image assets)
-        source: '/((?!_next/static|_next/image|favicon.ico|images/).*)',
+        // All other routes — security headers + no-cache for HTML pages (excluding static/image/model assets)
+        source: '/((?!_next/static|_next/image|favicon.ico|images/|js/|models/).*)',
         headers: [
           // Prevent clickjacking
           {
