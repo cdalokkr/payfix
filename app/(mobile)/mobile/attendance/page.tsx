@@ -1,6 +1,8 @@
+import { Suspense } from 'react'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
 import { MobileAttendanceClient } from './mobile-attendance-client'
+import MobileAttendanceLoading from './loading'
 import { redirect } from 'next/navigation'
 import { isDefaultAvatar } from '@/lib/utils/avatar-helper'
 import { runWithRequestHeaders } from '@/lib/tenant/with-context'
@@ -22,7 +24,7 @@ interface PageProps {
     searchParams?: Promise<{ action?: string }>
 }
 
-export default async function MobileAttendancePage({ searchParams }: PageProps) {
+async function MobileAttendanceContent({ searchParams }: PageProps) {
     const resolvedSearchParams = searchParams ? await searchParams : {}
     const requestedAction = resolvedSearchParams?.action === 'clock_out' ? 'clock_out' : resolvedSearchParams?.action === 'clock_in' ? 'clock_in' : null
 
@@ -85,5 +87,13 @@ export default async function MobileAttendancePage({ searchParams }: PageProps) 
             action={action}
             isPwaServer={isPwa}
         />
+    )
+}
+
+export default function MobileAttendancePage({ searchParams }: PageProps) {
+    return (
+        <Suspense fallback={<MobileAttendanceLoading />}>
+            <MobileAttendanceContent searchParams={searchParams} />
+        </Suspense>
     )
 }

@@ -49,6 +49,7 @@ import { usePwaCheck } from "@/hooks/use-pwa-check"
 import { isDefaultAvatar } from "@/lib/utils/avatar-helper"
 import { FaceApiBrowserService } from "@/lib/services/faceapi-browser.service"
 import { prewarmBiometricCamera, prewarmBiometricService } from "@/lib/biometric-camera-prewarm"
+import { useMobileCameraTransition } from "../mobile-camera-transition"
 
 function getHardwareAccelerationInfo(): { backend: string; isGpu: boolean } {
     if (typeof window === 'undefined') return { backend: 'CPU', isGpu: false };
@@ -131,9 +132,9 @@ const quickActions = [
 
 export function MobileDashboard({ profile, todayAttendance: initialAttendance, isPwaServer }: MobileDashboardProps) {
     const { isPwa, isMobile, isReady } = usePwaCheck(isPwaServer)
+    const { showCameraLaunchShell } = useMobileCameraTransition()
     const [isDesktop, setIsDesktop] = useState(false)
     const [isPhotoCaptureOpen, setIsPhotoCaptureOpen] = useState(false)
-    const [isLaunchingCamera, setIsLaunchingCamera] = useState(false)
     const [hardwareInfo, setHardwareInfo] = useState<{ backend: string; isGpu: boolean }>({ backend: 'WebGL GPU', isGpu: true })
 
     // Check if payslip features are accessible for this employee/workspace
@@ -393,7 +394,7 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
     return (
         <motion.div
             variants={containerVars}
-            initial="hidden"
+            initial={false}
             animate="show"
             className="space-y-6 pb-4"
         >
@@ -642,7 +643,7 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
                                                         onTouchStart={() => void prewarmBiometricCamera()}
                                                         onMouseEnter={() => void prewarmBiometricCamera()}
                                                         onClick={() => {
-                                                            setIsLaunchingCamera(true)
+                                                            showCameraLaunchShell()
                                                             void prewarmBiometricCamera()
                                                         }}
                                                         className={`flex items-center justify-center gap-2.5 w-full h-11 px-3.5 rounded-xl border transition-all shadow-md active:scale-98 backdrop-blur-md
@@ -773,21 +774,6 @@ export function MobileDashboard({ profile, todayAttendance: initialAttendance, i
                     />
                 </DialogContent>
             </Dialog>
-
-            {/* Instant 0ms camera shell transition overlay to eliminate blank white route navigation flicker */}
-            {isLaunchingCamera && (
-                <div className="fixed inset-0 z-[70] bg-slate-950 flex flex-col items-center justify-center p-4">
-                    <div className="w-full max-w-md flex flex-col items-center justify-center space-y-5 text-center">
-                        <div className="w-52 h-64 rounded-[999px] border-2 border-sky-500/40 bg-slate-900/70 flex items-center justify-center">
-                            <div className="w-10 h-10 rounded-full border-2 border-sky-400/30 border-t-sky-400 animate-spin" />
-                        </div>
-                        <div className="space-y-1.5">
-                            <p className="text-sm font-bold text-white tracking-tight">Opening Attendance Camera…</p>
-                            <p className="text-[11px] font-medium text-slate-400">Starting live video &amp; verification session</p>
-                        </div>
-                    </div>
-                </div>
-            )}
         </motion.div>
     )
 }

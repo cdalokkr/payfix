@@ -41,9 +41,11 @@ interface MobileHeaderProps {
         avatar_url: string | null
         email: string
     }
+    fallbackBrandName?: string | null
+    fallbackLogoUrl?: string | null
 }
 
-export function MobileHeader({ profile }: MobileHeaderProps) {
+export function MobileHeader({ profile, fallbackBrandName, fallbackLogoUrl }: MobileHeaderProps) {
     const router = useRouter()
     const utils = trpc.useUtils()
     const [isConfirmOpen, setIsConfirmOpen] = useState(false)
@@ -119,7 +121,11 @@ export function MobileHeader({ profile }: MobileHeaderProps) {
 
                     {/* Center: Tenant Business Logo badge */}
                     <div className="flex items-center">
-                        <TenantLogo size="xs" />
+                        <TenantLogo
+                            size="xs"
+                            fallbackText={fallbackBrandName || undefined}
+                            fallbackLogoUrl={fallbackLogoUrl}
+                        />
                     </div>
 
                     {/* Right: Actions */}

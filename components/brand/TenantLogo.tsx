@@ -16,6 +16,7 @@ interface TenantLogoProps {
   logoUrl?: string | null;
   appName?: string | null;
   fallbackText?: string;
+  fallbackLogoUrl?: string | null;
 }
 
 const SIZE_MAP: Record<Exclude<TenantLogoSize, 'custom'>, { box: string; icon: string; text: string; px: number }> = {
@@ -41,6 +42,7 @@ export function TenantLogo({
   logoUrl: propLogoUrl,
   appName: propAppName,
   fallbackText,
+  fallbackLogoUrl,
 }: TenantLogoProps) {
   const [imgError, setImgError] = useState(false);
 
@@ -54,7 +56,7 @@ export function TenantLogo({
 
   const activeLogoUrl = (propLogoUrl !== undefined && propLogoUrl !== null)
     ? propLogoUrl
-    : (orgData?.branding?.logoUrl || null);
+    : (orgData?.branding?.logoUrl || fallbackLogoUrl || null);
 
   const activeAppName = propAppName !== undefined 
     ? propAppName 
