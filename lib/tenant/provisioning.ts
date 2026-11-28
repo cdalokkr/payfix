@@ -262,6 +262,26 @@ async function alignCanonicalTenantSchema(
 
         ALTER TABLE IF EXISTS ${sql.raw(schemaName)}.biometric_verification_attempts
             ADD COLUMN IF NOT EXISTS "request_id" text;
+
+        ALTER TABLE IF EXISTS ${sql.raw(schemaName)}.office_settings
+            ADD COLUMN IF NOT EXISTS "pf_enabled" boolean NOT NULL DEFAULT false,
+            ADD COLUMN IF NOT EXISTS "esi_enabled" boolean NOT NULL DEFAULT false;
+
+        ALTER TABLE IF EXISTS ${sql.raw(schemaName)}.employee_salary_setup
+            ADD COLUMN IF NOT EXISTS "pf_enabled" boolean NOT NULL DEFAULT false,
+            ADD COLUMN IF NOT EXISTS "pf_uan" text,
+            ADD COLUMN IF NOT EXISTS "pf_mode" text NOT NULL DEFAULT 'statutory',
+            ADD COLUMN IF NOT EXISTS "pf_employee_rate" numeric(5, 2) NOT NULL DEFAULT 12.00,
+            ADD COLUMN IF NOT EXISTS "pf_employer_rate" numeric(5, 2) NOT NULL DEFAULT 12.00,
+            ADD COLUMN IF NOT EXISTS "pf_ceiling_enabled" boolean NOT NULL DEFAULT true,
+            ADD COLUMN IF NOT EXISTS "pf_fixed_amount" numeric(12, 2) NOT NULL DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS "esi_enabled" boolean NOT NULL DEFAULT false,
+            ADD COLUMN IF NOT EXISTS "esi_number" text,
+            ADD COLUMN IF NOT EXISTS "esi_mode" text NOT NULL DEFAULT 'statutory',
+            ADD COLUMN IF NOT EXISTS "esi_employee_rate" numeric(5, 2) NOT NULL DEFAULT 0.75,
+            ADD COLUMN IF NOT EXISTS "esi_employer_rate" numeric(5, 2) NOT NULL DEFAULT 3.25,
+            ADD COLUMN IF NOT EXISTS "esi_limit_enabled" boolean NOT NULL DEFAULT true,
+            ADD COLUMN IF NOT EXISTS "esi_fixed_amount" numeric(12, 2) NOT NULL DEFAULT 0;
     `);
 
     // Older public clones used photo_url/device_name/last_active_at. Rename

@@ -15,6 +15,7 @@ import { eq, and, gte, lte, desc, sql, inArray, or, ne, gt, isNotNull } from 'dr
 import { TRPCError } from '@trpc/server'
 import { SmartCache } from '@/lib/cache/smart-cache'
 import { calculateAttendanceExtraHours } from '@/lib/utils/attendance-extra-hours'
+import { calculateStatutoryDeductions } from '@/lib/utils/statutory-deductions'
 
 const MONTH_NAMES = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -176,6 +177,20 @@ export class SalaryService {
         incentive,
         otherDeductions,
         deductionRemark,
+        pfEnabled = false,
+        pfUan,
+        pfMode = 'statutory',
+        pfEmployeeRate = '12.00',
+        pfEmployerRate = '12.00',
+        pfCeilingEnabled = true,
+        pfFixedAmount = '0',
+        esiEnabled = false,
+        esiNumber,
+        esiMode = 'statutory',
+        esiEmployeeRate = '0.75',
+        esiEmployerRate = '3.25',
+        esiLimitEnabled = true,
+        esiFixedAmount = '0',
         effectiveFromMonth,
         effectiveFromYear,
         changeReason,
@@ -190,6 +205,20 @@ export class SalaryService {
         incentive: string
         otherDeductions: string
         deductionRemark?: string
+        pfEnabled?: boolean
+        pfUan?: string
+        pfMode?: 'statutory' | 'percentage' | 'fixed'
+        pfEmployeeRate?: string | number
+        pfEmployerRate?: string | number
+        pfCeilingEnabled?: boolean
+        pfFixedAmount?: string | number
+        esiEnabled?: boolean
+        esiNumber?: string
+        esiMode?: 'statutory' | 'percentage' | 'fixed'
+        esiEmployeeRate?: string | number
+        esiEmployerRate?: string | number
+        esiLimitEnabled?: boolean
+        esiFixedAmount?: string | number
         effectiveFromMonth: number
         effectiveFromYear: number
         changeReason?: string
@@ -231,6 +260,20 @@ export class SalaryService {
             incentive: incentive || '0',
             other_deductions: otherDeductions || '0',
             deduction_remark: deductionRemark || null,
+            pf_enabled: Boolean(pfEnabled),
+            pf_uan: pfUan?.trim() || null,
+            pf_mode: pfMode || 'statutory',
+            pf_employee_rate: String(pfEmployeeRate || '12.00'),
+            pf_employer_rate: String(pfEmployerRate || '12.00'),
+            pf_ceiling_enabled: pfCeilingEnabled !== false,
+            pf_fixed_amount: String(pfFixedAmount || '0'),
+            esi_enabled: Boolean(esiEnabled),
+            esi_number: esiNumber?.trim() || null,
+            esi_mode: esiMode || 'statutory',
+            esi_employee_rate: String(esiEmployeeRate || '0.75'),
+            esi_employer_rate: String(esiEmployerRate || '3.25'),
+            esi_limit_enabled: esiLimitEnabled !== false,
+            esi_fixed_amount: String(esiFixedAmount || '0'),
             effective_from_month: effectiveFromMonth,
             effective_from_year: effectiveFromYear,
             change_reason: changeReason || 'Initial Setup',
@@ -641,8 +684,40 @@ export class SalaryService {
             const leaveDeductionVal = 0
             const absenceDeduction = absentDeductionVal + halfDayDeductionVal
 
+            const companyPfEnabled = Boolean((officeSettingsData as any)?.pf_enabled)
+            const companyEsiEnabled = Boolean((officeSettingsData as any)?.esi_enabled)
+
             const grossSalary = baseGross + bonusAmt
-            const netSalary = grossSalary + extraDayPayment + extraShiftPayment - absenceDeduction - otherDeductions
+            const statutory = calculateStatutoryDeductions({
+                config: {
+                    basicSalary: basic,
+                    hra,
+                    da,
+                    ta,
+                    specialAllowance: special,
+                    incentive: incentiveAmt,
+                    pfEnabled: companyPfEnabled && Boolean(salarySetup.pf_enabled),
+                    pfUan: salarySetup.pf_uan,
+                    pfMode: salarySetup.pf_mode,
+                    pfEmployeeRate: Number(salarySetup.pf_employee_rate) || 12,
+                    pfEmployerRate: Number(salarySetup.pf_employer_rate) || 12,
+                    pfCeilingEnabled: salarySetup.pf_ceiling_enabled !== false,
+                    pfFixedAmount: Number(salarySetup.pf_fixed_amount) || 0,
+                    esiEnabled: companyEsiEnabled && Boolean(salarySetup.esi_enabled),
+                    esiNumber: salarySetup.esi_number,
+                    esiMode: salarySetup.esi_mode,
+                    esiEmployeeRate: Number(salarySetup.esi_employee_rate) || 0.75,
+                    esiEmployerRate: Number(salarySetup.esi_employer_rate) || 3.25,
+                    esiLimitEnabled: salarySetup.esi_limit_enabled !== false,
+                    esiFixedAmount: Number(salarySetup.esi_fixed_amount) || 0,
+                },
+                absenceDeduction,
+                bonusAmount: bonusAmt,
+                extraDayPayment,
+                extraShiftPayment,
+            })
+
+            const netSalary = grossSalary + extraDayPayment + extraShiftPayment - absenceDeduction - otherDeductions - statutory.totalEmployeeStatutory
 
             const lastDay = new Date(existingSummary.year, existingSummary.month, 0).getDate()
             const endDate = `${existingSummary.year}-${String(existingSummary.month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
@@ -728,6 +803,26 @@ export class SalaryService {
                 half_day_deduction: Number(halfDayDeductionVal.toFixed(2)),
                 leave_deduction: Number(leaveDeductionVal.toFixed(2)),
                 other_deductions: otherDeductions,
+                pf_enabled: statutory.pfEnabled,
+                pf_uan: statutory.pfUan,
+                pf_mode: statutory.pfMode,
+                pf_wage: statutory.pfWage,
+                pf_employee: statutory.pfEmployee,
+                pf_employer: statutory.pfEmployer,
+                pf_employer_epf: statutory.pfEmployerEpf,
+                pf_employer_eps: statutory.pfEmployerEps,
+                pf_employee_rate: statutory.pfEmployeeRate,
+                pf_employer_rate: statutory.pfEmployerRate,
+                esi_enabled: statutory.esiEnabled,
+                esi_number: statutory.esiNumber,
+                esi_mode: statutory.esiMode,
+                esi_eligible: statutory.esiEligible,
+                esi_wage: statutory.esiWage,
+                esi_employee: statutory.esiEmployee,
+                esi_employer: statutory.esiEmployer,
+                esi_employee_rate: statutory.esiEmployeeRate,
+                esi_employer_rate: statutory.esiEmployerRate,
+                statutory_deductions: statutory.totalEmployeeStatutory,
                 net_salary: Number(netSalary.toFixed(2)),
                 advance_recovery: Number(regularAdvanceRecovery.toFixed(2)),
                 carry_forward_recovery: Number(carryForwardRecovery.toFixed(2)),
@@ -1431,6 +1526,9 @@ export class SalaryService {
         }
         const locationsMap = new Map<string, any>(allLocations.map((l: any) => [l.id, l]))
 
+        const companyPfEnabled = Boolean((officeSettingsData as any)?.pf_enabled)
+        const companyEsiEnabled = Boolean((officeSettingsData as any)?.esi_enabled)
+
         const results: any[] = []
 
         for (const summary of summaries) {
@@ -1505,8 +1603,40 @@ export class SalaryService {
             const leaveDeductionVal = 0
             const absenceDeduction = absentDeductionVal + halfDayDeductionVal
 
+            const companyPfEnabled = Boolean((officeSettingsData as any)?.pf_enabled)
+            const companyEsiEnabled = Boolean((officeSettingsData as any)?.esi_enabled)
+
             const grossSalary = baseGross + bonusAmt
-            const netSalary = grossSalary + extraDayPayment + extraShiftPayment - absenceDeduction - otherDeductions
+            const statutory = calculateStatutoryDeductions({
+                config: {
+                    basicSalary: basic,
+                    hra,
+                    da,
+                    ta,
+                    specialAllowance: special,
+                    incentive: incentiveAmt,
+                    pfEnabled: companyPfEnabled && Boolean(salarySetup.pf_enabled),
+                    pfUan: salarySetup.pf_uan,
+                    pfMode: salarySetup.pf_mode,
+                    pfEmployeeRate: Number(salarySetup.pf_employee_rate) || 12,
+                    pfEmployerRate: Number(salarySetup.pf_employer_rate) || 12,
+                    pfCeilingEnabled: salarySetup.pf_ceiling_enabled !== false,
+                    pfFixedAmount: Number(salarySetup.pf_fixed_amount) || 0,
+                    esiEnabled: companyEsiEnabled && Boolean(salarySetup.esi_enabled),
+                    esiNumber: salarySetup.esi_number,
+                    esiMode: salarySetup.esi_mode,
+                    esiEmployeeRate: Number(salarySetup.esi_employee_rate) || 0.75,
+                    esiEmployerRate: Number(salarySetup.esi_employer_rate) || 3.25,
+                    esiLimitEnabled: salarySetup.esi_limit_enabled !== false,
+                    esiFixedAmount: Number(salarySetup.esi_fixed_amount) || 0,
+                },
+                absenceDeduction,
+                bonusAmount: bonusAmt,
+                extraDayPayment,
+                extraShiftPayment,
+            })
+
+            const netSalary = grossSalary + extraDayPayment + extraShiftPayment - absenceDeduction - otherDeductions - statutory.totalEmployeeStatutory
 
             const lastDay = new Date(summary.year, summary.month, 0).getDate()
             const endDate = `${summary.year}-${String(summary.month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
@@ -1592,6 +1722,26 @@ export class SalaryService {
                 half_day_deduction: Number(halfDayDeductionVal.toFixed(2)),
                 leave_deduction: Number(leaveDeductionVal.toFixed(2)),
                 other_deductions: otherDeductions,
+                pf_enabled: statutory.pfEnabled,
+                pf_uan: statutory.pfUan,
+                pf_mode: statutory.pfMode,
+                pf_wage: statutory.pfWage,
+                pf_employee: statutory.pfEmployee,
+                pf_employer: statutory.pfEmployer,
+                pf_employer_epf: statutory.pfEmployerEpf,
+                pf_employer_eps: statutory.pfEmployerEps,
+                pf_employee_rate: statutory.pfEmployeeRate,
+                pf_employer_rate: statutory.pfEmployerRate,
+                esi_enabled: statutory.esiEnabled,
+                esi_number: statutory.esiNumber,
+                esi_mode: statutory.esiMode,
+                esi_eligible: statutory.esiEligible,
+                esi_wage: statutory.esiWage,
+                esi_employee: statutory.esiEmployee,
+                esi_employer: statutory.esiEmployer,
+                esi_employee_rate: statutory.esiEmployeeRate,
+                esi_employer_rate: statutory.esiEmployerRate,
+                statutory_deductions: statutory.totalEmployeeStatutory,
                 net_salary: Number(netSalary.toFixed(2)),
                 advance_recovery: Number(regularAdvanceRecovery.toFixed(2)),
                 carry_forward_recovery: Number(carryForwardRecovery.toFixed(2)),
@@ -1769,6 +1919,42 @@ export class SalaryService {
             employeeEnabled,
             isAccessible: isStaff || (globalEnabled && employeeEnabled)
         }
+    }
+
+    /** Get company-level optional statutory (PF & ESI) applicability flags */
+    static async getStatutorySettings() {
+        const office = await SmartCache.getOfficeSettingsCached()
+        return {
+            pfEnabled: Boolean((office as any)?.pf_enabled),
+            esiEnabled: Boolean((office as any)?.esi_enabled),
+        }
+    }
+
+    /** Update company-level optional statutory (PF & ESI) applicability flags */
+    static async updateStatutorySettings(input: { pfEnabled?: boolean; esiEnabled?: boolean }) {
+        const existing = await db.query.officeSettings.findFirst()
+        if (existing) {
+            const updates: Partial<typeof officeSettings.$inferInsert> = { updated_at: new Date() }
+            if (input.pfEnabled !== undefined) updates.pf_enabled = input.pfEnabled
+            if (input.esiEnabled !== undefined) updates.esi_enabled = input.esiEnabled
+            await db.update(officeSettings)
+                .set(updates)
+                .where(eq(officeSettings.id, existing.id))
+            SmartCache.invalidateSettings()
+            return {
+                pfEnabled: input.pfEnabled ?? Boolean(existing.pf_enabled),
+                esiEnabled: input.esiEnabled ?? Boolean(existing.esi_enabled),
+            }
+        }
+
+        const pfEnabled = Boolean(input.pfEnabled)
+        const esiEnabled = Boolean(input.esiEnabled)
+        await db.insert(officeSettings).values({
+            pf_enabled: pfEnabled,
+            esi_enabled: esiEnabled,
+        })
+        SmartCache.invalidateSettings()
+        return { pfEnabled, esiEnabled }
     }
 
     /** Toggle workspace-wide global payslip access */
@@ -2430,9 +2616,11 @@ export class SalaryService {
                 })
             }
             const emp = employeeMap.get(pid)
+            const bd = (r.salaryBreakdown || {}) as Record<string, any>
+            const statutoryAndOther = (Number(bd.pf_employee) || 0) + (Number(bd.esi_employee) || 0) + (Number(bd.other_deductions) || 0)
             emp.payslipCount++
             emp.totalGross += r.grossSalary
-            emp.totalDeductions += (r.absenceDeduction + r.advanceRecovery)
+            emp.totalDeductions += (r.absenceDeduction + statutoryAndOther + r.advanceRecovery)
             emp.totalTakeHome += r.takeHome
             emp.totalPaid += r.paidAmount
             emp.totalBalanceDue += r.balanceDue
@@ -2462,6 +2650,170 @@ export class SalaryService {
                 totalBalanceDue: parseFloat(grandTotalBalanceDue.toFixed(2)),
             },
             availableYears
+        }
+    }
+
+    // ==========================================
+    // STATUTORY PF & ESI MONTHLY COMPLIANCE REPORT
+    // ==========================================
+
+    static async getPfEsiReport({
+        month,
+        year,
+        type = 'combined',
+        profileId,
+    }: {
+        month: number
+        year: number
+        type?: 'pf' | 'esi' | 'combined'
+        profileId?: string | null
+    }) {
+        const conditions: any[] = [
+            eq(monthlyAttendanceSummary.month, month),
+            eq(monthlyAttendanceSummary.year, year),
+            eq(monthlyAttendanceSummary.status, 'payslip_generated'),
+        ]
+        if (profileId) {
+            conditions.push(eq(monthlyAttendanceSummary.profile_id, profileId))
+        }
+
+        const summaries = await db.query.monthlyAttendanceSummary.findMany({
+            where: and(...conditions),
+            with: {
+                profile: {
+                    columns: {
+                        id: true,
+                        full_name: true,
+                        email: true,
+                        mobile_no: true,
+                        department_id: true,
+                        designation_id: true,
+                    },
+                    with: {
+                        designation: { columns: { name: true } },
+                        department: { columns: { name: true } },
+                    },
+                },
+            },
+            orderBy: [desc(monthlyAttendanceSummary.updated_at)],
+        })
+
+        const activeSetups = await db
+            .select({
+                profile_id: employeeSalarySetup.profile_id,
+                pf_enabled: employeeSalarySetup.pf_enabled,
+                pf_uan: employeeSalarySetup.pf_uan,
+                esi_enabled: employeeSalarySetup.esi_enabled,
+                esi_number: employeeSalarySetup.esi_number,
+            })
+            .from(employeeSalarySetup)
+            .where(eq(employeeSalarySetup.is_active, true))
+        const setupMap = new Map<string, (typeof activeSetups)[number]>(
+            activeSetups.map((s) => [s.profile_id, s] as const)
+        )
+
+        const rows = summaries
+            .map((s) => {
+                const bd = (s.salary_breakdown || {}) as Record<string, any>
+                const setup = setupMap.get(s.profile_id)
+                const pfEnabled = bd.pf_enabled !== undefined ? Boolean(bd.pf_enabled) : Boolean(setup?.pf_enabled)
+                const esiEnabled = bd.esi_enabled !== undefined ? Boolean(bd.esi_enabled) : Boolean(setup?.esi_enabled)
+
+                const pfWage = Number(bd.pf_wage) || 0
+                const pfEmployee = Number(bd.pf_employee) || 0
+                const pfEmployer = Number(bd.pf_employer) || 0
+                const pfEmployerEpf = Number(bd.pf_employer_epf) || 0
+                const pfEmployerEps = Number(bd.pf_employer_eps) || 0
+
+                const esiWage = Number(bd.esi_wage) || 0
+                const esiEmployee = Number(bd.esi_employee) || 0
+                const esiEmployer = Number(bd.esi_employer) || 0
+                const esiEligible = bd.esi_eligible !== undefined ? Boolean(bd.esi_eligible) : esiEmployee > 0
+
+                const paidDays = Math.max(
+                    0,
+                    (Number(s.total_present_days) || 0) +
+                        (Number(s.total_half_days) || 0) * 0.5 +
+                        (Number(s.total_leaves) || 0)
+                )
+
+                return {
+                    summaryId: s.id,
+                    profileId: s.profile_id,
+                    employeeName: s.profile?.full_name || s.profile?.email || 'Unknown',
+                    email: s.profile?.email || '',
+                    designation: s.profile?.designation?.name || 'Staff',
+                    department: s.profile?.department?.name || 'General',
+                    month: s.month,
+                    year: s.year,
+                    paidDays: Number(paidDays.toFixed(1)),
+                    grossSalary: Number(s.gross_salary || bd.gross_salary || 0),
+                    pfEnabled,
+                    pfUan: bd.pf_uan || setup?.pf_uan || null,
+                    pfWage,
+                    pfEmployee,
+                    pfEmployer,
+                    pfEmployerEpf,
+                    pfEmployerEps,
+                    pfTotal: pfEmployee + pfEmployer,
+                    esiEnabled,
+                    esiNumber: bd.esi_number || setup?.esi_number || null,
+                    esiEligible,
+                    esiWage,
+                    esiEmployee,
+                    esiEmployer,
+                    esiTotal: esiEmployee + esiEmployer,
+                    totalStatutory: pfEmployee + pfEmployer + esiEmployee + esiEmployer,
+                }
+            })
+            .filter((row) => {
+                if (type === 'pf') return row.pfEnabled || row.pfEmployee > 0 || row.pfEmployer > 0
+                if (type === 'esi') return row.esiEnabled || row.esiEmployee > 0 || row.esiEmployer > 0
+                return row.pfEnabled || row.esiEnabled || row.pfEmployee > 0 || row.esiEmployee > 0
+            })
+            .sort((a, b) => a.employeeName.localeCompare(b.employeeName))
+
+        const totals = rows.reduce(
+            (acc, r) => {
+                acc.employeeCount += 1
+                acc.totalGross += r.grossSalary
+                acc.totalPfWage += r.pfWage
+                acc.totalPfEmployee += r.pfEmployee
+                acc.totalPfEmployer += r.pfEmployer
+                acc.totalPfEmployerEpf += r.pfEmployerEpf
+                acc.totalPfEmployerEps += r.pfEmployerEps
+                acc.totalPf += r.pfTotal
+                acc.totalEsiWage += r.esiWage
+                acc.totalEsiEmployee += r.esiEmployee
+                acc.totalEsiEmployer += r.esiEmployer
+                acc.totalEsi += r.esiTotal
+                acc.grandTotalStatutory += r.totalStatutory
+                return acc
+            },
+            {
+                employeeCount: 0,
+                totalGross: 0,
+                totalPfWage: 0,
+                totalPfEmployee: 0,
+                totalPfEmployer: 0,
+                totalPfEmployerEpf: 0,
+                totalPfEmployerEps: 0,
+                totalPf: 0,
+                totalEsiWage: 0,
+                totalEsiEmployee: 0,
+                totalEsiEmployer: 0,
+                totalEsi: 0,
+                grandTotalStatutory: 0,
+            }
+        )
+
+        return {
+            month,
+            year,
+            monthName: MONTH_NAMES[month - 1] || String(month),
+            type,
+            rows,
+            totals,
         }
     }
 }

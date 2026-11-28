@@ -11,7 +11,9 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { trpc } from "@/lib/trpc/client"
 import { toast } from "sonner"
-import { IndianRupee, History, Users, Search, X, ChevronDown, ChevronUp, CheckCircle2, FileText, Clock, LayersPlus, Briefcase, Phone, CopyCheck, CalendarIcon } from "lucide-react"
+import { IndianRupee, History, Users, Search, X, ChevronDown, ChevronUp, CheckCircle2, FileText, Clock, LayersPlus, Briefcase, Phone, CopyCheck, CalendarIcon, ShieldCheck } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+import { calculateStatutoryDeductions } from "@/lib/utils/statutory-deductions"
 import { CardShell } from "./CardShell"
 import {
     Dialog,
@@ -71,6 +73,20 @@ const salarySetupSchema = z.object({
     incentive: z.string(),
     otherDeductions: z.string(),
     deductionRemark: z.string().optional(),
+    pfEnabled: z.boolean(),
+    pfUan: z.string().optional(),
+    pfMode: z.enum(["statutory", "percentage", "fixed"]),
+    pfEmployeeRate: z.string(),
+    pfEmployerRate: z.string(),
+    pfCeilingEnabled: z.boolean(),
+    pfFixedAmount: z.string(),
+    esiEnabled: z.boolean(),
+    esiNumber: z.string().optional(),
+    esiMode: z.enum(["statutory", "percentage", "fixed"]),
+    esiEmployeeRate: z.string(),
+    esiEmployerRate: z.string(),
+    esiLimitEnabled: z.boolean(),
+    esiFixedAmount: z.string(),
     effectiveFromMonth: z.number().min(1).max(12),
     effectiveFromYear: z.number().min(2000),
     changeReason: z.string().optional(),
@@ -104,14 +120,72 @@ export function SalarySetupManagement() {
             incentive: "",
             otherDeductions: "",
             deductionRemark: "",
+            pfEnabled: false,
+            pfUan: "",
+            pfMode: "statutory",
+            pfEmployeeRate: "12",
+            pfEmployerRate: "12",
+            pfCeilingEnabled: true,
+            pfFixedAmount: "",
+            esiEnabled: false,
+            esiNumber: "",
+            esiMode: "statutory",
+            esiEmployeeRate: "0.75",
+            esiEmployerRate: "3.25",
+            esiLimitEnabled: true,
+            esiFixedAmount: "",
             effectiveFromMonth: new Date().getMonth() + 1,
             effectiveFromYear: new Date().getFullYear(),
             changeReason: "",
         },
     })
 
+    const utils = trpc.useUtils()
+    const { data: statutorySettings } = trpc.salary.getStatutorySettings.useQuery()
+    const companyPfEnabled = Boolean(statutorySettings?.pfEnabled)
+    const companyEsiEnabled = Boolean(statutorySettings?.esiEnabled)
+
+    const updateStatutoryMutation = trpc.salary.updateStatutorySettings.useMutation({
+        onSuccess: (data, variables) => {
+            utils.salary.getStatutorySettings.setData(undefined, data)
+            utils.attendance.getOfficeSettings.invalidate()
+            if (variables.pfEnabled !== undefined) {
+                toast.success(data.pfEnabled ? "PF enabled for this company — configure per employee below" : "PF disabled (kept optional & hidden)")
+            } else if (variables.esiEnabled !== undefined) {
+                toast.success(data.esiEnabled ? "ESI enabled for this company — configure per employee below" : "ESI disabled (kept optional & hidden)")
+            }
+        },
+        onError: (err) => toast.error(err.message || "Failed to update statutory settings"),
+    })
+
     const { control, handleSubmit, reset, watch, setValue, formState: { errors } } = form
     const formProfileId = watch("profileId")
+    const watchedValues = watch()
+    const liveStatutory = useMemo(() => calculateStatutoryDeductions({
+        config: {
+            basicSalary: Number(watchedValues.basicSalary) || 0,
+            hra: Number(watchedValues.hra) || 0,
+            da: Number(watchedValues.da) || 0,
+            ta: Number(watchedValues.ta) || 0,
+            specialAllowance: Number(watchedValues.specialAllowance) || 0,
+            incentive: Number(watchedValues.incentive) || 0,
+            pfEnabled: companyPfEnabled && Boolean(watchedValues.pfEnabled),
+            pfUan: watchedValues.pfUan,
+            pfMode: watchedValues.pfMode,
+            pfEmployeeRate: Number(watchedValues.pfEmployeeRate) || 12,
+            pfEmployerRate: Number(watchedValues.pfEmployerRate) || 12,
+            pfCeilingEnabled: watchedValues.pfCeilingEnabled !== false,
+            pfFixedAmount: Number(watchedValues.pfFixedAmount) || 0,
+            esiEnabled: companyEsiEnabled && Boolean(watchedValues.esiEnabled),
+            esiNumber: watchedValues.esiNumber,
+            esiMode: watchedValues.esiMode,
+            esiEmployeeRate: Number(watchedValues.esiEmployeeRate) || 0.75,
+            esiEmployerRate: Number(watchedValues.esiEmployerRate) || 3.25,
+            esiLimitEnabled: watchedValues.esiLimitEnabled !== false,
+            esiFixedAmount: Number(watchedValues.esiFixedAmount) || 0,
+        },
+        absenceDeduction: 0,
+    }), [watchedValues, companyPfEnabled, companyEsiEnabled])
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -189,6 +263,20 @@ export function SalarySetupManagement() {
             incentive: "",
             otherDeductions: "",
             deductionRemark: "",
+            pfEnabled: false,
+            pfUan: "",
+            pfMode: "statutory",
+            pfEmployeeRate: "12",
+            pfEmployerRate: "12",
+            pfCeilingEnabled: true,
+            pfFixedAmount: "",
+            esiEnabled: false,
+            esiNumber: "",
+            esiMode: "statutory",
+            esiEmployeeRate: "0.75",
+            esiEmployerRate: "3.25",
+            esiLimitEnabled: true,
+            esiFixedAmount: "",
             effectiveFromMonth: new Date().getMonth() + 1,
             effectiveFromYear: new Date().getFullYear(),
             changeReason: "",
@@ -216,6 +304,20 @@ export function SalarySetupManagement() {
             incentive: setup?.incentive ? String(setup.incentive) : "",
             otherDeductions: setup?.other_deductions ? String(setup.other_deductions) : "",
             deductionRemark: setup?.deduction_remark ? String(setup.deduction_remark) : "",
+            pfEnabled: Boolean(setup?.pf_enabled),
+            pfUan: setup?.pf_uan ? String(setup.pf_uan) : "",
+            pfMode: (setup?.pf_mode as "statutory" | "percentage" | "fixed") || "statutory",
+            pfEmployeeRate: setup?.pf_employee_rate ? String(setup.pf_employee_rate) : "12",
+            pfEmployerRate: setup?.pf_employer_rate ? String(setup.pf_employer_rate) : "12",
+            pfCeilingEnabled: setup?.pf_ceiling_enabled !== false,
+            pfFixedAmount: setup?.pf_fixed_amount && Number(setup.pf_fixed_amount) > 0 ? String(setup.pf_fixed_amount) : "",
+            esiEnabled: Boolean(setup?.esi_enabled),
+            esiNumber: setup?.esi_number ? String(setup.esi_number) : "",
+            esiMode: (setup?.esi_mode as "statutory" | "percentage" | "fixed") || "statutory",
+            esiEmployeeRate: setup?.esi_employee_rate ? String(setup.esi_employee_rate) : "0.75",
+            esiEmployerRate: setup?.esi_employer_rate ? String(setup.esi_employer_rate) : "3.25",
+            esiLimitEnabled: setup?.esi_limit_enabled !== false,
+            esiFixedAmount: setup?.esi_fixed_amount && Number(setup.esi_fixed_amount) > 0 ? String(setup.esi_fixed_amount) : "",
             effectiveFromMonth: setup?.effective_from_month || new Date().getMonth() + 1,
             effectiveFromYear: setup?.effective_from_year || new Date().getFullYear(),
             changeReason: setup?.change_reason || (setup ? "Salary Revision" : "Initial Setup"),
@@ -332,6 +434,47 @@ export function SalarySetupManagement() {
                 icon={IndianRupee}
                 contentClassName="min-h-0 p-6 pt-2 h-full overflow-auto"
             >
+                {/* Optional Company-Level Statutory Compliance Bar */}
+                <div className="mb-4 rounded-xl border bg-muted/20 px-4 py-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                    <div className="flex items-start sm:items-center gap-2.5">
+                        <div className="h-8 w-8 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                            <ShieldCheck className="h-4 w-4" />
+                        </div>
+                        <div>
+                            <p className="text-xs font-bold text-foreground">
+                                Company Statutory Compliance (Optional PF &amp; ESI)
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">
+                                Keep disabled if your company does not use PF or ESI — no setup or report clutter will appear.
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-4 shrink-0">
+                        <div className="flex items-center gap-2 rounded-lg border bg-background px-3 py-1.5">
+                            <Label htmlFor="company-pf-toggle" className="text-xs font-semibold cursor-pointer">
+                                Use PF
+                            </Label>
+                            <Switch
+                                id="company-pf-toggle"
+                                checked={companyPfEnabled}
+                                disabled={updateStatutoryMutation.isPending}
+                                onCheckedChange={(checked) => updateStatutoryMutation.mutate({ pfEnabled: checked })}
+                            />
+                        </div>
+                        <div className="flex items-center gap-2 rounded-lg border bg-background px-3 py-1.5">
+                            <Label htmlFor="company-esi-toggle" className="text-xs font-semibold cursor-pointer">
+                                Use ESI
+                            </Label>
+                            <Switch
+                                id="company-esi-toggle"
+                                checked={companyEsiEnabled}
+                                disabled={updateStatutoryMutation.isPending}
+                                onCheckedChange={(checked) => updateStatutoryMutation.mutate({ esiEnabled: checked })}
+                            />
+                        </div>
+                    </div>
+                </div>
+
                 {/* Actions & FiltersToolbar */}
                 <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center py-2 mb-4">
                     <div className="relative w-full max-w-sm group">
@@ -438,9 +581,21 @@ export function SalarySetupManagement() {
                                         <div className="flex items-center gap-3 flex-shrink-0 mt-2 sm:mt-0">
                                             {setup ? (
                                                 <div className="flex flex-col items-end">
-                                                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 font-black tracking-tight rounded-md px-2">
-                                                        {formatCurrency(gross)} / mo
-                                                    </Badge>
+                                                    <div className="flex items-center gap-1.5">
+                                                        {companyPfEnabled && setup.pf_enabled && (
+                                                            <Badge variant="outline" className="bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/20 text-[10px] font-bold px-1.5">
+                                                                PF
+                                                            </Badge>
+                                                        )}
+                                                        {companyEsiEnabled && setup.esi_enabled && (
+                                                            <Badge variant="outline" className="bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-500/20 text-[10px] font-bold px-1.5">
+                                                                ESI
+                                                            </Badge>
+                                                        )}
+                                                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 font-black tracking-tight rounded-md px-2">
+                                                            {formatCurrency(gross)} / mo
+                                                        </Badge>
+                                                    </div>
                                                     <span className="text-[10px] text-muted-foreground font-medium mt-1">Configured</span>
                                                 </div>
                                             ) : (
@@ -491,9 +646,25 @@ export function SalarySetupManagement() {
                                                                 <p className="text-sm font-bold">{formatCurrency(setup.incentive)}</p>
                                                             </div>
                                                             <div className="p-3 rounded-lg bg-rose-50 border border-rose-100 dark:bg-rose-950/20 dark:border-rose-900/30 shadow-sm">
-                                                                <p className="text-[10px] font-bold uppercase tracking-widest text-rose-500 mb-1">Deductions</p>
+                                                                <p className="text-[10px] font-bold uppercase tracking-widest text-rose-500 mb-1">Other Deductions</p>
                                                                 <p className="text-sm font-bold text-rose-700 dark:text-rose-400">{formatCurrency(setup.other_deductions)}</p>
                                                             </div>
+                                                            {companyPfEnabled && (
+                                                                <div className="p-3 rounded-lg bg-indigo-50 border border-indigo-100 dark:bg-indigo-950/20 dark:border-indigo-900/30 shadow-sm">
+                                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-500 mb-1">PF (Optional)</p>
+                                                                    <p className="text-sm font-bold text-indigo-700 dark:text-indigo-400">
+                                                                        {setup.pf_enabled ? `${setup.pf_mode === 'fixed' ? formatCurrency(setup.pf_fixed_amount) : `${setup.pf_employee_rate || 12}%`}${setup.pf_uan ? ` • UAN ${setup.pf_uan}` : ''}` : 'Opted Out'}
+                                                                    </p>
+                                                                </div>
+                                                            )}
+                                                            {companyEsiEnabled && (
+                                                                <div className="p-3 rounded-lg bg-teal-50 border border-teal-100 dark:bg-teal-950/20 dark:border-teal-900/30 shadow-sm">
+                                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-teal-600 mb-1">ESI (Optional)</p>
+                                                                    <p className="text-sm font-bold text-teal-700 dark:text-teal-400">
+                                                                        {setup.esi_enabled ? `${setup.esi_mode === 'fixed' ? formatCurrency(setup.esi_fixed_amount) : `${setup.esi_employee_rate || 0.75}%`}${setup.esi_number ? ` • IP ${setup.esi_number}` : ''}` : 'Opted Out'}
+                                                                    </p>
+                                                                </div>
+                                                            )}
                                                             <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 shadow-sm relative overflow-hidden group">
                                                                 <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                                                                 <p className="text-[10px] font-bold uppercase tracking-widest text-primary/70 mb-1 relative z-10">Gross</p>
@@ -772,6 +943,253 @@ export function SalarySetupManagement() {
                                             </AccordionItem>
                                         </Accordion>
 
+                                        {/* Statutory Compliance (Optional PF & ESI — shown only if enabled for company) */}
+                                        {(companyPfEnabled || companyEsiEnabled) && (
+                                        <Accordion type="multiple" defaultValue={["statutory"]} className="bg-white/80 backdrop-blur-sm rounded-lg border">
+                                            <AccordionItem value="statutory" className="border-b-0">
+                                                <AccordionTrigger className="px-4 py-3 rounded-t-lg hover:no-underline transition-colors bg-indigo-50 hover:bg-indigo-100">
+                                                    <div className="flex items-center gap-3">
+                                                        <ShieldCheck className="h-5 w-5 text-indigo-600" />
+                                                        <span className="font-medium text-indigo-900">Statutory Compliance (Optional PF &amp; ESI)</span>
+                                                    </div>
+                                                </AccordionTrigger>
+                                                <AccordionContent className="px-4 pb-4 pt-4 space-y-5">
+                                                    {/* Optional PF Block */}
+                                                    {companyPfEnabled && (
+                                                    <div className="rounded-xl border border-indigo-200/70 bg-indigo-50/40 p-4 space-y-4">
+                                                        <div className="flex items-center justify-between gap-4">
+                                                            <div>
+                                                                <p className="text-sm font-bold text-slate-900">Provident Fund (EPF)</p>
+                                                                <p className="text-xs text-slate-500">Optional per-employee PF deduction on Basic + DA</p>
+                                                            </div>
+                                                            <Controller
+                                                                name="pfEnabled"
+                                                                control={control}
+                                                                render={({ field }) => (
+                                                                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                                                                )}
+                                                            />
+                                                        </div>
+
+                                                        {watchedValues.pfEnabled && (
+                                                            <div className="space-y-4 pt-2 border-t border-indigo-200/60">
+                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                                    <Controller
+                                                                        name="pfUan"
+                                                                        control={control}
+                                                                        render={({ field }) => (
+                                                                            <Field>
+                                                                                <FieldLabel className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1.5">UAN Number (Optional)</FieldLabel>
+                                                                                <Input className="h-10 border-2" placeholder="12-digit UAN" {...field} value={field.value || ""} />
+                                                                            </Field>
+                                                                        )}
+                                                                    />
+                                                                    <Controller
+                                                                        name="pfMode"
+                                                                        control={control}
+                                                                        render={({ field }) => (
+                                                                            <Field>
+                                                                                <FieldLabel className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1.5">PF Calculation Mode</FieldLabel>
+                                                                                <Select value={field.value} onValueChange={field.onChange}>
+                                                                                    <SelectTrigger className="h-10 border-2">
+                                                                                        <SelectValue />
+                                                                                    </SelectTrigger>
+                                                                                    <SelectContent>
+                                                                                        <SelectItem value="statutory">Statutory (12% Emp + 12% Er)</SelectItem>
+                                                                                        <SelectItem value="percentage">Custom Percentage (%)</SelectItem>
+                                                                                        <SelectItem value="fixed">Fixed Monthly Amount (₹)</SelectItem>
+                                                                                    </SelectContent>
+                                                                                </Select>
+                                                                            </Field>
+                                                                        )}
+                                                                    />
+                                                                </div>
+
+                                                                {watchedValues.pfMode === "fixed" ? (
+                                                                    <Controller
+                                                                        name="pfFixedAmount"
+                                                                        control={control}
+                                                                        render={({ field }) => (
+                                                                            <Field>
+                                                                                <FieldLabel className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1.5">Fixed PF Amount (₹ / Month)</FieldLabel>
+                                                                                <Input type="number" className="h-10 border-2" placeholder="1800" {...field} />
+                                                                            </Field>
+                                                                        )}
+                                                                    />
+                                                                ) : (
+                                                                    <div className="space-y-3">
+                                                                        {watchedValues.pfMode === "percentage" && (
+                                                                            <div className="grid grid-cols-2 gap-4">
+                                                                                <Controller
+                                                                                    name="pfEmployeeRate"
+                                                                                    control={control}
+                                                                                    render={({ field }) => (
+                                                                                        <Field>
+                                                                                            <FieldLabel className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1.5">Employee %</FieldLabel>
+                                                                                            <Input type="number" step="0.01" className="h-10 border-2" {...field} />
+                                                                                        </Field>
+                                                                                    )}
+                                                                                />
+                                                                                <Controller
+                                                                                    name="pfEmployerRate"
+                                                                                    control={control}
+                                                                                    render={({ field }) => (
+                                                                                        <Field>
+                                                                                            <FieldLabel className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1.5">Employer %</FieldLabel>
+                                                                                            <Input type="number" step="0.01" className="h-10 border-2" {...field} />
+                                                                                        </Field>
+                                                                                    )}
+                                                                                />
+                                                                            </div>
+                                                                        )}
+                                                                        <div className="flex items-center justify-between rounded-lg bg-white/80 px-3 py-2 border">
+                                                                            <span className="text-xs font-medium text-slate-700">Cap PF wage at ₹15,000 statutory ceiling</span>
+                                                                            <Controller
+                                                                                name="pfCeilingEnabled"
+                                                                                control={control}
+                                                                                render={({ field }) => (
+                                                                                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                                                                                )}
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                <div className="rounded-lg bg-white px-3 py-2 border text-xs flex flex-wrap items-center justify-between gap-2">
+                                                                    <span className="text-slate-500">PF Wage Base: <strong className="text-slate-900">{formatCurrency(liveStatutory.pfWage)}</strong></span>
+                                                                    <span className="text-indigo-700 font-semibold">
+                                                                        Emp Deduction: {formatCurrency(liveStatutory.pfEmployee)} • Er Contribution: {formatCurrency(liveStatutory.pfEmployer)}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    )}
+
+                                                    {/* Optional ESI Block */}
+                                                    {companyEsiEnabled && (
+                                                    <div className="rounded-xl border border-teal-200/70 bg-teal-50/40 p-4 space-y-4">
+                                                        <div className="flex items-center justify-between gap-4">
+                                                            <div>
+                                                                <p className="text-sm font-bold text-slate-900">ESI (ESIC)</p>
+                                                                <p className="text-xs text-slate-500">Optional per-employee ESI contribution on Gross Wages</p>
+                                                            </div>
+                                                            <Controller
+                                                                name="esiEnabled"
+                                                                control={control}
+                                                                render={({ field }) => (
+                                                                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                                                                )}
+                                                            />
+                                                        </div>
+
+                                                        {watchedValues.esiEnabled && (
+                                                            <div className="space-y-4 pt-2 border-t border-teal-200/60">
+                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                                    <Controller
+                                                                        name="esiNumber"
+                                                                        control={control}
+                                                                        render={({ field }) => (
+                                                                            <Field>
+                                                                                <FieldLabel className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1.5">ESIC IP Number (Optional)</FieldLabel>
+                                                                                <Input className="h-10 border-2" placeholder="10-digit IP Number" {...field} value={field.value || ""} />
+                                                                            </Field>
+                                                                        )}
+                                                                    />
+                                                                    <Controller
+                                                                        name="esiMode"
+                                                                        control={control}
+                                                                        render={({ field }) => (
+                                                                            <Field>
+                                                                                <FieldLabel className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1.5">ESI Calculation Mode</FieldLabel>
+                                                                                <Select value={field.value} onValueChange={field.onChange}>
+                                                                                    <SelectTrigger className="h-10 border-2">
+                                                                                        <SelectValue />
+                                                                                    </SelectTrigger>
+                                                                                    <SelectContent>
+                                                                                        <SelectItem value="statutory">Statutory (0.75% Emp + 3.25% Er)</SelectItem>
+                                                                                        <SelectItem value="percentage">Custom Percentage (%)</SelectItem>
+                                                                                        <SelectItem value="fixed">Fixed Monthly Amount (₹)</SelectItem>
+                                                                                    </SelectContent>
+                                                                                </Select>
+                                                                            </Field>
+                                                                        )}
+                                                                    />
+                                                                </div>
+
+                                                                {watchedValues.esiMode === "fixed" ? (
+                                                                    <Controller
+                                                                        name="esiFixedAmount"
+                                                                        control={control}
+                                                                        render={({ field }) => (
+                                                                            <Field>
+                                                                                <FieldLabel className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1.5">Fixed ESI Amount (₹ / Month)</FieldLabel>
+                                                                                <Input type="number" className="h-10 border-2" placeholder="150" {...field} />
+                                                                            </Field>
+                                                                        )}
+                                                                    />
+                                                                ) : (
+                                                                    <div className="space-y-3">
+                                                                        {watchedValues.esiMode === "percentage" && (
+                                                                            <div className="grid grid-cols-2 gap-4">
+                                                                                <Controller
+                                                                                    name="esiEmployeeRate"
+                                                                                    control={control}
+                                                                                    render={({ field }) => (
+                                                                                        <Field>
+                                                                                            <FieldLabel className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1.5">Employee %</FieldLabel>
+                                                                                            <Input type="number" step="0.01" className="h-10 border-2" {...field} />
+                                                                                        </Field>
+                                                                                    )}
+                                                                                />
+                                                                                <Controller
+                                                                                    name="esiEmployerRate"
+                                                                                    control={control}
+                                                                                    render={({ field }) => (
+                                                                                        <Field>
+                                                                                            <FieldLabel className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1.5">Employer %</FieldLabel>
+                                                                                            <Input type="number" step="0.01" className="h-10 border-2" {...field} />
+                                                                                        </Field>
+                                                                                    )}
+                                                                                />
+                                                                            </div>
+                                                                        )}
+                                                                        <div className="flex items-center justify-between rounded-lg bg-white/80 px-3 py-2 border">
+                                                                            <span className="text-xs font-medium text-slate-700">Enforce ₹21,000 gross eligibility limit</span>
+                                                                            <Controller
+                                                                                name="esiLimitEnabled"
+                                                                                control={control}
+                                                                                render={({ field }) => (
+                                                                                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                                                                                )}
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                <div className="rounded-lg bg-white px-3 py-2 border text-xs flex flex-wrap items-center justify-between gap-2">
+                                                                    {liveStatutory.esiEligible ? (
+                                                                        <>
+                                                                            <span className="text-slate-500">ESI Gross Base: <strong className="text-slate-900">{formatCurrency(liveStatutory.esiWage)}</strong></span>
+                                                                            <span className="text-teal-700 font-semibold">
+                                                                                Emp Deduction: {formatCurrency(liveStatutory.esiEmployee)} • Er Contribution: {formatCurrency(liveStatutory.esiEmployer)}
+                                                                            </span>
+                                                                        </>
+                                                                    ) : (
+                                                                        <span className="text-amber-700 font-semibold">
+                                                                            Gross exceeds ₹21,000 ESI ceiling — turn off limit check above to force-apply ESI.
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    )}
+                                                </AccordionContent>
+                                            </AccordionItem>
+                                        </Accordion>
+                                        )}
+
                                         {/* Deductions & Settings Section */}
                                         <Accordion type="multiple" defaultValue={["deductions"]} className="bg-white/80 backdrop-blur-sm rounded-lg border">
                                             <AccordionItem value="deductions" className="border-b-0">
@@ -792,7 +1210,7 @@ export function SalarySetupManagement() {
                                                             render={({ field }) => (
                                                                 <Field>
                                                                     <div className="flex items-center gap-2 mb-2">
-                                                                        <FieldLabel className="text-xs font-bold uppercase tracking-widest text-slate-500 m-0">Other Deductions <span className="text-muted-foreground font-medium normal-case">(PF, ESI, etc.)</span></FieldLabel>
+                                                                        <FieldLabel className="text-xs font-bold uppercase tracking-widest text-slate-500 m-0">Other Deductions <span className="text-muted-foreground font-medium normal-case">(TDS, PT, Canteen, etc.)</span></FieldLabel>
                                                                     </div>
                                                                     <Input type="number" className="h-12 border-2 focus-visible:ring-0 focus-visible:border-amber-500" placeholder="0" {...field} />
                                                                 </Field>

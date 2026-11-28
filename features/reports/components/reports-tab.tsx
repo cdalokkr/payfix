@@ -28,7 +28,10 @@ import {
     Clock,
     Eye,
     ChevronDown,
-    AlertCircle
+    AlertCircle,
+    ShieldCheck,
+    Landmark,
+    HeartPulse
 } from "lucide-react"
 import {
     Select,
@@ -62,37 +65,38 @@ const IconFileTypePdf = FileText
 type ExportFormat = 'csv' | 'pdf'
 type DownloadStatus = 'idle' | 'loading' | 'success' | 'error'
 
+interface ReportFilters {
+    roleFilter: string
+    dateRange: DateRange | undefined
+    selectedEmployee: { id: string; name: string } | undefined
+    month: number
+    year: number
+}
+
 interface ReportDefinition {
     id: string
     title: string
     description: string
     icon: React.ComponentType<any>
-    filters: ('role' | 'dateRange' | 'employee')[]
+    filters: ('role' | 'dateRange' | 'employee' | 'monthYear')[]
     fetchData: (
         role: 'admin' | 'moderator',
-        filters: {
-            roleFilter: string
-            dateRange: DateRange | undefined
-            selectedEmployee: { id: string; name: string } | undefined
-        },
+        filters: ReportFilters,
         utils: any
     ) => Promise<{ headers: string[]; rows: string[][] }>
     getFilename: (
-        filters: {
-            roleFilter: string
-            dateRange: DateRange | undefined
-            selectedEmployee: { id: string; name: string } | undefined
-        },
+        filters: ReportFilters,
         format: ExportFormat
     ) => string
     getPdfTitle: (
-        filters: {
-            roleFilter: string
-            dateRange: DateRange | undefined
-            selectedEmployee: { id: string; name: string } | undefined
-        }
+        filters: ReportFilters
     ) => string
 }
+
+const REPORT_MONTHS = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+]
 
 // Dynamic report definitions registry
 const REPORTS: ReportDefinition[] = [
@@ -365,6 +369,160 @@ const REPORTS: ReportDefinition[] = [
             const employeeStr = filters.selectedEmployee ? `\nEmployee: ${filters.selectedEmployee.name}` : ''
             return `Detailed Attendance${employeeStr}\nDate Range: ${rangeStr}`
         }
+    },
+    {
+        id: 'pf-statement',
+        title: 'PF Monthly Statement (EPF/EPS)',
+        description: 'Monthly Provident Fund wages, Employee PF (12%), Employer EPF/EPS split & UAN report',
+        icon: Landmark,
+        filters: ['monthYear', 'employee'],
+        fetchData: async (_role, filters, utils) => {
+            const report = await utils.salary.getPfEsiReport.fetch({
+                month: filters.month,
+                year: filters.year,
+                type: 'pf',
+                profileId: filters.selectedEmployee?.id,
+            })
+
+            if (!report.rows || report.rows.length === 0) {
+                throw new Error(`No PF records found for ${REPORT_MONTHS[filters.month - 1]} ${filters.year}. Generate payslips for PF-enabled staff first.`)
+            }
+
+            const headers = [
+                'Employee Name', 'Designation', 'Department', 'UAN', 'Paid Days',
+                'Gross Salary (INR)', 'EPF Wages (INR)', 'Employee PF (INR)',
+                'Employer EPF (INR)', 'Employer EPS (INR)', 'Total Employer PF (INR)', 'Total PF (INR)'
+            ]
+            const rows = report.rows.map((r: any) => [
+                r.employeeName,
+                r.designation,
+                r.department,
+                r.pfUan || 'Not Set',
+                String(r.paidDays),
+                r.grossSalary.toFixed(2),
+                r.pfWage.toFixed(2),
+                r.pfEmployee.toFixed(2),
+                r.pfEmployerEpf.toFixed(2),
+                r.pfEmployerEps.toFixed(2),
+                r.pfEmployer.toFixed(2),
+                r.pfTotal.toFixed(2),
+            ])
+            rows.push([
+                'TOTAL', '', '', `${report.totals.employeeCount} Staff`, '',
+                report.totals.totalGross.toFixed(2),
+                report.totals.totalPfWage.toFixed(2),
+                report.totals.totalPfEmployee.toFixed(2),
+                report.totals.totalPfEmployerEpf.toFixed(2),
+                report.totals.totalPfEmployerEps.toFixed(2),
+                report.totals.totalPfEmployer.toFixed(2),
+                report.totals.totalPf.toFixed(2),
+            ])
+            return { headers, rows }
+        },
+        getFilename: (filters, format) => {
+            const m = String(filters.month).padStart(2, '0')
+            return `pf-statement-${filters.year}-${m}.${format}`
+        },
+        getPdfTitle: (filters) => `PF Monthly Statement (EPF/EPS)\nPeriod: ${REPORT_MONTHS[filters.month - 1]} ${filters.year}`
+    },
+    {
+        id: 'esi-statement',
+        title: 'ESI Monthly Statement (ESIC)',
+        description: 'Monthly ESIC IP numbers, earned gross wages, Employee (0.75%) & Employer (3.25%) shares',
+        icon: HeartPulse,
+        filters: ['monthYear', 'employee'],
+        fetchData: async (_role, filters, utils) => {
+            const report = await utils.salary.getPfEsiReport.fetch({
+                month: filters.month,
+                year: filters.year,
+                type: 'esi',
+                profileId: filters.selectedEmployee?.id,
+            })
+
+            if (!report.rows || report.rows.length === 0) {
+                throw new Error(`No ESI records found for ${REPORT_MONTHS[filters.month - 1]} ${filters.year}. Generate payslips for ESI-enabled staff first.`)
+            }
+
+            const headers = [
+                'Employee Name', 'Designation', 'Department', 'ESIC IP No', 'Paid Days',
+                'ESI Eligible', 'ESI Wages (INR)', 'Employee ESI (INR)', 'Employer ESI (INR)', 'Total ESI (INR)'
+            ]
+            const rows = report.rows.map((r: any) => [
+                r.employeeName,
+                r.designation,
+                r.department,
+                r.esiNumber || 'Not Set',
+                String(r.paidDays),
+                r.esiEligible ? 'Eligible' : 'Above Limit (>21k)',
+                r.esiWage.toFixed(2),
+                r.esiEmployee.toFixed(2),
+                r.esiEmployer.toFixed(2),
+                r.esiTotal.toFixed(2),
+            ])
+            rows.push([
+                'TOTAL', '', '', `${report.totals.employeeCount} Staff`, '', '',
+                report.totals.totalEsiWage.toFixed(2),
+                report.totals.totalEsiEmployee.toFixed(2),
+                report.totals.totalEsiEmployer.toFixed(2),
+                report.totals.totalEsi.toFixed(2),
+            ])
+            return { headers, rows }
+        },
+        getFilename: (filters, format) => {
+            const m = String(filters.month).padStart(2, '0')
+            return `esi-statement-${filters.year}-${m}.${format}`
+        },
+        getPdfTitle: (filters) => `ESI Monthly Statement (ESIC)\nPeriod: ${REPORT_MONTHS[filters.month - 1]} ${filters.year}`
+    },
+    {
+        id: 'pf-esi-summary',
+        title: 'PF & ESI Compliance Summary',
+        description: 'Combined monthly statutory liability across PF and ESI opted employees',
+        icon: ShieldCheck,
+        filters: ['monthYear', 'employee'],
+        fetchData: async (_role, filters, utils) => {
+            const report = await utils.salary.getPfEsiReport.fetch({
+                month: filters.month,
+                year: filters.year,
+                type: 'combined',
+                profileId: filters.selectedEmployee?.id,
+            })
+
+            if (!report.rows || report.rows.length === 0) {
+                throw new Error(`No PF/ESI records found for ${REPORT_MONTHS[filters.month - 1]} ${filters.year}.`)
+            }
+
+            const headers = [
+                'Employee Name', 'UAN', 'ESIC IP No', 'Gross Salary (INR)',
+                'Emp PF (INR)', 'Er PF (INR)', 'Emp ESI (INR)', 'Er ESI (INR)', 'Total Statutory (INR)'
+            ]
+            const rows = report.rows.map((r: any) => [
+                r.employeeName,
+                r.pfEnabled ? (r.pfUan || 'Enabled') : 'Opted Out',
+                r.esiEnabled ? (r.esiNumber || 'Enabled') : 'Opted Out',
+                r.grossSalary.toFixed(2),
+                r.pfEmployee.toFixed(2),
+                r.pfEmployer.toFixed(2),
+                r.esiEmployee.toFixed(2),
+                r.esiEmployer.toFixed(2),
+                r.totalStatutory.toFixed(2),
+            ])
+            rows.push([
+                'TOTAL', `${report.totals.employeeCount} Staff`, '',
+                report.totals.totalGross.toFixed(2),
+                report.totals.totalPfEmployee.toFixed(2),
+                report.totals.totalPfEmployer.toFixed(2),
+                report.totals.totalEsiEmployee.toFixed(2),
+                report.totals.totalEsiEmployer.toFixed(2),
+                report.totals.grandTotalStatutory.toFixed(2),
+            ])
+            return { headers, rows }
+        },
+        getFilename: (filters, format) => {
+            const m = String(filters.month).padStart(2, '0')
+            return `pf-esi-summary-${filters.year}-${m}.${format}`
+        },
+        getPdfTitle: (filters) => `PF & ESI Compliance Summary\nPeriod: ${REPORT_MONTHS[filters.month - 1]} ${filters.year}`
     }
 ]
 
@@ -379,9 +537,30 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
         refetchOnWindowFocus: false,
     });
 
+    // Company-level optional PF & ESI applicability (hide statutory reports unless enabled)
+    const { data: statutorySettings } = trpc.salary.getStatutorySettings.useQuery(undefined, {
+        staleTime: 60 * 1000,
+        refetchOnWindowFocus: false,
+    });
+
+    const visibleReports = REPORTS.filter((r) => {
+        if (r.id === 'pf-statement') return Boolean(statutorySettings?.pfEnabled)
+        if (r.id === 'esi-statement') return Boolean(statutorySettings?.esiEnabled)
+        if (r.id === 'pf-esi-summary') return Boolean(statutorySettings?.pfEnabled || statutorySettings?.esiEnabled)
+        return true
+    });
+
     // Consolidated State Settings
     const [selectedReportId, setSelectedReportId] = useState<string>('users')
     const [roleFilter, setRoleFilter] = useState<string>('all')
+    const [reportMonth, setReportMonth] = useState<number>(() => {
+        const m = new Date().getMonth()
+        return m === 0 ? 12 : m
+    })
+    const [reportYear, setReportYear] = useState<number>(() => {
+        const now = new Date()
+        return now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()
+    })
     const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
         const to = new Date()
         const from = new Date()
@@ -430,7 +609,7 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
     const isLoadingSearch = role === 'admin' ? adminSearchResults.isLoading : moderatorSearchResults.isLoading
 
     // Find the currently selected report definition
-    const selectedReport = REPORTS.find(r => r.id === selectedReportId) || REPORTS[0]
+    const selectedReport = visibleReports.find(r => r.id === selectedReportId) || visibleReports[0]
 
     // Reset preview data and state when changing filters/reports
     const handleFilterChange = () => {
@@ -441,7 +620,7 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
     // Reset view whenever options are adjusted to avoid displaying stale data
     useEffect(() => {
         handleFilterChange()
-    }, [selectedReportId, roleFilter, dateRange, selectedEmployee])
+    }, [selectedReportId, roleFilter, dateRange, selectedEmployee, reportMonth, reportYear])
 
     // Fetch data for preview
     const handleViewReport = async () => {
@@ -449,7 +628,7 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
         setPreviewError(null)
         setPreviewData(null)
         try {
-            const filters = { roleFilter, dateRange, selectedEmployee }
+            const filters = { roleFilter, dateRange, selectedEmployee, month: reportMonth, year: reportYear }
             const result = await selectedReport.fetchData(role, filters, utils)
             setPreviewData(result)
         } catch (error: any) {
@@ -467,11 +646,11 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
             let data = previewData
             // If data is not yet previewed or has been reset, fetch it on-the-fly
             if (!data) {
-                const filters = { roleFilter, dateRange, selectedEmployee }
+                const filters = { roleFilter, dateRange, selectedEmployee, month: reportMonth, year: reportYear }
                 data = await selectedReport.fetchData(role, filters, utils)
             }
 
-            const filters = { roleFilter, dateRange, selectedEmployee }
+            const filters = { roleFilter, dateRange, selectedEmployee, month: reportMonth, year: reportYear }
             const filename = selectedReport.getFilename(filters, format)
             const pdfTitle = selectedReport.getPdfTitle(filters)
 
@@ -529,6 +708,27 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
                     border: 'border-indigo-500/30',
                     badgeBg: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
                 }
+            case 'pf-statement':
+                return {
+                    text: 'text-violet-500 dark:text-violet-400',
+                    bg: 'bg-violet-500/10 dark:bg-violet-500/20',
+                    border: 'border-violet-500/30',
+                    badgeBg: 'bg-violet-500/10 text-violet-600 dark:text-violet-400'
+                }
+            case 'esi-statement':
+                return {
+                    text: 'text-teal-500 dark:text-teal-400',
+                    bg: 'bg-teal-500/10 dark:bg-teal-500/20',
+                    border: 'border-teal-500/30',
+                    badgeBg: 'bg-teal-500/10 text-teal-600 dark:text-teal-400'
+                }
+            case 'pf-esi-summary':
+                return {
+                    text: 'text-emerald-500 dark:text-emerald-400',
+                    bg: 'bg-emerald-500/10 dark:bg-emerald-500/20',
+                    border: 'border-emerald-500/30',
+                    badgeBg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                }
             default:
                 return {
                     text: 'text-muted-foreground',
@@ -560,7 +760,7 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
                                     <SelectValue placeholder="Choose a report..." />
                                 </SelectTrigger>
                                 <SelectContent className="max-h-[300px] rounded-xl">
-                                    {REPORTS.map((report) => {
+                                    {visibleReports.map((report) => {
                                         const rColors = getThemeColors(report.id)
                                         return (
                                             <SelectItem key={report.id} value={report.id} className="py-2 rounded-lg my-0.5">
@@ -591,6 +791,42 @@ export function ReportsTab({ role = 'admin' }: ReportsTabProps) {
                                     transition={{ duration: 0.15 }}
                                     className="flex flex-col sm:flex-row sm:items-end gap-2 sm:gap-3 flex-[2] min-w-0"
                                 >
+                                    {/* Month & Year Filter (Statutory Payroll Reports) */}
+                                    {selectedReport.filters.includes('monthYear') && (
+                                        <div className="flex flex-1 min-w-[210px] gap-2">
+                                            <div className="flex-1 space-y-0.5">
+                                                <label className="text-[11px] font-medium text-muted-foreground">Month</label>
+                                                <Select value={String(reportMonth)} onValueChange={(v) => setReportMonth(Number(v))}>
+                                                    <SelectTrigger className="!h-10 w-full bg-background/50 border-muted/50 rounded-lg text-xs">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent className="rounded-lg">
+                                                        {REPORT_MONTHS.map((mName, idx) => (
+                                                            <SelectItem key={mName} value={String(idx + 1)} className="text-xs">
+                                                                {mName}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="w-[100px] space-y-0.5">
+                                                <label className="text-[11px] font-medium text-muted-foreground">Year</label>
+                                                <Select value={String(reportYear)} onValueChange={(v) => setReportYear(Number(v))}>
+                                                    <SelectTrigger className="!h-10 w-full bg-background/50 border-muted/50 rounded-lg text-xs">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent className="rounded-lg">
+                                                        {[reportYear - 2, reportYear - 1, reportYear, reportYear + 1].map((y) => (
+                                                            <SelectItem key={y} value={String(y)} className="text-xs">
+                                                                {y}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {/* Role Filter */}
                                     {selectedReport.filters.includes('role') && (
                                         <div className="flex-1 min-w-[150px] space-y-0.5">

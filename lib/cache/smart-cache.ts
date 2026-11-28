@@ -44,7 +44,9 @@ export class SmartCache {
             default_check_out: officeSettings.default_check_out,
             off_days: officeSettings.off_days,
             daily_working_hours: officeSettings.daily_working_hours,
-            absent_deduction_multiplier: officeSettings.absent_deduction_multiplier
+            absent_deduction_multiplier: officeSettings.absent_deduction_multiplier,
+            pf_enabled: officeSettings.pf_enabled,
+            esi_enabled: officeSettings.esi_enabled
         })
         .from(officeSettings)
         .limit(1)

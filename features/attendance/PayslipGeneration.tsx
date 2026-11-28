@@ -154,9 +154,11 @@ export function PayslipGeneration({
     })
 
     const [isExportingExcel, setIsExportingExcel] = useState(false)
+    const [isExportingStatutory, setIsExportingStatutory] = useState(false)
 
-    // Access control query & mutations
+    // Access control & optional statutory settings queries
     const { data: accessSettings, refetch: refetchAccess } = trpc.salary.getPayslipAccessSettings.useQuery()
+    const { data: statutorySettings } = trpc.salary.getStatutorySettings.useQuery()
 
     const toggleGlobalMutation = trpc.salary.toggleGlobalPayslipAccess.useMutation({
         onSuccess: () => {
@@ -231,6 +233,18 @@ export function PayslipGeneration({
         summaries?.filter((s: any) => s.status === 'set_for_salary' || s.status === 'payslip_generated') || [], [summaries]
     )
 
+    const hasPfInMonth = useMemo(
+        () => displaySummaries.some((s: any) => Number((s.salary_breakdown as any)?.pf_employee || 0) > 0),
+        [displaySummaries]
+    )
+    const hasEsiInMonth = useMemo(
+        () => displaySummaries.some((s: any) => Number((s.salary_breakdown as any)?.esi_employee || 0) > 0),
+        [displaySummaries]
+    )
+    const showPf = Boolean(statutorySettings?.pfEnabled) || hasPfInMonth
+    const showEsi = Boolean(statutorySettings?.esiEnabled) || hasEsiInMonth
+    const showStatutoryReportBtn = showPf || showEsi
+
     const payrollStats = useMemo(() => {
         if (!displaySummaries || displaySummaries.length === 0) {
             return {
@@ -262,7 +276,7 @@ export function PayslipGeneration({
                 generated++
                 net += Number(s.take_home) || 0
                 gross += Number(s.gross_salary) || 0
-                deductions += (Number(s.absence_deduction) || 0) + (Number(bd?.other_deductions) || 0) + (Number(s.advance_recovery) || 0)
+                deductions += (Number(s.absence_deduction) || 0) + (Number(bd?.pf_employee) || 0) + (Number(bd?.esi_employee) || 0) + (Number(bd?.other_deductions) || 0) + (Number(s.advance_recovery) || 0)
                 advances += Number(s.advance_recovery) || 0
 
                 const paidSoFar = s.payments?.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0
@@ -387,6 +401,129 @@ export function PayslipGeneration({
         }
     }
 
+    const handleExportPfEsiExcel = async () => {
+        setIsExportingStatutory(true)
+        try {
+            const report = await utils.salary.getPfEsiReport.fetch({
+                month,
+                year,
+                type: 'combined',
+            })
+
+            if (!report.rows || report.rows.length === 0) {
+                toast.error(`No PF or ESI records found for ${MONTHS[month - 1]} ${year}. Generate payslips for PF/ESI-enabled employees first.`)
+                return
+            }
+
+            const ExcelJS = (await import('exceljs')).default
+            const workbook = new ExcelJS.Workbook()
+            workbook.creator = 'NIYAMO'
+            workbook.created = new Date()
+            const monthName = MONTHS[month - 1]
+
+            // Sheet 1: PF Monthly Statement
+            const pfRows = report.rows.filter((r: any) => r.pfEnabled || r.pfEmployee > 0 || r.pfEmployer > 0)
+            const pfSheet = workbook.addWorksheet(`PF Statement (${monthName})`)
+            pfSheet.addRow([`NIYAMO - PF (EPF/EPS) MONTHLY STATEMENT — ${monthName.toUpperCase()} ${year}`])
+            pfSheet.addRow([`Generated: ${format(new Date(), 'dd MMM yyyy, HH:mm')}`, `Opted Staff: ${pfRows.length}`])
+            pfSheet.addRow([])
+            const pfHeaders = [
+                'S.No', 'Employee Name', 'Designation', 'Department', 'UAN',
+                'Paid Days', 'Gross Salary (₹)', 'EPF Wages (₹)', 'Employee PF (12%)',
+                'Employer EPF (3.67%)', 'Employer EPS (8.33%)', 'Total Employer PF', 'Total PF Remittance'
+            ]
+            const pfHeaderRow = pfSheet.addRow(pfHeaders)
+            pfHeaderRow.eachCell((cell) => {
+                cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } }
+                cell.alignment = { horizontal: 'center', vertical: 'middle' }
+            })
+            pfRows.forEach((r: any, i: number) => {
+                pfSheet.addRow([
+                    i + 1, r.employeeName, r.designation, r.department, r.pfUan || 'Not Set',
+                    r.paidDays, r.grossSalary, r.pfWage, r.pfEmployee,
+                    r.pfEmployerEpf, r.pfEmployerEps, r.pfEmployer, r.pfTotal
+                ])
+            })
+            const pfTotalRow = pfSheet.addRow([
+                '', 'TOTAL', '', '', `${pfRows.length} Staff`, '',
+                pfRows.reduce((s: number, r: any) => s + r.grossSalary, 0),
+                pfRows.reduce((s: number, r: any) => s + r.pfWage, 0),
+                pfRows.reduce((s: number, r: any) => s + r.pfEmployee, 0),
+                pfRows.reduce((s: number, r: any) => s + r.pfEmployerEpf, 0),
+                pfRows.reduce((s: number, r: any) => s + r.pfEmployerEps, 0),
+                pfRows.reduce((s: number, r: any) => s + r.pfEmployer, 0),
+                pfRows.reduce((s: number, r: any) => s + r.pfTotal, 0),
+            ])
+            pfTotalRow.eachCell((cell) => {
+                cell.font = { bold: true }
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } }
+            })
+            pfSheet.columns = [
+                { width: 6 }, { width: 22 }, { width: 16 }, { width: 16 }, { width: 16 },
+                { width: 10 }, { width: 15 }, { width: 14 }, { width: 16 },
+                { width: 18 }, { width: 18 }, { width: 16 }, { width: 18 },
+            ]
+
+            // Sheet 2: ESI Monthly Statement
+            const esiRows = report.rows.filter((r: any) => r.esiEnabled || r.esiEmployee > 0 || r.esiEmployer > 0)
+            const esiSheet = workbook.addWorksheet(`ESI Statement (${monthName})`)
+            esiSheet.addRow([`NIYAMO - ESI (ESIC) MONTHLY STATEMENT — ${monthName.toUpperCase()} ${year}`])
+            esiSheet.addRow([`Generated: ${format(new Date(), 'dd MMM yyyy, HH:mm')}`, `Opted Staff: ${esiRows.length}`])
+            esiSheet.addRow([])
+            const esiHeaders = [
+                'S.No', 'Employee Name', 'Designation', 'Department', 'ESIC IP Number',
+                'Paid Days', 'Eligibility', 'ESI Gross Wages (₹)', 'Employee ESI (0.75%)',
+                'Employer ESI (3.25%)', 'Total ESI Remittance'
+            ]
+            const esiHeaderRow = esiSheet.addRow(esiHeaders)
+            esiHeaderRow.eachCell((cell) => {
+                cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0D9488' } }
+                cell.alignment = { horizontal: 'center', vertical: 'middle' }
+            })
+            esiRows.forEach((r: any, i: number) => {
+                esiSheet.addRow([
+                    i + 1, r.employeeName, r.designation, r.department, r.esiNumber || 'Not Set',
+                    r.paidDays, r.esiEligible ? 'Eligible' : 'Above Limit (>21k)', r.esiWage,
+                    r.esiEmployee, r.esiEmployer, r.esiTotal
+                ])
+            })
+            const esiTotalRow = esiSheet.addRow([
+                '', 'TOTAL', '', '', `${esiRows.length} Staff`, '', '',
+                esiRows.reduce((s: number, r: any) => s + r.esiWage, 0),
+                esiRows.reduce((s: number, r: any) => s + r.esiEmployee, 0),
+                esiRows.reduce((s: number, r: any) => s + r.esiEmployer, 0),
+                esiRows.reduce((s: number, r: any) => s + r.esiTotal, 0),
+            ])
+            esiTotalRow.eachCell((cell) => {
+                cell.font = { bold: true }
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } }
+            })
+            esiSheet.columns = [
+                { width: 6 }, { width: 22 }, { width: 16 }, { width: 16 }, { width: 16 },
+                { width: 10 }, { width: 18 }, { width: 18 }, { width: 18 }, { width: 18 }, { width: 18 },
+            ]
+
+            const buffer = await workbook.xlsx.writeBuffer()
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+            const url = window.URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = `NIYAMO_PF_ESI_Report_${monthName}_${year}.xlsx`
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+            window.URL.revokeObjectURL(url)
+            toast.success('PF & ESI Compliance Excel exported!')
+        } catch (err: any) {
+            console.error('Failed to export PF/ESI Excel:', err)
+            toast.error(err.message || 'Failed to export PF & ESI report')
+        } finally {
+            setIsExportingStatutory(false)
+        }
+    }
+
     const handleExportExcel = async () => {
         if (!displaySummaries || displaySummaries.length === 0) {
             toast.error("No payroll records available to export")
@@ -416,31 +553,9 @@ export function PayslipGeneration({
                 }
             })
 
-            // 1. Title Block
-            worksheet.mergeCells('A1:U1')
-            const titleCell = worksheet.getCell('A1')
-            titleCell.value = 'NIYAMO WORKSPACE - MONTHLY SALARY REGISTER'
-            titleCell.font = { name: 'Calibri', size: 15, bold: true, color: { argb: 'FFFFFFFF' } }
-            titleCell.alignment = { horizontal: 'center', vertical: 'middle' }
-            titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF635BFF' } }
-            worksheet.getRow(1).height = 28
-
-            worksheet.mergeCells('A2:U2')
-            const subTitleCell = worksheet.getCell('A2')
-            subTitleCell.value = `Salary & Attendance Statement for the period of ${monthName} ${year} (Landscape A4)`
-            subTitleCell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF334155' } }
-            subTitleCell.alignment = { horizontal: 'center', vertical: 'middle' }
-            subTitleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } }
-            worksheet.getRow(2).height = 20
-
-            worksheet.mergeCells('A3:U3')
-            const dateCell = worksheet.getCell('A3')
-            dateCell.value = `Generated on: ${format(new Date(), 'dd MMMM yyyy, HH:mm:ss')} | Total Records: ${displaySummaries.length}`
-            dateCell.font = { name: 'Calibri', size: 9, italic: true, color: { argb: 'FF64748B' } }
-            dateCell.alignment = { horizontal: 'center', vertical: 'middle' }
-            worksheet.getRow(3).height = 16
-
-            worksheet.getRow(4).height = 8
+            const centerKeys = new Set(['sno', 'month_days', 'present', 'absent', 'half_days', 'leaves', 'extra_days', 'status'])
+            const currencyKeys = new Set(['basic', 'gross', 'absent_deduct', 'half_deduct', 'adv_rec', 'pf_emp', 'esi_emp', 'other_deduct', 'total_deduct', 'net_salary'])
+            const totalCurrencyKeys = new Set(['gross', 'absent_deduct', 'half_deduct', 'adv_rec', 'pf_emp', 'esi_emp', 'other_deduct', 'total_deduct', 'net_salary'])
 
             // 2. Table Column Headers
             const columns = [
@@ -460,12 +575,42 @@ export function PayslipGeneration({
                 { header: 'Absent Deduct.', key: 'absent_deduct', width: 14 },
                 { header: 'Half Day Deduct.', key: 'half_deduct', width: 14 },
                 { header: 'Advance Rec.', key: 'adv_rec', width: 13 },
+                ...(showPf ? [{ header: 'PF (Emp)', key: 'pf_emp', width: 12 }] : []),
+                ...(showEsi ? [{ header: 'ESI (Emp)', key: 'esi_emp', width: 12 }] : []),
                 { header: 'Other Deduct.', key: 'other_deduct', width: 13 },
                 { header: 'Total Deductions', key: 'total_deduct', width: 15 },
                 { header: 'Net Salary', key: 'net_salary', width: 16 },
                 { header: 'Status', key: 'status', width: 12 },
                 { header: 'Paid Details', key: 'pay_details', width: 22 },
             ]
+
+            const lastColLetter = String.fromCharCode(64 + columns.length)
+
+            // 1. Title Block
+            worksheet.mergeCells(`A1:${lastColLetter}1`)
+            const titleCell = worksheet.getCell('A1')
+            titleCell.value = 'NIYAMO WORKSPACE - MONTHLY SALARY REGISTER'
+            titleCell.font = { name: 'Calibri', size: 15, bold: true, color: { argb: 'FFFFFFFF' } }
+            titleCell.alignment = { horizontal: 'center', vertical: 'middle' }
+            titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF635BFF' } }
+            worksheet.getRow(1).height = 28
+
+            worksheet.mergeCells(`A2:${lastColLetter}2`)
+            const subTitleCell = worksheet.getCell('A2')
+            subTitleCell.value = `Salary & Attendance Statement for the period of ${monthName} ${year} (Landscape A4)`
+            subTitleCell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF334155' } }
+            subTitleCell.alignment = { horizontal: 'center', vertical: 'middle' }
+            subTitleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } }
+            worksheet.getRow(2).height = 20
+
+            worksheet.mergeCells(`A3:${lastColLetter}3`)
+            const dateCell = worksheet.getCell('A3')
+            dateCell.value = `Generated on: ${format(new Date(), 'dd MMMM yyyy, HH:mm:ss')} | Total Records: ${displaySummaries.length}`
+            dateCell.font = { name: 'Calibri', size: 9, italic: true, color: { argb: 'FF64748B' } }
+            dateCell.alignment = { horizontal: 'center', vertical: 'middle' }
+            worksheet.getRow(3).height = 16
+
+            worksheet.getRow(4).height = 8
 
             worksheet.columns = columns
 
@@ -494,8 +639,10 @@ export function PayslipGeneration({
                 const absentDeduction = Number(bd?.absent_deduction || s.absence_deduction || 0)
                 const halfDayDeduction = Number(bd?.half_day_deduction || 0)
                 const advanceRecovery = Number(s.advance_recovery || bd?.advance_recovery || 0)
+                const pfEmployee = Number(bd?.pf_employee || 0)
+                const esiEmployee = Number(bd?.esi_employee || 0)
                 const otherDeductions = Number(bd?.other_deductions || 0)
-                const totalDeductions = Number(s.absence_deduction || 0) + Number(bd?.other_deductions || 0) + Number(s.advance_recovery || 0)
+                const totalDeductions = Number(s.absence_deduction || 0) + pfEmployee + esiEmployee + otherDeductions + Number(s.advance_recovery || 0)
                 const netSalary = Number(s.take_home || bd?.take_home || s.net_salary || 0)
 
                 const paidSoFar = s.payments?.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) || 0
@@ -519,6 +666,8 @@ export function PayslipGeneration({
                     absent_deduct: absentDeduction,
                     half_deduct: halfDayDeduction,
                     adv_rec: advanceRecovery,
+                    pf_emp: pfEmployee,
+                    esi_emp: esiEmployee,
                     other_deduct: otherDeductions,
                     total_deduct: totalDeductions,
                     net_salary: netSalary,
@@ -540,13 +689,12 @@ export function PayslipGeneration({
                         right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
                     }
 
-                    if ([6, 7, 8, 9, 10, 11].includes(colNumber)) {
+                    const colKey = columns[colNumber - 1]?.key || ''
+                    if (centerKeys.has(colKey)) {
                         cell.alignment = { horizontal: 'center', vertical: 'middle' }
-                    } else if ([12, 13, 14, 15, 16, 17, 18, 19].includes(colNumber)) {
+                    } else if (currencyKeys.has(colKey)) {
                         cell.numFmt = '₹#,##0.00'
                         cell.alignment = { horizontal: 'right', vertical: 'middle' }
-                    } else if (colNumber === 1 || colNumber === 20) {
-                        cell.alignment = { horizontal: 'center', vertical: 'middle' }
                     } else {
                         cell.alignment = { horizontal: 'left', vertical: 'middle' }
                     }
@@ -558,8 +706,10 @@ export function PayslipGeneration({
             const totalAbsDeduct = displaySummaries.reduce((sum: number, s: any) => sum + Number((s.salary_breakdown as any)?.absent_deduction || s.absence_deduction || 0), 0)
             const totalHalfDeduct = displaySummaries.reduce((sum: number, s: any) => sum + Number((s.salary_breakdown as any)?.half_day_deduction || 0), 0)
             const totalAdvRec = displaySummaries.reduce((sum: number, s: any) => sum + Number(s.advance_recovery || 0), 0)
+            const totalPfEmp = displaySummaries.reduce((sum: number, s: any) => sum + Number((s.salary_breakdown as any)?.pf_employee || 0), 0)
+            const totalEsiEmp = displaySummaries.reduce((sum: number, s: any) => sum + Number((s.salary_breakdown as any)?.esi_employee || 0), 0)
             const totalOtherDeduct = displaySummaries.reduce((sum: number, s: any) => sum + Number((s.salary_breakdown as any)?.other_deductions || 0), 0)
-            const totalAllDeduct = displaySummaries.reduce((sum: number, s: any) => sum + Number(s.absence_deduction || 0) + Number((s.salary_breakdown as any)?.other_deductions || 0) + Number(s.advance_recovery || 0), 0)
+            const totalAllDeduct = displaySummaries.reduce((sum: number, s: any) => sum + Number(s.absence_deduction || 0) + Number((s.salary_breakdown as any)?.pf_employee || 0) + Number((s.salary_breakdown as any)?.esi_employee || 0) + Number((s.salary_breakdown as any)?.other_deductions || 0) + Number(s.advance_recovery || 0), 0)
             const totalNet = displaySummaries.reduce((sum: number, s: any) => sum + Number(s.take_home || (s.salary_breakdown as any)?.take_home || s.net_salary || 0), 0)
 
             const totalRow = worksheet.addRow({
@@ -579,6 +729,8 @@ export function PayslipGeneration({
                 absent_deduct: totalAbsDeduct,
                 half_deduct: totalHalfDeduct,
                 adv_rec: totalAdvRec,
+                pf_emp: totalPfEmp,
+                esi_emp: totalEsiEmp,
                 other_deduct: totalOtherDeduct,
                 total_deduct: totalAllDeduct,
                 net_salary: totalNet,
@@ -596,7 +748,8 @@ export function PayslipGeneration({
                     left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
                     right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
                 }
-                if ([13, 14, 15, 16, 17, 18, 19].includes(colNumber)) {
+                const colKey = columns[colNumber - 1]?.key || ''
+                if (totalCurrencyKeys.has(colKey)) {
                     cell.numFmt = '₹#,##0.00'
                     cell.alignment = { horizontal: 'right', vertical: 'middle' }
                 }
@@ -643,6 +796,8 @@ export function PayslipGeneration({
 
     const totalDeductions = breakdown ? (
         Number(breakdown.absence_deduction || 0) +
+        Number(breakdown.pf_employee || 0) +
+        Number(breakdown.esi_employee || 0) +
         Number(breakdown.other_deductions || 0) +
         Number(breakdown.total_advance_recovery !== undefined ? breakdown.total_advance_recovery : (breakdown.advance_recovery || 0))
     ) : 0
@@ -672,7 +827,9 @@ export function PayslipGeneration({
                 { label: 'Absence Deduction', amount: breakdown.absence_deduction }
               ]
         ),
-        { label: 'Other Deductions (PF/ESI/etc.)', amount: breakdown.other_deductions },
+        ...(Number(breakdown.pf_employee) > 0 ? [{ label: `Provident Fund (PF)${breakdown.pf_uan ? ` • UAN ${breakdown.pf_uan}` : ''}`, amount: breakdown.pf_employee }] : []),
+        ...(Number(breakdown.esi_employee) > 0 ? [{ label: `ESI Contribution${breakdown.esi_number ? ` • IP ${breakdown.esi_number}` : ''}`, amount: breakdown.esi_employee }] : []),
+        { label: 'Other Deductions', amount: breakdown.other_deductions },
         ...(breakdown.carry_forward_recovery !== undefined
             ? [
                 ...(Number(breakdown.carry_forward_recovery) > 0 ? [{ label: 'Salary Deficit Carry-Forward', amount: breakdown.carry_forward_recovery }] : []),
@@ -772,6 +929,22 @@ export function PayslipGeneration({
                             )}
                             Export Detailed Payroll (Excel)
                         </Button>
+
+                        {showStatutoryReportBtn && (
+                        <Button
+                            variant="outline"
+                            onClick={handleExportPfEsiExcel}
+                            disabled={isExportingStatutory || displaySummaries.length === 0}
+                            className="font-medium gap-1.5 border-indigo-500/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-500/10 shadow-xs"
+                        >
+                            {isExportingStatutory ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                                <ShieldCheck className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                            )}
+                            PF &amp; ESI Report (Excel)
+                        </Button>
+                        )}
 
                         {!isUnified && (
                             <Button
@@ -956,6 +1129,22 @@ export function PayslipGeneration({
                                     )}
                                     Export Detailed Payroll (Excel)
                                 </Button>
+                                {showStatutoryReportBtn && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleExportPfEsiExcel}
+                                    disabled={isExportingStatutory || displaySummaries.length === 0}
+                                    className="font-semibold gap-1.5 border-indigo-500/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-500/10 shadow-xs h-8 text-xs"
+                                >
+                                    {isExportingStatutory ? (
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    ) : (
+                                        <ShieldCheck className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+                                    )}
+                                    PF &amp; ESI Report
+                                </Button>
+                                )}
                             </div>
                         }
                         contentClassName="p-0"
@@ -1054,7 +1243,7 @@ export function PayslipGeneration({
                                             {isGenerated && (
                                                 <div className="grid grid-cols-2 gap-y-2 gap-x-2 text-[10px] mt-2 bg-muted/20 p-2 rounded-md">
                                                     <div><span className="text-muted-foreground mr-1">Gross:</span><span className="font-medium">{formatCurrency(s.gross_salary)}</span></div>
-                                                    <div><span className="text-muted-foreground mr-1">Deductions:</span><span className="font-medium text-rose-600">{formatCurrency(Number(s.absence_deduction || 0) + Number(bd?.other_deductions || 0))}</span></div>
+                                                    <div><span className="text-muted-foreground mr-1">Deductions:</span><span className="font-medium text-rose-600">{formatCurrency(Number(s.absence_deduction || 0) + Number(bd?.pf_employee || 0) + Number(bd?.esi_employee || 0) + Number(bd?.other_deductions || 0))}</span></div>
                                                     <div><span className="text-muted-foreground mr-1">Adv. Rec:</span><span className="font-medium text-amber-600">{Number(s.advance_recovery) > 0 ? formatCurrency(s.advance_recovery) : '—'}</span></div>
                                                     <div><span className="text-muted-foreground mr-1">Take-Home:</span><span className="font-medium text-emerald-600">{formatCurrency(s.take_home)}</span></div>
                                                 </div>
@@ -1155,7 +1344,7 @@ export function PayslipGeneration({
                                                 {isGenerated ? formatCurrency(s.gross_salary) : <span className="text-muted-foreground/40">—</span>}
                                             </td>
                                             <td className="p-3 text-right font-medium text-rose-600">
-                                                {isGenerated ? formatCurrency(Number(s.absence_deduction || 0) + Number(bd?.other_deductions || 0)) : <span className="text-muted-foreground/40">—</span>}
+                                                {isGenerated ? formatCurrency(Number(s.absence_deduction || 0) + Number(bd?.pf_employee || 0) + Number(bd?.esi_employee || 0) + Number(bd?.other_deductions || 0)) : <span className="text-muted-foreground/40">—</span>}
                                             </td>
                                             <td className="p-3 text-right font-medium text-amber-600">
                                                 {isGenerated ? (Number(s.advance_recovery) > 0 ? formatCurrency(s.advance_recovery) : <span className="text-muted-foreground/40">—</span>) : <span className="text-muted-foreground/40">—</span>}
